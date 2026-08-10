@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabaseClient';
+import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,6 +15,12 @@ export default function LoginPage() {
     event.preventDefault();
     setLoading(true);
     setError('');
+
+    if (!hasSupabaseConfig || !supabase) {
+      setError('Supabase belum dikonfigurasi. Silakan periksa variabel lingkungan.');
+      setLoading(false);
+      return;
+    }
 
     const { error: authError } = await supabase.auth.signInWithPassword({
       email,

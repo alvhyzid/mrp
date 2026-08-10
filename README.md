@@ -12,8 +12,10 @@ Fondasi platform MRP multi-tenant untuk manufaktur berbasis Next.js 16, Supabase
    ```env
    NEXT_PUBLIC_SUPABASE_URL=YOUR_SUPABASE_URL
    NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
-   NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY=YOUR_SUPABASE_SERVICE_ROLE_KEY
+   SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY
    ```
+
+   > Jangan letakkan `SUPABASE_SERVICE_ROLE_KEY` di variabel `NEXT_PUBLIC_`; key ini hanya untuk server-side dan harus dirahasiakan.
 3. Jalankan dev server:
    ```bash
    npm run dev

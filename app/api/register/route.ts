@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: authError?.message || 'Gagal membuat akun.' }, { status: 500 });
   }
 
-  const userId = authData.user.id;
+  const authUid = authData.user.id;
 
   const { data: companyData, error: companyError } = await supabaseAdmin
     .from('companies')
@@ -51,6 +51,7 @@ export async function POST(request: NextRequest) {
   const { error: userRowError } = await supabaseAdmin.from('users').insert([
     {
       company_id: companyId,
+      auth_uid: authUid,
       name,
       email,
       role: 'company_admin',

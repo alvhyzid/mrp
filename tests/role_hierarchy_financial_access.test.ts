@@ -172,7 +172,7 @@ describe('role hierarchy & financial-access RLS verification', () => {
     // 20260812155500) — sempat lupa dihapus di sini pada percobaan pertama, yang
     // menyebabkan delete lots gagal diam-diam dan RoleTestCorp tertinggal. Setiap
     // langkah sekarang mengecek error supaya kegagalan tidak lagi senyap.
-    const steps: Array<[string, () => Promise<{ error: { message: string } | null }>]> = [
+    const cleanupSteps: Array<[string, () => any]> = [
       ['stock_movements', () => adminClient.from('stock_movements').delete().eq('company_id', companyId)],
       ['work_order_consumption', () => adminClient.from('work_order_consumption').delete().eq('work_order_id', workOrderId)],
       ['work_order_assignments', () => adminClient.from('work_order_assignments').delete().eq('work_order_id', workOrderId)],
@@ -187,7 +187,7 @@ describe('role hierarchy & financial-access RLS verification', () => {
       ['companies', () => adminClient.from('companies').delete().eq('company_id', companyId)]
     ];
 
-    for (const [label, run] of steps) {
+    for (const [label, run] of cleanupSteps) {
       const { error } = await run();
       if (error) throw new Error(`Cleanup failed at ${label}: ${error.message}`);
     }
@@ -216,7 +216,7 @@ describe('role hierarchy & financial-access RLS verification', () => {
     const client = await signInAs('finance.roletest@debug.mrp');
     const { data, error } = await client.from('employees_secure').select('employee_id, wage_rate').eq('employee_id', employee1Id).single();
     expect(error).toBeNull();
-    expect(data.wage_rate).toBeNull();
+    expect(data!.wage_rate).toBeNull();
   });
 
   it('finance_manager: get_work_order_labor_cost_total() BERHASIL, angka total tanpa rincian per-orang', async () => {
@@ -280,7 +280,7 @@ describe('role hierarchy & financial-access RLS verification', () => {
   it('work_order_consumption mengurangi lots.quantity_on_hand sesuai jumlah dipakai (before/after)', async () => {
     const { data: before, error: beforeError } = await adminClient.from('lots').select('quantity_on_hand').eq('lot_id', lotId).single();
     expect(beforeError).toBeNull();
-    expect(Number(before.quantity_on_hand)).toBe(100);
+    expect(Number(before!.quantity_on_hand)).toBe(100);
 
     const qtyConsumed = 37.5;
     const { error: consumeError } = await adminClient
@@ -290,6 +290,6 @@ describe('role hierarchy & financial-access RLS verification', () => {
 
     const { data: after, error: afterError } = await adminClient.from('lots').select('quantity_on_hand').eq('lot_id', lotId).single();
     expect(afterError).toBeNull();
-    expect(Number(after.quantity_on_hand)).toBe(100 - qtyConsumed);
+    expect(Number(after!.quantity_on_hand)).toBe(100 - qtyConsumed);
   });
 });

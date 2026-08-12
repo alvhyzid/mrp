@@ -1,15 +1,18 @@
 const { createClient } = require('@supabase/supabase-js');
 const dotenv = require('dotenv');
 
-dotenv.config();
+dotenv.config({ path: '.env.local' });
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const companyAPassword = process.env.DEBUG_COMPANY_A_PASSWORD;
 const companyBPassword = process.env.DEBUG_COMPANY_B_PASSWORD;
+const companyAStaffPassword = process.env.DEBUG_COMPANY_A_STAFF_PASSWORD;
 
-if (!supabaseUrl || !serviceRoleKey || !companyAPassword || !companyBPassword) {
-  console.error('Environment variables NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, DEBUG_COMPANY_A_PASSWORD and DEBUG_COMPANY_B_PASSWORD must be set.');
+if (!supabaseUrl || !serviceRoleKey || !companyAPassword || !companyBPassword || !companyAStaffPassword) {
+  console.error(
+    'Environment variables NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, DEBUG_COMPANY_A_PASSWORD, DEBUG_COMPANY_B_PASSWORD and DEBUG_COMPANY_A_STAFF_PASSWORD must be set.'
+  );
   process.exit(1);
 }
 
@@ -59,26 +62,25 @@ async function findOrCreateAuthUser(user) {
 }
 
 async function main() {
-  const companies = [
-    { name: 'Company A', industry_type: 'manufacturing', status: 'trial' },
-    { name: 'Company B', industry_type: 'manufacturing', status: 'trial' }
-  ];
+  const companyA = await findOrCreateCompany({ name: 'Company A', industry_type: 'manufacturing', status: 'trial' });
+  const companyB = await findOrCreateCompany({ name: 'Company B', industry_type: 'manufacturing', status: 'trial' });
 
   const users = [
-    { name: 'Company A User', email: 'company.a@debug.mrp', password: companyAPassword, role: 'company_admin', status: 'active' },
-    { name: 'Company B User', email: 'company.b@debug.mrp', password: companyBPassword, role: 'company_admin', status: 'active' }
+    { name: 'Company A User', email: 'company.a@debug.mrp', password: companyAPassword, role: 'company_admin', status: 'active', companyId: companyA.company_id },
+    { name: 'Company B User', email: 'company.b@debug.mrp', password: companyBPassword, role: 'company_admin', status: 'active', companyId: companyB.company_id },
+    // Akun peran terbatas permanen (bukan sekali-pakai) supaya Anda bisa login sendiri
+    // di browser dan lihat langsung bagaimana tampilan berubah untuk role yang TIDAK
+    // termasuk company_admin/general_manager/finance_manager — mis. field/kolom
+    // finansial (standard_cost, dst) tidak akan muncul untuk akun ini.
+    { name: 'Company A Production Staff', email: 'staff.a@debug.mrp', password: companyAStaffPassword, role: 'production_staff', status: 'active', companyId: companyA.company_id }
   ];
 
-  for (const company of companies) {
-    const companyData = await findOrCreateCompany(company);
-    const user = users.shift();
-    if (!user) break;
-
+  for (const user of users) {
     const authUser = await findOrCreateAuthUser(user);
     const authUid = authUser.id;
 
     const insertPayload = {
-      company_id: companyData.company_id,
+      company_id: user.companyId,
       auth_uid: authUid,
       name: user.name,
       email: user.email,
@@ -92,12 +94,13 @@ async function main() {
       throw new Error(`Failed to insert application user row for: ${user.email} - ${userError.message}`);
     }
 
-    console.log(`Ensured company ${companyData.name} and user ${user.email}`);
+    console.log(`Ensured user ${user.email} (${user.role}) for company_id=${user.companyId}`);
   }
 
-  console.log('\nLogin credentials (see DEBUG_COMPANY_A_PASSWORD / DEBUG_COMPANY_B_PASSWORD in your .env.local):');
-  console.log('Company A user: company.a@debug.mrp');
-  console.log('Company B user: company.b@debug.mrp');
+  console.log('\nLogin credentials (see DEBUG_COMPANY_A_PASSWORD / DEBUG_COMPANY_B_PASSWORD / DEBUG_COMPANY_A_STAFF_PASSWORD in your .env.local):');
+  console.log('Company A admin (full access): company.a@debug.mrp');
+  console.log('Company A production_staff (restricted access): staff.a@debug.mrp');
+  console.log('Company B admin (isolation check): company.b@debug.mrp');
 }
 
 main().catch((err) => {

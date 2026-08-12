@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { isCompanyLeadership } from '@/lib/roles';
+import { canViewFinancialData, isCompanyLeadership } from '@/lib/roles';
 
 const itemTypes = ['raw_material', 'wip', 'finished_good', 'packaging'];
 
@@ -64,6 +64,7 @@ export default function ItemsPage() {
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
   const [canManage, setCanManage] = useState(false);
+  const [canViewCost, setCanViewCost] = useState(false);
 
   const [items, setItems] = useState<Item[]>([]);
   const [itemsError, setItemsError] = useState('');
@@ -128,6 +129,7 @@ export default function ItemsPage() {
       }
 
       setCanManage(isCompanyLeadership(meData?.user?.role));
+      setCanViewCost(canViewFinancialData(meData?.user?.role));
       setCheckingAccess(false);
       await loadItems();
     };
@@ -212,8 +214,8 @@ export default function ItemsPage() {
     await loadItems();
   };
 
-  const columns = useMemo<ColumnDef<Item>[]>(
-    () => [
+  const columns = useMemo<ColumnDef<Item>[]>(() => {
+    const baseColumns: ColumnDef<Item>[] = [
       {
         accessorKey: 'item_code',
         header: 'Kode',
@@ -235,8 +237,15 @@ export default function ItemsPage() {
         accessorKey: 'min_stock_level',
         header: 'Min Stock',
         cell: ({ row }) => <span className="text-data">{row.original.min_stock_level}</span>
-      },
-      {
+      }
+    ];
+
+    // standard_cost adalah data finansial (lihat "Kontrol Akses Data Finansial") —
+    // kolomnya cuma dirender sama sekali untuk role yang berhak, bukan cuma
+    // ditampilkan kosong. API sendiri sudah mengembalikan null untuk role lain,
+    // ini lapisan tambahan supaya kolomnya tidak nongol sama sekali di tabel.
+    if (canViewCost) {
+      baseColumns.push({
         accessorKey: 'standard_cost',
         header: 'Biaya Standar',
         cell: ({ row }) => (
@@ -244,7 +253,10 @@ export default function ItemsPage() {
             {row.original.standard_cost === null ? <span className="text-muted-foreground">-</span> : row.original.standard_cost}
           </span>
         )
-      },
+      });
+    }
+
+    baseColumns.push(
       {
         accessorKey: 'is_active',
         header: 'Status',
@@ -266,9 +278,10 @@ export default function ItemsPage() {
             <span className="text-xs text-muted-foreground">-</span>
           )
       }
-    ],
-    [canManage]
-  );
+    );
+
+    return baseColumns;
+  }, [canManage, canViewCost]);
 
   if (checkingAccess) {
     return (
@@ -424,15 +437,17 @@ export default function ItemsPage() {
                   />
                 </label>
 
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">Standard Cost</span>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={form.standard_cost}
-                    onChange={(event) => setForm((prev) => ({ ...prev, standard_cost: event.target.value }))}
-                  />
-                </label>
+                {canViewCost ? (
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-medium text-foreground">Biaya Standar</span>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={form.standard_cost}
+                      onChange={(event) => setForm((prev) => ({ ...prev, standard_cost: event.target.value }))}
+                    />
+                  </label>
+                ) : null}
 
                 <label className="flex items-center gap-2 sm:col-span-2">
                   <input

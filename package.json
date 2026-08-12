@@ -10,6 +10,7 @@
     "seed:test-tenants": "node scripts/seed-debug-tenants.js",
     "seed:debug-items": "node scripts/seed-debug-items.js",
     "seed:debug-boms": "node scripts/seed-debug-boms.js",
+    "seed:debug-employees": "node scripts/seed-debug-employees.js",
     "super-admin:test": "vitest run tests/super_admin.test.ts",
     "super-admin:seed": "node scripts/test-super-admin.js",
     "role-access:test": "vitest run tests/role_hierarchy_financial_access.test.ts",

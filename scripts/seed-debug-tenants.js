@@ -105,7 +105,11 @@ async function main() {
     // Akun approval department (dipakai untuk uji alur approval PO client 3
     // department — masing-masing hanya bisa approve/reject department-nya sendiri).
     { name: 'Company A Finance Manager', email: 'finance.a@debug.mrp', password: companyAApproverPassword, role: 'finance_manager', status: 'active', companyId: companyA.company_id },
-    { name: 'Company A PPIC Manager', email: 'ppic.a@debug.mrp', password: companyAApproverPassword, role: 'ppic_manager', status: 'active', companyId: companyA.company_id }
+    { name: 'Company A PPIC Manager', email: 'ppic.a@debug.mrp', password: companyAApproverPassword, role: 'ppic_manager', status: 'active', companyId: companyA.company_id },
+    // Akun dashboard department (Prinsip Desain #8) — supaya Anda bisa login sendiri
+    // dan lihat langsung dashboard Warehouse & HRD diarahkan otomatis begitu login.
+    { name: 'Company A HR Manager', email: 'hr.a@debug.mrp', password: companyAApproverPassword, role: 'hr_manager', status: 'active', companyId: companyA.company_id },
+    { name: 'Company A Warehouse Manager', email: 'warehouse.a@debug.mrp', password: companyAApproverPassword, role: 'warehouse_manager', status: 'active', companyId: companyA.company_id }
   ];
 
   for (const user of users) {
@@ -135,6 +139,8 @@ async function main() {
   console.log('Company A production_staff (restricted access): staff.a@debug.mrp');
   console.log('Company A finance_manager (approve department finance): finance.a@debug.mrp');
   console.log('Company A ppic_manager (approve department ppic): ppic.a@debug.mrp');
+  console.log('Company A hr_manager (dashboard HRD): hr.a@debug.mrp');
+  console.log('Company A warehouse_manager (dashboard Warehouse): warehouse.a@debug.mrp');
   console.log('Company B admin (isolation check): company.b@debug.mrp');
 }
 

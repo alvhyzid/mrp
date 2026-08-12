@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
+import { getDashboardRouteForRole } from '@/lib/roles';
 import Link from 'next/link';
 
 export default function DashboardPage() {
@@ -22,6 +23,20 @@ export default function DashboardPage() {
       const { data, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !data?.session) {
         router.replace('/login');
+        return;
+      }
+
+      // Prinsip Desain #8: dashboard per-department, murni routing — begitu login,
+      // role tertentu diarahkan langsung ke dashboard department mereka. Role yang
+      // belum punya dashboard khusus (atau company_admin/general_manager yang
+      // memang harus lihat ringkasan lintas-department) tetap di sini.
+      const meResponse = await fetch('/api/me', {
+        headers: { Authorization: `Bearer ${data.session.access_token}` }
+      });
+      const meData = await meResponse.json();
+      const departmentRoute = meResponse.ok ? getDashboardRouteForRole(meData?.user?.role) : null;
+      if (departmentRoute) {
+        router.replace(departmentRoute);
         return;
       }
 
@@ -79,6 +94,12 @@ export default function DashboardPage() {
               </Link>
               <Link href="/work-orders" className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-50">
                 Work Order
+              </Link>
+              <Link href="/warehouse" className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-50">
+                Dashboard Warehouse
+              </Link>
+              <Link href="/hr" className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-50">
+                Dashboard HRD
               </Link>
               <Link href="/team" className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-50">
                 Kelola Tim

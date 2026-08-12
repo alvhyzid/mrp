@@ -6,3 +6,4 @@ export * from './listBoms';
 export * from './createBom';
 export * from './updateBom';
 export * from './bomValidation';
+export * from './bomCycleCheck';

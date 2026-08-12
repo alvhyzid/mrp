@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
 import { canManageBom } from '@/lib/roles';
 import { parseBomInput } from './bomValidation';
+import { findBomCycleError } from './bomCycleCheck';
 
 interface ApiResult {
   status: number;
@@ -65,6 +66,11 @@ export async function updateBom(request: NextRequest): Promise<ApiResult> {
       if (!validItemIds.has(componentId)) {
         return { status: 400, body: { error: 'Salah satu item komponen tidak ditemukan di perusahaan Anda.' } };
       }
+    }
+
+    const cycleError = await findBomCycleError(adminClient, appUser.company_id, existingBom.parent_item_id, componentIds, bomId);
+    if (cycleError) {
+      return { status: 400, body: { error: cycleError } };
     }
 
     const { error: updateError } = await adminClient

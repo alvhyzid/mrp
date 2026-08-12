@@ -33,14 +33,14 @@ create table if not exists users (
 alter table if exists companies enable row level security;
 alter table if exists users enable row level security;
 
-create policy if not exists companies_select_for_company on companies
+create policy companies_select_for_company on companies
   for select using (company_id = current_setting('app.current_company_id')::integer);
 
-create policy if not exists users_select_for_company on users
+create policy users_select_for_company on users
   for select using (company_id = current_setting('app.current_company_id')::integer);
 
-create policy if not exists companies_insert_admin on companies
+create policy companies_insert_admin on companies
   for insert with check (true);
 
-create policy if not exists users_insert_for_company on users
+create policy users_insert_for_company on users
   for insert with check (company_id = current_setting('app.current_company_id')::integer);

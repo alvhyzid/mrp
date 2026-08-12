@@ -31,7 +31,7 @@ Paket langganan yang tersedia.
 - `max_users`, `max_items` (batasan sesuai paket)
 
 ### `users`
-- `user_id`, `company_id`, `name`, `email`, `password_hash`
+- `user_id`, `company_id`, `name`, `email`, `auth_uid` (referensi ke Supabase Auth `auth.users.id` — password dikelola sepenuhnya oleh Supabase Auth, tidak disimpan ulang di tabel ini)
 - `role` (super_admin / company_admin / production_staff / warehouse_staff / purchasing_staff / viewer)
 - `status` (active/invited/suspended)
 

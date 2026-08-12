@@ -335,6 +335,11 @@ export default function CustomerPurchaseOrdersPage() {
   );
 
   const expandedPo = purchaseOrders.find((po) => po.customer_purchase_order_id === expandedPoId) ?? null;
+  // Server sudah masking unit_price jadi null untuk role yang tidak berhak (sama
+  // seperti Items/BOM) — kolom harga cuma dirender kalau setidaknya satu baris
+  // punya nilai. th dan td di tabel di bawah WAJIB pakai variabel yang sama supaya
+  // jumlah kolom keduanya tidak pernah beda.
+  const showPriceColumn = expandedPo ? expandedPo.lines.some((line) => line.unit_price !== null) : false;
 
   if (checkingAccess) {
     return (
@@ -415,9 +420,11 @@ export default function CustomerPurchaseOrdersPage() {
                     <tr className="border-b">
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Item</th>
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Qty</th>
-                      {expandedPo.lines.some((l) => l.unit_price !== null) || canManagePo ? (
-                        <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Harga Satuan</th>
-                      ) : null}
+                      {/* Server sudah masking unit_price jadi null untuk role yang tidak
+                          berhak (sama seperti Items/BOM) — kolom ini cuma dirender kalau
+                          setidaknya satu baris punya nilai, dan th/td harus konsisten
+                          pakai kondisi yang sama supaya jumlah kolom tidak pernah beda. */}
+                      {showPriceColumn ? <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Harga Satuan</th> : null}
                     </tr>
                   </thead>
                   <tbody>
@@ -429,7 +436,9 @@ export default function CustomerPurchaseOrdersPage() {
                         <td className="px-3 py-1.5">
                           {line.qty_ordered} {line.item_base_uom}
                         </td>
-                        <td className="px-3 py-1.5">{line.unit_price === null ? <span className="text-muted-foreground">-</span> : line.unit_price}</td>
+                        {showPriceColumn ? (
+                          <td className="px-3 py-1.5">{line.unit_price === null ? <span className="text-muted-foreground">-</span> : line.unit_price}</td>
+                        ) : null}
                       </tr>
                     ))}
                   </tbody>

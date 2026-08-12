@@ -19,7 +19,7 @@ export async function listItems(request: NextRequest): Promise<ApiResult> {
     const { data, error } = await adminClient
       .from('items')
       .select(
-        'item_id, item_code, name, type, base_uom, purchase_uom, uom_conversion_factor, shelf_life_days, min_stock_level, reorder_point, reorder_qty, is_active, standard_cost'
+        'item_id, item_code, name, type, base_uom, purchase_uom, uom_conversion_factor, shelf_life_days, min_stock_level, reorder_point, reorder_qty, is_active, standard_cost, bpom_registration_number'
       )
       .eq('company_id', appUser.company_id)
       .order('item_code', { ascending: true });

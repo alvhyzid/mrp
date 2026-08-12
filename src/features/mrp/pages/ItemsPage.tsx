@@ -27,6 +27,7 @@ type Item = {
   reorder_qty: number | null;
   is_active: boolean;
   standard_cost: number | null;
+  bpom_registration_number: string | null;
 };
 
 const emptyForm = {
@@ -41,6 +42,7 @@ const emptyForm = {
   reorder_point: '',
   reorder_qty: '',
   standard_cost: '',
+  bpom_registration_number: '',
   is_active: true
 };
 
@@ -143,6 +145,7 @@ export default function ItemsPage() {
       reorder_point: item.reorder_point === null ? '' : String(item.reorder_point),
       reorder_qty: item.reorder_qty === null ? '' : String(item.reorder_qty),
       standard_cost: item.standard_cost === null ? '' : String(item.standard_cost),
+      bpom_registration_number: item.bpom_registration_number ?? '',
       is_active: item.is_active
     });
     setFormStatus('idle');
@@ -174,6 +177,7 @@ export default function ItemsPage() {
       reorder_point: form.reorder_point,
       reorder_qty: form.reorder_qty,
       standard_cost: form.standard_cost,
+      bpom_registration_number: form.bpom_registration_number,
       is_active: form.is_active
     };
 
@@ -433,6 +437,15 @@ export default function ItemsPage() {
                     />
                   </label>
                 ) : null}
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">No. Registrasi BPOM</span>
+                  <Input
+                    placeholder="mis. BPOM RI MD 023733999101561"
+                    value={form.bpom_registration_number}
+                    onChange={(event) => setForm((prev) => ({ ...prev, bpom_registration_number: event.target.value }))}
+                  />
+                </label>
 
                 <label className="flex items-center gap-2 sm:col-span-2">
                   <input

@@ -13,6 +13,7 @@ export interface ItemInput {
   reorder_qty: number | null;
   is_active: boolean;
   standard_cost: number | null;
+  bpom_registration_number: string | null;
 }
 
 function parseOptionalNumber(value: unknown, fieldLabel: string): { value: number | null; error?: string } {
@@ -62,6 +63,8 @@ export function parseItemInput(body: Record<string, unknown>): { input?: ItemInp
   const standardCost = parseOptionalNumber(body.standard_cost, 'Standard cost');
   if (standardCost.error) return { error: standardCost.error };
 
+  const bpomRegistrationNumber = String(body.bpom_registration_number ?? '').trim();
+
   return {
     input: {
       item_code,
@@ -75,7 +78,8 @@ export function parseItemInput(body: Record<string, unknown>): { input?: ItemInp
       reorder_point: reorderPoint.value,
       reorder_qty: reorderQty.value,
       is_active: body.is_active === undefined ? true : Boolean(body.is_active),
-      standard_cost: standardCost.value
+      standard_cost: standardCost.value,
+      bpom_registration_number: bpomRegistrationNumber || null
     }
   };
 }

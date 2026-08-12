@@ -57,6 +57,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 - Faktor Konversi Satuan Beli→Dasar (uom_conversion_factor)
 - Umur Simpan Hari (shelf_life_days) · Stok Minimum (min_stock_level) · Titik Pesan Ulang (reorder_point) · Jumlah Pesan Ulang (reorder_qty) · Status Aktif (is_active)
 - Biaya Standar — SENSITIF (standard_cost)
+- Nomor Registrasi BPOM — nullable (bpom_registration_number)
 
 > Catatan: MOQ (minimum order quantity) sengaja tidak dimodelkan — Purchasing input sesuai realita pembelian.
 
@@ -84,8 +85,9 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 
 **Database Stok per Lot/Batch** (`lots`)
 - ID Lot (lot_id) · ID Perusahaan (company_id) · ID Lokasi Pabrik (production_plant_id) · ID Item (item_id) · Nomor Lot (lot_number)
-- Tanggal Kadaluarsa (expiry_date) · Tanggal Terima/Produksi (produced_or_received_date) · Jumlah Tersedia dalam satuan dasar (quantity_on_hand) · Sumber (source_type) · Status (status)
-- Biaya per Unit — SENSITIF (unit_cost)
+- Tanggal Kadaluarsa (expiry_date) · Tanggal Terima/Produksi (produced_or_received_date) · Jumlah Tersedia dalam satuan dasar (quantity_on_hand) · Sumber: dibeli/diproduksi/dari client (source_type) · Status (status)
+- ID PO Client Asal — wajib diisi kalau sumbernya dari client (source_customer_purchase_order_id)
+- Biaya per Unit — SENSITIF, otomatis 0 kalau dari client (unit_cost)
 
 **Database Jejak Lot** (`lot_genealogy`)
 - ID Jejak (lot_genealogy_id) · ID Lot Hasil (output_lot_id) · ID Lot Komponen (component_lot_id) · Jumlah Terpakai (qty_consumed)
@@ -116,10 +118,13 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 - ID Baris (goods_receipt_line_id) · ID Penerimaan (goods_receipt_id) · ID Baris PO (purchase_order_line_id) · ID Item (item_id) · Jumlah Diterima dalam satuan beli (qty_received) · ID Lot Baru (lot_id)
 
 **Database Client** (`customers`)
-- ID Client (customer_id) · ID Perusahaan (company_id) · Nama (name) · Info Kontak (contact_info)
+- ID Client (customer_id) · ID Perusahaan (company_id) · Nama (name)
+- Tipe: perusahaan/perorangan (customer_type)
+- Info Kontak (contact_info)
 
 **Database Header PO dari Client** (`customer_purchase_orders`)
 - ID PO Client (customer_purchase_order_id) · ID Perusahaan (company_id) · ID Client (customer_id) · Nomor PO Client (po_number) · Tanggal PO (po_date) · Tanggal Kirim Diminta (requested_ship_date)
+- Nama PIC (pic_name) · Jabatan PIC (pic_position) · No HP PIC (pic_phone) · Email PIC (pic_email)
 - Status: baru/ditunda/batal/sudah diproses (status)
 - Syarat Pembayaran (payment_terms) · Status Pembayaran (payment_status)
 - Diproses Oleh (processed_by) · Waktu Diproses (processed_at)
@@ -135,6 +140,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 
 **Database Header SO** (`sales_orders`)
 - ID SO (sales_order_id) · ID Perusahaan (company_id) · ID PO Client Asal (customer_purchase_order_id) · ID Client (customer_id)
+- Nomor SO Internal — format sendiri, beda dari nomor PO client (so_number)
 - ID Lokasi Pabrik — dipilih wajib saat "Process" (production_plant_id)
 - Status (status) · Tanggal Dibuat (created_at)
 

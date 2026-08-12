@@ -109,6 +109,7 @@ Semua "benda" yang dikenal sistem — bahan mentah, WIP, produk jadi, kemasan. P
 - `uom_conversion_factor` (berapa `base_uom` per 1 `purchase_uom` — mis. 1000 untuk kg→gram; kalau `purchase_uom` = `base_uom`, factor = 1, otomatis tanpa konversi)
 - `shelf_life_days`, `min_stock_level`, `reorder_point`, `reorder_qty`, `is_active`
 - `standard_cost` (nullable — nilai sensitif, lihat "Kontrol Akses Data Finansial")
+- `bpom_registration_number` (nullable — mis. "BPOM RI MD 023733999101561", khusus produk jadi yang sudah teregistrasi)
 
 > **Catatan MOQ:** sengaja TIDAK dimodelkan. Purchasing beli sesuai realita (termasuk MOQ dari supplier), lalu input hasil pembelian sesuai data invoice apa adanya — sistem tidak memvalidasi/membatasi jumlah beli.
 
@@ -145,9 +146,12 @@ Menyimpan "Base Formula" sebagai referensi murni untuk R&D — TIDAK terhubung f
 Stok dipecah per lot, per lokasi pabrik (karena stok secara fisik ada di satu tempat, dan 1 plant = 1 gudang).
 - `lot_id`, `company_id`, `production_plant_id`, `item_id`, `lot_number`
 - `expiry_date`, `produced_or_received_date`
-- `quantity_on_hand` (dalam `base_uom`), `source_type` (purchased / produced)
+- `quantity_on_hand` (dalam `base_uom`), `source_type` (purchased / produced / customer_supplied)
 - `status` (available / quarantine / expired / consumed)
 - `unit_cost` (nullable — nilai sensitif, lihat "Kontrol Akses Data Finansial")
+- `source_customer_purchase_order_id` (nullable, → `customer_purchase_order_id`) — WAJIB diisi kalau `source_type = customer_supplied`, untuk lacak balik bahan/kemasan kiriman client ke PO asalnya
+
+> **Bahan/kemasan dari client (`customer_supplied`):** pola umum di operasional Anda — client kadang kirim sendiri bahan/kemasan (botol, box, bahan aktif, dst) untuk dipakai produksi order mereka. Lot dengan `source_type = customer_supplied` otomatis `unit_cost = 0` (karena memang tidak dibeli), supaya kalkulasi margin tetap akurat tanpa logika khusus tambahan. **Catatan penting:** karena ini kepunyaan client tertentu (bukan stok umum perusahaan), sebaiknya UI memberi peringatan lembut (bukan blokir keras) kalau lot ini coba dipakai di Work Order yang terhubung ke customer BERBEDA dari `source_customer_purchase_order_id`-nya — mencegah salah pakai bahan kiriman client A untuk produksi client B.
 
 ### `lot_genealogy`
 Jejak "lot ini dibuat dari lot apa saja" — inti traceability BPOM/halal.
@@ -179,11 +183,15 @@ Konfirmasi kedatangan barang oleh Warehouse — memicu stok bertambah dan otomat
 > **Alur konversi satuan:** Purchasing input PO & terima invoice sesuai satuan beli (mis. "275kg, Rp 268.000/kg"). Saat Warehouse konfirmasi barang datang, sistem otomatis konversi ke satuan dasar (275.000 gram, Rp 268/gram) dan itulah yang tersimpan di `lots.unit_cost` — BOM & pemakaian produksi otomatis cocok karena sama-sama `base_uom`.
 
 ### `customers`
-- `customer_id`, `company_id`, `name`, `contact_info`
+Order bisa dari perusahaan (dengan PIC yang bisa beda-beda tiap order) atau perorangan langsung.
+- `customer_id`, `company_id`, `name` (nama perusahaan ATAU nama perorangan, tergantung `customer_type`)
+- `customer_type` (company / individual)
+- `contact_info`
 
 ### `customer_purchase_orders` & `customer_purchase_order_lines`
 PO dari client — TERPISAH dari `sales_orders`. Statusnya berjalan sebelum jadi komitmen produksi, dan **masih bisa diedit/ditunda/dibatalkan** selama di status `new`. Wajib disetujui **3 department secara terpisah** (lihat `customer_po_approvals`) sebelum tombol "Process" aktif — begitu diproses, `sales_orders` otomatis tercipta dari sini (data lines di-*copy*, bukan cuma dirujuk).
 - Header: `customer_purchase_order_id`, `company_id`, `customer_id`, `po_number`, `po_date`, `requested_ship_date`
+- `pic_name`, `pic_position`, `pic_phone`, `pic_email` (nullable — data PIC order INI spesifik, karena bisa beda tiap order meski perusahaan client-nya sama, mis. beda staf R&D yang mengajukan)
 - `status` (new / on_hold / cancelled / processed) — `new` → `processed` HANYA boleh terjadi kalau ketiga baris `customer_po_approvals` berstatus `approved`
 - `payment_terms` (full / tempo), `payment_status` (pending / partial / confirmed)
 - `processed_by` (nullable, → `user_id`), `processed_at`
@@ -201,7 +209,9 @@ Approval wajib dari 3 department sebelum PO client bisa diproses jadi SO — sek
 
 ### `sales_orders` & `sales_order_lines`
 Tercipta OTOMATIS saat `customer_purchase_orders` diproses — komitmen produksi yang sudah "terkunci". Orang yang klik "Process" WAJIB memilih `production_plant_id` — penting karena menentukan SDM (termasuk PHL) yang tersedia untuk ditugaskan (`employees` terikat per plant).
-- Header: `sales_order_id`, `company_id`, `customer_purchase_order_id`, `customer_id`, `production_plant_id` (dipilih saat "Process"), `status` (confirmed / in_production / completed / cancelled), `created_at`
+- Header: `sales_order_id`, `company_id`, `customer_purchase_order_id`, `customer_id`
+- `so_number` (nomor SO internal yang bisa dibaca manusia, format sesuai kebiasaan Anda mis. "020/2-ITM/2026" — auto-generated saat "Process" diklik; BEDA dari `customer_purchase_orders.po_number` yang merujuk nomor PO milik client)
+- `production_plant_id` (dipilih saat "Process"), `status` (confirmed / in_production / completed / cancelled), `created_at`
 - Line: `sales_order_line_id`, `sales_order_id`, `item_id`, `qty_ordered`, `unit_price` (disalin dari PO)
 
 > **Satu SO line bisa punya BANYAK Work Order** — PPIC bebas memecah 1 SO line jadi beberapa WO (mis. per hari/per kapasitas produksi: WO day 1, day 2, day 3), tidak harus 1:1. Dashboard PO tetap menjumlahkan total progres dari semua WO yang terhubung ke SO line yang sama.

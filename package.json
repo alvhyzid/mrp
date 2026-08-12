@@ -9,7 +9,8 @@
     "lint": "eslint . --ext .ts,.tsx",
     "seed:test-tenants": "node scripts/seed-test-tenants.js",
     "super-admin:test": "vitest run tests/super_admin.test.ts",
-    "super-admin:seed": "node scripts/test-super-admin.js"
+    "super-admin:seed": "node scripts/test-super-admin.js",
+    "role-access:test": "vitest run tests/role_hierarchy_financial_access.test.ts"
   },
   "dependencies": {
     "@radix-ui/react-select": "^2.3.7",

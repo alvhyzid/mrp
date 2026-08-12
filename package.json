@@ -12,7 +12,8 @@
     "seed:debug-boms": "node scripts/seed-debug-boms.js",
     "super-admin:test": "vitest run tests/super_admin.test.ts",
     "super-admin:seed": "node scripts/test-super-admin.js",
-    "role-access:test": "vitest run tests/role_hierarchy_financial_access.test.ts"
+    "role-access:test": "vitest run tests/role_hierarchy_financial_access.test.ts",
+    "attendance-access:test": "vitest run tests/employee_attendance_access.test.ts"
   },
   "dependencies": {
     "@radix-ui/react-select": "^2.3.7",

@@ -14,6 +14,7 @@ Dokumen ini adalah rancangan struktur database sistem MRP. Ditulis dalam bahasa 
 5. **Konvensi penamaan primary key**: `nama_tabel_tunggal_id` (mis. tabel `employees` → primary key `employee_id`). Nama ini identik dengan nama yang dipakai tabel lain saat mereferensikannya sebagai foreign key.
 6. **Multi-plant sejak awal** — 1 company bisa punya beberapa lokasi pabrik fisik (`production_plants`), masing-masing dengan gudang, mesin, tenaga kerja sendiri.
 7. **Data finansial dibatasi ketat** — lihat bagian "Kontrol Akses Data Finansial" di bawah, ini prinsip lintas-tabel yang berlaku di banyak tempat.
+8. **Dashboard per-department, data tetap satu sumber** — begitu login, tampilan diarahkan sesuai `role`/`department` user (Warehouse lihat dashboard ala WMS, HRD lihat data karyawan, dst) — TAPI ini murni soal TAMPILAN/ROUTING di aplikasi, BUKAN pemisahan tabel. `items`, `work_orders`, dan tabel lain yang lintas-department (dipakai lebih dari 1 department) TETAP satu tabel, satu sumber kebenaran — cukup difilter/ditata beda sesuai sudut pandang department yang login.
 
 ---
 
@@ -91,10 +92,21 @@ Mencatat gangguan operasional yang menyebabkan produksi terhambat/terhenti — m
 Data pekerja pabrik untuk keperluan biaya SDM — terpisah dari `users`. **Akses ke kolom gaji dibatasi ketat, lihat "Kontrol Akses Data Finansial" di atas.**
 - `employee_id`, `company_id`, `production_plant_id` (nullable — pekerja lapangan biasanya terikat 1 lokasi, staf non-produksi mungkin tidak)
 - `name`, `position` (mis. "Operator Produksi", "QC")
+- `department` (production / ppic / finance / purchasing / warehouse / hr / management — dipakai untuk filter dashboard per-department & scoping absensi)
 - `wage_type` (hourly / daily / monthly / piece_rate)
 - `wage_rate` (nilai sensitif — lihat kontrol akses)
 - `linked_user_id` (nullable, merujuk ke `user_id`)
 - `is_active`
+
+### `employee_attendance`
+Absensi harian umum (jam masuk-pulang) — berlaku untuk SEMUA karyawan termasuk staf kantoran (Finance, HRD sendiri, dst) yang tidak pernah masuk ke Work Order sama sekali. Terpisah dari `work_order_assignments` yang tujuannya beda (biaya produksi, bukan kehadiran). Fondasi awal untuk modul HRD yang akan meluas ke payroll/legal nanti — tidak dibangun sekaligus sekarang.
+- `employee_attendance_id`, `company_id`, `employee_id`
+- `attendance_date`
+- `check_in_at`, `check_out_at` (nullable sampai check-out)
+- `status` (present / late / absent / on_leave / sick)
+- `notes` (nullable)
+
+> **Akses:** `company_admin` & `hr_manager`/`hr_staff` — akses penuh semua karyawan. Manager tiap department — bisa lihat absensi staf DI department mereka sendiri (`employees.department` yang sama), untuk keperluan perencanaan kerja. Karyawan — cuma bisa lihat/submit absensinya sendiri.
 
 ### `company_settings`
 Konstanta yang bisa beda per perusahaan (tenant).

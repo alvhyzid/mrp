@@ -74,6 +74,12 @@ export default function DashboardPage() {
               <Link href="/boms" className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-50">
                 BOM (Resep)
               </Link>
+              <Link href="/customer-purchase-orders" className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-50">
+                PO Client
+              </Link>
+              <Link href="/work-orders" className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-50">
+                Work Order
+              </Link>
               <Link href="/team" className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-50">
                 Kelola Tim
               </Link>

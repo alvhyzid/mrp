@@ -8,10 +8,11 @@ const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const companyAPassword = process.env.DEBUG_COMPANY_A_PASSWORD;
 const companyBPassword = process.env.DEBUG_COMPANY_B_PASSWORD;
 const companyAStaffPassword = process.env.DEBUG_COMPANY_A_STAFF_PASSWORD;
+const companyAApproverPassword = process.env.DEBUG_COMPANY_A_APPROVER_PASSWORD;
 
-if (!supabaseUrl || !serviceRoleKey || !companyAPassword || !companyBPassword || !companyAStaffPassword) {
+if (!supabaseUrl || !serviceRoleKey || !companyAPassword || !companyBPassword || !companyAStaffPassword || !companyAApproverPassword) {
   console.error(
-    'Environment variables NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, DEBUG_COMPANY_A_PASSWORD, DEBUG_COMPANY_B_PASSWORD and DEBUG_COMPANY_A_STAFF_PASSWORD must be set.'
+    'Environment variables NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, DEBUG_COMPANY_A_PASSWORD, DEBUG_COMPANY_B_PASSWORD, DEBUG_COMPANY_A_STAFF_PASSWORD and DEBUG_COMPANY_A_APPROVER_PASSWORD must be set.'
   );
   process.exit(1);
 }
@@ -100,7 +101,11 @@ async function main() {
     // di browser dan lihat langsung bagaimana tampilan berubah untuk role yang TIDAK
     // termasuk company_admin/general_manager/finance_manager — mis. field/kolom
     // finansial (standard_cost, dst) tidak akan muncul untuk akun ini.
-    { name: 'Company A Production Staff', email: 'staff.a@debug.mrp', password: companyAStaffPassword, role: 'production_staff', status: 'active', companyId: companyA.company_id }
+    { name: 'Company A Production Staff', email: 'staff.a@debug.mrp', password: companyAStaffPassword, role: 'production_staff', status: 'active', companyId: companyA.company_id },
+    // Akun approval department (dipakai untuk uji alur approval PO client 3
+    // department — masing-masing hanya bisa approve/reject department-nya sendiri).
+    { name: 'Company A Finance Manager', email: 'finance.a@debug.mrp', password: companyAApproverPassword, role: 'finance_manager', status: 'active', companyId: companyA.company_id },
+    { name: 'Company A PPIC Manager', email: 'ppic.a@debug.mrp', password: companyAApproverPassword, role: 'ppic_manager', status: 'active', companyId: companyA.company_id }
   ];
 
   for (const user of users) {
@@ -125,9 +130,11 @@ async function main() {
     console.log(`Ensured user ${user.email} (${user.role}) for company_id=${user.companyId}`);
   }
 
-  console.log('\nLogin credentials (see DEBUG_COMPANY_A_PASSWORD / DEBUG_COMPANY_B_PASSWORD / DEBUG_COMPANY_A_STAFF_PASSWORD in your .env.local):');
+  console.log('\nLogin credentials (see DEBUG_COMPANY_A_PASSWORD / DEBUG_COMPANY_B_PASSWORD / DEBUG_COMPANY_A_STAFF_PASSWORD / DEBUG_COMPANY_A_APPROVER_PASSWORD in your .env.local):');
   console.log('Company A admin (full access): company.a@debug.mrp');
   console.log('Company A production_staff (restricted access): staff.a@debug.mrp');
+  console.log('Company A finance_manager (approve department finance): finance.a@debug.mrp');
+  console.log('Company A ppic_manager (approve department ppic): ppic.a@debug.mrp');
   console.log('Company B admin (isolation check): company.b@debug.mrp');
 }
 

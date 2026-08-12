@@ -44,7 +44,13 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 
 **Database Pekerja** (`employees`) — *akses gaji dibatasi, lihat kontrol akses di atas*
 - ID Pekerja (employee_id) · ID Perusahaan (company_id) · ID Lokasi Pabrik — nullable (production_plant_id) · Nama (name) · Posisi (position)
+- Department: production/ppic/finance/purchasing/warehouse/hr/management (department)
 - Jenis Upah (wage_type) · Tarif Upah — SENSITIF (wage_rate) · ID User Terkait (linked_user_id) · Status Aktif (is_active)
+
+**Database Absensi Harian** (`employee_attendance`)
+- ID Absensi (employee_attendance_id) · ID Perusahaan (company_id) · ID Pekerja (employee_id)
+- Tanggal (attendance_date) · Jam Masuk (check_in_at) · Jam Pulang (check_out_at)
+- Status: hadir/telat/absen/cuti/sakit (status) · Catatan (notes)
 
 **Database Pengaturan Perusahaan** (`company_settings`)
 - ID Pengaturan (company_setting_id) · ID Perusahaan (company_id) · Kunci (setting_key) · Nilai (setting_value)

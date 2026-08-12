@@ -51,3 +51,33 @@ export const BOM_MANAGE_ROLES = [...LEADERSHIP_ROLES, 'ppic_manager', 'ppic_staf
 export function canManageBom(role: string | undefined | null): boolean {
   return !!role && BOM_MANAGE_ROLES.includes(role);
 }
+
+// Role yang boleh mengelola customer & PO client — harus sinkron dengan policy
+// customers_write_ppic / customer_purchase_orders_insert_ppic di
+// supabase/migrations/20260812153100_customer_purchase_orders.sql.
+export const CUSTOMER_PO_MANAGE_ROLES = [...LEADERSHIP_ROLES, 'ppic_manager', 'ppic_staff'];
+
+export function canManageCustomerPo(role: string | undefined | null): boolean {
+  return !!role && CUSTOMER_PO_MANAGE_ROLES.includes(role);
+}
+
+// Pemetaan department approval PO client -> role yang boleh approve/reject-nya.
+// Harus sinkron dengan catatan "Pemetaan department ke role" di
+// docs/rancangan-skema-database-mrp.md dan policy
+// customer_po_approvals_update_by_department.
+export function canApproveDepartment(role: string | undefined | null, department: string): boolean {
+  if (!role) return false;
+  if (department === 'finance') return role === 'finance_manager';
+  if (department === 'ppic') return role === 'ppic_manager';
+  if (department === 'manager') return isCompanyLeadership(role);
+  return false;
+}
+
+// Role yang boleh membuat/mengelola Work Order — harus sinkron dengan policy
+// work_orders_write_production di
+// supabase/migrations/20260812153500_work_orders.sql.
+export const WORK_ORDER_MANAGE_ROLES = [...LEADERSHIP_ROLES, 'ppic_manager', 'ppic_staff', 'production_manager', 'production_staff'];
+
+export function canManageWorkOrder(role: string | undefined | null): boolean {
+  return !!role && WORK_ORDER_MANAGE_ROLES.includes(role);
+}

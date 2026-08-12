@@ -95,18 +95,31 @@ const items = [
 ];
 
 async function main() {
+  // Dicari lewat email debug user, BUKAN nama company — nama company bisa berubah
+  // kapan saja kalau user mengganti nama perusahaannya lewat halaman /company
+  // (mis. "Company A" -> "PT ITM"), tapi email debug user tetap tetap.
+  const { data: debugUser, error: debugUserError } = await admin
+    .from('users')
+    .select('company_id')
+    .eq('email', 'company.a@debug.mrp')
+    .maybeSingle();
+
+  if (debugUserError) {
+    throw new Error(`Failed to find Company A debug user: ${debugUserError.message}`);
+  }
+
+  if (!debugUser) {
+    throw new Error('Company A debug user (company.a@debug.mrp) not found. Run npm run seed:test-tenants first.');
+  }
+
   const { data: company, error: companyError } = await admin
     .from('companies')
     .select('company_id,name')
-    .eq('name', 'Company A')
-    .maybeSingle();
+    .eq('company_id', debugUser.company_id)
+    .single();
 
   if (companyError) {
-    throw new Error(`Failed to find Company A: ${companyError.message}`);
-  }
-
-  if (!company) {
-    throw new Error('Company A not found. Run npm run seed:test-tenants first.');
+    throw new Error(`Failed to load Company A: ${companyError.message}`);
   }
 
   for (const item of items) {

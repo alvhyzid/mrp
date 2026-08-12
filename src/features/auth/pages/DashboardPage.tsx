@@ -71,6 +71,9 @@ export default function DashboardPage() {
               <Link href="/items" className="inline-flex items-center justify-center rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700">
                 Daftar Item
               </Link>
+              <Link href="/boms" className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-50">
+                BOM (Resep)
+              </Link>
               <Link href="/team" className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-50">
                 Kelola Tim
               </Link>

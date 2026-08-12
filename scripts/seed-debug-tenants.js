@@ -36,6 +36,34 @@ async function findOrCreateCompany(company) {
   return insertedCompany;
 }
 
+// Perusahaan sudah ada kalau debug user ini SUDAH terhubung ke sebuah company_id
+// (dicek lewat auth_uid, bukan nama company) — nama company bisa saja sudah diubah
+// user lewat halaman /company (mis. "Company A" -> "PT ITM"). Kalau belum pernah
+// ada, baru cari/buat company by-name sebagai bootstrap awal.
+async function resolveCompanyForDebugUser(email, fallbackCompany) {
+  const { data: existingUsers, error: listError } = await admin.auth.admin.listUsers({ perPage: 100, page: 1 });
+  if (listError) {
+    throw new Error(`Failed to list auth users: ${listError.message}`);
+  }
+  const existingAuthUser = existingUsers.users.find((item) => item.email === email);
+
+  if (existingAuthUser) {
+    const { data: existingAppUser, error: appUserError } = await admin.from('users').select('company_id').eq('auth_uid', existingAuthUser.id).maybeSingle();
+    if (appUserError) {
+      throw new Error(`Failed to look up existing app user for ${email}: ${appUserError.message}`);
+    }
+    if (existingAppUser?.company_id) {
+      const { data: company, error: companyError } = await admin.from('companies').select('company_id,name').eq('company_id', existingAppUser.company_id).single();
+      if (companyError) {
+        throw new Error(`Failed to load company for ${email}: ${companyError.message}`);
+      }
+      return company;
+    }
+  }
+
+  return findOrCreateCompany(fallbackCompany);
+}
+
 async function findOrCreateAuthUser(user) {
   const { data: existingUsers, error: listError } = await admin.auth.admin.listUsers({ perPage: 100, page: 1 });
   if (listError) {
@@ -62,8 +90,8 @@ async function findOrCreateAuthUser(user) {
 }
 
 async function main() {
-  const companyA = await findOrCreateCompany({ name: 'Company A', industry_type: 'manufacturing', status: 'trial' });
-  const companyB = await findOrCreateCompany({ name: 'Company B', industry_type: 'manufacturing', status: 'trial' });
+  const companyA = await resolveCompanyForDebugUser('company.a@debug.mrp', { name: 'Company A', industry_type: 'manufacturing', status: 'trial' });
+  const companyB = await resolveCompanyForDebugUser('company.b@debug.mrp', { name: 'Company B', industry_type: 'manufacturing', status: 'trial' });
 
   const users = [
     { name: 'Company A User', email: 'company.a@debug.mrp', password: companyAPassword, role: 'company_admin', status: 'active', companyId: companyA.company_id },

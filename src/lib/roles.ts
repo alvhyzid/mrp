@@ -42,3 +42,12 @@ export const FINANCIAL_DATA_ROLES = ['company_admin', 'general_manager', 'financ
 export function canViewFinancialData(role: string | undefined | null): boolean {
   return !!role && FINANCIAL_DATA_ROLES.includes(role);
 }
+
+// Role yang boleh mengelola BOM (resep) — harus sinkron dengan policy
+// boms_write_ppic / bom_lines_write_ppic di
+// supabase/migrations/20260812153000_bom_routing_workcenters.sql.
+export const BOM_MANAGE_ROLES = [...LEADERSHIP_ROLES, 'ppic_manager', 'ppic_staff', 'production_manager'];
+
+export function canManageBom(role: string | undefined | null): boolean {
+  return !!role && BOM_MANAGE_ROLES.includes(role);
+}

@@ -30,6 +30,7 @@ describe('role hierarchy & financial-access RLS verification', () => {
   let financeAuthUid: string;
   let hrAuthUid: string;
   let prodStaffAuthUid: string;
+  let prodManagerAuthUid: string;
 
   const EMPLOYEE1_WAGE = 200000;
   const EMPLOYEE2_WAGE = 175000;
@@ -90,9 +91,11 @@ describe('role hierarchy & financial-access RLS verification', () => {
     const financeUser = await getOrCreateAuthUser('finance.roletest@debug.mrp', roleTestPassword, 'Finance RoleTest');
     const hrUser = await getOrCreateAuthUser('hr.roletest@debug.mrp', roleTestPassword, 'HR RoleTest');
     const prodStaffUser = await getOrCreateAuthUser('prodstaff.roletest@debug.mrp', roleTestPassword, 'Production Staff RoleTest');
+    const prodManagerUser = await getOrCreateAuthUser('prodmanager.roletest@debug.mrp', roleTestPassword, 'Production Manager RoleTest');
     financeAuthUid = financeUser.id;
     hrAuthUid = hrUser.id;
     prodStaffAuthUid = prodStaffUser.id;
+    prodManagerAuthUid = prodManagerUser.id;
 
     const { data: appUsers, error: appUsersError } = await adminClient
       .from('users')
@@ -100,7 +103,8 @@ describe('role hierarchy & financial-access RLS verification', () => {
         [
           { auth_uid: financeAuthUid, company_id: companyId, name: 'Finance RoleTest', email: 'finance.roletest@debug.mrp', role: 'finance_manager', status: 'active' },
           { auth_uid: hrAuthUid, company_id: companyId, name: 'HR RoleTest', email: 'hr.roletest@debug.mrp', role: 'hr_manager', status: 'active' },
-          { auth_uid: prodStaffAuthUid, company_id: companyId, name: 'Production Staff RoleTest', email: 'prodstaff.roletest@debug.mrp', role: 'production_staff', status: 'active' }
+          { auth_uid: prodStaffAuthUid, company_id: companyId, name: 'Production Staff RoleTest', email: 'prodstaff.roletest@debug.mrp', role: 'production_staff', status: 'active' },
+          { auth_uid: prodManagerAuthUid, company_id: companyId, name: 'Production Manager RoleTest', email: 'prodmanager.roletest@debug.mrp', role: 'production_manager', status: 'active' }
         ],
         { onConflict: 'auth_uid' }
       )
@@ -191,6 +195,7 @@ describe('role hierarchy & financial-access RLS verification', () => {
     await adminClient.auth.admin.deleteUser(financeAuthUid);
     await adminClient.auth.admin.deleteUser(hrAuthUid);
     await adminClient.auth.admin.deleteUser(prodStaffAuthUid);
+    await adminClient.auth.admin.deleteUser(prodManagerAuthUid);
   });
 
   it('pg_policies employees: hanya ada policy INSERT & UPDATE, TIDAK ADA policy SELECT (default-deny)', async () => {
@@ -252,6 +257,24 @@ describe('role hierarchy & financial-access RLS verification', () => {
     const byId: Record<number, number | null> = Object.fromEntries(data!.map((r: any) => [r.employee_id, r.wage_rate]));
     expect(byId[employee1Id]).toBe(EMPLOYEE1_WAGE); // dirinya sendiri
     expect(byId[employee2Id]).toBeNull(); // rekan kerja, bukan dirinya
+  });
+
+  it('production_manager: employees_secure -> BISA lihat name/position (perlu untuk penugasan kerja), TAPI wage_rate/wage_type tetap null', async () => {
+    const client = await signInAs('prodmanager.roletest@debug.mrp');
+    const { data, error } = await client
+      .from('employees_secure')
+      .select('employee_id, name, position, wage_type, wage_rate')
+      .in('employee_id', [employee1Id, employee2Id])
+      .order('employee_id');
+    expect(error).toBeNull();
+    console.log('production_manager employees_secure raw result:', JSON.stringify(data, null, 2));
+    expect(data).toHaveLength(2);
+    for (const row of data!) {
+      expect(row.name).not.toBeNull();
+      expect(row.position).not.toBeNull();
+      expect(row.wage_type).toBeNull();
+      expect(row.wage_rate).toBeNull();
+    }
   });
 
   it('work_order_consumption mengurangi lots.quantity_on_hand sesuai jumlah dipakai (before/after)', async () => {

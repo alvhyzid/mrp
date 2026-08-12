@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { isCompanyLeadership } from '@/lib/roles';
 
 const itemTypes = ['raw_material', 'wip', 'finished_good', 'packaging'];
 
@@ -32,7 +33,9 @@ type Item = {
   item_code: string;
   name: string;
   type: string;
-  uom: string;
+  base_uom: string;
+  purchase_uom: string;
+  uom_conversion_factor: number;
   shelf_life_days: number | null;
   min_stock_level: number;
   reorder_point: number | null;
@@ -45,7 +48,9 @@ const emptyForm = {
   item_code: '',
   name: '',
   type: itemTypes[0],
-  uom: '',
+  base_uom: '',
+  purchase_uom: '',
+  uom_conversion_factor: '1',
   shelf_life_days: '',
   min_stock_level: '0',
   reorder_point: '',
@@ -122,7 +127,7 @@ export default function ItemsPage() {
         return;
       }
 
-      setCanManage(meData?.user?.role === 'company_admin');
+      setCanManage(isCompanyLeadership(meData?.user?.role));
       setCheckingAccess(false);
       await loadItems();
     };
@@ -143,7 +148,9 @@ export default function ItemsPage() {
       item_code: item.item_code,
       name: item.name,
       type: item.type,
-      uom: item.uom,
+      base_uom: item.base_uom,
+      purchase_uom: item.purchase_uom,
+      uom_conversion_factor: String(item.uom_conversion_factor ?? 1),
       shelf_life_days: item.shelf_life_days === null ? '' : String(item.shelf_life_days),
       min_stock_level: String(item.min_stock_level),
       reorder_point: item.reorder_point === null ? '' : String(item.reorder_point),
@@ -172,7 +179,9 @@ export default function ItemsPage() {
       item_code: form.item_code,
       name: form.name,
       type: form.type,
-      uom: form.uom,
+      base_uom: form.base_uom,
+      purchase_uom: form.purchase_uom,
+      uom_conversion_factor: form.uom_conversion_factor,
       shelf_life_days: form.shelf_life_days,
       min_stock_level: form.min_stock_level,
       reorder_point: form.reorder_point,
@@ -220,11 +229,21 @@ export default function ItemsPage() {
           </Badge>
         )
       },
-      { accessorKey: 'uom', header: 'UOM' },
+      { accessorKey: 'base_uom', header: 'Satuan Dasar' },
+      { accessorKey: 'purchase_uom', header: 'Satuan Beli' },
       {
         accessorKey: 'min_stock_level',
         header: 'Min Stock',
         cell: ({ row }) => <span className="text-data">{row.original.min_stock_level}</span>
+      },
+      {
+        accessorKey: 'standard_cost',
+        header: 'Biaya Standar',
+        cell: ({ row }) => (
+          <span className="text-data">
+            {row.original.standard_cost === null ? <span className="text-muted-foreground">-</span> : row.original.standard_cost}
+          </span>
+        )
       },
       {
         accessorKey: 'is_active',
@@ -333,11 +352,34 @@ export default function ItemsPage() {
                 </label>
 
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">Satuan (UOM)</span>
+                  <span className="text-sm font-medium text-foreground">Satuan Dasar/Pakai</span>
                   <Input
                     placeholder="mis. g, ml, pcs"
-                    value={form.uom}
-                    onChange={(event) => setForm((prev) => ({ ...prev, uom: event.target.value }))}
+                    value={form.base_uom}
+                    onChange={(event) => setForm((prev) => ({ ...prev, base_uom: event.target.value }))}
+                    required
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Satuan Beli</span>
+                  <Input
+                    placeholder="mis. kg, liter, dus"
+                    value={form.purchase_uom}
+                    onChange={(event) => setForm((prev) => ({ ...prev, purchase_uom: event.target.value }))}
+                    required
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Faktor Konversi (satuan beli → satuan dasar)</span>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="any"
+                    placeholder="mis. 1000 untuk kg -> gram"
+                    value={form.uom_conversion_factor}
+                    onChange={(event) => setForm((prev) => ({ ...prev, uom_conversion_factor: event.target.value }))}
                     required
                   />
                 </label>

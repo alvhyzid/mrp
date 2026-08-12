@@ -4,7 +4,9 @@ export interface ItemInput {
   item_code: string;
   name: string;
   type: string;
-  uom: string;
+  base_uom: string;
+  purchase_uom: string;
+  uom_conversion_factor: number;
   shelf_life_days: number | null;
   min_stock_level: number;
   reorder_point: number | null;
@@ -28,14 +30,21 @@ export function parseItemInput(body: Record<string, unknown>): { input?: ItemInp
   const item_code = String(body.item_code ?? '').trim();
   const name = String(body.name ?? '').trim();
   const type = String(body.type ?? '').trim();
-  const uom = String(body.uom ?? '').trim();
+  const base_uom = String(body.base_uom ?? '').trim();
+  const purchase_uom = String(body.purchase_uom ?? body.base_uom ?? '').trim();
 
-  if (!item_code || !name || !type || !uom) {
-    return { error: 'Kode item, nama, tipe, dan satuan (UOM) wajib diisi.' };
+  if (!item_code || !name || !type || !base_uom || !purchase_uom) {
+    return { error: 'Kode item, nama, tipe, satuan dasar, dan satuan beli wajib diisi.' };
   }
 
   if (!itemTypes.includes(type)) {
     return { error: 'Tipe item tidak valid.' };
+  }
+
+  const conversionFactor = parseOptionalNumber(body.uom_conversion_factor, 'Faktor konversi satuan');
+  if (conversionFactor.error) return { error: conversionFactor.error };
+  if (conversionFactor.value !== null && conversionFactor.value <= 0) {
+    return { error: 'Faktor konversi satuan harus lebih besar dari 0.' };
   }
 
   const shelfLife = parseOptionalNumber(body.shelf_life_days, 'Shelf life');
@@ -58,7 +67,9 @@ export function parseItemInput(body: Record<string, unknown>): { input?: ItemInp
       item_code,
       name,
       type,
-      uom,
+      base_uom,
+      purchase_uom,
+      uom_conversion_factor: conversionFactor.value ?? 1,
       shelf_life_days: shelfLife.value,
       min_stock_level: minStock.value ?? 0,
       reorder_point: reorderPoint.value,

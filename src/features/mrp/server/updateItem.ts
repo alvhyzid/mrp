@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
 import { parseItemInput } from './itemValidation';
+import { isCompanyLeadership } from '@/lib/roles';
 
 interface ApiResult {
   status: number;
@@ -11,8 +12,8 @@ export async function updateItem(request: NextRequest): Promise<ApiResult> {
   try {
     const { appUser } = await getCurrentUser(request);
 
-    if (appUser.role !== 'company_admin') {
-      return { status: 403, body: { error: 'Hanya company_admin yang dapat mengubah item.' } };
+    if (!isCompanyLeadership(appUser.role)) {
+      return { status: 403, body: { error: 'Hanya company_admin atau general_manager yang dapat mengubah item.' } };
     }
 
     if (!appUser.company_id) {

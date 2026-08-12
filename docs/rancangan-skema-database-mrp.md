@@ -1,17 +1,34 @@
 # Rancangan Skema Database — MRP Multi-Tenant
 ### PT. Indo Taste Manufacture (Tenant Pertama)
 
-Dokumen ini adalah rancangan awal (draft v1) struktur database sistem MRP. Ditulis dalam bahasa yang mudah dibaca — nama tabel & kolom pakai istilah teknis standar (bahasa Inggris, konvensi umum database), penjelasannya dalam Bahasa Indonesia.
+Dokumen ini adalah rancangan struktur database sistem MRP. Ditulis dalam bahasa yang mudah dibaca — nama tabel & kolom pakai istilah teknis standar (bahasa Inggris, konvensi umum database), penjelasannya dalam Bahasa Indonesia.
 
 ---
 
 ## Prinsip Desain
 
 1. **Multi-tenant sejak baris pertama** — hampir semua tabel punya kolom `company_id`. Ini yang memisahkan data PT. Indo Taste dari perusahaan lain yang nanti akan pakai sistem ini.
-2. **Row-Level Security (RLS)** — akan diterapkan di level database (Supabase/Postgres), bukan cuma di kode aplikasi. Artinya walaupun ada bug di kode, database sendiri menolak mengeluarkan data perusahaan lain ke user yang salah. Dua lapis pengaman, bukan satu.
-3. **Generik untuk industri manufaktur apa pun** — struktur Item/BOM/Routing tidak di-hardcode khusus gummy/serbuk, supaya bisa dipakai perusahaan manufaktur lain nanti.
-4. **BOM per unit output, bukan per batch** — supaya scaling resep (seperti resep lab yang di-scale-up) dihitung otomatis oleh sistem.
-5. **Konvensi penamaan primary key**: `nama_tabel_tunggal_id` (mis. tabel `employees` → primary key `employee_id`). Nama ini identik dengan nama yang dipakai tabel lain saat mereferensikannya sebagai foreign key — konsisten di mana pun dipakai, best practice standar.
+2. **Row-Level Security (RLS)** — diterapkan di level database (Supabase/Postgres), bukan cuma di kode aplikasi. Dua lapis pengaman, bukan satu.
+3. **Generik untuk industri manufaktur apa pun** — struktur Item/BOM/Routing tidak di-hardcode khusus gummy/serbuk.
+4. **BOM per unit output, bukan per batch** — supaya scaling resep dihitung otomatis oleh sistem.
+5. **Konvensi penamaan primary key**: `nama_tabel_tunggal_id` (mis. tabel `employees` → primary key `employee_id`). Nama ini identik dengan nama yang dipakai tabel lain saat mereferensikannya sebagai foreign key.
+6. **Multi-plant sejak awal** — 1 company bisa punya beberapa lokasi pabrik fisik (`production_plants`), masing-masing dengan gudang, mesin, tenaga kerja sendiri.
+7. **Data finansial dibatasi ketat** — lihat bagian "Kontrol Akses Data Finansial" di bawah, ini prinsip lintas-tabel yang berlaku di banyak tempat.
+
+---
+
+## Kontrol Akses Data Finansial
+
+Ini bukan satu tabel, tapi aturan lintas-tabel yang berlaku di beberapa kolom sensitif — dicatat terpusat di sini supaya tidak tercecer.
+
+| Data | Yang Boleh Lihat | Yang TIDAK Boleh Lihat |
+|---|---|---|
+| Harga jual, margin, biaya gabungan (`sales_order_lines.unit_price`, hasil kalkulasi margin, `lots.unit_cost` di laporan biaya) | `company_admin`, `general_manager`, `finance_manager` | Production, PPIC, Warehouse, Purchasing (kecuali poin di bawah) |
+| **Gaji individual** (`employees.wage_rate`, `wage_type`) | **HANYA** `company_admin` (Direktur) dan `hr_manager`/`hr_staff`, serta karyawan itu sendiri untuk data dirinya | `general_manager` DAN `finance_manager` — TIDAK terkecuali, meski mereka boleh lihat data finansial lain di atas |
+| Total biaya SDM per batch/laporan (angka akumulasi) | Sama seperti baris pertama (`finance_manager` dkk) | — (ini beda dari gaji individual — cuma angka total, bukan rincian per-orang) |
+| Harga di PO ke supplier (`purchase_order_lines.unit_price`) yang MEREKA SENDIRI input | `purchasing_manager`, `purchasing_staff` (karena ini memang tugas mereka bertransaksi) | Tetap tidak bisa lihat dashboard margin/biaya gabungan perusahaan |
+
+**Kenapa gaji dipisah dari data finansial lain:** ini soal etika perusahaan Anda — Finance mengurus keuangan perusahaan secara agregat, tapi gaji personal adalah privasi yang cuma HRD & karyawan bersangkutan yang tahu.
 
 ---
 
@@ -29,104 +46,112 @@ Paket langganan yang tersedia.
 - `subscription_plan_id`, `name` (mis. "Starter", "Business")
 - `price`, `billing_cycle` (bulanan/tahunan)
 - `max_users`, `max_items` (batasan sesuai paket)
+- `created_at`
 
 ### `users`
-- `user_id`, `company_id`, `name`, `email`, `auth_uid` (referensi ke Supabase Auth `auth.users.id` — password dikelola sepenuhnya oleh Supabase Auth, tidak disimpan ulang di tabel ini)
-- `role` (super_admin / company_admin / production_staff / warehouse_staff / purchasing_staff / viewer)
+- `user_id`, `company_id`, `name`, `email`
+- `auth_uid` (penghubung ke `auth.users.id` milik Supabase Auth — WAJIB ada, sistem login bergantung pada ini)
+- `role` (super_admin / company_admin / general_manager / production_manager / production_staff / ppic_manager / ppic_staff / finance_manager / finance_staff / purchasing_manager / purchasing_staff / warehouse_manager / warehouse_staff / hr_manager / hr_staff / viewer)
 - `status` (active/invited/suspended)
+- `created_at`
 
-> **Catatan:** `super_admin` adalah role khusus Anda (pemilik platform) — tidak terikat ke satu `company_id`, bisa lihat semua tenant lewat Admin Panel nanti.
+> **Catatan role:** `super_admin` = pemilik platform, tidak terikat 1 company. `company_admin` = pembuat akun pertama & pencipta company (bisa hapus company/nonaktifkan akun siapa pun, DAN satu-satunya level di atas manager yang boleh lihat gaji individual). `general_manager` = level setara `company_admin` di operasional, TAPI TANPA izin hapus company/nonaktifkan akun user lain, DAN TANPA akses lihat gaji individual. **Keenam department** (Production, PPIC, Finance, Purchasing, Warehouse, HR) konsisten punya tingkat *manager* dan *staff* — disiapkan dari awal meski beberapa posisi manager mungkin belum terisi orangnya di kondisi nyata sekarang. `hr_manager`/`hr_staff` punya akses penuh ke `employees` termasuk data gaji — satu-satunya department dengan akses itu selain `company_admin`.
+
+### `invitations`
+Undangan company_admin/manager ke calon anggota tim baru.
+- `invitation_id`, `company_id`, `email` (email yang diundang)
+- `role` (role yang akan didapat setelah diterima)
+- `invited_by` (merujuk ke `user_id`)
+- `status` (pending / accepted / expired)
+- `token` (kode unik untuk proses accept)
+- `expires_at`, `created_at`, `accepted_at`
 
 ---
 
 ## Kelompok 2: Master Data Produksi
 
+### `production_plants`
+Satu company bisa punya beberapa lokasi pabrik fisik berbeda (mis. PT ITM: 2 lokasi produksi gummy, 1 lokasi produksi minuman serbuk). Rujukan lokasi untuk mesin, stok, tenaga kerja, dan work order. **Untuk saat ini, 1 plant = 1 gudang** (tidak perlu tabel `warehouses` terpisah — bisa direvisit kalau nanti 1 plant butuh multi-gudang fisik).
+- `production_plant_id`, `company_id`, `name`, `address`
+- `product_focus` (nullable, teks bebas — mis. "gummy", "powder_drink") — dipakai sebagai **saran/default cerdas** saat memilih plant pada aksi "Process" PO→SO, BUKAN validasi keras yang memblokir pilihan lain
+- `is_active`
+
 ### `shifts`
-Definisi shift kerja pabrik (mis. Shift Pagi 07:00-15:00, Shift Malam 15:00-23:00).
-- `shift_id`, `company_id`, `name`, `start_time`, `end_time`, `is_active`
+Definisi shift kerja pabrik (mis. Shift Pagi 07:00-15:00, Shift Malam 15:00-23:00) — per lokasi pabrik, karena jam kerja bisa beda antar lokasi.
+- `shift_id`, `company_id`, `production_plant_id`, `name`, `start_time`, `end_time`, `is_active`
 
 ### `production_disruptions`
-Mencatat gangguan operasional yang menyebabkan produksi terhambat/terhenti — tidak terbatas pada mesin rusak, juga mencakup listrik padam atau kejadian tak terduga lainnya. Jadi alasan tercatat kenapa hasil aktual meleset dari target, bukan cuma catatan verbal.
+Mencatat gangguan operasional yang menyebabkan produksi terhambat/terhenti — mesin rusak, listrik padam, faktor eksternal, ATAU produksi dialihkan ke pekerjaan lain yang lebih mendesak.
 - `production_disruption_id`, `company_id`
-- `disruption_type` (equipment_breakdown / utility_outage / external_factor / other) — pilihan kategori: mesin, listrik/air padam, faktor eksternal (cuaca, dll), atau lainnya
-- `work_center_id` (nullable — diisi kalau memang terkait mesin tertentu; dikosongkan kalau gangguan menyeluruh seperti listrik padam yang tidak spesifik ke satu mesin)
-- `work_order_id`, `routing_step_id` (nullable — kalau gangguan terjadi di tengah pengerjaan batch tertentu)
-- `shift_id`
+- `disruption_type` (equipment_breakdown / utility_outage / external_factor / reprioritized / other) — `reprioritized` dipakai saat WO di-pause karena dialihkan ke pekerjaan lain
+- `work_center_id` (nullable), `work_order_id`, `routing_step_id` (nullable), `shift_id`
 - `started_at`, `resolved_at`, `description`
 
-> **Contoh kasus:** Target 1 Januari = 5 batch, pegawai sudah dialokasikan penuh untuk 5 batch. Mesin rusak jam 10:00, perbaikan selesai jam 13:00 → dicatat 1 baris `production_disruptions` (`equipment_breakdown`, terkait `work_center_id` mesin tsb, 10:00-13:00). Kalau penyebabnya listrik padam se-pabrik, dicatat `utility_outage` tanpa `work_center_id` spesifik. Akhir shift hasil cuma 3 batch (`work_order_outputs`) meski tenaga kerja lengkap untuk 5 — selisih antara rencana dan hasil jadi punya penjelasan tercatat.
-
 ### `employees`
-Data pekerja pabrik untuk keperluan biaya SDM — terpisah dari `users` karena tidak semua pekerja lapangan butuh akun login sistem.
-- `employee_id`, `company_id`, `name`, `position` (mis. "Operator Produksi", "QC")
+Data pekerja pabrik untuk keperluan biaya SDM — terpisah dari `users`. **Akses ke kolom gaji dibatasi ketat, lihat "Kontrol Akses Data Finansial" di atas.**
+- `employee_id`, `company_id`, `production_plant_id` (nullable — pekerja lapangan biasanya terikat 1 lokasi, staf non-produksi mungkin tidak)
+- `name`, `position` (mis. "Operator Produksi", "QC")
 - `wage_type` (hourly / daily / monthly / piece_rate)
-- `wage_rate` (angka sesuai `wage_type`: per jam / per hari / per bulan / per pieces)
-- `linked_user_id` (nullable — kalau pekerja ini juga punya akun login sistem, merujuk ke `user_id`)
+- `wage_rate` (nilai sensitif — lihat kontrol akses)
+- `linked_user_id` (nullable, merujuk ke `user_id`)
 - `is_active`
 
 ### `company_settings`
-Konstanta yang bisa beda per perusahaan (tenant) — dipakai a.l. untuk konversi gaji harian/bulanan jadi tarif per jam saat kalkulasi biaya batch.
-- `company_setting_id`, `company_id`, `setting_key` (mis. "standard_hours_per_day", "standard_hours_per_month")
-- `setting_value`
+Konstanta yang bisa beda per perusahaan (tenant).
+- `company_setting_id`, `company_id`, `setting_key` (mis. "standard_hours_per_day"), `setting_value`
 
 ### `items`
-Semua "benda" yang dikenal sistem — bahan mentah, WIP, produk jadi, kemasan.
+Semua "benda" yang dikenal sistem — bahan mentah, WIP, produk jadi, kemasan. Punya **2 satuan berbeda** untuk mengakomodasi pola beli-per-kg-pakai-per-gram (atau kombinasi satuan lain).
 - `item_id`, `company_id`, `item_code`, `name`
 - `type` (raw_material / wip / finished_good / packaging)
-- `uom` (satuan: g, ml, pcs, dll)
-- `shelf_life_days` (untuk hitung expiry — penting untuk Base Gelatin, dll)
-- `min_stock_level`, `is_active`
-- `reorder_point` (nullable — titik stok kapan harus pesan ulang, lebih presisi dari sekadar `min_stock_level`)
-- `reorder_qty` (nullable — jumlah standar yang biasa dipesan ulang, dipakai sistem untuk menyarankan kuantitas PO otomatis)
-- `standard_cost` (nullable — harga acuan per unit, dasar kalkulasi biaya BOM untuk perencanaan/quoting)
+- `base_uom` (satuan dasar/pakai — dipakai di BOM & stok, mis. gram, ml, pcs)
+- `purchase_uom` (satuan beli — dipakai Purchasing saat bikin PO, mis. kg, liter, dus, pcs)
+- `uom_conversion_factor` (berapa `base_uom` per 1 `purchase_uom` — mis. 1000 untuk kg→gram; kalau `purchase_uom` = `base_uom`, factor = 1, otomatis tanpa konversi)
+- `shelf_life_days`, `min_stock_level`, `reorder_point`, `reorder_qty`, `is_active`
+- `standard_cost` (nullable — nilai sensitif, lihat "Kontrol Akses Data Finansial")
+
+> **Catatan MOQ:** sengaja TIDAK dimodelkan. Purchasing beli sesuai realita (termasuk MOQ dari supplier), lalu input hasil pembelian sesuai data invoice apa adanya — sistem tidak memvalidasi/membatasi jumlah beli.
 
 ### `boms`
-Header resep/komposisi. Satu item bisa punya beberapa versi BOM (resep berubah seiring waktu, versi lama tetap tersimpan untuk histori/audit).
-- `bom_id`, `company_id`, `parent_item_id` (item yang diproduksi, merujuk ke `item_id`)
-- `version`, `standard_yield_qty`, `standard_yield_uom`
-- `status` (draft / active / archived)
+Header resep/komposisi. Satu item bisa punya beberapa versi (`version`), resep lama tetap tersimpan untuk histori/audit.
+- `bom_id`, `company_id`, `parent_item_id` (→ `item_id`), `version`, `standard_yield_qty`, `standard_yield_uom`, `status` (draft / active / archived)
 
 ### `bom_lines`
-Daftar komponen per BOM.
-- `bom_line_id`, `bom_id`, `component_item_id` (merujuk ke `item_id`)
-- `qty_per_unit_output`, `uom`
-> Kalau `component_item_id` menunjuk ke item bertipe `wip` (mis. Base Gelatin), sistem otomatis tahu ini butuh produksi 2 lapis — tinggal ikuti BOM item tersebut lagi secara rekursif.
+Daftar komponen per BOM, dalam `base_uom`.
+- `bom_line_id`, `bom_id`, `component_item_id` (→ `item_id`), `qty_per_unit_output`, `uom`
 
 ### `work_centers`
-Master data mesin/stasiun kerja — sebelumnya cuma teks bebas di `routing_steps`, sekarang jadi data master supaya downtime bisa dilacak per mesin.
-- `work_center_id`, `company_id`, `name`, `code`, `is_active`
+Master data mesin/stasiun kerja — fisiknya ada di SATU lokasi pabrik.
+- `work_center_id`, `company_id`, `production_plant_id`, `name`, `code`, `is_active`
 
 ### `routings`
-Header urutan tahapan produksi per item (terpisah dari resep).
+Header urutan tahapan produksi per item — sengaja TETAP generik (tidak diikat 1 plant), dianggap sama di semua lokasi yang memproduksi item itu.
 - `routing_id`, `company_id`, `item_id`, `version`
 
 ### `routing_steps`
 - `routing_step_id`, `routing_id`, `sequence_no`, `step_name`
-- `active_duration_minutes` (waktu kerja aktif)
-- `wait_duration_minutes` (waktu tunggu pasif — curing, bloom, dll)
+- `active_duration_minutes`, `wait_duration_minutes`
 - `work_center_id` (opsional, referensi ke `work_centers`)
 
 ### `formula_templates`
-Menyimpan "Base Formula" gummy sebagai referensi murni — TIDAK terhubung fungsional ke produksi, hanya starting point saat bikin resep varian baru.
-- `formula_template_id`, `company_id`, `name`, `notes`, `reference_composition` (teks bebas/JSON)
+Menyimpan "Base Formula" sebagai referensi murni untuk R&D — TIDAK terhubung fungsional ke produksi.
+- `formula_template_id`, `company_id`, `name`, `notes`, `reference_composition`
 
 ---
 
 ## Kelompok 3: Inventory & Traceability
 
 ### `lots`
-Stok dipecah per lot, bukan angka total.
-- `lot_id`, `company_id`, `item_id`, `lot_number`
+Stok dipecah per lot, per lokasi pabrik (karena stok secara fisik ada di satu tempat, dan 1 plant = 1 gudang).
+- `lot_id`, `company_id`, `production_plant_id`, `item_id`, `lot_number`
 - `expiry_date`, `produced_or_received_date`
-- `quantity_on_hand`, `source_type` (purchased / produced)
+- `quantity_on_hand` (dalam `base_uom`), `source_type` (purchased / produced)
 - `status` (available / quarantine / expired / consumed)
-- `unit_cost` (nullable — biaya aktual per unit di lot ini; dari harga PO kalau dibeli, atau hasil kalkulasi dari biaya lot komponen yang dipakai kalau diproduksi sendiri)
+- `unit_cost` (nullable — nilai sensitif, lihat "Kontrol Akses Data Finansial")
 
 ### `lot_genealogy`
-Jejak "lot ini dibuat dari lot apa saja" — inti dari traceability BPOM/halal.
-- `lot_genealogy_id`, `output_lot_id` (lot hasil produksi, merujuk ke `lot_id`)
-- `component_lot_id` (lot bahan yang dipakai, merujuk ke `lot_id`)
-- `qty_consumed`
+Jejak "lot ini dibuat dari lot apa saja" — inti traceability BPOM/halal.
+- `lot_genealogy_id`, `output_lot_id` (→ `lot_id`), `component_lot_id` (→ `lot_id`), `qty_consumed`
 
 ### `stock_movements`
 Log setiap pergerakan stok (audit trail).
@@ -139,90 +164,109 @@ Log setiap pergerakan stok (audit trail).
 ## Kelompok 4: Procurement & Sales
 
 ### `suppliers`
-- `supplier_id`, `company_id`, `name`, `contact_info`, `lead_time_days`
-- `supplier_type` (material_supplier / subcontractor / both) — kolom disiapkan untuk fitur subcontracting nanti
+- `supplier_id`, `company_id`, `name`, `contact_info`, `lead_time_days`, `supplier_type` (material_supplier / subcontractor / both)
 
 ### `purchase_orders` & `purchase_order_lines`
-PO ke supplier untuk bahan baku yang kurang.
-- Header: `purchase_order_id`, `company_id`, `supplier_id`, `status`, `order_date`, `expected_date`
-- Line: `purchase_order_line_id`, `purchase_order_id`, `item_id`, `qty_ordered`, `qty_received`, `unit_price`
+PO KITA ke supplier (beda dari `customer_purchase_orders`). Form "Create PO" di dashboard Purchasing punya field **alamat kirim** berupa pilihan `production_plant_id` — begitu dipilih, sistem otomatis tahu barang ini nanti masuk gudang plant mana saat diterima.
+- Header: `purchase_order_id`, `company_id`, `supplier_id`, `production_plant_id` (alamat kirim/tujuan), `status`, `order_date`, `expected_date`
+- Line: `purchase_order_line_id`, `purchase_order_id`, `item_id`, `qty_ordered` (dalam `purchase_uom`), `qty_received`, `unit_price` (dalam `purchase_uom` — Purchasing boleh lihat & input ini, karena memang tugas mereka bertransaksi, lihat "Kontrol Akses Data Finansial")
+
+### `goods_receipts` & `goods_receipt_lines`
+Konfirmasi kedatangan barang oleh Warehouse — memicu stok bertambah dan otomatis "menyelesaikan" alert kekurangan bahan yang terkait.
+- Header: `goods_receipt_id`, `company_id`, `purchase_order_id`, `production_plant_id`, `received_date`, `received_by` (→ `user_id`), `status`
+- Line: `goods_receipt_line_id`, `goods_receipt_id`, `purchase_order_line_id`, `item_id`, `qty_received` (dalam `purchase_uom`, sistem otomatis konversi ke `base_uom` pakai `uom_conversion_factor` saat membuat `lot` baru), `lot_id` (lot baru yang tercipta dari penerimaan ini)
+
+> **Alur konversi satuan:** Purchasing input PO & terima invoice sesuai satuan beli (mis. "275kg, Rp 268.000/kg"). Saat Warehouse konfirmasi barang datang, sistem otomatis konversi ke satuan dasar (275.000 gram, Rp 268/gram) dan itulah yang tersimpan di `lots.unit_cost` — BOM & pemakaian produksi otomatis cocok karena sama-sama `base_uom`.
 
 ### `customers`
 - `customer_id`, `company_id`, `name`, `contact_info`
 
+### `customer_purchase_orders` & `customer_purchase_order_lines`
+PO dari client — TERPISAH dari `sales_orders`. Statusnya berjalan sebelum jadi komitmen produksi, dan **masih bisa diedit/ditunda/dibatalkan** selama di status `new`. Wajib disetujui **3 department secara terpisah** (lihat `customer_po_approvals`) sebelum tombol "Process" aktif — begitu diproses, `sales_orders` otomatis tercipta dari sini (data lines di-*copy*, bukan cuma dirujuk).
+- Header: `customer_purchase_order_id`, `company_id`, `customer_id`, `po_number`, `po_date`, `requested_ship_date`
+- `status` (new / on_hold / cancelled / processed) — `new` → `processed` HANYA boleh terjadi kalau ketiga baris `customer_po_approvals` berstatus `approved`
+- `payment_terms` (full / tempo), `payment_status` (pending / partial / confirmed)
+- `processed_by` (nullable, → `user_id`), `processed_at`
+- Line: `customer_purchase_order_line_id`, `customer_purchase_order_id`, `item_id` (SETIAP VARIAN kemasan/ukuran = `item_id` terpisah), `qty_ordered`, `unit_price` (harga jual disepakati — nilai sensitif, lihat "Kontrol Akses Data Finansial")
+
+### `customer_po_approvals`
+Approval wajib dari 3 department sebelum PO client bisa diproses jadi SO — sekaligus mekanisme notifikasi. 3 baris dibuat OTOMATIS (satu per department) begitu PO baru dibuat, semua mulai `pending`.
+- `customer_po_approval_id`, `customer_purchase_order_id`
+- `department` (finance / ppic / manager)
+- `status` (pending / approved / rejected)
+- `approved_by` (nullable, → `user_id` dari role sesuai department), `approved_at`
+- `notes` (nullable — terutama kalau `rejected`)
+
+> **Pemetaan department ke role:** `manager` → `company_admin`/`general_manager`, `finance` → `finance_manager`, `ppic` → `ppic_manager`. Sengaja level *manager*, bukan *staff*. Begitu PO baru dibuat, sistem kirim `system_alerts` ke role yang sesuai.
+
 ### `sales_orders` & `sales_order_lines`
-PO dari client (titik awal alur kerja Anda).
-- Header: `sales_order_id`, `company_id`, `customer_id`, `po_number`, `status`, `order_date`, `requested_ship_date`
-- Line: `sales_order_line_id`, `sales_order_id`, `item_id` (produk jadi), `qty_ordered`
+Tercipta OTOMATIS saat `customer_purchase_orders` diproses — komitmen produksi yang sudah "terkunci". Orang yang klik "Process" WAJIB memilih `production_plant_id` — penting karena menentukan SDM (termasuk PHL) yang tersedia untuk ditugaskan (`employees` terikat per plant).
+- Header: `sales_order_id`, `company_id`, `customer_purchase_order_id`, `customer_id`, `production_plant_id` (dipilih saat "Process"), `status` (confirmed / in_production / completed / cancelled), `created_at`
+- Line: `sales_order_line_id`, `sales_order_id`, `item_id`, `qty_ordered`, `unit_price` (disalin dari PO)
+
+> **Satu SO line bisa punya BANYAK Work Order** — PPIC bebas memecah 1 SO line jadi beberapa WO (mis. per hari/per kapasitas produksi: WO day 1, day 2, day 3), tidak harus 1:1. Dashboard PO tetap menjumlahkan total progres dari semua WO yang terhubung ke SO line yang sama.
+
+> **Perhitungan margin:** dihitung PER PENGIRIMAN (bukan nunggu SO selesai total). Untuk tiap `shipment_lines`: **Pendapatan** = `qty_shipped × sales_order_lines.unit_price`, **Biaya** = biaya bahan (`work_order_consumption` × `lots.unit_cost`, proporsional ke lot yang dikirim) + biaya SDM (`work_order_assignments` terkait). **Margin** = Pendapatan − Biaya. Dihitung dari data yang ada, bukan tabel baru.
 
 ### `shipments` & `shipment_lines`
-Satu PO bisa dikirim bertahap (parsial) — tabel ini mencatat tiap pengiriman sebagai peristiwa terpisah.
+Satu SO bisa dikirim bertahap (parsial).
 - Header: `shipment_id`, `company_id`, `sales_order_id`, `shipment_date`, `status`
-- Line: `shipment_line_id`, `shipment_id`, `sales_order_line_id`, `item_id`, `qty_shipped`, `lot_id` (lot/batch mana yang dikirim — untuk traceability)
-
-> **Sisa kuantitas PO** dihitung otomatis: `qty_ordered` dikurangi total `qty_shipped` dari semua `shipment_lines` terkait — tidak disimpan sebagai angka statis supaya selalu akurat real-time.
+- Line: `shipment_line_id`, `shipment_id`, `sales_order_line_id`, `item_id`, `qty_shipped`, `lot_id`
 
 ---
 
 ## Kelompok 5: Produksi
 
 ### `work_orders`
-Perintah produksi — jantung dari eksekusi MRP.
-- `work_order_id`, `company_id`, `item_id`, `bom_id`, `routing_id`
-- `sales_order_line_id` (nullable — menghubungkan work order ke PO/Sales Order asal, supaya bisa ditelusuri dari 1 nomor PO)
+Perintah produksi (SPK) — jantung eksekusi MRP.
+- `work_order_id`, `company_id`, `production_plant_id`, `item_id`, `bom_id`, `routing_id`
+- `sales_order_line_id` (nullable — 1 SO line bisa dipecah jadi banyak WO)
 - `planned_qty`
-- `status` (planned / in_progress / completed / cancelled)
+- `status` (planned / in_progress / paused / completed / cancelled) — `paused` dipakai saat WO dihentikan sementara (mis. dialihkan ke pekerjaan lain mendesak), bisa dilanjutkan lagi tanpa kehilangan progres
+- `priority` (mis. low / normal / high / urgent — bantu PPIC tentukan mana yang didahulukan saat rebutan sumber daya)
 - `scheduled_start`, `scheduled_end`, `actual_start_at`, `actual_completed_at`
-- `subcontractor_id` (nullable — kolom disiapkan untuk fitur subcontracting nanti, belum dipakai sekarang)
+- `subcontractor_id` (nullable, disiapkan untuk nanti)
+
+> **"Ready to Start" / dependency (ala Jira, tapi otomatis):** WO dianggap siap mulai HANYA kalau tidak ada `system_alerts` berstatus `open` yang terkait `work_order_id` itu (kekurangan bahan, SDM belum lengkap, mesin rusak). Kalau masih ada alert terbuka → WO otomatis "Blocked" dengan alasan spesifik ditampilkan. Ini TIDAK perlu link manual antar-WO seperti Jira — cukup pantau status alert yang sudah ada. Kasus WO saling bergantung (mis. WO Gummy butuh Base Gelatin dari WO lain yang belum selesai) otomatis tertangani lewat alert kekurangan bahan yang sama, tanpa perlu definisikan "WO A depends on WO B" secara eksplisit.
 
 ### `work_order_outputs`
-Satu work order bisa menghasilkan **lebih dari satu output** — sesuai proses gummy Anda: produk jadi siap kemas DAN sisa produksi yang masih bisa dimasak ulang jadi bahan baku batch berikutnya (*rework/regrind*).
-- `work_order_output_id`, `work_order_id`, `item_id` (produk jadi ATAU item "sisa reprocessable"), `shift_id`
-- `output_type` (main_output / reprocessable_waste / disposed_waste)
-- `qty`, `lot_id` (lot baru yang tercipta dari output ini)
-
-> **Catatan:** Sisa produksi yang bisa dipakai lagi (`reprocessable_waste`) dicatat sebagai `item` baru bertipe `wip` — sehingga bisa langsung muncul sebagai komponen di `bom_lines` batch produksi berikutnya, tanpa perlu tipe data baru.
+Satu WO bisa menghasilkan lebih dari satu output (produk jadi + sisa reprocessable).
+- `work_order_output_id`, `work_order_id`, `item_id`, `shift_id`, `output_type` (main_output / reprocessable_waste / disposed_waste), `qty`, `lot_id`
 
 ### `work_order_consumption`
-Bahan/lot apa saja yang benar-benar dipakai di satu work order (sumber data untuk `lot_genealogy`). Berlaku juga kalau yang dipakai adalah lot sisa produksi yang di-reprocess.
-- `work_order_consumption_id`, `work_order_id`, `component_lot_id` (merujuk ke `lot_id`), `qty_consumed`
-- `shift_id`, `recorded_at` (kapan/shift mana pemakaian ini tercatat — dasar breakdown biaya bahan per hari/shift)
+Bahan/lot yang benar-benar dipakai — identitas ke WO baru tercatat SAAT dipakai (bukan sejak bahan datang), memungkinkan 1 lot dipakai lintas banyak WO/PO sampai habis.
+- `work_order_consumption_id`, `work_order_id`, `component_lot_id` (→ `lot_id`), `qty_consumed`, `shift_id`, `recorded_at`
 
 ### `work_order_assignments`
-Workforce Planning — pekerja mana ditugaskan ke work order/tahap produksi mana. Sekaligus sumber data biaya SDM per batch. Satu pekerja yang bekerja di beberapa shift berbeda pada work order yang sama akan punya beberapa baris terpisah (satu per shift) — supaya biaya SDM bisa dipecah harian.
-- `work_order_assignment_id`, `work_order_id`, `employee_id` (dari tabel `employees`, bukan `users`)
-- `routing_step_id` (opsional — kalau penugasan setingkat tahap spesifik, bukan seluruh work order)
-- `shift_id`
-- `status` (planned / confirmed / absent / replaced / completed / unplanned_addition) — menangani kasus PHL yang direncanakan tapi mendadak tidak masuk, ATAU sebaliknya pegawai tambahan yang mendadak dimasukkan di luar rencana awal
-- `replacement_for_assignment_id` (nullable, merujuk ke `work_order_assignment_id` di tabel ini sendiri — kalau baris ini adalah pengganti dari penugasan lain yang batal)
-- `scheduled_hours`, `actual_hours` (jam kerja rencana vs aktual)
-- `qty_produced` (nullable — khusus untuk pekerja dengan `wage_type` = piece_rate, mis. jumlah botol yang dikemas orang itu)
-
-> **Contoh alur:** Rencana: PHL A & PHL B ditugaskan shift pagi (status `planned`). PHL B mendadak tidak masuk → status diubah jadi `absent` (`actual_hours` = 0, tidak dihitung biaya). Kalau ada pengganti (PHL C) datang, dibuat baris baru dengan `replacement_for_assignment_id` menunjuk ke penugasan PHL B. Kalau tidak ada pengganti, work order otomatis tercatat berjalan dengan tenaga kerja lebih sedikit dari rencana — datanya tetap akurat tanpa perlu diedit manual.
+Penugasan pekerja — sumber data biaya SDM (nilai sensitif, lihat "Kontrol Akses Data Finansial").
+- `work_order_assignment_id`, `work_order_id`, `employee_id`, `routing_step_id` (nullable), `shift_id`
+- `status` (planned / confirmed / absent / replaced / completed / unplanned_addition)
+- `replacement_for_assignment_id` (nullable, → `work_order_assignment_id`)
+- `scheduled_hours`, `actual_hours`, `qty_produced` (nullable, khusus `wage_type` = piece_rate)
 
 ### `work_order_step_progress`
-Visibilitas real-time — tahap mana dari sebuah work order yang sedang berjalan sekarang. Krusial untuk proses dengan waktu tunggu panjang seperti curing 48 jam atau bloom 12 jam. Juga sumber data untuk laporan harian/shift (total hasil curing, total filling botol, dll) — operator catat kuantitas saat menyelesaikan tiap tahap, laporan tersusun otomatis.
+Visibilitas real-time tahap produksi — juga basis kalkulasi proyeksi stok (lihat `system_alerts`).
 - `work_order_step_progress_id`, `work_order_id`, `routing_step_id`, `shift_id`
-- `status` (pending / in_progress / completed)
-- `qty_recorded` (jumlah/kuantitas di checkpoint tahap ini — mis. "48kg hasil curing"), `uom`
-- `started_at`, `completed_at`, `notes`
+- `status` (pending / in_progress / completed), `qty_recorded`, `uom`, `started_at`, `completed_at`, `notes`
 
 ### `system_alerts`
-Peringatan otomatis dari sistem — menggantikan ketergantungan pada komunikasi manual (Discord). Contoh kasus nyata: work order dijadwalkan mulai tanggal X, tapi bahan bakunya belum cukup stok DAN PO terkait sudah lewat perkiraan tanggal datang → sistem otomatis buat alert ke role Purchasing & Production, bukan menunggu orang lapor.
-- `system_alert_id`, `company_id`, `alert_type` (material_shortage / po_delayed / low_stock / production_delay / worker_absence / production_disruption)
-- `related_work_order_id`, `related_po_id`, `related_item_id` (nullable, sesuai konteks)
-- `message`, `severity` (info/warning/critical)
-- `status` (open / acknowledged / resolved), `created_at`
+Peringatan otomatis dari sistem.
+- `system_alert_id`, `company_id`
+- `alert_type` (material_shortage / po_delayed / low_stock / production_delay / worker_absence / production_disruption / so_ready_for_production / po_needs_approval / stock_depletion_forecast / expiry_risk_low_usage)
+- `related_work_order_id`, `related_po_id`, `related_item_id` (nullable)
+- `message`, `severity` (info/warning/critical), `status` (open / acknowledged / resolved), `created_at`
 - `acknowledged_by`, `acknowledged_at`
+
+> **Proyeksi stok habis & risiko kadaluarsa (`stock_depletion_forecast`, `expiry_risk_low_usage`):** dihitung dari **rata-rata pemakaian harian** tiap item (dari riwayat `work_order_consumption`), **dihitung ULANG setiap kali ada data baru masuk** (tiap akhir shift/update batch) — real-time, bukan terjadwal.
+> - `stock_depletion_forecast`: sisa stok ÷ rata-rata pemakaian harian = perkiraan hari sampai habis. Kalau mendekati `suppliers.lead_time_days`, alert dini ke Purchasing.
+> - `expiry_risk_low_usage`: kalau proyeksi "habis terpakai" LEBIH LAMA dari `lots.expiry_date` (bahan keburu kadaluarsa sebelum habis, kasus khas bahan MOQ besar tapi pemakaian kecil) → alert risiko dini, bukan cuma H-berapa hari standar.
 
 ---
 
-## Kelompok 6: Billing *(kerangka awal — detail menyusul saat integrasi Xendit/Midtrans)*
+## Kelompok 6: Billing
 
 ### `invoices`
-- `invoice_id`, `company_id`, `subscription_plan_id`
-- `amount`, `status` (unpaid/paid/overdue)
-- `payment_gateway_ref`, `period_start`, `period_end`
+- `invoice_id`, `company_id`, `subscription_plan_id`, `amount`, `status` (unpaid/paid/overdue), `payment_gateway_ref`, `period_start`, `period_end`
 
 ---
 
@@ -230,20 +274,20 @@ Peringatan otomatis dari sistem — menggantikan ketergantungan pada komunikasi 
 
 ```
 companies ──< users
+companies ──< production_plants ──< shifts, work_centers, lots, work_orders, employees (semua terikat lokasi fisik)
 companies ──< items ──< boms ──< bom_lines ──> items (component, bisa WIP)
 items ──< routings ──< routing_steps
 items ──< lots ──< lot_genealogy (lot ke lot lain)
-sales_orders ──< sales_order_lines ──> items
-work_orders ──> items, boms, routings
-work_orders ──< work_order_outputs ──> items, lots (bisa multi-output: produk jadi + sisa reprocessable)
+suppliers ──< purchase_orders ──< purchase_order_lines ──> items (PO KITA ke supplier, punya production_plant_id sbg tujuan kirim)
+purchase_orders ──< goods_receipts ──< goods_receipt_lines ──> lots (konfirmasi barang datang, trigger stok baru)
+customers ──< customer_purchase_orders ──< customer_purchase_order_lines ──> items
+customer_purchase_orders ──< customer_po_approvals (3 baris: finance/ppic/manager)
+customer_purchase_orders ──processed──> sales_orders ──< sales_order_lines ──> items (lines disalin dari PO)
+sales_order_lines ──< work_orders (1 SO line bisa dipecah jadi banyak WO)
+work_orders ──> items, boms, routings, production_plants
+work_orders ──< work_order_outputs ──> items, lots (bisa multi-output)
 work_orders ──< work_order_consumption ──> lots
 work_orders ──< work_order_assignments ──> employees
-purchase_orders ──< purchase_order_lines ──> items
+work_orders ──< system_alerts (dipantau untuk status "Ready to Start"/"Blocked")
 companies ──< invoices ──> subscription_plans
 ```
-
----
-
-## Catatan Terbuka
-
-Struktur ini belum menyentuh **multi-plant** secara eksplisit — akan ditambahkan kolom `plant_id` di tabel terkait saat masuk fase ekspansi (sesuai roadmap), sengaja ditunda supaya MVP tetap fokus.

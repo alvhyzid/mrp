@@ -10,9 +10,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { COMPANY_ROLES, INVITABLE_ROLES } from '@/lib/roles';
 
-const inviteRoles = ['production_staff', 'warehouse_staff', 'purchasing_staff', 'viewer'];
-const memberRoles = ['company_admin', 'production_staff', 'warehouse_staff', 'purchasing_staff', 'viewer'];
+const inviteRoles = INVITABLE_ROLES;
+const memberRoles = COMPANY_ROLES;
 
 type Member = {
   user_id: number;

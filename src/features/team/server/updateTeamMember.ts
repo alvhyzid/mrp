@@ -1,8 +1,9 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
+import { COMPANY_ROLES } from '@/lib/roles';
 
 const allowedStatuses = ['active', 'invited', 'suspended'];
-const allowedRoles = ['company_admin', 'production_staff', 'warehouse_staff', 'purchasing_staff', 'viewer'];
+const allowedRoles = COMPANY_ROLES;
 
 interface ApiResult {
   status: number;

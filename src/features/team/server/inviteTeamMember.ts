@@ -1,14 +1,9 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
 import { randomBytes } from 'crypto';
+import { INVITABLE_ROLES } from '@/lib/roles';
 
-const validRoles = [
-  'company_admin',
-  'production_staff',
-  'warehouse_staff',
-  'purchasing_staff',
-  'viewer'
-];
+const validRoles = INVITABLE_ROLES;
 
 interface ApiResult {
   status: number;

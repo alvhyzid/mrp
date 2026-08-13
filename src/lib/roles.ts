@@ -107,16 +107,20 @@ export function canAccessHrDashboard(role: string | undefined | null): boolean {
 // Prinsip Desain #8 (docs/rancangan-skema-database-mrp.md): begitu login, user
 // diarahkan ke dashboard sesuai role/department mereka — murni routing/tampilan,
 // data yang dipakai tetap sama (cuma difilter beda). Role yang belum punya dashboard
-// khusus (PPIC/Production/Purchasing/Finance staff & manager) sengaja TIDAK dipetakan
-// di sini dulu — mereka tetap di /dashboard (ringkasan umum) sampai dashboard
-// department-nya dibangun menyusul. company_admin/general_manager/super_admin/viewer
-// SENGAJA juga tidak dipetakan — mereka melihat ringkasan lintas-department di
-// /dashboard, bukan diarahkan ke satu department tertentu.
+// khusus (Purchasing/Finance staff & manager) sengaja TIDAK dipetakan di sini dulu —
+// mereka tetap di /dashboard (ringkasan umum) sampai dashboard department-nya
+// dibangun menyusul. company_admin/general_manager/super_admin/viewer SENGAJA juga
+// tidak dipetakan — mereka melihat ringkasan lintas-department di /dashboard, bukan
+// diarahkan ke satu department tertentu.
 const ROLE_DASHBOARD_ROUTES: Record<string, string> = {
   warehouse_manager: '/warehouse',
   warehouse_staff: '/warehouse',
   hr_manager: '/hr',
-  hr_staff: '/hr'
+  hr_staff: '/hr',
+  ppic_manager: '/ppic',
+  ppic_staff: '/ppic',
+  production_manager: '/production',
+  production_staff: '/production'
 };
 
 export function getDashboardRouteForRole(role: string | undefined | null): string | null {
@@ -140,4 +144,34 @@ const MANAGED_DEPARTMENT_BY_ROLE: Record<string, string> = {
 export function getManagedDepartmentForRole(role: string | undefined | null): string | null {
   if (!role) return null;
   return MANAGED_DEPARTMENT_BY_ROLE[role] ?? null;
+}
+
+// Kebalikan dari canApproveDepartment() — dipakai dashboard PPIC/Finance untuk
+// menyaring "PO client menunggu approval BAGIAN SAYA" tanpa perlu client menebak
+// nama department-nya sendiri. Tetap harus sinkron dengan canApproveDepartment().
+export function getApprovalDepartmentForRole(role: string | undefined | null): string | null {
+  if (!role) return null;
+  if (role === 'finance_manager') return 'finance';
+  if (role === 'ppic_manager') return 'ppic';
+  if (isCompanyLeadership(role)) return 'manager';
+  return null;
+}
+
+export const PPIC_DASHBOARD_ROLES = [...LEADERSHIP_ROLES, 'ppic_manager', 'ppic_staff'];
+
+export function canAccessPpicDashboard(role: string | undefined | null): boolean {
+  return !!role && PPIC_DASHBOARD_ROLES.includes(role);
+}
+
+export const PRODUCTION_DASHBOARD_ROLES = [...LEADERSHIP_ROLES, 'production_manager', 'production_staff'];
+
+export function canAccessProductionDashboard(role: string | undefined | null): boolean {
+  return !!role && PRODUCTION_DASHBOARD_ROLES.includes(role);
+}
+
+// Role yang boleh mencatat progres tahap produksi (work_order_step_progress) —
+// disamakan dengan yang boleh mengelola Work Order (production + PPIC + leadership),
+// bukan set baru.
+export function canRecordStepProgress(role: string | undefined | null): boolean {
+  return canManageWorkOrder(role);
 }

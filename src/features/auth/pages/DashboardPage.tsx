@@ -101,6 +101,12 @@ export default function DashboardPage() {
               <Link href="/hr" className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-50">
                 Dashboard HRD
               </Link>
+              <Link href="/ppic" className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-50">
+                Dashboard PPIC
+              </Link>
+              <Link href="/production" className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-50">
+                Dashboard Production
+              </Link>
               <Link href="/team" className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-50">
                 Kelola Tim
               </Link>

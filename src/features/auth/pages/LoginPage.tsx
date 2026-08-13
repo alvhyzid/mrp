@@ -2,34 +2,19 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { IBM_Plex_Sans } from 'next/font/google';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import { getDashboardRouteForRole } from '@/lib/roles';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 
-// Eksperimen terisolasi: gaya visual Carbon Design System (IBM) diterapkan
-// HANYA di halaman /login dan /register lewat className override di sini —
-// src/components/ui/{button,input,card}.tsx SENGAJA tidak disentuh sama
-// sekali (twMerge di cn() membuat override className di titik pemakaian ini
-// aman, tanpa mengubah tampilan komponen di halaman lain). Nilai warna,
-// spacing, dan tipografi diambil langsung dari source resmi Carbon
-// (@carbon/themes, @carbon/layout, @carbon/type, @carbon/colors via unpkg),
-// bukan tebakan — lihat catatan token di bawah.
-const ibmPlexSans = IBM_Plex_Sans({ subsets: ['latin'], weight: ['400', '500', '600'] });
-
-// Token Carbon yang dipakai (white theme, sumber: unpkg @carbon/themes,
-// @carbon/layout, @carbon/type, @carbon/colors):
-// - interactive/focus/link-primary (Blue 60): #0f62fe
-// - button-primary hover (Blue 70): #0043ce
-// - button-primary active (Blue 80): #002d9c
-// - text-primary: #161616, text-secondary: #525252
-// - border-strong-01: #8d8d8d, border-subtle-01: #c6c6c6, layerAccent01: #e0e0e0
-// - field-01 (input bg): #f4f4f4
-// - support-error: #da1e28
-// - spacing-05=1rem, spacing-07=2rem, spacing-09=3rem (field/button height)
-// - label-01/helper-text-01: 12px/1.333, body-compact-01: 14px/1.286
+// Halaman ini awalnya jadi eksperimen terisolasi gaya Carbon Design System
+// (IBM) sebelum diperluas company-wide di Tahap 3 — className hex eksplisit
+// di sini sekarang KEBETULAN sama dengan token dasar src/components/ui/ &
+// app/globals.css (sumbernya sama: @carbon/themes, @carbon/layout,
+// @carbon/type, @carbon/colors via unpkg), sengaja dibiarkan sebagai
+// override eksplisit di sini karena sebelumnya sudah direview & disetujui
+// apa adanya. Font IBM Plex Sans sekarang dimuat sekali di app/layout.tsx.
 
 export default function LoginPage() {
   const router = useRouter();
@@ -97,7 +82,7 @@ export default function LoginPage() {
   };
 
   return (
-    <main className={`${ibmPlexSans.className} min-h-screen bg-white py-16`}>
+    <main className="min-h-screen bg-white py-16">
       <div className="mx-auto max-w-md px-4">
         <Card className="rounded-none border border-[#e0e0e0] bg-white p-8 shadow-none">
           <CardContent className="flex flex-col gap-6 p-0">

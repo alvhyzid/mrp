@@ -2,20 +2,13 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { IBM_Plex_Sans } from 'next/font/google';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 
-// Eksperimen terisolasi: gaya visual Carbon Design System (IBM) diterapkan
-// HANYA di halaman /login dan /register lewat className override di sini —
-// src/components/ui/{button,input,card}.tsx SENGAJA tidak disentuh sama
-// sekali (twMerge di cn() membuat override className di titik pemakaian ini
-// aman, tanpa mengubah tampilan komponen di halaman lain). Nilai warna,
-// spacing, dan tipografi diambil langsung dari source resmi Carbon
-// (@carbon/themes, @carbon/layout, @carbon/type, @carbon/colors via unpkg) —
-// lihat catatan token lengkap di LoginPage.tsx.
-const ibmPlexSans = IBM_Plex_Sans({ subsets: ['latin'], weight: ['400', '500', '600'] });
+// Lihat catatan di LoginPage.tsx: className hex eksplisit di sini kebetulan
+// sama dengan token dasar Carbon di src/components/ui/ & app/globals.css
+// sejak Tahap 3. Font IBM Plex Sans dimuat sekali di app/layout.tsx.
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -59,7 +52,7 @@ export default function RegisterPage() {
     'h-12 rounded-none border-0 border-b border-[#8d8d8d] bg-[#f4f4f4] px-4 text-sm text-[#161616] shadow-none focus-visible:border-transparent focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#0f62fe] focus-visible:ring-0';
 
   return (
-    <main className={`${ibmPlexSans.className} min-h-screen bg-white py-16`}>
+    <main className="min-h-screen bg-white py-16">
       <div className="mx-auto max-w-md px-4">
         <Card className="rounded-none border border-[#e0e0e0] bg-white p-8 shadow-none">
           <CardContent className="flex flex-col gap-6 p-0">

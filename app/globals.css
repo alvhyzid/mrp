@@ -4,46 +4,57 @@
 
 @layer base {
   :root {
+    /* Token dasar Carbon Design System (white theme) — diambil langsung dari
+       source resmi (@carbon/colors, @carbon/themes via unpkg), bukan tebakan.
+       Dikonversi ke HSL karena util Tailwind di sini pakai hsl(var(--x)):
+       background #ffffff, text-primary/gray100 #161616, text-secondary/gray70
+       #525252, border-subtle/gray30 #c6c6c6, border-strong/gray50 #8d8d8d,
+       field-01/gray10 #f4f4f4, layerAccent01/gray20 #e0e0e0,
+       interactive/Blue 60 #0f62fe. */
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 0 0% 9%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 0 0% 9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --destructive-subtle: 0 93% 94%;
-    --destructive-subtle-foreground: 0 74% 32%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
+    --popover-foreground: 0 0% 9%;
+    --primary: 219 99% 53%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 32%;
+    --accent: 0 0% 88%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 357 76% 49%;
+    --destructive-foreground: 0 0% 100%;
+    --destructive-subtle: 0 100% 97%;
+    --destructive-subtle-foreground: 357 70% 30%;
+    --border: 0 0% 78%;
+    --input: 0 0% 55%;
+    --ring: 219 99% 53%;
+    --radius: 0rem;
 
     /* Semantic status palette — see tailwind.config.ts for the rationale.
        success = aktif/tersedia, warning = peringatan, info = informasi,
-       destructive (above) doubles as "kritis" for system_alerts severity. */
-    --success: 142 71% 35%;
+       destructive (above) doubles as "kritis" for system_alerts severity.
+       Nilai diambil dari support-color Carbon (Green/Yellow/Blue family di
+       @carbon/colors): success/Green 50 #24a148, warning/Yellow 30 #f1c21b
+       (teks di atasnya sengaja gelap, bukan putih — kuning terlalu terang
+       untuk kontras teks putih), info/Blue 70 #0043ce. */
+    --success: 137 63% 39%;
     --success-foreground: 0 0% 100%;
-    --success-subtle: 142 76% 94%;
-    --success-subtle-foreground: 142 76% 24%;
+    --success-subtle: 137 78% 93%;
+    --success-subtle-foreground: 137 70% 22%;
 
-    --warning: 38 92% 42%;
-    --warning-foreground: 0 0% 100%;
-    --warning-subtle: 48 96% 92%;
-    --warning-subtle-foreground: 32 95% 24%;
+    --warning: 47 88% 53%;
+    --warning-foreground: 0 0% 9%;
+    --warning-subtle: 47 86% 91%;
+    --warning-subtle-foreground: 32 90% 24%;
 
-    --info: 217 91% 45%;
+    --info: 220 100% 40%;
     --info-foreground: 0 0% 100%;
-    --info-subtle: 214 95% 93%;
-    --info-subtle-foreground: 217 91% 28%;
+    --info-subtle: 213 100% 96%;
+    --info-subtle-foreground: 220 90% 30%;
   }
 }
 
@@ -58,8 +69,7 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background-color: #f8fafc;
+  background-color: #ffffff;
 }
 
 * {

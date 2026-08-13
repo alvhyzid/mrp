@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { IBM_Plex_Sans } from 'next/font/google';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import { canAccessWarehouseDashboard, canAccessHrDashboard, canAccessPpicDashboard, canAccessProductionDashboard } from '@/lib/roles';
 
@@ -18,7 +17,8 @@ import { canAccessWarehouseDashboard, canAccessHrDashboard, canAccessPpicDashboa
 //   min-height 32px (mini-units(4)), teks default $text-secondary (#525252),
 //   hover bg rgba(141,141,141,.12), item aktif bg rgba(141,141,141,.2) +
 //   teks $text-primary + garis aksen kiri 3px $border-interactive (#0f62fe).
-const ibmPlexSans = IBM_Plex_Sans({ subsets: ['latin'], weight: ['400', '500', '600'] });
+// Font IBM Plex Sans dimuat sekali di app/layout.tsx (berlaku company-wide
+// sejak Tahap 3), tidak perlu dimuat lagi di sini.
 
 const ROLE_LABELS: Record<string, string> = {
   company_admin: 'Admin Perusahaan',
@@ -104,7 +104,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const visibleItems = NAV_ITEMS.filter((item) => item.visible(role));
 
   return (
-    <div className={`${ibmPlexSans.className} min-h-screen bg-white`}>
+    <div className="min-h-screen bg-white">
       <header className="fixed inset-x-0 top-0 z-40 flex h-12 items-center justify-between border-b border-[#c6c6c6] bg-white px-4">
         <span className="text-sm font-semibold text-[#161616]">MRP &mdash; PT ITM</span>
         <div className="flex items-center gap-4">

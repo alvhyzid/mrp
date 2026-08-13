@@ -76,9 +76,13 @@ const config: Config = {
         }
       },
       borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)'
+        // Carbon: sudut tajam di mana-mana (radius 0) — --radius tetap ada di
+        // globals.css sebagai token, tapi di-hardcode 0px di sini (bukan
+        // calc(var(--radius) - Npx)) supaya tidak menghasilkan nilai negatif
+        // yang jadi invalid CSS kalau --radius diset 0.
+        lg: '0px',
+        md: '0px',
+        sm: '0px'
       },
       fontSize: {
         // Dense/tabular data size — a notch below the default `sm` (14px), for table

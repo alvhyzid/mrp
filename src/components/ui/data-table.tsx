@@ -18,7 +18,7 @@ export function DataTable<TData, TValue>({ columns, data, emptyMessage = 'Tidak 
   });
 
   return (
-    <div className="overflow-hidden rounded-md border">
+    <div className="overflow-hidden rounded-none border">
       <Table>
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (

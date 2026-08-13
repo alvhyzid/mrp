@@ -2,6 +2,8 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+// Carbon Design System: sudut tajam, tanpa shadow — kartu dibedakan dari
+// latar cuma lewat garis tipis (border), bukan bayangan mengambang.
 const Card = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
@@ -9,7 +11,7 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "rounded-xl border bg-card text-card-foreground shadow",
+      "rounded-none border bg-card text-card-foreground shadow-none",
       className
     )}
     {...props}

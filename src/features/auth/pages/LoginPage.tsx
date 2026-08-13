@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { IBM_Plex_Sans } from 'next/font/google';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
+import { getDashboardRouteForRole } from '@/lib/roles';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -82,8 +83,17 @@ export default function LoginPage() {
       return;
     }
 
-    const redirectTo = new URLSearchParams(window.location.search).get('redirectTo') || '/dashboard';
-    router.push(redirectTo);
+    // Redirect langsung ke dashboard department (kalau role user punya satu) —
+    // TANPA mampir dulu ke /dashboard generik untuk fetch /api/me. Role sudah
+    // ada di data.user.tenant.role dari respons /api/login barusan, jadi tidak
+    // perlu request tambahan. Ini menghilangkan 1 putaran /api/me penuh
+    // (auth.getUser + query users + query companies, ~550-900ms terukur) yang
+    // sebelumnya terjadi 2x berturut-turut (sekali di /dashboard, sekali lagi
+    // di halaman department) — sekarang cukup sekali, dan cuma kalau memang
+    // dituju ke halaman umum /dashboard.
+    const explicitRedirect = new URLSearchParams(window.location.search).get('redirectTo');
+    const departmentRoute = getDashboardRouteForRole(data?.user?.tenant?.role);
+    router.push(explicitRedirect || departmentRoute || '/dashboard');
   };
 
   return (

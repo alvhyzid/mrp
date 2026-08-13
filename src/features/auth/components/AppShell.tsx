@@ -39,20 +39,53 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 type NavItem = { label: string; href: string; visible: (role: string | null) => boolean };
+type NavSection = { title: string; items: NavItem[] };
 
-const NAV_ITEMS: NavItem[] = [
-  { label: 'Ringkasan', href: '/dashboard', visible: () => true },
-  { label: 'Dashboard Warehouse', href: '/warehouse', visible: canAccessWarehouseDashboard },
-  { label: 'Dashboard HRD', href: '/hr', visible: canAccessHrDashboard },
-  { label: 'Dashboard PPIC', href: '/ppic', visible: canAccessPpicDashboard },
-  { label: 'Dashboard Production', href: '/production', visible: canAccessProductionDashboard },
-  { label: 'Item Master', href: '/items', visible: () => true },
-  { label: 'BOM (Resep)', href: '/boms', visible: () => true },
-  { label: 'PO Client', href: '/customer-purchase-orders', visible: () => true },
-  { label: 'Work Order', href: '/work-orders', visible: () => true },
-  { label: 'Kelola Tim', href: '/team', visible: (role) => role === 'company_admin' },
-  { label: 'Data Perusahaan', href: '/company', visible: (role) => role === 'company_admin' },
-  { label: 'Profil Saya', href: '/profile', visible: () => true }
+// "Ringkasan" berdiri sendiri di paling atas, tanpa section/divider — dashboard
+// lintas-department, cuma relevan untuk company_admin/general_manager (department
+// lain sudah punya dashboard sendiri sebagai halaman utama mereka).
+const TOP_ITEM: NavItem = { label: 'Ringkasan', href: '/dashboard', visible: () => true };
+
+// Tiap section dirender dengan judul + garis pembatas di atasnya, dan section itu
+// sendiri disembunyikan total kalau tidak ada satu pun item di dalamnya yang
+// visible untuk role yang login (jadi tidak ada judul section menggantung kosong).
+// Visibilitas PER ITEM sengaja tetap identik dengan sebelum restrukturisasi ini —
+// cuma pengelompokan & format tampilannya yang berubah.
+const NAV_SECTIONS: NavSection[] = [
+  {
+    title: 'MRP',
+    items: [
+      { label: 'PO Client', href: '/customer-purchase-orders', visible: () => true },
+      { label: 'BOM (Resep)', href: '/boms', visible: () => true },
+      { label: 'Work Order', href: '/work-orders', visible: () => true }
+    ]
+  },
+  {
+    title: 'Warehouse',
+    items: [
+      { label: 'Dashboard', href: '/warehouse', visible: canAccessWarehouseDashboard },
+      { label: 'Item Master', href: '/items', visible: () => true }
+    ]
+  },
+  {
+    title: 'PPIC',
+    items: [{ label: 'Dashboard', href: '/ppic', visible: canAccessPpicDashboard }]
+  },
+  {
+    title: 'Production',
+    items: [{ label: 'Dashboard', href: '/production', visible: canAccessProductionDashboard }]
+  },
+  {
+    title: 'HR',
+    items: [{ label: 'Dashboard', href: '/hr', visible: canAccessHrDashboard }]
+  },
+  {
+    title: 'Settings',
+    items: [
+      { label: 'Data Perusahaan', href: '/company', visible: (role) => role === 'company_admin' },
+      { label: 'Profil Saya', href: '/profile', visible: () => true }
+    ]
+  }
 ];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -101,7 +134,27 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     router.push('/login');
   };
 
-  const visibleItems = NAV_ITEMS.filter((item) => item.visible(role));
+  const visibleSections = NAV_SECTIONS.map((section) => ({
+    ...section,
+    items: section.items.filter((item) => item.visible(role))
+  })).filter((section) => section.items.length > 0);
+
+  const renderNavLink = (item: NavItem) => {
+    const active = pathname === item.href;
+    return (
+      <li key={item.href}>
+        <Link
+          href={item.href}
+          className={`relative flex h-8 items-center px-4 text-sm transition-colors ${
+            active ? 'bg-[rgba(141,141,141,0.2)] font-medium text-[#161616]' : 'text-[#525252] hover:bg-[rgba(141,141,141,0.12)]'
+          }`}
+        >
+          {active ? <span className="absolute inset-y-0 left-0 w-[3px] bg-[#0f62fe]" aria-hidden="true" /> : null}
+          {item.label}
+        </Link>
+      </li>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-white">
@@ -128,24 +181,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       <nav aria-label="Navigasi utama" className="fixed bottom-0 left-0 top-12 z-30 w-64 overflow-y-auto border-r border-[#e0e0e0] bg-white">
-        <ul>
-          {visibleItems.map((item) => {
-            const active = pathname === item.href;
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className={`relative flex h-8 items-center px-4 text-sm transition-colors ${
-                    active ? 'bg-[rgba(141,141,141,0.2)] font-medium text-[#161616]' : 'text-[#525252] hover:bg-[rgba(141,141,141,0.12)]'
-                  }`}
-                >
-                  {active ? <span className="absolute inset-y-0 left-0 w-[3px] bg-[#0f62fe]" aria-hidden="true" /> : null}
-                  {item.label}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+        <ul>{renderNavLink(TOP_ITEM)}</ul>
+        {visibleSections.map((section) => (
+          <div key={section.title} className="border-t border-[#e0e0e0] pt-2">
+            <p className="px-4 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-[#8d8d8d]">{section.title}</p>
+            <ul>{section.items.map(renderNavLink)}</ul>
+          </div>
+        ))}
       </nav>
 
       <div className="ml-64 pt-12">{children}</div>

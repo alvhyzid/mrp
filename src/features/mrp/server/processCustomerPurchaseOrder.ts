@@ -8,19 +8,24 @@ interface ApiResult {
 }
 
 // Reimplementasi TypeScript dari fungsi DB process_customer_purchase_order()
-// (supabase/migrations/20260813100000_po_so_customer_schema_updates.sql). Fungsi DB
-// itu SECURITY DEFINER dan membaca auth.jwt() milik user yang memanggilnya lewat
-// PostgREST — tapi API route ini (seperti semua endpoint lain di aplikasi) memanggil
-// Supabase pakai service-role client, yang TIDAK punya konteks JWT user biasa,
-// jadi tidak bisa langsung .rpc() fungsi itu dari sini. Fungsi DB tetap ada sebagai
-// pengaman lapis kedua kalau ada yang panggil langsung lewat anon key + JWT sendiri;
-// logikanya (termasuk format so_number) HARUS tetap sinkron dengan versi ini.
+// (supabase/migrations/20260813100000_po_so_customer_schema_updates.sql, direvisi di
+// 20260814100000_admin_staff_role.sql). Fungsi DB itu SECURITY DEFINER dan membaca
+// auth.jwt() milik user yang memanggilnya lewat PostgREST — tapi API route ini
+// (seperti semua endpoint lain di aplikasi) memanggil Supabase pakai service-role
+// client, yang TIDAK punya konteks JWT user biasa, jadi tidak bisa langsung .rpc()
+// fungsi itu dari sini. Fungsi DB tetap ada sebagai pengaman lapis kedua kalau ada
+// yang panggil langsung lewat anon key + JWT sendiri; logikanya (termasuk format
+// so_number) HARUS tetap sinkron dengan versi ini.
+//
+// Sengaja HANYA company_admin/general_manager (bukan ppic_manager, meski dia salah
+// satu dari 3 approver) — Process adalah keputusan final mengunci komitmen produksi,
+// beda dari approve per-department.
 export async function processCustomerPurchaseOrder(request: NextRequest): Promise<ApiResult> {
   try {
     const { appUser } = await getCurrentUser(request);
 
-    if (!(isCompanyLeadership(appUser.role) || appUser.role === 'ppic_manager')) {
-      return { status: 403, body: { error: 'Hanya company_admin, general_manager, atau ppic_manager yang boleh memproses PO client.' } };
+    if (!isCompanyLeadership(appUser.role)) {
+      return { status: 403, body: { error: 'Hanya company_admin atau general_manager yang boleh memproses PO client.' } };
     }
 
     if (!appUser.company_id) {

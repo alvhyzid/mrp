@@ -477,30 +477,43 @@ export default function CustomerPurchaseOrdersPage() {
                 </div>
               </div>
 
-              {expandedPo.status === 'new' && expandedPo.approvals.every((a) => a.status === 'approved') && (isCompanyLeadership(role) || role === 'ppic_manager') ? (
-                <div className="flex items-end gap-3 rounded-md border p-3">
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">Lokasi Pabrik (untuk Process)</span>
-                    <Select
-                      value={processPlantChoice[expandedPo.customer_purchase_order_id] ?? ''}
-                      onValueChange={(value) => setProcessPlantChoice((prev) => ({ ...prev, [expandedPo.customer_purchase_order_id]: value }))}
-                    >
-                      <SelectTrigger className="w-56">
-                        <SelectValue placeholder="Pilih plant..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {plants.map((plant) => (
-                          <SelectItem key={plant.production_plant_id} value={String(plant.production_plant_id)}>
-                            {plant.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
-                  <Button disabled={busyKey === `process-${expandedPo.customer_purchase_order_id}`} onClick={() => handleProcess(expandedPo)}>
-                    Process -&gt; Buat Sales Order
-                  </Button>
-                </div>
+              {expandedPo.status === 'new' && expandedPo.approvals.every((a) => a.status === 'approved') ? (
+                isCompanyLeadership(role) ? (
+                  <div className="flex items-end gap-3 rounded-md border p-3">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Lokasi Pabrik (untuk Process)</span>
+                      <Select
+                        value={processPlantChoice[expandedPo.customer_purchase_order_id] ?? ''}
+                        onValueChange={(value) => setProcessPlantChoice((prev) => ({ ...prev, [expandedPo.customer_purchase_order_id]: value }))}
+                      >
+                        <SelectTrigger className="w-56">
+                          <SelectValue placeholder="Pilih plant..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {plants.map((plant) => (
+                            <SelectItem key={plant.production_plant_id} value={String(plant.production_plant_id)}>
+                              {plant.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </label>
+                    <Button disabled={busyKey === `process-${expandedPo.customer_purchase_order_id}`} onClick={() => handleProcess(expandedPo)}>
+                      Process -&gt; Buat Sales Order
+                    </Button>
+                  </div>
+                ) : (
+                  // Ketiga approval sudah selesai (termasuk ppic_manager, salah satu dari
+                  // 3 approver) tapi Process sengaja tetap terkunci untuk role selain
+                  // leadership — ditampilkan disabled + alasan, bukan disembunyikan total,
+                  // supaya jelas kenapa (bukan kelihatan seperti bug/hilang).
+                  <div className="flex items-center gap-3 rounded-md border border-dashed p-3">
+                    <Button disabled className="pointer-events-none">
+                      Process -&gt; Buat Sales Order
+                    </Button>
+                    <p className="text-sm text-muted-foreground">Semua approval sudah selesai, tapi hanya company_admin atau general_manager yang bisa memproses PO ini menjadi Sales Order.</p>
+                  </div>
+                )
               ) : null}
 
               {actionMessage[expandedPo.customer_purchase_order_id] ? <p className="text-sm text-foreground">{actionMessage[expandedPo.customer_purchase_order_id]}</p> : null}

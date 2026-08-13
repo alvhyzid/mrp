@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
-import { isCompanyLeadership } from '@/lib/roles';
+import { canManageCustomerPo } from '@/lib/roles';
 import { parseCustomerInput } from './customerValidation';
 
 interface ApiResult {
@@ -12,7 +12,12 @@ export async function createCustomer(request: NextRequest): Promise<ApiResult> {
   try {
     const { appUser } = await getCurrentUser(request);
 
-    if (!(isCompanyLeadership(appUser.role) || ['ppic_manager', 'ppic_staff'].includes(appUser.role))) {
+    // Dulu daftar role di-hardcode terpisah di sini (leadership + ppic manual) —
+    // disatukan ke canManageCustomerPo supaya tidak ada 2 sumber kebenaran yang
+    // bisa drift (ini persis yang terjadi saat admin_staff ditambahkan: kalau
+    // tetap hardcode, tombol "+ Baru" client di form Buat PO akan muncul untuk
+    // admin_staff tapi gagal submit karena endpoint ini belum tahu soal role itu).
+    if (!canManageCustomerPo(appUser.role)) {
       return { status: 403, body: { error: 'Role Anda tidak punya izin menambah client.' } };
     }
 

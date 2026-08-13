@@ -8,6 +8,7 @@ export const SUPER_ADMIN_ROLE = 'super_admin';
 export const COMPANY_ROLES = [
   'company_admin',
   'general_manager',
+  'admin_staff',
   'production_manager',
   'production_staff',
   'ppic_manager',
@@ -54,11 +55,21 @@ export function canManageBom(role: string | undefined | null): boolean {
 
 // Role yang boleh mengelola customer & PO client — harus sinkron dengan policy
 // customers_write_ppic / customer_purchase_orders_insert_ppic di
-// supabase/migrations/20260812153100_customer_purchase_orders.sql.
-export const CUSTOMER_PO_MANAGE_ROLES = [...LEADERSHIP_ROLES, 'ppic_manager', 'ppic_staff'];
+// supabase/migrations/20260812153100_customer_purchase_orders.sql (+ admin_staff
+// ditambahkan di supabase/migrations/20260814100000_admin_staff_role.sql).
+export const CUSTOMER_PO_MANAGE_ROLES = [...LEADERSHIP_ROLES, 'ppic_manager', 'ppic_staff', 'admin_staff'];
 
 export function canManageCustomerPo(role: string | undefined | null): boolean {
   return !!role && CUSTOMER_PO_MANAGE_ROLES.includes(role);
+}
+
+// Subset lebih sempit dari CUSTOMER_PO_MANAGE_ROLES — khusus tombol pintasan
+// "Buat PO" di header (bukan izin akses halaman PO Client itu sendiri, yang tetap
+// terbuka juga untuk ppic_manager/ppic_staff seperti sebelumnya).
+export const CUSTOMER_PO_QUICK_CREATE_ROLES = [...LEADERSHIP_ROLES, 'admin_staff'];
+
+export function canQuickCreateCustomerPo(role: string | undefined | null): boolean {
+  return !!role && CUSTOMER_PO_QUICK_CREATE_ROLES.includes(role);
 }
 
 // Pemetaan department approval PO client -> role yang boleh approve/reject-nya.

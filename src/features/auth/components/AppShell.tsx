@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { canAccessWarehouseDashboard, canAccessHrDashboard, canAccessPpicDashboard, canAccessProductionDashboard } from '@/lib/roles';
+import { canAccessWarehouseDashboard, canAccessHrDashboard, canAccessPpicDashboard, canAccessProductionDashboard, canQuickCreateCustomerPo } from '@/lib/roles';
 
 // UI Shell Carbon Design System (Header + SideNav) sebagai layout terpakai
 // bersama di semua halaman berlogin — perluasan dari tombol Logout yang
@@ -23,6 +23,7 @@ import { canAccessWarehouseDashboard, canAccessHrDashboard, canAccessPpicDashboa
 const ROLE_LABELS: Record<string, string> = {
   company_admin: 'Admin Perusahaan',
   general_manager: 'General Manager',
+  admin_staff: 'Staf Administrasi',
   production_manager: 'Manager Produksi',
   production_staff: 'Staf Produksi',
   ppic_manager: 'Manager PPIC',
@@ -170,24 +171,39 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               </>
             ) : null}
           </span>
+          {/* Dulu slot ini dipakai tombol Keluar (sekarang pindah ke bawah side nav,
+              supaya tetap bisa diakses semua role tanpa perlu gate role) — sekarang
+              dipakai pintasan "Buat PO", cuma untuk role yang eksplisit diberi izin. */}
+          {canQuickCreateCustomerPo(role) ? (
+            <Link
+              href="/customer-purchase-orders"
+              className="inline-flex h-8 items-center rounded-none bg-[#0f62fe] px-3 text-xs font-medium text-white transition-colors hover:bg-[#0043ce]"
+            >
+              Buat PO
+            </Link>
+          ) : null}
+        </div>
+      </header>
+
+      <nav aria-label="Navigasi utama" className="fixed bottom-0 left-0 top-12 z-30 flex w-64 flex-col border-r border-[#e0e0e0] bg-white">
+        <div className="flex-1 overflow-y-auto">
+          <ul>{renderNavLink(TOP_ITEM)}</ul>
+          {visibleSections.map((section) => (
+            <div key={section.title} className="border-t border-[#e0e0e0] pt-2">
+              <p className="px-4 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-[#8d8d8d]">{section.title}</p>
+              <ul>{section.items.map(renderNavLink)}</ul>
+            </div>
+          ))}
+        </div>
+        <div className="border-t border-[#e0e0e0] p-2">
           <button
             type="button"
             onClick={handleSignOut}
-            className="h-8 rounded-none border border-[#8d8d8d] bg-white px-3 text-xs font-medium text-[#161616] transition-colors hover:bg-[#f4f4f4]"
+            className="flex h-8 w-full items-center justify-center rounded-none border border-[#8d8d8d] bg-white text-xs font-medium text-[#161616] transition-colors hover:bg-[#f4f4f4]"
           >
             Keluar
           </button>
         </div>
-      </header>
-
-      <nav aria-label="Navigasi utama" className="fixed bottom-0 left-0 top-12 z-30 w-64 overflow-y-auto border-r border-[#e0e0e0] bg-white">
-        <ul>{renderNavLink(TOP_ITEM)}</ul>
-        {visibleSections.map((section) => (
-          <div key={section.title} className="border-t border-[#e0e0e0] pt-2">
-            <p className="px-4 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-[#8d8d8d]">{section.title}</p>
-            <ul>{section.items.map(renderNavLink)}</ul>
-          </div>
-        ))}
       </nav>
 
       <div className="ml-64 pt-12">{children}</div>

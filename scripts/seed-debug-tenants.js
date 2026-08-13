@@ -109,7 +109,10 @@ async function main() {
     // Akun dashboard department (Prinsip Desain #8) — supaya Anda bisa login sendiri
     // dan lihat langsung dashboard Warehouse & HRD diarahkan otomatis begitu login.
     { name: 'Company A HR Manager', email: 'hr.a@debug.mrp', password: companyAApproverPassword, role: 'hr_manager', status: 'active', companyId: companyA.company_id },
-    { name: 'Company A Warehouse Manager', email: 'warehouse.a@debug.mrp', password: companyAApproverPassword, role: 'warehouse_manager', status: 'active', companyId: companyA.company_id }
+    { name: 'Company A Warehouse Manager', email: 'warehouse.a@debug.mrp', password: companyAApproverPassword, role: 'warehouse_manager', status: 'active', companyId: companyA.company_id },
+    // admin_staff: administratif lintas-department, bukan terikat department
+    // tertentu — kewenangan pertamanya cuma create customer_purchase_orders.
+    { name: 'Company A Admin Staff', email: 'admin-staff.a@debug.mrp', password: companyAApproverPassword, role: 'admin_staff', status: 'active', companyId: companyA.company_id }
   ];
 
   for (const user of users) {
@@ -141,6 +144,7 @@ async function main() {
   console.log('Company A ppic_manager (approve department ppic): ppic.a@debug.mrp');
   console.log('Company A hr_manager (dashboard HRD): hr.a@debug.mrp');
   console.log('Company A warehouse_manager (dashboard Warehouse): warehouse.a@debug.mrp');
+  console.log('Company A admin_staff (create PO client, lintas-department): admin-staff.a@debug.mrp');
   console.log('Company B admin (isolation check): company.b@debug.mrp');
 }
 

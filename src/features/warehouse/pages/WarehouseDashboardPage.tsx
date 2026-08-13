@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import type { ColumnDef } from '@tanstack/react-table';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -241,14 +240,9 @@ export default function WarehouseDashboardPage() {
   return (
     <main className="min-h-screen bg-muted/30 py-10">
       <div className="container flex max-w-5xl flex-col gap-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Dashboard Department</p>
-            <h1 className="text-2xl font-semibold text-foreground">Warehouse</h1>
-          </div>
-          <Link href="/dashboard" className="text-sm text-muted-foreground underline">
-            Kembali ke ringkasan umum
-          </Link>
+        <div>
+          <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Dashboard Department</p>
+          <h1 className="text-2xl font-semibold text-foreground">Warehouse</h1>
         </div>
 
         <Card>

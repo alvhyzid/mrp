@@ -8,4 +8,5 @@ export { default as InviteAcceptPage } from './pages/InviteAcceptPage';
 export { default as ProfilePage } from './pages/ProfilePage';
 export { default as ForgotPasswordPage } from './pages/ForgotPasswordPage';
 export { default as ResetPasswordPage } from './pages/ResetPasswordPage';
+export { default as AppShell } from './components/AppShell';
 export * from './server';

@@ -34,6 +34,21 @@ import { canAccessWarehouseDashboard, canAccessHrDashboard, canAccessPpicDashboa
 // Font IBM Plex Sans dimuat sekali di app/layout.tsx (berlaku company-wide
 // sejak Tahap 3), tidak perlu dimuat lagi di sini.
 
+// Placeholder slot logo saat perusahaan belum upload logo asli — inisial dihitung
+// MURNI dari companyName (data), persis pola yang sama dengan kenapa "PT ITM"
+// dulu salah di-hardcode di header: apa pun yang tampil di elemen shared ini
+// WAJIB diturunkan dari data tenant yang sedang login, tidak boleh ada string
+// nama perusahaan tertulis langsung di kode. Aturan: huruf pertama kata ke-1 +
+// huruf pertama kata ke-2 (mis. "CV Sastro" -> "CS"); kalau nama cuma 1 kata,
+// pakai 2 huruf pertama kata itu saja.
+function getCompanyInitials(name: string | null): string {
+  if (!name) return '';
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '';
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+}
+
 const ROLE_LABELS: Record<string, string> = {
   company_admin: 'Admin Perusahaan',
   general_manager: 'General Manager',
@@ -201,6 +216,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           ) : companyLogoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={companyLogoUrl} alt={companyName ?? 'Logo perusahaan'} className="h-6 w-6 shrink-0 object-contain" />
+          ) : companyName ? (
+            <span
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-none bg-[#e0e0e0] text-[10px] font-semibold text-[#525252]"
+              title={companyName}
+            >
+              {getCompanyInitials(companyName)}
+            </span>
           ) : null}
           <span className="text-sm font-semibold text-[#161616]">
             MRP{companyName ? ` — ${companyName}` : ''}

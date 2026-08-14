@@ -34,16 +34,27 @@ import { canAccessWarehouseDashboard, canAccessHrDashboard, canAccessPpicDashboa
 // Font IBM Plex Sans dimuat sekali di app/layout.tsx (berlaku company-wide
 // sejak Tahap 3), tidak perlu dimuat lagi di sini.
 
+// Prefiks badan hukum umum yang dibuang dulu sebelum hitung inisial company —
+// supaya inisial mencerminkan NAMA INTI perusahaan, bukan kebetulan sama-sama
+// diawali jenis badan hukum yang sama. TAMBAHKAN DI SINI kalau nanti ada tenant
+// baru dengan prefiks lain yang belum tercakup (mis. "Yayasan", "UMKM", dst).
+const COMPANY_NAME_PREFIXES = ['PT', 'CV', 'UD', 'PD', 'FA', 'FIRMA', 'PERUM', 'KOPERASI'];
+
 // Placeholder slot logo saat perusahaan belum upload logo asli — inisial dihitung
 // MURNI dari companyName (data), persis pola yang sama dengan kenapa "PT ITM"
 // dulu salah di-hardcode di header: apa pun yang tampil di elemen shared ini
 // WAJIB diturunkan dari data tenant yang sedang login, tidak boleh ada string
-// nama perusahaan tertulis langsung di kode. Aturan: huruf pertama kata ke-1 +
-// huruf pertama kata ke-2 (mis. "CV Sastro" -> "CS"); kalau nama cuma 1 kata,
-// pakai 2 huruf pertama kata itu saja.
+// nama perusahaan tertulis langsung di kode. Aturan: buang 1 prefiks badan
+// hukum di kata pertama (case-insensitive, titik di akhir diabaikan) kalau ada,
+// baru ambil huruf pertama dari 2 kata sisa berikutnya (mis. "PT Indo Taste
+// Manufacture" -> "IT"); kalau sisa cuma 1 kata, pakai 2 huruf pertama kata itu
+// (mis. "PT ITM" -> "IT").
 function getCompanyInitials(name: string | null): string {
   if (!name) return '';
-  const words = name.trim().split(/\s+/).filter(Boolean);
+  let words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length > 1 && COMPANY_NAME_PREFIXES.includes(words[0].replace(/\.$/, '').toUpperCase())) {
+    words = words.slice(1);
+  }
   if (words.length === 0) return '';
   if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
   return (words[0][0] + words[1][0]).toUpperCase();

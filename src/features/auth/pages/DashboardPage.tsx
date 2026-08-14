@@ -95,14 +95,14 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <main className="min-h-screen bg-muted/30 py-16">
-        <div className="container max-w-5xl text-center text-sm text-muted-foreground">Memuat dashboard...</div>
+        <div className="px-6 text-center text-sm text-muted-foreground">Memuat dashboard...</div>
       </main>
     );
   }
 
   return (
     <main className="min-h-screen bg-muted/30 py-10">
-      <div className="container flex max-w-5xl flex-col gap-6">
+      <div className="flex w-full flex-col gap-6 px-6">
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Ringkasan</p>

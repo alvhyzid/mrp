@@ -3,6 +3,20 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import {
+  Dashboard,
+  Document,
+  Receipt,
+  Assembly,
+  Task,
+  InventoryManagement,
+  Cube,
+  ChartLine,
+  Industry,
+  UserMultiple,
+  Settings as SettingsIcon,
+  UserAvatar
+} from '@carbon/icons-react';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import { canAccessWarehouseDashboard, canAccessHrDashboard, canAccessPpicDashboard, canAccessProductionDashboard, canQuickCreateCustomerPo } from '@/lib/roles';
 
@@ -39,13 +53,17 @@ const ROLE_LABELS: Record<string, string> = {
   viewer: 'Viewer'
 };
 
-type NavItem = { label: string; href: string; visible: (role: string | null) => boolean };
+type NavItem = { label: string; href: string; visible: (role: string | null) => boolean; icon: CarbonIcon };
 type NavSection = { title: string; items: NavItem[] };
+// Tipe komponen icon dari @carbon/icons-react (bukan tebakan/lucide — icon set
+// resmi IBM Carbon, konsisten dengan font/warna/ukuran shell yang sudah disumber
+// dari paket @carbon/* asli).
+type CarbonIcon = React.ComponentType<{ size?: number; className?: string }>;
 
 // "Ringkasan" berdiri sendiri di paling atas, tanpa section/divider — dashboard
 // lintas-department, cuma relevan untuk company_admin/general_manager (department
 // lain sudah punya dashboard sendiri sebagai halaman utama mereka).
-const TOP_ITEM: NavItem = { label: 'Ringkasan', href: '/dashboard', visible: () => true };
+const TOP_ITEM: NavItem = { label: 'Ringkasan', href: '/dashboard', visible: () => true, icon: Dashboard };
 
 // Tiap section dirender dengan judul + garis pembatas di atasnya, dan section itu
 // sendiri disembunyikan total kalau tidak ada satu pun item di dalamnya yang
@@ -56,36 +74,36 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: 'MRP',
     items: [
-      { label: 'PO Client', href: '/customer-purchase-orders', visible: () => true },
-      { label: 'Sales Order', href: '/sales-orders', visible: () => true },
-      { label: 'BOM (Resep)', href: '/boms', visible: () => true },
-      { label: 'Work Order', href: '/work-orders', visible: () => true }
+      { label: 'PO Client', href: '/customer-purchase-orders', visible: () => true, icon: Document },
+      { label: 'Sales Order', href: '/sales-orders', visible: () => true, icon: Receipt },
+      { label: 'BOM (Resep)', href: '/boms', visible: () => true, icon: Assembly },
+      { label: 'Work Order', href: '/work-orders', visible: () => true, icon: Task }
     ]
   },
   {
     title: 'Warehouse',
     items: [
-      { label: 'Dashboard', href: '/warehouse', visible: canAccessWarehouseDashboard },
-      { label: 'Item Master', href: '/items', visible: () => true }
+      { label: 'Dashboard', href: '/warehouse', visible: canAccessWarehouseDashboard, icon: InventoryManagement },
+      { label: 'Item Master', href: '/items', visible: () => true, icon: Cube }
     ]
   },
   {
     title: 'PPIC',
-    items: [{ label: 'Dashboard', href: '/ppic', visible: canAccessPpicDashboard }]
+    items: [{ label: 'Dashboard', href: '/ppic', visible: canAccessPpicDashboard, icon: ChartLine }]
   },
   {
     title: 'Production',
-    items: [{ label: 'Dashboard', href: '/production', visible: canAccessProductionDashboard }]
+    items: [{ label: 'Dashboard', href: '/production', visible: canAccessProductionDashboard, icon: Industry }]
   },
   {
     title: 'HR',
-    items: [{ label: 'Dashboard', href: '/hr', visible: canAccessHrDashboard }]
+    items: [{ label: 'Dashboard', href: '/hr', visible: canAccessHrDashboard, icon: UserMultiple }]
   },
   {
     title: 'Settings',
     items: [
-      { label: 'Data Perusahaan', href: '/company', visible: (role) => role === 'company_admin' },
-      { label: 'Profil Saya', href: '/profile', visible: () => true }
+      { label: 'Data Perusahaan', href: '/company', visible: (role) => role === 'company_admin', icon: SettingsIcon },
+      { label: 'Profil Saya', href: '/profile', visible: () => true, icon: UserAvatar }
     ]
   }
 ];
@@ -95,6 +113,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [userName, setUserName] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState<string | null>(null);
+  const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,12 +134,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         return;
       }
       const response = await fetch('/api/me', {
-        headers: { Authorization: `Bearer ${sessionData.session.access_token}` }
+        headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
+        cache: 'no-store'
       });
       const data = await response.json();
       if (!cancelled && response.ok) {
         setUserName(data?.user?.name ?? null);
         setRole(data?.user?.role ?? null);
+        setCompanyName(data?.company?.name ?? null);
+        setCompanyLogoUrl(data?.company?.logo_url ?? null);
       }
     };
 
@@ -143,15 +166,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const renderNavLink = (item: NavItem) => {
     const active = pathname === item.href;
+    const Icon = item.icon;
     return (
       <li key={item.href}>
         <Link
           href={item.href}
-          className={`relative flex h-8 items-center px-4 text-sm transition-colors ${
+          className={`relative flex h-8 items-center gap-3 px-4 text-sm transition-colors ${
             active ? 'bg-[rgba(141,141,141,0.2)] font-medium text-[#161616]' : 'text-[#525252] hover:bg-[rgba(141,141,141,0.12)]'
           }`}
         >
           {active ? <span className="absolute inset-y-0 left-0 w-[3px] bg-[#0f62fe]" aria-hidden="true" /> : null}
+          <Icon size={16} className="shrink-0" />
           {item.label}
         </Link>
       </li>
@@ -161,7 +186,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-white">
       <header className="fixed inset-x-0 top-0 z-40 flex h-12 items-center justify-between border-b border-[#c6c6c6] bg-white px-4">
-        <span className="text-sm font-semibold text-[#161616]">MRP &mdash; PT ITM</span>
+        <div className="flex items-center gap-2.5">
+          {companyLogoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={companyLogoUrl} alt={companyName ?? 'Logo perusahaan'} className="h-6 w-6 object-contain" />
+          ) : null}
+          <span className="text-sm font-semibold text-[#161616]">MRP</span>
+        </div>
         <div className="flex items-center gap-4">
           <span className="text-xs text-[#525252]">
             {userName ?? '…'}
@@ -187,16 +218,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       <nav aria-label="Navigasi utama" className="fixed bottom-0 left-0 top-12 z-30 flex w-64 flex-col border-r border-[#e0e0e0] bg-white">
-        <div className="flex-1 overflow-y-auto">
-          <ul>{renderNavLink(TOP_ITEM)}</ul>
+        <div className="flex-1 overflow-y-auto py-2">
+          <ul className="pb-2">{renderNavLink(TOP_ITEM)}</ul>
           {visibleSections.map((section) => (
-            <div key={section.title} className="border-t border-[#e0e0e0] pt-2">
-              <p className="px-4 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-[#8d8d8d]">{section.title}</p>
-              <ul>{section.items.map(renderNavLink)}</ul>
+            <div key={section.title} className="border-t border-[#e0e0e0] pb-2 pt-3">
+              <p className="px-4 pb-2 text-xs font-semibold uppercase tracking-wide text-[#8d8d8d]">{section.title}</p>
+              <ul className="flex flex-col gap-0.5">{section.items.map(renderNavLink)}</ul>
             </div>
           ))}
         </div>
-        <div className="border-t border-[#e0e0e0] p-2">
+        <div className="border-t border-[#e0e0e0] p-3">
           <button
             type="button"
             onClick={handleSignOut}

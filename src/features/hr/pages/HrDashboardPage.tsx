@@ -200,7 +200,7 @@ export default function HrDashboardPage() {
   if (checkingAccess) {
     return (
       <main className="min-h-screen bg-muted/30 py-16">
-        <div className="container max-w-5xl text-center text-sm text-muted-foreground">Memuat...</div>
+        <div className="px-6 text-center text-sm text-muted-foreground">Memuat...</div>
       </main>
     );
   }
@@ -208,7 +208,7 @@ export default function HrDashboardPage() {
   if (accessDenied) {
     return (
       <main className="min-h-screen bg-muted/30 py-16">
-        <div className="container max-w-3xl">
+        <div className="max-w-3xl px-6">
           <Card>
             <CardHeader>
               <CardDescription className="uppercase tracking-[0.2em] text-destructive">Akses Ditolak</CardDescription>
@@ -228,7 +228,7 @@ export default function HrDashboardPage() {
 
   return (
     <main className="min-h-screen bg-muted/30 py-10">
-      <div className="container flex max-w-5xl flex-col gap-6">
+      <div className="flex w-full flex-col gap-6 px-6">
         <div>
           <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Dashboard Department</p>
           <h1 className="text-2xl font-semibold text-foreground">HRD</h1>

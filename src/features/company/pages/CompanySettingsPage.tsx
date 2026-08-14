@@ -146,7 +146,7 @@ export default function CompanySettingsPage() {
   if (checkingAccess) {
     return (
       <main className="min-h-screen bg-muted/30 py-16">
-        <div className="container max-w-2xl text-center text-sm text-muted-foreground">Memuat...</div>
+        <div className="px-6 text-center text-sm text-muted-foreground">Memuat...</div>
       </main>
     );
   }
@@ -154,7 +154,7 @@ export default function CompanySettingsPage() {
   if (accessDenied) {
     return (
       <main className="min-h-screen bg-muted/30 py-16">
-        <div className="container max-w-2xl">
+        <div className="max-w-2xl px-6">
           <Card>
             <CardHeader>
               <CardDescription className="uppercase tracking-[0.2em] text-destructive">Akses Ditolak</CardDescription>
@@ -174,7 +174,7 @@ export default function CompanySettingsPage() {
 
   return (
     <main className="min-h-screen bg-muted/30 py-16">
-      <div className="container flex max-w-2xl flex-col gap-6">
+      <div className="flex w-full flex-col gap-6 px-6">
         <Card>
           <CardHeader>
             <CardDescription className="uppercase tracking-[0.2em]">Pengaturan Perusahaan</CardDescription>

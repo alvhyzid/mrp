@@ -145,7 +145,7 @@ export default function SalesOrdersPage() {
   if (checkingAccess) {
     return (
       <main className="min-h-screen bg-muted/30 py-16">
-        <div className="container max-w-5xl text-center text-sm text-muted-foreground">Memuat...</div>
+        <div className="px-6 text-center text-sm text-muted-foreground">Memuat...</div>
       </main>
     );
   }
@@ -153,7 +153,7 @@ export default function SalesOrdersPage() {
   if (accessDenied) {
     return (
       <main className="min-h-screen bg-muted/30 py-16">
-        <div className="container max-w-3xl">
+        <div className="max-w-3xl px-6">
           <Card>
             <CardHeader>
               <CardDescription className="uppercase tracking-[0.2em] text-destructive">Akses Ditolak</CardDescription>
@@ -173,7 +173,7 @@ export default function SalesOrdersPage() {
 
   return (
     <main className="min-h-screen bg-muted/30 py-10">
-      <div className="container flex max-w-5xl flex-col gap-6">
+      <div className="flex w-full flex-col gap-6 px-6">
         <Card>
           <CardHeader>
             <CardDescription className="uppercase tracking-[0.2em]">Sales</CardDescription>

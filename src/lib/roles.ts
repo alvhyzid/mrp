@@ -180,6 +180,16 @@ export function canAccessProductionDashboard(role: string | undefined | null): b
   return !!role && PRODUCTION_DASHBOARD_ROLES.includes(role);
 }
 
+// Role yang boleh mengubah work_centers (termasuk capacity_hours_per_day) — harus
+// sinkron dengan policy work_centers_write_production di
+// supabase/migrations/20260812153000_bom_routing_workcenters.sql. Sengaja BUKAN
+// termasuk *_staff — sama seperti policy DB-nya, hanya level manager ke atas.
+export const WORK_CENTER_MANAGE_ROLES = [...LEADERSHIP_ROLES, 'production_manager', 'ppic_manager'];
+
+export function canManageWorkCenterCapacity(role: string | undefined | null): boolean {
+  return !!role && WORK_CENTER_MANAGE_ROLES.includes(role);
+}
+
 // Role yang boleh mencatat progres tahap produksi (work_order_step_progress) —
 // disamakan dengan yang boleh mengelola Work Order (production + PPIC + leadership),
 // bukan set baru.

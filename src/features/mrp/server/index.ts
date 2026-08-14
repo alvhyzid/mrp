@@ -31,3 +31,5 @@ export * from './listPendingApprovalsForMe';
 export * from './listRoutingSteps';
 export * from './listWorkOrderStepProgress';
 export * from './recordWorkOrderStepProgress';
+export * from './getWorkCenterCapacity';
+export * from './updateWorkCenterCapacity';

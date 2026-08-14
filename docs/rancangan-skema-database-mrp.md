@@ -139,6 +139,7 @@ Daftar komponen per BOM, dalam `base_uom`.
 ### `work_centers`
 Master data mesin/stasiun kerja — fisiknya ada di SATU lokasi pabrik.
 - `work_center_id`, `company_id`, `production_plant_id`, `name`, `code`, `is_active`
+- `capacity_hours_per_day` (nullable — dasar Dashboard Kapasitas per Work Center, lihat `rencana-ams-mvp.md` Bagian 3 poin 1)
 
 ### `routings`
 Header urutan tahapan produksi per item — sengaja TETAP generik (tidak diikat 1 plant), dianggap sama di semua lokasi yang memproduksi item itu.

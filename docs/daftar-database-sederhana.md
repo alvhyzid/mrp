@@ -76,6 +76,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 
 **Database Mesin/Stasiun Kerja** (`work_centers`)
 - ID Mesin (work_center_id) · ID Perusahaan (company_id) · ID Lokasi Pabrik (production_plant_id) · Nama Mesin (name) · Kode Mesin (code) · Status Aktif (is_active)
+- Kapasitas Jam per Hari — nullable, dasar Dashboard Kapasitas (capacity_hours_per_day)
 
 **Database Header Alur Produksi** (`routings`)
 - ID Routing (routing_id) · ID Perusahaan (company_id) · ID Item (item_id) · Versi (version)

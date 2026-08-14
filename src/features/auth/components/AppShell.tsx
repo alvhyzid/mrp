@@ -115,6 +115,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState<string | null>(null);
   const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
+  // Beda dari companyLogoUrl (null = "sudah dicek, memang tidak ada logo"): flag
+  // ini khusus menandai "belum selesai dicek sama sekali", supaya slot logo bisa
+  // menampilkan placeholder netral saat masih memuat alih-alih kosong tiba-tiba
+  // terisi (mencegah kesan patah/blank sesaat, dan mencegah konten header
+  // "melompat" begitu logo muncul).
+  const [meLoaded, setMeLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -138,11 +144,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         cache: 'no-store'
       });
       const data = await response.json();
-      if (!cancelled && response.ok) {
-        setUserName(data?.user?.name ?? null);
-        setRole(data?.user?.role ?? null);
-        setCompanyName(data?.company?.name ?? null);
-        setCompanyLogoUrl(data?.company?.logo_url ?? null);
+      if (!cancelled) {
+        if (response.ok) {
+          setUserName(data?.user?.name ?? null);
+          setRole(data?.user?.role ?? null);
+          setCompanyName(data?.company?.name ?? null);
+          setCompanyLogoUrl(data?.company?.logo_url ?? null);
+        }
+        setMeLoaded(true);
       }
     };
 
@@ -187,11 +196,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-white">
       <header className="fixed inset-x-0 top-0 z-40 flex h-12 items-center justify-between border-b border-[#c6c6c6] bg-white px-4">
         <div className="flex items-center gap-2.5">
-          {companyLogoUrl ? (
+          {!meLoaded ? (
+            <span className="h-6 w-6 shrink-0 animate-pulse rounded-none bg-[#e0e0e0]" aria-hidden="true" />
+          ) : companyLogoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={companyLogoUrl} alt={companyName ?? 'Logo perusahaan'} className="h-6 w-6 object-contain" />
+            <img src={companyLogoUrl} alt={companyName ?? 'Logo perusahaan'} className="h-6 w-6 shrink-0 object-contain" />
           ) : null}
-          <span className="text-sm font-semibold text-[#161616]">MRP</span>
+          <span className="text-sm font-semibold text-[#161616]">
+            MRP{companyName ? ` — ${companyName}` : ''}
+          </span>
         </div>
         <div className="flex items-center gap-4">
           <span className="text-xs text-[#525252]">

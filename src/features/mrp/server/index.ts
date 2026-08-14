@@ -34,3 +34,4 @@ export * from './recordWorkOrderStepProgress';
 export * from './getWorkCenterCapacity';
 export * from './updateWorkCenterCapacity';
 export * from './getWorkCenterGantt';
+export * from './updateProductionBatchSchedule';

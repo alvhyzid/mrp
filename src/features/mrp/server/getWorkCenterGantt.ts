@@ -106,39 +106,47 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
       date: string;
       production_batch_id: number;
       batch_number: string;
+      batch_status: string;
       item_code: string | null;
       item_name: string | null;
       step_name: string;
       sequence_no: number;
       duration_minutes: number;
+      day_offset: number;
     }[] = [];
     const unscheduled: {
       production_batch_id: number;
       batch_number: string;
+      batch_status: string;
       item_code: string | null;
       item_name: string | null;
       planned_qty: number;
       uom: string;
+      primary_work_center_id: number | null;
     }[] = [];
 
     for (const batch of batches ?? []) {
       const wo = woById.get(batch.work_order_id);
       const item = wo ? itemsById.get(wo.item_id) : undefined;
 
+      const routingId = wo?.routing_id;
+      const steps = routingId ? (stepsByRoutingId.get(routingId) ?? []) : [];
+
       if (!batch.planned_date) {
+        const firstStepWithWc = steps.find((s) => s.work_center_id);
         unscheduled.push({
           production_batch_id: batch.production_batch_id,
           batch_number: batch.batch_number,
+          batch_status: batch.status,
           item_code: item?.item_code ?? null,
           item_name: item?.name ?? null,
           planned_qty: batch.planned_qty,
-          uom: batch.uom
+          uom: batch.uom,
+          primary_work_center_id: firstStepWithWc?.work_center_id ?? null
         });
         continue;
       }
 
-      const routingId = wo?.routing_id;
-      const steps = routingId ? (stepsByRoutingId.get(routingId) ?? []) : [];
       const baseDate = new Date(`${batch.planned_date}T00:00:00`);
       let cumulativeMinutes = 0;
 
@@ -154,11 +162,13 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
             date: stepDateStr,
             production_batch_id: batch.production_batch_id,
             batch_number: batch.batch_number,
+            batch_status: batch.status,
             item_code: item?.item_code ?? null,
             item_name: item?.name ?? null,
             step_name: step.step_name,
             sequence_no: step.sequence_no,
-            duration_minutes: step.active_duration_minutes ?? 0
+            duration_minutes: step.active_duration_minutes ?? 0,
+            day_offset: dayOffset
           });
         }
         // Kumulatif (posisi) tetap jalan biar urutan step berikutnya tetap benar,

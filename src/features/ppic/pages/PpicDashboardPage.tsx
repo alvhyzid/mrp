@@ -4,13 +4,15 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { ColumnDef } from '@tanstack/react-table';
+import { DndContext, DragOverlay, useDraggable, useDroppable, useSensor, useSensors, PointerSensor, pointerWithin } from '@dnd-kit/core';
+import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { DataTable } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { canAccessPpicDashboard, canManageWorkCenterCapacity } from '@/lib/roles';
+import { canAccessPpicDashboard, canManageWorkCenterCapacity, canManageWorkOrder } from '@/lib/roles';
 
 const statusLabels: Record<string, string> = { planned: 'Direncanakan', in_progress: 'Berjalan', paused: 'Dijeda', completed: 'Selesai', cancelled: 'Batal' };
 const statusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical' | 'secondary'> = {
@@ -51,19 +53,23 @@ type GanttBlock = {
   date: string;
   production_batch_id: number;
   batch_number: string;
+  batch_status: string;
   item_code: string | null;
   item_name: string | null;
   step_name: string;
   sequence_no: number;
   duration_minutes: number;
+  day_offset: number;
 };
 type UnscheduledBatch = {
   production_batch_id: number;
   batch_number: string;
+  batch_status: string;
   item_code: string | null;
   item_name: string | null;
   planned_qty: number;
   uom: string;
+  primary_work_center_id: number | null;
 };
 
 const DAY_LABELS = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
@@ -71,6 +77,96 @@ const DAY_LABELS = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
 function formatDayLabel(dateStr: string, index: number): string {
   const [, m, d] = dateStr.split('-');
   return `${DAY_LABELS[index]} ${d}/${m}`;
+}
+
+// Geser tanggal (string YYYY-MM-DD) sejumlah hari — dipakai buat hitung
+// planned_date baru dari sel yang di-drop + day_offset blok yang diseret,
+// murni aritmetika lokal (bukan UTC) supaya konsisten dengan weekRange.ts.
+function addDaysToDateString(dateStr: string, deltaDays: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d + deltaDays);
+  const yy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
+type DragData =
+  | { type: 'block'; production_batch_id: number; batch_number: string; work_center_id: number; day_offset: number }
+  | { type: 'unscheduled'; production_batch_id: number; batch_number: string; primary_work_center_id: number | null };
+
+function DraggableBlock({ block, canDrag }: { block: GanttBlock; canDrag: boolean }) {
+  const draggable = canDrag && block.batch_status === 'planned';
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `block-${block.production_batch_id}-${block.sequence_no}-${block.date}`,
+    data: { type: 'block', production_batch_id: block.production_batch_id, batch_number: block.batch_number, work_center_id: block.work_center_id, day_offset: block.day_offset } satisfies DragData,
+    disabled: !draggable
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      {...(draggable ? listeners : {})}
+      {...(draggable ? attributes : {})}
+      title={draggable ? 'Seret untuk jadwalkan ulang batch ini' : 'Batch yang sudah berjalan/selesai tidak bisa dijadwalkan ulang'}
+      style={draggable ? { touchAction: 'none' } : undefined}
+      className={`select-none border-l-2 border-info bg-info-subtle px-1.5 py-1 text-xs text-info-subtle-foreground ${
+        draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-not-allowed opacity-60'
+      } ${isDragging ? 'opacity-30' : ''}`}
+    >
+      <div className="font-medium">{block.batch_number}</div>
+      <div className="truncate">{block.item_code ?? block.item_name}</div>
+      <div className="text-[10px] text-muted-foreground">
+        {block.step_name} · {block.duration_minutes} mnt
+      </div>
+    </div>
+  );
+}
+
+function DraggableUnscheduled({ batch, canDrag }: { batch: UnscheduledBatch; canDrag: boolean }) {
+  const draggable = canDrag && batch.batch_status === 'planned';
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `unscheduled-${batch.production_batch_id}`,
+    data: { type: 'unscheduled', production_batch_id: batch.production_batch_id, batch_number: batch.batch_number, primary_work_center_id: batch.primary_work_center_id } satisfies DragData,
+    disabled: !draggable
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      {...(draggable ? listeners : {})}
+      {...(draggable ? attributes : {})}
+      title={draggable ? 'Seret ke grid untuk atur tanggal rencana' : 'Batch ini tidak bisa dijadwalkan lewat drag'}
+      style={draggable ? { touchAction: 'none' } : undefined}
+      className={`select-none flex items-center justify-between rounded-md border p-2 text-sm ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-not-allowed opacity-60'} ${isDragging ? 'opacity-30' : ''}`}
+    >
+      <span className="font-medium text-foreground">{batch.batch_number}</span>
+      <span className="text-muted-foreground">{batch.item_code ?? batch.item_name}</span>
+      <span className="text-data text-muted-foreground">
+        {batch.planned_qty} {batch.uom}
+      </span>
+    </div>
+  );
+}
+
+function DroppableCell({
+  workCenterId,
+  date,
+  restrictedRow,
+  children
+}: {
+  workCenterId: number;
+  date: string;
+  restrictedRow: boolean;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: `cell-${workCenterId}-${date}`, data: { work_center_id: workCenterId, date }, disabled: restrictedRow });
+  return (
+    <td
+      ref={setNodeRef}
+      className={`px-1.5 py-1.5 align-top transition-colors ${isOver && !restrictedRow ? 'bg-info-subtle/60' : ''} ${restrictedRow ? 'cursor-not-allowed' : ''}`}
+    >
+      <div className="flex flex-col gap-1">{children}</div>
+    </td>
+  );
 }
 
 export default function PpicDashboardPage() {
@@ -108,6 +204,10 @@ export default function PpicDashboardPage() {
   const [ganttUnscheduled, setGanttUnscheduled] = useState<UnscheduledBatch[]>([]);
   const [ganttError, setGanttError] = useState('');
   const [ganttLoading, setGanttLoading] = useState(true);
+  const [activeDragWorkCenterId, setActiveDragWorkCenterId] = useState<number | null>(null);
+  const [activeDragLabel, setActiveDragLabel] = useState<string | null>(null);
+  const [dragMessage, setDragMessage] = useState('');
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
@@ -252,6 +352,39 @@ export default function PpicDashboardPage() {
       return;
     }
     await loadCapacity();
+  };
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const data = event.active.data.current as DragData | undefined;
+    if (!data) return;
+    setActiveDragLabel(data.batch_number);
+    setActiveDragWorkCenterId(data.type === 'block' ? data.work_center_id : data.primary_work_center_id);
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveDragWorkCenterId(null);
+    setActiveDragLabel(null);
+    const data = event.active.data.current as DragData | undefined;
+    const overData = event.over?.data.current as { work_center_id: number; date: string } | undefined;
+    if (!data || !overData) return;
+
+    if (overData.work_center_id !== (data.type === 'block' ? data.work_center_id : (data.primary_work_center_id ?? overData.work_center_id))) {
+      setDragMessage('Batch cuma bisa dijadwalkan ulang di Work Center yang sama.');
+      return;
+    }
+
+    const newPlannedDate = data.type === 'block' ? addDaysToDateString(overData.date, -data.day_offset) : overData.date;
+
+    setDragMessage('');
+    const { ok, body } = await authedFetch('/api/production-batches', {
+      method: 'PATCH',
+      body: JSON.stringify({ production_batch_id: data.production_batch_id, planned_date: newPlannedDate })
+    });
+    if (!ok) {
+      setDragMessage(body.error || 'Gagal menjadwalkan ulang batch.');
+      return;
+    }
+    await Promise.all([loadGantt(ganttWeekOffset), loadCapacity()]);
   };
 
   const handleApprove = async (approvalId: number, status: 'approved' | 'rejected') => {
@@ -489,7 +622,7 @@ export default function PpicDashboardPage() {
           <CardContent className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm text-muted-foreground">
-                Blok = 1 tahap routing per batch. Posisi tanggal dihitung dari waktu aktif + waktu tunggu tahap-tahap sebelumnya (mis. tahap sesudah curing 48 jam baru muncul 2 hari kemudian); lebar blok cuma durasi aktif mesin (waktu tunggu tidak menyibukkan mesin, beda dari posisinya). Tampilan saja, belum bisa digeser.
+                Blok = 1 tahap routing per batch. Posisi tanggal dihitung dari waktu aktif + waktu tunggu tahap-tahap sebelumnya (mis. tahap sesudah curing 48 jam baru muncul 2 hari kemudian); lebar blok cuma durasi aktif mesin (waktu tunggu tidak menyibukkan mesin, beda dari posisinya). Seret batch berstatus Direncanakan untuk jadwalkan ulang (tetap di Work Center yang sama) — batch yang sudah berjalan/selesai tidak bisa diseret.
               </p>
               <div className="flex items-center gap-2">
                 <Button size="sm" variant="outline" onClick={() => setGanttWeekOffset((prev) => prev - 1)}>
@@ -504,73 +637,78 @@ export default function PpicDashboardPage() {
               </div>
             </div>
             {ganttError ? <p className="text-sm text-destructive">{ganttError}</p> : null}
+            {dragMessage ? <p className="text-sm text-destructive">{dragMessage}</p> : null}
             {ganttLoading ? (
               <p className="text-sm text-muted-foreground">Memuat...</p>
             ) : ganttWorkCenters.length === 0 ? (
               <p className="text-sm text-muted-foreground">Belum ada Work Center aktif.</p>
             ) : (
-              <div className="overflow-x-auto rounded-md border">
-                <table className="w-full table-fixed text-data">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="h-8 w-36 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Work Center</th>
-                      {ganttDays.map((day, index) => (
-                        <th key={day} className="h-8 w-32 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          {formatDayLabel(day, index)}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ganttWorkCenters.map((wc) => (
-                      <tr key={wc.work_center_id} className="border-b align-top last:border-0">
-                        <td className="px-3 py-2 font-medium text-foreground">
-                          {wc.name}
-                          {wc.code ? <span className="text-xs font-normal text-muted-foreground"> ({wc.code})</span> : null}
-                        </td>
-                        {ganttDays.map((day) => {
-                          const cellBlocks = ganttBlocksByCell.get(`${wc.work_center_id}_${day}`) ?? [];
-                          return (
-                            <td key={day} className="px-1.5 py-1.5 align-top">
-                              <div className="flex flex-col gap-1">
-                                {cellBlocks.map((block, i) => (
-                                  <div key={`${block.production_batch_id}_${block.sequence_no}_${i}`} className="border-l-2 border-info bg-info-subtle px-1.5 py-1 text-xs text-info-subtle-foreground">
-                                    <div className="font-medium">{block.batch_number}</div>
-                                    <div className="truncate">{block.item_code ?? block.item_name}</div>
-                                    <div className="text-[10px] text-muted-foreground">
-                                      {block.step_name} · {block.duration_minutes} mnt
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </td>
-                          );
-                        })}
+              // pointerWithin (bukan default rectIntersection) — target drop ditentukan dari
+              // posisi KURSOR, bukan dari area tumpang-tindih rect elemen yang diseret. Penting
+              // untuk baris "Belum Dijadwalkan" yang jauh lebih lebar dari 1 kolom hari: dengan
+              // rectIntersection, rect elemen lebar itu bisa "nyerempet" kolom tetangga dan
+              // drop mendarat di kolom yang salah walau kursor sudah tepat di kolom yang dituju.
+              <DndContext
+                sensors={dndSensors}
+                collisionDetection={pointerWithin}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onDragCancel={() => { setActiveDragWorkCenterId(null); setActiveDragLabel(null); }}
+              >
+                <div className="overflow-x-auto rounded-md border">
+                  <table className="w-full table-fixed text-data">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="h-8 w-36 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Work Center</th>
+                        {ganttDays.map((day, index) => (
+                          <th key={day} className="h-8 w-32 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            {formatDayLabel(day, index)}
+                          </th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            <div>
-              <p className="mb-2 text-sm font-medium text-foreground">Belum Dijadwalkan (planned_date kosong)</p>
-              {ganttLoading ? null : ganttUnscheduled.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Semua batch aktif sudah punya tanggal rencana.</p>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {ganttUnscheduled.map((b) => (
-                    <div key={b.production_batch_id} className="flex items-center justify-between rounded-md border p-2 text-sm">
-                      <span className="font-medium text-foreground">{b.batch_number}</span>
-                      <span className="text-muted-foreground">{b.item_code ?? b.item_name}</span>
-                      <span className="text-data text-muted-foreground">
-                        {b.planned_qty} {b.uom}
-                      </span>
-                    </div>
-                  ))}
+                    </thead>
+                    <tbody>
+                      {ganttWorkCenters.map((wc) => {
+                        const restrictedRow = activeDragWorkCenterId !== null && activeDragWorkCenterId !== wc.work_center_id;
+                        return (
+                          <tr key={wc.work_center_id} className={`border-b align-top last:border-0 transition-opacity ${restrictedRow ? 'opacity-40' : ''}`}>
+                            <td className="px-3 py-2 font-medium text-foreground">
+                              {wc.name}
+                              {wc.code ? <span className="text-xs font-normal text-muted-foreground"> ({wc.code})</span> : null}
+                            </td>
+                            {ganttDays.map((day) => {
+                              const cellBlocks = ganttBlocksByCell.get(`${wc.work_center_id}_${day}`) ?? [];
+                              return (
+                                <DroppableCell key={day} workCenterId={wc.work_center_id} date={day} restrictedRow={restrictedRow}>
+                                  {cellBlocks.map((block, i) => (
+                                    <DraggableBlock key={`${block.production_batch_id}_${block.sequence_no}_${i}`} block={block} canDrag={canManageWorkOrder(role)} />
+                                  ))}
+                                </DroppableCell>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-              )}
-            </div>
+
+                <div>
+                  <p className="mb-2 mt-3 text-sm font-medium text-foreground">Belum Dijadwalkan (planned_date kosong)</p>
+                  {ganttUnscheduled.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Semua batch aktif sudah punya tanggal rencana.</p>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {ganttUnscheduled.map((b) => (
+                        <DraggableUnscheduled key={b.production_batch_id} batch={b} canDrag={canManageWorkOrder(role)} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <DragOverlay>{activeDragLabel ? <div className="border-l-2 border-info bg-info-subtle px-2 py-1 text-xs font-medium text-info-subtle-foreground shadow">{activeDragLabel}</div> : null}</DragOverlay>
+              </DndContext>
+            )}
           </CardContent>
         </Card>
 

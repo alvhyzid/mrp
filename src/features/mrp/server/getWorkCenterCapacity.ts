@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
+import { getWeekRange } from './weekRange';
 
 interface ApiResult {
   status: number;
@@ -21,15 +22,6 @@ async function getWorkingDaysPerWeek(adminClient: ReturnType<typeof getAdminClie
     .maybeSingle();
   const parsed = data?.setting_value ? Number(data.setting_value) : NaN;
   return Number.isFinite(parsed) && parsed > 0 && parsed <= 7 ? parsed : DEFAULT_WORKING_DAYS_PER_WEEK;
-}
-
-function startOfThisWeek(): Date {
-  const now = new Date();
-  const day = now.getDay(); // 0 = Minggu, 1 = Senin, ... 6 = Sabtu
-  const diffToMonday = day === 0 ? -6 : 1 - day;
-  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday);
-  monday.setHours(0, 0, 0, 0);
-  return monday;
 }
 
 function round1(n: number): number {
@@ -65,9 +57,7 @@ export async function getWorkCenterCapacity(request: NextRequest): Promise<ApiRe
 
     const plantIds = Array.from(new Set(workCenters.map((wc) => wc.production_plant_id)));
 
-    const weekStart = startOfThisWeek();
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 7);
+    const { weekStart, weekEnd } = getWeekRange(0);
 
     const [plantsRes, batchesRes] = await Promise.all([
       adminClient.from('production_plants').select('production_plant_id, name').in('production_plant_id', plantIds),

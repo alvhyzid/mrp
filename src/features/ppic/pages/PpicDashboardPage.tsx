@@ -45,6 +45,34 @@ function utilizationBadgeVariant(pct: number): 'success' | 'warning' | 'critical
   return 'success';
 }
 
+type GanttWorkCenter = { work_center_id: number; name: string; code: string | null };
+type GanttBlock = {
+  work_center_id: number;
+  date: string;
+  production_batch_id: number;
+  batch_number: string;
+  item_code: string | null;
+  item_name: string | null;
+  step_name: string;
+  sequence_no: number;
+  duration_minutes: number;
+};
+type UnscheduledBatch = {
+  production_batch_id: number;
+  batch_number: string;
+  item_code: string | null;
+  item_name: string | null;
+  planned_qty: number;
+  uom: string;
+};
+
+const DAY_LABELS = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+
+function formatDayLabel(dateStr: string, index: number): string {
+  const [, m, d] = dateStr.split('-');
+  return `${DAY_LABELS[index]} ${d}/${m}`;
+}
+
 export default function PpicDashboardPage() {
   const router = useRouter();
   const [checkingAccess, setCheckingAccess] = useState(true);
@@ -72,6 +100,14 @@ export default function PpicDashboardPage() {
   const [capacityEdits, setCapacityEdits] = useState<Record<number, string>>({});
   const [capacitySavingId, setCapacitySavingId] = useState<number | null>(null);
   const [capacityMessage, setCapacityMessage] = useState('');
+
+  const [ganttWeekOffset, setGanttWeekOffset] = useState(0);
+  const [ganttDays, setGanttDays] = useState<string[]>([]);
+  const [ganttWorkCenters, setGanttWorkCenters] = useState<GanttWorkCenter[]>([]);
+  const [ganttBlocks, setGanttBlocks] = useState<GanttBlock[]>([]);
+  const [ganttUnscheduled, setGanttUnscheduled] = useState<UnscheduledBatch[]>([]);
+  const [ganttError, setGanttError] = useState('');
+  const [ganttLoading, setGanttLoading] = useState(true);
 
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
@@ -142,6 +178,25 @@ export default function PpicDashboardPage() {
     setCapacityLoading(false);
   }, [authedFetch]);
 
+  const loadGantt = useCallback(
+    async (offset: number) => {
+      setGanttLoading(true);
+      const { ok, body } = await authedFetch(`/api/work-centers/gantt?week_offset=${offset}`);
+      if (!ok) {
+        setGanttError(body.error || 'Gagal memuat Gantt produksi.');
+        setGanttLoading(false);
+        return;
+      }
+      setGanttDays(body.days || []);
+      setGanttWorkCenters(body.workCenters || []);
+      setGanttBlocks(body.blocks || []);
+      setGanttUnscheduled(body.unscheduled || []);
+      setGanttError('');
+      setGanttLoading(false);
+    },
+    [authedFetch]
+  );
+
   useEffect(() => {
     const checkAccessAndLoad = async () => {
       if (!hasSupabaseConfig || !supabase) {
@@ -167,7 +222,16 @@ export default function PpicDashboardPage() {
       await Promise.all([loadApprovals(), loadWorkOrders(), loadBoms(), loadCapacity()]);
     };
     checkAccessAndLoad();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, loadApprovals, loadWorkOrders, loadBoms, loadCapacity]);
+
+  // Terpisah dari effect di atas supaya navigasi minggu (ganttWeekOffset berubah)
+  // cukup reload Gantt-nya saja, tidak mengulang approval/WO/BOM/capacity.
+  useEffect(() => {
+    if (checkingAccess || accessDenied) return;
+    loadGantt(ganttWeekOffset);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ganttWeekOffset, checkingAccess, accessDenied]);
 
   const handleSaveCapacity = async (workCenterId: number) => {
     const raw = capacityEdits[workCenterId];
@@ -248,6 +312,18 @@ export default function PpicDashboardPage() {
     ],
     []
   );
+
+  const ganttBlocksByCell = useMemo(() => {
+    const map = new Map<string, GanttBlock[]>();
+    for (const block of ganttBlocks) {
+      const key = `${block.work_center_id}_${block.date}`;
+      const list = map.get(key) ?? [];
+      list.push(block);
+      map.set(key, list);
+    }
+    for (const list of map.values()) list.sort((a, b) => a.sequence_no - b.sequence_no);
+    return map;
+  }, [ganttBlocks]);
 
   const bomColumns = useMemo<ColumnDef<Bom>[]>(
     () => [
@@ -402,6 +478,99 @@ export default function PpicDashboardPage() {
                 </table>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardDescription className="uppercase tracking-[0.2em]">Perencanaan Kapasitas</CardDescription>
+            <CardTitle className="text-xl">Gantt Produksi per Work Center</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-muted-foreground">
+                Blok = 1 tahap routing per batch, diproyeksikan dari tanggal rencana batch + urutan tahap (durasi aktif mesin saja — sama seperti Dashboard Kapasitas di atas). Tampilan saja, belum bisa digeser.
+              </p>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={() => setGanttWeekOffset((prev) => prev - 1)}>
+                  ← Minggu Sebelumnya
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setGanttWeekOffset(0)} disabled={ganttWeekOffset === 0}>
+                  Minggu Ini
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setGanttWeekOffset((prev) => prev + 1)}>
+                  Minggu Berikutnya →
+                </Button>
+              </div>
+            </div>
+            {ganttError ? <p className="text-sm text-destructive">{ganttError}</p> : null}
+            {ganttLoading ? (
+              <p className="text-sm text-muted-foreground">Memuat...</p>
+            ) : ganttWorkCenters.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Belum ada Work Center aktif.</p>
+            ) : (
+              <div className="overflow-x-auto rounded-md border">
+                <table className="w-full table-fixed text-data">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="h-8 w-36 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Work Center</th>
+                      {ganttDays.map((day, index) => (
+                        <th key={day} className="h-8 w-32 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          {formatDayLabel(day, index)}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ganttWorkCenters.map((wc) => (
+                      <tr key={wc.work_center_id} className="border-b align-top last:border-0">
+                        <td className="px-3 py-2 font-medium text-foreground">
+                          {wc.name}
+                          {wc.code ? <span className="text-xs font-normal text-muted-foreground"> ({wc.code})</span> : null}
+                        </td>
+                        {ganttDays.map((day) => {
+                          const cellBlocks = ganttBlocksByCell.get(`${wc.work_center_id}_${day}`) ?? [];
+                          return (
+                            <td key={day} className="px-1.5 py-1.5 align-top">
+                              <div className="flex flex-col gap-1">
+                                {cellBlocks.map((block, i) => (
+                                  <div key={`${block.production_batch_id}_${block.sequence_no}_${i}`} className="border-l-2 border-info bg-info-subtle px-1.5 py-1 text-xs text-info-subtle-foreground">
+                                    <div className="font-medium">{block.batch_number}</div>
+                                    <div className="truncate">{block.item_code ?? block.item_name}</div>
+                                    <div className="text-[10px] text-muted-foreground">
+                                      {block.step_name} · {block.duration_minutes} mnt
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div>
+              <p className="mb-2 text-sm font-medium text-foreground">Belum Dijadwalkan (planned_date kosong)</p>
+              {ganttLoading ? null : ganttUnscheduled.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Semua batch aktif sudah punya tanggal rencana.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {ganttUnscheduled.map((b) => (
+                    <div key={b.production_batch_id} className="flex items-center justify-between rounded-md border p-2 text-sm">
+                      <span className="font-medium text-foreground">{b.batch_number}</span>
+                      <span className="text-muted-foreground">{b.item_code ?? b.item_name}</span>
+                      <span className="text-data text-muted-foreground">
+                        {b.planned_qty} {b.uom}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 

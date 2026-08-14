@@ -7,14 +7,33 @@ interface ApiResult {
   body: Record<string, unknown>;
 }
 
-type RoutingStep = { routing_id: number; sequence_no: number; step_name: string; work_center_id: number | null; active_duration_minutes: number | null };
+type RoutingStep = {
+  routing_id: number;
+  sequence_no: number;
+  step_name: string;
+  work_center_id: number | null;
+  active_duration_minutes: number | null;
+  wait_duration_minutes: number | null;
+};
 
 // Tampilan Gantt VIEW-ONLY (bukan drag-and-drop — itu iterasi terpisah menyusul).
 // Lihat docs/rencana-ams-mvp.md Bagian 3 poin 2. Blok = 1 kemunculan routing_step
 // untuk 1 batch, diproyeksikan dari production_batches.planned_date secara
-// berurutan sesuai routing_steps.sequence_no, PAKAI active_duration_minutes SAJA
-// — SENGAJA sama persis dengan logika getWorkCenterCapacity.ts (wait_duration_minutes
-// tidak pernah dihitung sebagai "menyibukkan" Work Center, di kedua fitur ini).
+// berurutan sesuai routing_steps.sequence_no.
+//
+// POSISI (tanggal mulai tiap tahap) vs LEBAR (durasi visual blok) SENGAJA pakai
+// dua besaran berbeda:
+// - Posisi: offset kumulatif dari SEMUA tahap sebelumnya, active_duration_minutes
+//   DAN wait_duration_minutes-nya — ini waktu NYATA yang berlalu sebelum tahap
+//   berikutnya bisa mulai (mis. QC baru bisa mulai setelah curing 48 jam selesai).
+// - Lebar blok: active_duration_minutes tahap itu SENDIRI saja — supaya blok
+//   tetap terlihat "mesin cuma sibuk sebentar", bukan seakan-akan terpakai
+//   sepanjang waktu tunggu.
+// CATATAN: ini BEDA dari getWorkCenterCapacity.ts, yang menjumlah cuma
+// active_duration_minutes untuk kalkulasi total jam terjadwal per minggu —
+// dua kalkulasi itu menjawab pertanyaan berbeda (kapan tahap ini terjadi, vs
+// berapa total jam mesin benar-benar aktif) dan SENGAJA tidak disamakan.
+const MINUTES_PER_DAY = 24 * 60;
 export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResult> {
   try {
     const { appUser } = await getCurrentUser(request);
@@ -67,7 +86,7 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
         ? adminClient.from('items').select('item_id, item_code, name').in('item_id', itemIds)
         : Promise.resolve({ data: [] as { item_id: number; item_code: string | null; name: string }[], error: null }),
       routingIds.length
-        ? adminClient.from('routing_steps').select('routing_id, sequence_no, step_name, work_center_id, active_duration_minutes').in('routing_id', routingIds)
+        ? adminClient.from('routing_steps').select('routing_id, sequence_no, step_name, work_center_id, active_duration_minutes, wait_duration_minutes').in('routing_id', routingIds)
         : Promise.resolve({ data: [] as RoutingStep[], error: null })
     ]);
     if (itemsRes.error) return { status: 500, body: { error: itemsRes.error.message } };
@@ -124,7 +143,7 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
       let cumulativeMinutes = 0;
 
       for (const step of steps) {
-        const dayOffset = Math.floor(cumulativeMinutes / (24 * 60));
+        const dayOffset = Math.floor(cumulativeMinutes / MINUTES_PER_DAY);
         const stepDate = new Date(baseDate);
         stepDate.setDate(baseDate.getDate() + dayOffset);
         const stepDateStr = dateToDateString(stepDate);
@@ -142,9 +161,11 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
             duration_minutes: step.active_duration_minutes ?? 0
           });
         }
-        // Kumulatif tetap jalan biar urutan step berikutnya tetap benar, terlepas
-        // dari step ini punya work_center atau jatuh di luar minggu yang dilihat.
-        cumulativeMinutes += step.active_duration_minutes ?? 0;
+        // Kumulatif (posisi) tetap jalan biar urutan step berikutnya tetap benar,
+        // terlepas dari step ini punya work_center atau jatuh di luar minggu yang
+        // dilihat — dan SENGAJA ikut wait_duration_minutes (beda dari lebar blok
+        // di atas, yang cuma active_duration_minutes).
+        cumulativeMinutes += (step.active_duration_minutes ?? 0) + (step.wait_duration_minutes ?? 0);
       }
     }
 

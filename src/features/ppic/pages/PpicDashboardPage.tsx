@@ -489,7 +489,7 @@ export default function PpicDashboardPage() {
           <CardContent className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm text-muted-foreground">
-                Blok = 1 tahap routing per batch, diproyeksikan dari tanggal rencana batch + urutan tahap (durasi aktif mesin saja — sama seperti Dashboard Kapasitas di atas). Tampilan saja, belum bisa digeser.
+                Blok = 1 tahap routing per batch. Posisi tanggal dihitung dari waktu aktif + waktu tunggu tahap-tahap sebelumnya (mis. tahap sesudah curing 48 jam baru muncul 2 hari kemudian); lebar blok cuma durasi aktif mesin (waktu tunggu tidak menyibukkan mesin, beda dari posisinya). Tampilan saja, belum bisa digeser.
               </p>
               <div className="flex items-center gap-2">
                 <Button size="sm" variant="outline" onClick={() => setGanttWeekOffset((prev) => prev - 1)}>

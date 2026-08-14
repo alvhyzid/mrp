@@ -28,7 +28,11 @@ const stepStatuses = ['pending', 'in_progress', 'completed'];
 
 type WorkOrder = { work_order_id: number; item_code: string | null; item_name: string | null; item_base_uom: string | null; routing_id: number | null; planned_qty: number; status: string; readiness: string; open_alert_count: number; so_number: string | null };
 type RoutingStep = { routing_step_id: number; sequence_no: number; step_name: string; active_duration_minutes: number; wait_duration_minutes: number };
-type StepProgress = { work_order_step_progress_id: number; routing_step_id: number; status: string; qty_recorded: number | null; uom: string | null; started_at: string | null; completed_at: string | null };
+type StepProgress = { work_order_step_progress_id: number; production_batch_id: number | null; routing_step_id: number; status: string; qty_recorded: number | null; uom: string | null; started_at: string | null; completed_at: string | null };
+type ProductionBatch = { production_batch_id: number; batch_number: string; planned_qty: number; uom: string; status: string };
+
+const batchStatusLabels: Record<string, string> = { planned: 'Direncanakan', in_progress: 'Berjalan', completed: 'Selesai', cancelled: 'Batal' };
+const batchStatusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical'> = { planned: 'info', in_progress: 'warning', completed: 'success', cancelled: 'critical' };
 
 export default function ProductionDashboardPage() {
   const router = useRouter();
@@ -44,6 +48,8 @@ export default function ProductionDashboardPage() {
   const [stepProgress, setStepProgress] = useState<StepProgress[]>([]);
   const [stepForm, setStepForm] = useState<Record<number, { status: string; qty_recorded: string }>>({});
   const [stepMessage, setStepMessage] = useState<Record<number, string>>({});
+  const [batchesForExpanded, setBatchesForExpanded] = useState<ProductionBatch[]>([]);
+  const [selectedBatchId, setSelectedBatchId] = useState('');
 
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
@@ -106,17 +112,31 @@ export default function ProductionDashboardPage() {
       return;
     }
     setExpandedWoId(wo.work_order_id);
-    if (!wo.routing_id) {
-      setRoutingSteps([]);
+    setSelectedBatchId('');
+    setStepProgress([]);
+    const [stepsRes, batchesRes] = await Promise.all([
+      wo.routing_id ? authedFetch(`/api/routing-steps?routing_id=${wo.routing_id}`) : Promise.resolve({ ok: true, body: { routingSteps: [] } }),
+      authedFetch(`/api/production-batches?work_order_id=${wo.work_order_id}`)
+    ]);
+    setRoutingSteps(stepsRes.ok ? stepsRes.body.routingSteps || [] : []);
+    setBatchesForExpanded(batchesRes.ok ? batchesRes.body.batches || [] : []);
+  };
+
+  const handleSelectBatch = async (batchId: string) => {
+    setSelectedBatchId(batchId);
+    if (!expandedWoId || !batchId) {
       setStepProgress([]);
       return;
     }
-    const [stepsRes, progressRes] = await Promise.all([authedFetch(`/api/routing-steps?routing_id=${wo.routing_id}`), authedFetch(`/api/work-order-step-progress?work_order_id=${wo.work_order_id}`)]);
-    setRoutingSteps(stepsRes.ok ? stepsRes.body.routingSteps || [] : []);
+    const progressRes = await authedFetch(`/api/work-order-step-progress?work_order_id=${expandedWoId}&production_batch_id=${batchId}`);
     setStepProgress(progressRes.ok ? progressRes.body.stepProgress || [] : []);
   };
 
   const handleSaveStep = async (wo: WorkOrder, step: RoutingStep) => {
+    if (!selectedBatchId) {
+      setStepMessage((prev) => ({ ...prev, [step.routing_step_id]: 'Pilih batch produksi dulu.' }));
+      return;
+    }
     const entry = stepForm[step.routing_step_id];
     if (!entry?.status) {
       setStepMessage((prev) => ({ ...prev, [step.routing_step_id]: 'Pilih status dulu.' }));
@@ -124,14 +144,20 @@ export default function ProductionDashboardPage() {
     }
     const { ok, body } = await authedFetch('/api/work-order-step-progress', {
       method: 'POST',
-      body: JSON.stringify({ work_order_id: wo.work_order_id, routing_step_id: step.routing_step_id, status: entry.status, qty_recorded: entry.qty_recorded || null })
+      body: JSON.stringify({
+        work_order_id: wo.work_order_id,
+        production_batch_id: Number(selectedBatchId),
+        routing_step_id: step.routing_step_id,
+        status: entry.status,
+        qty_recorded: entry.qty_recorded || null
+      })
     });
     if (!ok) {
       setStepMessage((prev) => ({ ...prev, [step.routing_step_id]: body.error || 'Gagal menyimpan progres.' }));
       return;
     }
     setStepMessage((prev) => ({ ...prev, [step.routing_step_id]: 'Tersimpan.' }));
-    const progressRes = await authedFetch(`/api/work-order-step-progress?work_order_id=${wo.work_order_id}`);
+    const progressRes = await authedFetch(`/api/work-order-step-progress?work_order_id=${wo.work_order_id}&production_batch_id=${selectedBatchId}`);
     if (progressRes.ok) setStepProgress(progressRes.body.stepProgress || []);
   };
 
@@ -227,12 +253,40 @@ export default function ProductionDashboardPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {!expandedWo.routing_id ? (
+              <label className="mb-3 flex max-w-xs flex-col gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground">Batch Produksi</span>
+                <Select value={selectedBatchId} onValueChange={handleSelectBatch}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih batch..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {batchesForExpanded.map((batch) => (
+                      <SelectItem key={batch.production_batch_id} value={String(batch.production_batch_id)}>
+                        {batch.batch_number} ({batch.planned_qty} {batch.uom}) — {batchStatusLabels[batch.status] ?? batch.status}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+
+              {batchesForExpanded.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Belum ada batch untuk Work Order ini — buat batch dulu di halaman Work Order sebelum mencatat progres tahap.</p>
+              ) : !selectedBatchId ? (
+                <p className="text-sm text-muted-foreground">Pilih batch produksi dulu di atas — tiap batch bisa berada di tahap berbeda, jadi progres dicatat per batch.</p>
+              ) : !expandedWo.routing_id ? (
                 <p className="text-sm text-muted-foreground">Work Order ini belum punya routing (urutan tahap produksi), jadi progres tahap belum bisa dicatat.</p>
               ) : routingSteps.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Routing untuk item ini belum punya tahap.</p>
               ) : (
                 <div className="flex flex-col gap-3">
+                  {(() => {
+                    const selectedBatch = batchesForExpanded.find((b) => String(b.production_batch_id) === selectedBatchId);
+                    return selectedBatch ? (
+                      <p className="text-xs text-muted-foreground">
+                        Mencatat progres untuk batch <span className="font-medium text-foreground">{selectedBatch.batch_number}</span> ({selectedBatch.planned_qty} {selectedBatch.uom})
+                      </p>
+                    ) : null;
+                  })()}
                   {routingSteps.map((step) => {
                     const existing = stepProgress.find((p) => p.routing_step_id === step.routing_step_id);
                     const entry = stepForm[step.routing_step_id] ?? { status: existing?.status ?? 'pending', qty_recorded: existing?.qty_recorded !== null && existing?.qty_recorded !== undefined ? String(existing.qty_recorded) : '' };

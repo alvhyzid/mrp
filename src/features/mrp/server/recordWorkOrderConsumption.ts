@@ -21,11 +21,19 @@ export async function recordWorkOrderConsumption(request: NextRequest): Promise<
 
     const body = await request.json();
     const workOrderId = Number(body.work_order_id);
+    const productionBatchId = Number(body.production_batch_id);
     const lotId = Number(body.component_lot_id);
     const qtyConsumed = Number(body.qty_consumed);
 
     if (!workOrderId || !lotId) {
       return { status: 400, body: { error: 'Work Order dan lot bahan wajib dipilih.' } };
+    }
+    // production_batch_id WAJIB untuk pencatatan baru — pemakaian bahan sekarang
+    // dicatat di level batch (docs: "pencatatan detail sekarang di level batch,
+    // bukan langsung di level WO"). Kolomnya tetap nullable di DB supaya baris lama
+    // (dari sebelum production_batches ada) tetap valid.
+    if (!productionBatchId) {
+      return { status: 400, body: { error: 'Batch produksi wajib dipilih — buat batch dulu kalau belum ada.' } };
     }
     if (Number.isNaN(qtyConsumed) || qtyConsumed <= 0) {
       return { status: 400, body: { error: 'Jumlah pemakaian harus lebih besar dari 0.' } };
@@ -41,6 +49,16 @@ export async function recordWorkOrderConsumption(request: NextRequest): Promise<
     if (woError) return { status: 500, body: { error: woError.message } };
     if (!wo || wo.company_id !== appUser.company_id) {
       return { status: 404, body: { error: 'Work Order tidak ditemukan.' } };
+    }
+
+    const { data: batch, error: batchError } = await adminClient
+      .from('production_batches')
+      .select('production_batch_id, work_order_id, company_id')
+      .eq('production_batch_id', productionBatchId)
+      .maybeSingle();
+    if (batchError) return { status: 500, body: { error: batchError.message } };
+    if (!batch || batch.company_id !== appUser.company_id || batch.work_order_id !== workOrderId) {
+      return { status: 404, body: { error: 'Batch produksi tidak ditemukan untuk Work Order ini.' } };
     }
 
     const { data: lot, error: lotError } = await adminClient
@@ -61,7 +79,7 @@ export async function recordWorkOrderConsumption(request: NextRequest): Promise<
 
     const { error: insertError } = await adminClient
       .from('work_order_consumption')
-      .insert([{ work_order_id: workOrderId, component_lot_id: lotId, qty_consumed: qtyConsumed }]);
+      .insert([{ work_order_id: workOrderId, production_batch_id: productionBatchId, component_lot_id: lotId, qty_consumed: qtyConsumed }]);
 
     if (insertError) {
       return { status: 500, body: { error: insertError.message } };

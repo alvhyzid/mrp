@@ -48,6 +48,7 @@ type Bom = {
   standard_yield_qty: number;
   standard_yield_uom: string;
   status: string;
+  buffer_percentage: number | null;
   lines: BomLine[];
 };
 
@@ -72,6 +73,7 @@ const emptyForm = {
   standard_yield_qty: '',
   standard_yield_uom: '',
   status: 'draft',
+  buffer_percentage: '',
   lines: [{ ...emptyFormLine }] as FormLine[]
 };
 
@@ -191,6 +193,7 @@ export default function BomsPage() {
       standard_yield_qty: String(bom.standard_yield_qty),
       standard_yield_uom: bom.standard_yield_uom,
       status: bom.status,
+      buffer_percentage: bom.buffer_percentage !== null && bom.buffer_percentage !== undefined ? String(bom.buffer_percentage) : '',
       lines: bom.lines.map((line) => ({
         component_item_id: String(line.component_item_id),
         // Ditampilkan sebagai "jumlah per batch standar" supaya intuitif diisi orang
@@ -271,6 +274,7 @@ export default function BomsPage() {
       standard_yield_qty: standardYieldQty,
       standard_yield_uom: form.standard_yield_uom,
       status: form.status,
+      buffer_percentage: form.buffer_percentage === '' ? null : Number(form.buffer_percentage),
       lines: linesPayload
     };
 
@@ -426,6 +430,9 @@ export default function BomsPage() {
               <CardTitle className="text-xl">
                 {viewingBom.parent_item_code} — v{viewingBom.version} ({viewingBom.standard_yield_qty} {viewingBom.standard_yield_uom})
               </CardTitle>
+              {viewingBom.buffer_percentage !== null && viewingBom.buffer_percentage !== undefined ? (
+                <CardDescription>Buffer {viewingBom.buffer_percentage}% — kebutuhan bahan per batch dihitung dengan tambahan ini.</CardDescription>
+              ) : null}
             </CardHeader>
             <CardContent>
               <div className="overflow-hidden rounded-md border">
@@ -536,21 +543,37 @@ export default function BomsPage() {
                     </label>
                   </div>
 
-                  <label className="flex max-w-xs flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">Status</span>
-                    <Select value={form.status} onValueChange={(value) => setForm((prev) => ({ ...prev, status: value }))}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {bomStatuses.map((statusOption) => (
-                          <SelectItem key={statusOption} value={statusOption}>
-                            {statusLabels[statusOption]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
+                  <div className="grid max-w-md gap-3 sm:grid-cols-2">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Status</span>
+                      <Select value={form.status} onValueChange={(value) => setForm((prev) => ({ ...prev, status: value }))}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {bomStatuses.map((statusOption) => (
+                            <SelectItem key={statusOption} value={statusOption}>
+                              {statusLabels[statusOption]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </label>
+
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Buffer % (opsional)</span>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="any"
+                        placeholder="mis. 5"
+                        value={form.buffer_percentage}
+                        onChange={(event) => setForm((prev) => ({ ...prev, buffer_percentage: event.target.value }))}
+                      />
+                      <span className="text-xs text-muted-foreground">Kompensasi kehilangan produksi — dipakai saat hitung kebutuhan bahan per batch.</span>
+                    </label>
+                  </div>
 
                   <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between">

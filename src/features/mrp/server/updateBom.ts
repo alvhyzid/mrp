@@ -78,7 +78,8 @@ export async function updateBom(request: NextRequest): Promise<ApiResult> {
       .update({
         standard_yield_qty: input.standard_yield_qty,
         standard_yield_uom: input.standard_yield_uom,
-        status: input.status
+        status: input.status,
+        buffer_percentage: input.buffer_percentage
       })
       .eq('bom_id', bomId);
 

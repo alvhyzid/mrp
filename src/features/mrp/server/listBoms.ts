@@ -20,7 +20,7 @@ export async function listBoms(request: NextRequest): Promise<ApiResult> {
 
     const { data: boms, error: bomsError } = await adminClient
       .from('boms')
-      .select('bom_id, parent_item_id, version, standard_yield_qty, standard_yield_uom, status, created_at')
+      .select('bom_id, parent_item_id, version, standard_yield_qty, standard_yield_uom, status, buffer_percentage, created_at')
       .eq('company_id', appUser.company_id)
       .order('created_at', { ascending: false });
 
@@ -86,6 +86,7 @@ export async function listBoms(request: NextRequest): Promise<ApiResult> {
         standard_yield_qty: bom.standard_yield_qty,
         standard_yield_uom: bom.standard_yield_uom,
         status: bom.status,
+        buffer_percentage: bom.buffer_percentage,
         created_at: bom.created_at,
         lines: bomLines
       };

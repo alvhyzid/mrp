@@ -11,6 +11,7 @@ export interface BomInput {
   standard_yield_qty: number;
   standard_yield_uom: string;
   status: string;
+  buffer_percentage: number | null;
   lines: BomLineInput[];
 }
 
@@ -45,6 +46,15 @@ export function parseBomInput(body: Record<string, unknown>): { input?: BomInput
   const status = String(body.status ?? 'draft').trim();
   if (!bomStatuses.includes(status)) {
     return { error: 'Status BOM tidak valid.' };
+  }
+
+  let bufferPercentage: number | null = null;
+  if (body.buffer_percentage !== undefined && body.buffer_percentage !== null && body.buffer_percentage !== '') {
+    const parsedBuffer = Number(body.buffer_percentage);
+    if (Number.isNaN(parsedBuffer) || parsedBuffer < 0 || parsedBuffer > 100) {
+      return { error: 'Persentase buffer harus di antara 0 dan 100.' };
+    }
+    bufferPercentage = parsedBuffer;
   }
 
   const rawLines = Array.isArray(body.lines) ? body.lines : [];
@@ -86,6 +96,7 @@ export function parseBomInput(body: Record<string, unknown>): { input?: BomInput
       standard_yield_qty: standardYieldQty.value!,
       standard_yield_uom: standardYieldUom,
       status,
+      buffer_percentage: bufferPercentage,
       lines
     }
   };

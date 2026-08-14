@@ -19,6 +19,8 @@ export * from './listProductionPlants';
 export * from './workOrderValidation';
 export * from './listWorkOrders';
 export * from './createWorkOrder';
+export * from './listProductionBatches';
+export * from './createProductionBatch';
 export * from './recordWorkOrderConsumption';
 export * from './listLots';
 export * from './listSalesOrders';

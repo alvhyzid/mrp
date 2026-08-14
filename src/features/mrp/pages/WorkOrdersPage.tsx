@@ -59,8 +59,31 @@ type SoLine = {
 };
 type SalesOrder = { sales_order_id: number; so_number: string; customer_id: number; customer_name: string | null; production_plant_id: number; status: string; lines: SoLine[] };
 
-type Bom = { bom_id: number; parent_item_id: number; version: number; status: string; standard_yield_qty: number; standard_yield_uom: string; lines: { component_item_id: number; component_item_code: string | null; component_item_name: string | null; qty_per_unit_output: number; uom: string }[] };
+type Bom = {
+  bom_id: number;
+  parent_item_id: number;
+  version: number;
+  status: string;
+  standard_yield_qty: number;
+  standard_yield_uom: string;
+  buffer_percentage: number | null;
+  lines: { component_item_id: number; component_item_code: string | null; component_item_name: string | null; qty_per_unit_output: number; uom: string }[];
+};
 type PlantOption = { production_plant_id: number; name: string };
+
+type ProductionBatch = {
+  production_batch_id: number;
+  batch_number: string;
+  planned_qty: number;
+  uom: string;
+  status: string;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+};
+
+const batchStatusLabels: Record<string, string> = { planned: 'Direncanakan', in_progress: 'Berjalan', completed: 'Selesai', cancelled: 'Batal' };
+const batchStatusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical'> = { planned: 'info', in_progress: 'warning', completed: 'success', cancelled: 'critical' };
 
 type Lot = {
   lot_id: number;
@@ -92,6 +115,12 @@ export default function WorkOrdersPage() {
   const [lotsForExpanded, setLotsForExpanded] = useState<Lot[]>([]);
   const [consumptionForm, setConsumptionForm] = useState<Record<number, { lot_id: string; qty: string }>>({});
   const [consumptionMessage, setConsumptionMessage] = useState<Record<number, string>>({});
+
+  const [batchesForExpanded, setBatchesForExpanded] = useState<ProductionBatch[]>([]);
+  const [batchPlannedQty, setBatchPlannedQty] = useState('');
+  const [batchFormStatus, setBatchFormStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
+  const [batchFormMessage, setBatchFormMessage] = useState('');
+  const [consumptionBatchId, setConsumptionBatchId] = useState('');
 
   const [form, setForm] = useState({
     sales_order_id: '',
@@ -221,12 +250,24 @@ export default function WorkOrdersPage() {
     await loadWorkOrders();
   };
 
+  const loadBatchesForWo = useCallback(
+    async (workOrderId: number) => {
+      const { ok, body } = await authedFetch(`/api/production-batches?work_order_id=${workOrderId}`);
+      if (ok) setBatchesForExpanded(body.batches || []);
+    },
+    [authedFetch]
+  );
+
   const toggleExpand = async (wo: WorkOrder) => {
     if (expandedWoId === wo.work_order_id) {
       setExpandedWoId(null);
       return;
     }
     setExpandedWoId(wo.work_order_id);
+    setBatchPlannedQty('');
+    setBatchFormStatus('idle');
+    setBatchFormMessage('');
+    setConsumptionBatchId('');
     const bom = boms.find((b) => b.bom_id === wo.bom_id);
     const componentItemIds = bom ? bom.lines.map((line) => line.component_item_id) : [];
     if (componentItemIds.length > 0) {
@@ -235,9 +276,38 @@ export default function WorkOrdersPage() {
     } else {
       setLotsForExpanded([]);
     }
+    await loadBatchesForWo(wo.work_order_id);
+  };
+
+  const handleCreateBatch = async (wo: WorkOrder) => {
+    const plannedQty = Number(batchPlannedQty);
+    if (!plannedQty || plannedQty <= 0) {
+      setBatchFormStatus('error');
+      setBatchFormMessage('Planned qty batch harus lebih besar dari 0.');
+      return;
+    }
+    setBatchFormStatus('pending');
+    setBatchFormMessage('');
+    const { ok, body } = await authedFetch('/api/production-batches', {
+      method: 'POST',
+      body: JSON.stringify({ work_order_id: wo.work_order_id, planned_qty: plannedQty })
+    });
+    if (!ok) {
+      setBatchFormStatus('error');
+      setBatchFormMessage(body.error || 'Gagal membuat batch produksi.');
+      return;
+    }
+    setBatchFormStatus('success');
+    setBatchFormMessage(`Batch ${body.batch.batch_number} berhasil dibuat.`);
+    setBatchPlannedQty('');
+    await loadBatchesForWo(wo.work_order_id);
   };
 
   const handleRecordConsumption = async (wo: WorkOrder, componentItemId: number) => {
+    if (!consumptionBatchId) {
+      setConsumptionMessage((prev) => ({ ...prev, [componentItemId]: 'Pilih batch produksi dulu di atas.' }));
+      return;
+    }
     const entry = consumptionForm[componentItemId];
     if (!entry?.lot_id || !entry?.qty) {
       setConsumptionMessage((prev) => ({ ...prev, [componentItemId]: 'Pilih lot dan isi jumlah pemakaian dulu.' }));
@@ -245,7 +315,7 @@ export default function WorkOrdersPage() {
     }
     const { ok, body } = await authedFetch('/api/work-orders/consumption', {
       method: 'POST',
-      body: JSON.stringify({ work_order_id: wo.work_order_id, component_lot_id: Number(entry.lot_id), qty_consumed: Number(entry.qty) })
+      body: JSON.stringify({ work_order_id: wo.work_order_id, production_batch_id: Number(consumptionBatchId), component_lot_id: Number(entry.lot_id), qty_consumed: Number(entry.qty) })
     });
     if (!ok) {
       setConsumptionMessage((prev) => ({ ...prev, [componentItemId]: body.error || 'Gagal mencatat pemakaian.' }));
@@ -379,71 +449,184 @@ export default function WorkOrdersPage() {
               ) : null}
 
               <div>
-                <p className="mb-2 text-sm font-medium text-foreground">Catat Pemakaian Bahan (komponen BOM)</p>
-                {!expandedBom || expandedBom.lines.length === 0 ? (
+                <p className="mb-2 text-sm font-medium text-foreground">Catat Pemakaian Bahan (komponen BOM) — per Batch</p>
+                <label className="mb-3 flex max-w-xs flex-col gap-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">Batch Produksi</span>
+                  <Select value={consumptionBatchId} onValueChange={setConsumptionBatchId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih batch..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {batchesForExpanded.map((batch) => (
+                        <SelectItem key={batch.production_batch_id} value={String(batch.production_batch_id)}>
+                          {batch.batch_number} ({batch.planned_qty} {batch.uom})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+
+                {batchesForExpanded.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Belum ada batch — buat batch dulu di bagian &quot;Batch Produksi&quot; di bawah sebelum mencatat pemakaian bahan.</p>
+                ) : !consumptionBatchId ? (
+                  <p className="text-sm text-muted-foreground">Pilih batch produksi dulu di atas untuk mencatat pemakaian bahan batch itu.</p>
+                ) : !expandedBom || expandedBom.lines.length === 0 ? (
                   <p className="text-sm text-muted-foreground">BOM untuk item ini belum punya komponen.</p>
                 ) : (
-                  <div className="flex flex-col gap-3">
-                    {expandedBom.lines.map((line) => {
-                      const lotsForComponent = lotsForExpanded.filter((lot) => lot.item_id === line.component_item_id);
-                      const entry = consumptionForm[line.component_item_id] ?? { lot_id: '', qty: '' };
-                      const selectedLot = lotsForComponent.find((lot) => String(lot.lot_id) === entry.lot_id);
-                      const crossCustomerWarning =
-                        selectedLot && selectedLot.source_type === 'customer_supplied' && expandedWo.customer_id && selectedLot.source_customer_id !== expandedWo.customer_id;
+                  (() => {
+                    const selectedBatch = batchesForExpanded.find((b) => String(b.production_batch_id) === consumptionBatchId);
+                    const batchQty = selectedBatch?.planned_qty ?? 0;
+                    return (
+                      <div className="flex flex-col gap-3">
+                        {expandedBom.lines.map((line) => {
+                          const lotsForComponent = lotsForExpanded.filter((lot) => lot.item_id === line.component_item_id);
+                          const entry = consumptionForm[line.component_item_id] ?? { lot_id: '', qty: '' };
+                          const selectedLot = lotsForComponent.find((lot) => String(lot.lot_id) === entry.lot_id);
+                          const crossCustomerWarning =
+                            selectedLot && selectedLot.source_type === 'customer_supplied' && expandedWo.customer_id && selectedLot.source_customer_id !== expandedWo.customer_id;
+                          const bufferedQty = line.qty_per_unit_output * batchQty * (1 + (expandedBom.buffer_percentage ?? 0) / 100);
 
-                      return (
-                        <div key={line.component_item_id} className="rounded-md border p-2">
-                          <p className="text-sm font-medium text-foreground">
-                            {line.component_item_code} — {line.component_item_name}
-                          </p>
-                          <p className="mb-2 text-xs text-muted-foreground">
-                            Kebutuhan: {(line.qty_per_unit_output * expandedWo.planned_qty).toLocaleString('id-ID', { maximumFractionDigits: 4 })} {line.uom} untuk {expandedWo.planned_qty} {expandedWo.item_base_uom}
-                          </p>
-                          {lotsForComponent.length === 0 ? (
-                            <p className="text-sm text-destructive">Belum ada stok lot tersedia untuk item ini.</p>
-                          ) : (
-                            <div className="grid grid-cols-[1fr_120px_auto] items-end gap-2">
-                              <label className="flex flex-col gap-1">
-                                <span className="text-xs font-medium text-muted-foreground">Pilih Lot</span>
-                                <Select value={entry.lot_id} onValueChange={(value) => setConsumptionForm((prev) => ({ ...prev, [line.component_item_id]: { ...entry, lot_id: value } }))}>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Pilih lot..." />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {lotsForComponent.map((lot) => (
-                                      <SelectItem key={lot.lot_id} value={String(lot.lot_id)}>
-                                        {lot.lot_number} — {lot.quantity_on_hand} tersedia {lot.source_type === 'customer_supplied' ? '(kiriman client)' : ''}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </label>
-                              <label className="flex flex-col gap-1">
-                                <span className="text-xs font-medium text-muted-foreground">Jumlah Dipakai</span>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  step="any"
-                                  value={entry.qty}
-                                  onChange={(event) => setConsumptionForm((prev) => ({ ...prev, [line.component_item_id]: { ...entry, qty: event.target.value } }))}
-                                />
-                              </label>
-                              <Button size="sm" onClick={() => handleRecordConsumption(expandedWo, line.component_item_id)}>
-                                Catat
-                              </Button>
+                          return (
+                            <div key={line.component_item_id} className="rounded-md border p-2">
+                              <p className="text-sm font-medium text-foreground">
+                                {line.component_item_code} — {line.component_item_name}
+                              </p>
+                              <p className="mb-2 text-xs text-muted-foreground">
+                                Kebutuhan: {bufferedQty.toLocaleString('id-ID', { maximumFractionDigits: 4 })} {line.uom} untuk batch {selectedBatch?.batch_number} ({batchQty} {selectedBatch?.uom})
+                                {expandedBom.buffer_percentage ? ` — sudah + buffer ${expandedBom.buffer_percentage}%` : ''}
+                              </p>
+                              {lotsForComponent.length === 0 ? (
+                                <p className="text-sm text-destructive">Belum ada stok lot tersedia untuk item ini.</p>
+                              ) : (
+                                <div className="grid grid-cols-[1fr_120px_auto] items-end gap-2">
+                                  <label className="flex flex-col gap-1">
+                                    <span className="text-xs font-medium text-muted-foreground">Pilih Lot</span>
+                                    <Select value={entry.lot_id} onValueChange={(value) => setConsumptionForm((prev) => ({ ...prev, [line.component_item_id]: { ...entry, lot_id: value } }))}>
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Pilih lot..." />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {lotsForComponent.map((lot) => (
+                                          <SelectItem key={lot.lot_id} value={String(lot.lot_id)}>
+                                            {lot.lot_number} — {lot.quantity_on_hand} tersedia {lot.source_type === 'customer_supplied' ? '(kiriman client)' : ''}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </label>
+                                  <label className="flex flex-col gap-1">
+                                    <span className="text-xs font-medium text-muted-foreground">Jumlah Dipakai</span>
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      step="any"
+                                      value={entry.qty}
+                                      onChange={(event) => setConsumptionForm((prev) => ({ ...prev, [line.component_item_id]: { ...entry, qty: event.target.value } }))}
+                                    />
+                                  </label>
+                                  <Button size="sm" onClick={() => handleRecordConsumption(expandedWo, line.component_item_id)}>
+                                    Catat
+                                  </Button>
+                                </div>
+                              )}
+                              {crossCustomerWarning ? (
+                                <p className="mt-2 rounded-md border border-warning/40 bg-warning-subtle p-2 text-xs text-warning-subtle-foreground">
+                                  Peringatan: lot ini kiriman client lain (bukan client pada SO Work Order ini) — pastikan tidak salah pakai bahan milik client berbeda.
+                                </p>
+                              ) : null}
+                              {consumptionMessage[line.component_item_id] ? <p className="mt-1 text-xs text-muted-foreground">{consumptionMessage[line.component_item_id]}</p> : null}
                             </div>
-                          )}
-                          {crossCustomerWarning ? (
-                            <p className="mt-2 rounded-md border border-warning/40 bg-warning-subtle p-2 text-xs text-warning-subtle-foreground">
-                              Peringatan: lot ini kiriman client lain (bukan client pada SO Work Order ini) — pastikan tidak salah pakai bahan milik client berbeda.
-                            </p>
-                          ) : null}
-                          {consumptionMessage[line.component_item_id] ? <p className="mt-1 text-xs text-muted-foreground">{consumptionMessage[line.component_item_id]}</p> : null}
-                        </div>
-                      );
-                    })}
+                          );
+                        })}
+                      </div>
+                    );
+                  })()
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {expandedWo ? (
+          <Card>
+            <CardHeader>
+              <CardDescription className="uppercase tracking-[0.2em]">Eksekusi</CardDescription>
+              <CardTitle className="text-xl">Batch Produksi</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <div>
+                <p className="mb-2 text-sm font-medium text-foreground">Batch yang sudah dibuat</p>
+                {batchesForExpanded.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Belum ada batch untuk Work Order ini.</p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {batchesForExpanded.map((batch) => (
+                      <div key={batch.production_batch_id} className="flex items-center justify-between rounded-md border p-2 text-sm">
+                        <span className="font-medium text-foreground">{batch.batch_number}</span>
+                        <span className="text-data text-muted-foreground">
+                          {batch.planned_qty} {batch.uom}
+                        </span>
+                        <Badge variant={batchStatusBadgeVariant[batch.status] ?? 'secondary'}>{batchStatusLabels[batch.status] ?? batch.status}</Badge>
+                      </div>
+                    ))}
                   </div>
                 )}
+              </div>
+
+              <div className="rounded-md border p-3">
+                <p className="mb-2 text-sm font-medium text-foreground">Buat Batch Baru</p>
+                <label className="flex max-w-xs flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Planned Qty Batch Ini</span>
+                  <Input type="number" min="0" step="any" value={batchPlannedQty} onChange={(event) => setBatchPlannedQty(event.target.value)} placeholder={`mis. 500 ${expandedWo.item_base_uom ?? ''}`} />
+                  <span className="text-xs text-muted-foreground">Bebas ditentukan — tidak harus sama dengan standard_yield_qty di BOM.</span>
+                </label>
+
+                {expandedBom && Number(batchPlannedQty) > 0 ? (
+                  <div className="mt-3">
+                    <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Kalkulasi Kebutuhan Bahan{expandedBom.buffer_percentage ? ` (sudah + buffer ${expandedBom.buffer_percentage}%)` : ' (BOM ini belum punya buffer_percentage)'}
+                    </p>
+                    {expandedBom.lines.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">BOM untuk item ini belum punya komponen.</p>
+                    ) : (
+                      <div className="overflow-hidden rounded-md border">
+                        <table className="w-full text-data">
+                          <thead>
+                            <tr className="border-b">
+                              <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Komponen</th>
+                              <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Tanpa Buffer</th>
+                              <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Dibutuhkan (+buffer)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {expandedBom.lines.map((line) => {
+                              const baseQty = line.qty_per_unit_output * Number(batchPlannedQty);
+                              const bufferedQty = baseQty * (1 + (expandedBom.buffer_percentage ?? 0) / 100);
+                              return (
+                                <tr key={line.component_item_id} className="border-b last:border-0">
+                                  <td className="px-3 py-1.5">
+                                    {line.component_item_code} — {line.component_item_name}
+                                  </td>
+                                  <td className="px-3 py-1.5 text-muted-foreground">
+                                    {baseQty.toLocaleString('id-ID', { maximumFractionDigits: 4 })} {line.uom}
+                                  </td>
+                                  <td className="px-3 py-1.5 font-medium text-foreground">
+                                    {bufferedQty.toLocaleString('id-ID', { maximumFractionDigits: 4 })} {line.uom}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                <Button className="mt-3 w-fit" disabled={batchFormStatus === 'pending'} onClick={() => handleCreateBatch(expandedWo)}>
+                  {batchFormStatus === 'pending' ? 'Menyimpan...' : 'Buat Batch'}
+                </Button>
+                {batchFormMessage ? <p className={`mt-2 text-sm ${batchFormStatus === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>{batchFormMessage}</p> : null}
               </div>
             </CardContent>
           </Card>

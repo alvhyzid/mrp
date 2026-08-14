@@ -18,6 +18,10 @@ export async function listWorkOrderStepProgress(request: NextRequest): Promise<A
     if (!workOrderId) {
       return { status: 400, body: { error: 'work_order_id wajib diisi.' } };
     }
+    // production_batch_id opsional — kalau diisi, hasil difilter ke batch itu saja
+    // (progres sekarang dicatat per batch, bukan digabung di level WO).
+    const productionBatchIdParam = request.nextUrl.searchParams.get('production_batch_id');
+    const productionBatchId = productionBatchIdParam ? Number(productionBatchIdParam) : null;
 
     const adminClient = getAdminClient();
 
@@ -31,10 +35,14 @@ export async function listWorkOrderStepProgress(request: NextRequest): Promise<A
       return { status: 404, body: { error: 'Work Order tidak ditemukan.' } };
     }
 
-    const { data: progress, error } = await adminClient
+    let query = adminClient
       .from('work_order_step_progress')
-      .select('work_order_step_progress_id, routing_step_id, status, qty_recorded, uom, started_at, completed_at, notes')
+      .select('work_order_step_progress_id, production_batch_id, routing_step_id, status, qty_recorded, uom, started_at, completed_at, notes')
       .eq('work_order_id', workOrderId);
+    if (productionBatchId) {
+      query = query.eq('production_batch_id', productionBatchId);
+    }
+    const { data: progress, error } = await query;
 
     if (error) {
       return { status: 500, body: { error: error.message } };

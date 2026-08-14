@@ -47,7 +47,7 @@ export async function getCurrentUser(request: NextRequest, options: { allowInvit
   const authUid = authData.user.id;
   const { data: userRow, error: userRowError } = await adminClient
     .from('users')
-    .select('user_id,company_id,role,status,name,email,auth_uid')
+    .select('user_id,company_id,role,status,name,email,auth_uid,avatar_url')
     .eq('auth_uid', authUid)
     .single();
 

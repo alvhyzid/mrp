@@ -14,7 +14,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 ## Kelompok 1: Akses & Tenant
 
 **Database Perusahaan** (`companies`)
-- ID Perusahaan (company_id) · Nama (name) · Jenis Industri (industry_type) · ID Paket Langganan (subscription_plan_id) · Status (status) · Tanggal Dibuat (created_at)
+- ID Perusahaan (company_id) · Nama (name) · Jenis Industri (industry_type) · ID Paket Langganan (subscription_plan_id) · Status (status) · Logo Perusahaan — file di Supabase Storage (logo_url) · Tanggal Dibuat (created_at)
 
 **Database Paket Langganan** (`subscription_plans`)
 - ID Paket (subscription_plan_id) · Nama Paket (name) · Harga (price) · Siklus Tagihan (billing_cycle) · Maksimal User (max_users) · Maksimal Item (max_items)
@@ -22,7 +22,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 **Database Pengguna/Login** (`users`)
 - ID User (user_id) · ID Perusahaan (company_id) · Nama (name) · Email (email) · Penghubung Akun Login Supabase (auth_uid)
 - Peran/Role (role): super_admin / company_admin / general_manager / production_manager / production_staff / ppic_manager / ppic_staff / finance_manager / finance_staff / purchasing_manager / purchasing_staff / warehouse_manager / warehouse_staff / hr_manager / hr_staff / viewer
-- Status (status) · Tanggal Dibuat (created_at)
+- Status (status) · Foto Profil — file di Supabase Storage (avatar_url) · Tanggal Dibuat (created_at)
 
 **Database Undangan Anggota Tim** (`invitations`)
 - ID Undangan (invitation_id) · ID Perusahaan (company_id) · Email Diundang (email) · Role (role) · Diundang Oleh (invited_by) · Status (status) · Kode Undangan (token) · Tanggal Kadaluarsa (expires_at) · Tanggal Dibuat (created_at) · Tanggal Diterima (accepted_at)

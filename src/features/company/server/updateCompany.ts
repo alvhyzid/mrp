@@ -17,7 +17,7 @@ export async function getCompany(request: NextRequest): Promise<ApiResult> {
     const adminClient = getAdminClient();
     const { data, error } = await adminClient
       .from('companies')
-      .select('company_id, name, industry_type, status')
+      .select('company_id, name, industry_type, status, logo_url')
       .eq('company_id', appUser.company_id)
       .single();
 

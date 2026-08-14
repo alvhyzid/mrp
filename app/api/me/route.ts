@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     if (appUser.company_id !== null && appUser.company_id !== undefined) {
       const { data, error } = await adminClient
         .from('companies')
-        .select('company_id,name,industry_type,status')
+        .select('company_id,name,industry_type,status,logo_url')
         .eq('company_id', appUser.company_id)
         .maybeSingle();
 

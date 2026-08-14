@@ -18,6 +18,11 @@ export default function CompanySettingsPage() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
 
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoStatus, setLogoStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
+  const [logoMessage, setLogoMessage] = useState('');
+
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
     const { data } = await supabase.auth.getSession();
@@ -65,11 +70,46 @@ export default function CompanySettingsPage() {
       setName(companyData.company.name || '');
       setIndustryType(companyData.company.industry_type || '');
       setStatus(companyData.company.status || '');
+      setLogoUrl(companyData.company.logo_url || null);
       setCheckingAccess(false);
     };
 
     load();
   }, [router]);
+
+  const handleLogoUpload = async () => {
+    if (!logoFile) return;
+    setLogoStatus('pending');
+    setLogoMessage('');
+
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      setLogoStatus('error');
+      setLogoMessage('Sesi Anda sudah tidak valid, silakan login ulang.');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('logo', logoFile);
+
+    const response = await fetch('/api/company/logo', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: formData
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      setLogoStatus('error');
+      setLogoMessage(data.error || 'Gagal mengunggah logo.');
+      return;
+    }
+
+    setLogoUrl(data.logo_url);
+    setLogoFile(null);
+    setLogoStatus('success');
+    setLogoMessage('Logo berhasil diperbarui.');
+  };
 
   const handleSave = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -134,7 +174,41 @@ export default function CompanySettingsPage() {
 
   return (
     <main className="min-h-screen bg-muted/30 py-16">
-      <div className="container max-w-2xl">
+      <div className="container flex max-w-2xl flex-col gap-6">
+        <Card>
+          <CardHeader>
+            <CardDescription className="uppercase tracking-[0.2em]">Pengaturan Perusahaan</CardDescription>
+            <CardTitle className="text-2xl">Logo perusahaan</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="flex items-center gap-4">
+              <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-none border border-[#e0e0e0] bg-muted">
+                {logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={logoUrl} alt="Logo perusahaan" className="h-full w-full object-contain" />
+                ) : (
+                  <span className="text-center text-xs text-muted-foreground">Belum ada logo</span>
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={(event) => setLogoFile(event.target.files?.[0] ?? null)}
+                  className="text-sm text-foreground file:mr-3 file:h-8 file:rounded-none file:border-0 file:bg-[#0f62fe] file:px-3 file:text-xs file:font-medium file:text-white hover:file:bg-[#0043ce]"
+                />
+                <span className="text-xs text-muted-foreground">PNG, JPG, atau WEBP, maksimal 2MB.</span>
+                <Button type="button" onClick={handleLogoUpload} disabled={!logoFile || logoStatus === 'pending'} className="w-fit">
+                  {logoStatus === 'pending' ? 'Mengunggah...' : 'Upload Logo'}
+                </Button>
+              </div>
+            </div>
+            {logoMessage ? (
+              <p className={`text-sm ${logoStatus === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>{logoMessage}</p>
+            ) : null}
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardDescription className="uppercase tracking-[0.2em]">Pengaturan Perusahaan</CardDescription>

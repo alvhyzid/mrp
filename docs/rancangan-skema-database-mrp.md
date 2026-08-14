@@ -40,6 +40,7 @@ Satu baris = satu perusahaan pelanggan (tenant).
 - `company_id`, `name`, `industry_type` (mis. "food_manufacturing")
 - `subscription_plan_id` → referensi ke `subscription_plans`
 - `status` (trial / active / suspended)
+- `logo_url` (nullable — referensi ke file di Supabase Storage, diatur company_admin/general_manager lewat Data Perusahaan)
 - `created_at`
 
 ### `subscription_plans`
@@ -54,6 +55,7 @@ Paket langganan yang tersedia.
 - `auth_uid` (penghubung ke `auth.users.id` milik Supabase Auth — WAJIB ada, sistem login bergantung pada ini)
 - `role` (super_admin / company_admin / general_manager / production_manager / production_staff / ppic_manager / ppic_staff / finance_manager / finance_staff / purchasing_manager / purchasing_staff / warehouse_manager / warehouse_staff / hr_manager / hr_staff / viewer)
 - `status` (active/invited/suspended)
+- `avatar_url` (nullable — referensi ke file di Supabase Storage, diatur user itu sendiri lewat halaman Profil)
 - `created_at`
 
 > **Catatan role:** `super_admin` = pemilik platform, tidak terikat 1 company. `company_admin` = pembuat akun pertama & pencipta company (bisa hapus company/nonaktifkan akun siapa pun, DAN satu-satunya level di atas manager yang boleh lihat gaji individual). `general_manager` = level setara `company_admin` di operasional, TAPI TANPA izin hapus company/nonaktifkan akun user lain, DAN TANPA akses lihat gaji individual. **Keenam department** (Production, PPIC, Finance, Purchasing, Warehouse, HR) konsisten punya tingkat *manager* dan *staff* — disiapkan dari awal meski beberapa posisi manager mungkin belum terisi orangnya di kondisi nyata sekarang. `hr_manager`/`hr_staff` punya akses penuh ke `employees` termasuk data gaji — satu-satunya department dengan akses itu selain `company_admin`.

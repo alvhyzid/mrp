@@ -27,6 +27,7 @@ Fitur ini sudah ada di roadmap Fase 3-6 dan skema database yang sudah kita ranca
 | Kalkulasi biaya BOM (standar & aktual dari lot) | ✅ `items.standard_cost`, `lots.unit_cost` |
 | Laporan biaya lengkap per batch/PO (bahan + SDM + durasi) | ✅ `employees`, `work_order_assignments`, gabungan seluruh data produksi |
 | Dashboard biaya PO real-time/per-shift untuk pemilik (progres, biaya bahan, biaya SDM, total berjalan) | ✅ Semua tabel biaya diberi `shift_id`/timestamp — bisa dilihat kumulatif live maupun dipecah per hari |
+| **Margin/profit per pengiriman** (sistem keuangan inti: pendapatan − biaya bahan − biaya SDM, dihitung saat barang dikirim) | ✅ `unit_price` di line PO/SO + biaya yang sudah ada (`lots.unit_cost`, `work_order_assignments`) — dihitung otomatis, bukan tabel terpisah |
 | Penanganan pekerja (PHL) absen mendadak & penggantian di hari-H | ✅ `work_order_assignments.status`, `replacement_for_assignment_id`, alert `worker_absence` |
 | Penambahan pekerja mendadak di luar rencana | ✅ `work_order_assignments.status = unplanned_addition` |
 | Pencatatan gangguan produksi (mesin, listrik padam, faktor eksternal lain) sebagai penjelasan selisih target vs hasil | ✅ `work_centers`, `production_disruptions`, alert `production_disruption` |

@@ -6,11 +6,22 @@ interface ApiResult {
   body: Record<string, unknown>;
 }
 
-// Asumsi hari kerja per minggu — belum ada pengaturan kalender kerja per company
-// di skema (lihat company_settings), jadi dipatok tetap dulu (Senin-Sabtu, umum
-// di operasional manufaktur Indonesia). Ditulis eksplisit di sini + dikirim ke
-// response supaya UI bisa tampilkan asumsinya, bukan angka misterius.
-const WORKING_DAYS_PER_WEEK = 6;
+// Asumsi hari kerja per minggu SEKARANG diambil dari company_settings (key
+// "working_days_per_week"), pola sama seperti "standard_hours_per_day" /
+// "so_number_company_code" yang sudah ada — bukan lagi hardcode. Default 6
+// (Senin-Sabtu) dipakai kalau company belum pernah mengatur key ini.
+const DEFAULT_WORKING_DAYS_PER_WEEK = 6;
+
+async function getWorkingDaysPerWeek(adminClient: ReturnType<typeof getAdminClient>, companyId: number): Promise<number> {
+  const { data } = await adminClient
+    .from('company_settings')
+    .select('setting_value')
+    .eq('company_id', companyId)
+    .eq('setting_key', 'working_days_per_week')
+    .maybeSingle();
+  const parsed = data?.setting_value ? Number(data.setting_value) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 && parsed <= 7 ? parsed : DEFAULT_WORKING_DAYS_PER_WEEK;
+}
 
 function startOfThisWeek(): Date {
   const now = new Date();
@@ -45,8 +56,11 @@ export async function getWorkCenterCapacity(request: NextRequest): Promise<ApiRe
       .eq('is_active', true)
       .order('name', { ascending: true });
     if (wcError) return { status: 500, body: { error: wcError.message } };
+
+    const workingDaysPerWeek = await getWorkingDaysPerWeek(adminClient, appUser.company_id);
+
     if (!workCenters || workCenters.length === 0) {
-      return { status: 200, body: { workCenters: [], workingDaysPerWeek: WORKING_DAYS_PER_WEEK } };
+      return { status: 200, body: { workCenters: [], workingDaysPerWeek } };
     }
 
     const plantIds = Array.from(new Set(workCenters.map((wc) => wc.production_plant_id)));
@@ -109,7 +123,7 @@ export async function getWorkCenterCapacity(request: NextRequest): Promise<ApiRe
     const result = workCenters.map((wc) => {
       const scheduledHours = round1((scheduledMinutesByWorkCenter.get(wc.work_center_id) ?? 0) / 60);
       const capacityPerDay = wc.capacity_hours_per_day !== null ? Number(wc.capacity_hours_per_day) : null;
-      const totalCapacityHours = capacityPerDay !== null ? round1(capacityPerDay * WORKING_DAYS_PER_WEEK) : null;
+      const totalCapacityHours = capacityPerDay !== null ? round1(capacityPerDay * workingDaysPerWeek) : null;
       const utilizationPct = totalCapacityHours !== null && totalCapacityHours > 0 ? round1((scheduledHours / totalCapacityHours) * 100) : null;
       return {
         work_center_id: wc.work_center_id,
@@ -128,7 +142,7 @@ export async function getWorkCenterCapacity(request: NextRequest): Promise<ApiRe
       status: 200,
       body: {
         workCenters: result,
-        workingDaysPerWeek: WORKING_DAYS_PER_WEEK,
+        workingDaysPerWeek,
         weekStart: weekStart.toISOString(),
         weekEnd: weekEnd.toISOString()
       }

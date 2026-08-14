@@ -180,6 +180,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 **Database Batch Produksi** (`production_batches`)
 - ID Batch (production_batch_id) · ID Perusahaan (company_id) · ID Work Order (work_order_id) · Nomor Batch (batch_number)
 - ID Shift (shift_id) · Jumlah Rencana — bebas diatur PPIC, tidak terpaku ukuran standar BOM (planned_qty) · Satuan (uom)
+- Tanggal Rencana — kapan batch SEHARUSNYA dikerjakan, dasar Dashboard Kapasitas (planned_date)
 - Status: rencana/berjalan/selesai/batal (status) · Waktu Mulai (started_at) · Waktu Selesai (completed_at)
 
 > 1 Work Order biasanya dikerjakan lewat 3-5 batch fisik per shift — masing-masing punya bahan, hasil, dan jejak lot sendiri untuk traceability BPOM/halal.

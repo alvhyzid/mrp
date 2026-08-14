@@ -36,6 +36,15 @@ export async function createProductionBatch(request: NextRequest): Promise<ApiRe
       return { status: 400, body: { error: 'Planned qty batch harus lebih besar dari 0.' } };
     }
 
+    // planned_date: kapan batch ini SEHARUSNYA dikerjakan (dasar Dashboard
+    // Kapasitas) — default ke hari ini kalau PPIC tidak isi, bukan dibiarkan
+    // kosong begitu saja (batch baru dibuat tanpa tanggal rencana tidak masuk akal).
+    const plannedDateRaw = typeof body.planned_date === 'string' ? body.planned_date.trim() : '';
+    if (plannedDateRaw && !/^\d{4}-\d{2}-\d{2}$/.test(plannedDateRaw)) {
+      return { status: 400, body: { error: 'Format tanggal rencana tidak valid.' } };
+    }
+    const plannedDate = plannedDateRaw || new Date().toISOString().slice(0, 10);
+
     const adminClient = getAdminClient();
 
     const { data: wo, error: woError } = await adminClient
@@ -83,11 +92,12 @@ export async function createProductionBatch(request: NextRequest): Promise<ApiRe
           batch_number: batchNumber,
           shift_id: shiftId,
           planned_qty: plannedQty,
+          planned_date: plannedDate,
           uom,
           status: 'planned'
         }
       ])
-      .select('production_batch_id, batch_number, planned_qty, uom, status')
+      .select('production_batch_id, batch_number, planned_qty, planned_date, uom, status')
       .single();
 
     if (insertError || !inserted) {

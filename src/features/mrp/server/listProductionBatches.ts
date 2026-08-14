@@ -29,7 +29,7 @@ export async function listProductionBatches(request: NextRequest): Promise<ApiRe
 
     const { data: batches, error } = await adminClient
       .from('production_batches')
-      .select('production_batch_id, batch_number, shift_id, planned_qty, uom, status, started_at, completed_at, created_at')
+      .select('production_batch_id, batch_number, shift_id, planned_qty, planned_date, uom, status, started_at, completed_at, created_at')
       .eq('work_order_id', workOrderId)
       .order('created_at', { ascending: false });
 

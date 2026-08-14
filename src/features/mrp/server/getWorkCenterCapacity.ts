@@ -73,7 +73,7 @@ export async function getWorkCenterCapacity(request: NextRequest): Promise<ApiRe
       adminClient.from('production_plants').select('production_plant_id, name').in('production_plant_id', plantIds),
       adminClient
         .from('production_batches')
-        .select('production_batch_id, work_order_id, status, started_at, created_at')
+        .select('production_batch_id, work_order_id, status, planned_date, started_at, created_at')
         .eq('company_id', appUser.company_id)
         .in('status', ['planned', 'in_progress'])
     ]);
@@ -82,8 +82,12 @@ export async function getWorkCenterCapacity(request: NextRequest): Promise<ApiRe
 
     const plantsById = new Map((plantsRes.data ?? []).map((p) => [p.production_plant_id, p]));
 
+    // Acuan tanggal: planned_date (UTAMA — kapan batch SEHARUSNYA dikerjakan,
+    // diisi PPIC saat bikin batch) -> started_at (fallback untuk data lama yang
+    // belum punya planned_date, sudah benar-benar mulai) -> created_at (fallback
+    // terakhir, batch lama yang belum sempat mulai maupun belum punya planned_date).
     const batchesThisWeek = (batchesRes.data ?? []).filter((b) => {
-      const ref = new Date(b.started_at ?? b.created_at);
+      const ref = b.planned_date ? new Date(`${b.planned_date}T00:00:00`) : new Date(b.started_at ?? b.created_at);
       return ref >= weekStart && ref < weekEnd;
     });
 

@@ -75,12 +75,17 @@ type ProductionBatch = {
   production_batch_id: number;
   batch_number: string;
   planned_qty: number;
+  planned_date: string | null;
   uom: string;
   status: string;
   started_at: string | null;
   completed_at: string | null;
   created_at: string;
 };
+
+function todayDateString(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 const batchStatusLabels: Record<string, string> = { planned: 'Direncanakan', in_progress: 'Berjalan', completed: 'Selesai', cancelled: 'Batal' };
 const batchStatusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical'> = { planned: 'info', in_progress: 'warning', completed: 'success', cancelled: 'critical' };
@@ -118,6 +123,7 @@ export default function WorkOrdersPage() {
 
   const [batchesForExpanded, setBatchesForExpanded] = useState<ProductionBatch[]>([]);
   const [batchPlannedQty, setBatchPlannedQty] = useState('');
+  const [batchPlannedDate, setBatchPlannedDate] = useState(todayDateString());
   const [batchFormStatus, setBatchFormStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [batchFormMessage, setBatchFormMessage] = useState('');
   const [consumptionBatchId, setConsumptionBatchId] = useState('');
@@ -290,7 +296,7 @@ export default function WorkOrdersPage() {
     setBatchFormMessage('');
     const { ok, body } = await authedFetch('/api/production-batches', {
       method: 'POST',
-      body: JSON.stringify({ work_order_id: wo.work_order_id, planned_qty: plannedQty })
+      body: JSON.stringify({ work_order_id: wo.work_order_id, planned_qty: plannedQty, planned_date: batchPlannedDate || undefined })
     });
     if (!ok) {
       setBatchFormStatus('error');
@@ -298,8 +304,9 @@ export default function WorkOrdersPage() {
       return;
     }
     setBatchFormStatus('success');
-    setBatchFormMessage(`Batch ${body.batch.batch_number} berhasil dibuat.`);
+    setBatchFormMessage(`Batch ${body.batch.batch_number} berhasil dibuat (rencana ${body.batch.planned_date}).`);
     setBatchPlannedQty('');
+    setBatchPlannedDate(todayDateString());
     await loadBatchesForWo(wo.work_order_id);
   };
 
@@ -566,6 +573,7 @@ export default function WorkOrdersPage() {
                         <span className="text-data text-muted-foreground">
                           {batch.planned_qty} {batch.uom}
                         </span>
+                        <span className="text-data text-muted-foreground">Rencana: {batch.planned_date ?? '-'}</span>
                         <Badge variant={batchStatusBadgeVariant[batch.status] ?? 'secondary'}>{batchStatusLabels[batch.status] ?? batch.status}</Badge>
                       </div>
                     ))}
@@ -575,11 +583,18 @@ export default function WorkOrdersPage() {
 
               <div className="rounded-md border p-3">
                 <p className="mb-2 text-sm font-medium text-foreground">Buat Batch Baru</p>
-                <label className="flex max-w-xs flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">Planned Qty Batch Ini</span>
-                  <Input type="number" min="0" step="any" value={batchPlannedQty} onChange={(event) => setBatchPlannedQty(event.target.value)} placeholder={`mis. 500 ${expandedWo.item_base_uom ?? ''}`} />
-                  <span className="text-xs text-muted-foreground">Bebas ditentukan — tidak harus sama dengan standard_yield_qty di BOM.</span>
-                </label>
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex max-w-xs flex-col gap-1.5">
+                    <span className="text-sm font-medium text-foreground">Planned Qty Batch Ini</span>
+                    <Input type="number" min="0" step="any" value={batchPlannedQty} onChange={(event) => setBatchPlannedQty(event.target.value)} placeholder={`mis. 500 ${expandedWo.item_base_uom ?? ''}`} />
+                    <span className="text-xs text-muted-foreground">Bebas ditentukan — tidak harus sama dengan standard_yield_qty di BOM.</span>
+                  </label>
+                  <label className="flex max-w-xs flex-col gap-1.5">
+                    <span className="text-sm font-medium text-foreground">Tanggal Rencana</span>
+                    <Input type="date" value={batchPlannedDate} onChange={(event) => setBatchPlannedDate(event.target.value)} />
+                    <span className="text-xs text-muted-foreground">Kapan batch ini SEHARUSNYA dikerjakan — default hari ini, jadi acuan Dashboard Kapasitas.</span>
+                  </label>
+                </div>
 
                 {expandedBom && Number(batchPlannedQty) > 0 ? (
                   <div className="mt-3">

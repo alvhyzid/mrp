@@ -247,6 +247,7 @@ Satu SO bisa dikirim bertahap (parsial).
 Level eksekusi NYATA di lantai produksi — 1 Work Order biasanya dikerjakan lewat beberapa batch fisik terpisah (3-5 per shift, umum di operasional Anda), masing-masing dengan bahan, hasil, dan jejak lot sendiri-sendiri (penting untuk isolasi traceability BPOM/halal kalau ada masalah kualitas di 1 batch spesifik). PPIC (atau siapa pun yang berwenang) bebas menentukan `planned_qty` tiap batch — TIDAK terpaku ke ukuran standar BOM (mis. BOM ditulis basis 10kg, tapi batch produksi riil bisa sampai 50kg — sistem otomatis scale kebutuhan bahan sesuai `planned_qty` batch ini, ditambah `boms.buffer_percentage`).
 - `production_batch_id`, `company_id`, `work_order_id`, `batch_number` (mis. "WO-0012-B003")
 - `shift_id`, `planned_qty`, `uom`
+- `planned_date` (date, nullable — kapan batch ini SEHARUSNYA dikerjakan, diisi PPIC saat bikin batch. Beda dari `started_at` yang baru terisi setelah benar-benar mulai — ini yang jadi acuan Dashboard Kapasitas Work Center, bukan `started_at`/`created_at`, supaya perencanaan ke depan/minggu depan terhitung benar)
 - `status` (planned / in_progress / completed / cancelled)
 - `started_at`, `completed_at`
 

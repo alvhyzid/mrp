@@ -57,6 +57,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'MRP',
     items: [
       { label: 'PO Client', href: '/customer-purchase-orders', visible: () => true },
+      { label: 'Sales Order', href: '/sales-orders', visible: () => true },
       { label: 'BOM (Resep)', href: '/boms', visible: () => true },
       { label: 'Work Order', href: '/work-orders', visible: () => true }
     ]

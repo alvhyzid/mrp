@@ -128,6 +128,7 @@ Semua "benda" yang dikenal sistem — bahan mentah, WIP, produk jadi, kemasan. P
 ### `boms`
 Header resep/komposisi. Satu item bisa punya beberapa versi (`version`), resep lama tetap tersimpan untuk histori/audit.
 - `bom_id`, `company_id`, `parent_item_id` (→ `item_id`), `version`, `standard_yield_qty`, `standard_yield_uom`, `status` (draft / active / archived)
+- `buffer_percentage` (nullable, mis. 3-5 — diatur PPIC saat bikin/edit BOM, kompensasi kehilangan produksi akibat kendala mesin dsb. Dipakai untuk hitung kebutuhan bahan mentah SEBENARNYA: `qty_dibutuhkan = (rasio BOM × qty target batch) × (1 + buffer_percentage/100)` — supaya walau ada yang terbuang di proses, hasil akhir tetap kena target)
 
 ### `bom_lines`
 Daftar komponen per BOM, dalam `base_uom`.
@@ -239,8 +240,15 @@ Satu SO bisa dikirim bertahap (parsial).
 
 ## Kelompok 5: Produksi
 
+### `production_batches`
+Level eksekusi NYATA di lantai produksi — 1 Work Order biasanya dikerjakan lewat beberapa batch fisik terpisah (3-5 per shift, umum di operasional Anda), masing-masing dengan bahan, hasil, dan jejak lot sendiri-sendiri (penting untuk isolasi traceability BPOM/halal kalau ada masalah kualitas di 1 batch spesifik). PPIC (atau siapa pun yang berwenang) bebas menentukan `planned_qty` tiap batch — TIDAK terpaku ke ukuran standar BOM (mis. BOM ditulis basis 10kg, tapi batch produksi riil bisa sampai 50kg — sistem otomatis scale kebutuhan bahan sesuai `planned_qty` batch ini, ditambah `boms.buffer_percentage`).
+- `production_batch_id`, `company_id`, `work_order_id`, `batch_number` (mis. "WO-0012-B003")
+- `shift_id`, `planned_qty`, `uom`
+- `status` (planned / in_progress / completed / cancelled)
+- `started_at`, `completed_at`
+
 ### `work_orders`
-Perintah produksi (SPK) — jantung eksekusi MRP.
+Perintah produksi (SPK) — jantung eksekusi MRP, level rencana besar (bisa dipecah jadi banyak `production_batches`).
 - `work_order_id`, `company_id`, `production_plant_id`, `item_id`, `bom_id`, `routing_id`
 - `sales_order_line_id` (nullable — 1 SO line bisa dipecah jadi banyak WO)
 - `planned_qty`
@@ -252,23 +260,23 @@ Perintah produksi (SPK) — jantung eksekusi MRP.
 > **"Ready to Start" / dependency (ala Jira, tapi otomatis):** WO dianggap siap mulai HANYA kalau tidak ada `system_alerts` berstatus `open` yang terkait `work_order_id` itu (kekurangan bahan, SDM belum lengkap, mesin rusak). Kalau masih ada alert terbuka → WO otomatis "Blocked" dengan alasan spesifik ditampilkan. Ini TIDAK perlu link manual antar-WO seperti Jira — cukup pantau status alert yang sudah ada. Kasus WO saling bergantung (mis. WO Gummy butuh Base Gelatin dari WO lain yang belum selesai) otomatis tertangani lewat alert kekurangan bahan yang sama, tanpa perlu definisikan "WO A depends on WO B" secara eksplisit.
 
 ### `work_order_outputs`
-Satu WO bisa menghasilkan lebih dari satu output (produk jadi + sisa reprocessable).
-- `work_order_output_id`, `work_order_id`, `item_id`, `shift_id`, `output_type` (main_output / reprocessable_waste / disposed_waste), `qty`, `lot_id`
+Satu BATCH bisa menghasilkan lebih dari satu output (produk jadi + sisa reprocessable).
+- `work_order_output_id`, `work_order_id`, `production_batch_id`, `item_id`, `shift_id`, `output_type` (main_output / reprocessable_waste / disposed_waste), `qty`, `lot_id`
 
 ### `work_order_consumption`
-Bahan/lot yang benar-benar dipakai — identitas ke WO baru tercatat SAAT dipakai (bukan sejak bahan datang), memungkinkan 1 lot dipakai lintas banyak WO/PO sampai habis.
-- `work_order_consumption_id`, `work_order_id`, `component_lot_id` (→ `lot_id`), `qty_consumed`, `shift_id`, `recorded_at`
+Bahan/lot yang benar-benar dipakai per BATCH — identitas ke batch baru tercatat SAAT dipakai (bukan sejak bahan datang), memungkinkan 1 lot dipakai lintas banyak batch/WO/PO sampai habis.
+- `work_order_consumption_id`, `work_order_id`, `production_batch_id`, `component_lot_id` (→ `lot_id`), `qty_consumed`, `shift_id`, `recorded_at`
 
 ### `work_order_assignments`
-Penugasan pekerja — sumber data biaya SDM (nilai sensitif, lihat "Kontrol Akses Data Finansial").
-- `work_order_assignment_id`, `work_order_id`, `employee_id`, `routing_step_id` (nullable), `shift_id`
+Penugasan pekerja per BATCH — sumber data biaya SDM (nilai sensitif, lihat "Kontrol Akses Data Finansial"). Perlu tahu persis siapa terlibat di batch mana (bukan cuma level WO+shift).
+- `work_order_assignment_id`, `work_order_id`, `production_batch_id`, `employee_id`, `routing_step_id` (nullable), `shift_id`
 - `status` (planned / confirmed / absent / replaced / completed / unplanned_addition)
 - `replacement_for_assignment_id` (nullable, → `work_order_assignment_id`)
 - `scheduled_hours`, `actual_hours`, `qty_produced` (nullable, khusus `wage_type` = piece_rate)
 
 ### `work_order_step_progress`
-Visibilitas real-time tahap produksi — juga basis kalkulasi proyeksi stok (lihat `system_alerts`).
-- `work_order_step_progress_id`, `work_order_id`, `routing_step_id`, `shift_id`
+Visibilitas real-time tahap produksi per BATCH — penting karena batch-batch dalam 1 shift bisa berada di tahap BERBEDA secara bersamaan (mis. Batch 1 sedang curing 48 jam, sementara Batch 3 baru mixing) — juga basis kalkulasi proyeksi stok (lihat `system_alerts`).
+- `work_order_step_progress_id`, `work_order_id`, `production_batch_id`, `routing_step_id`, `shift_id`
 - `status` (pending / in_progress / completed), `qty_recorded`, `uom`, `started_at`, `completed_at`, `notes`
 
 ### `system_alerts`
@@ -307,9 +315,11 @@ customer_purchase_orders ──< customer_po_approvals (3 baris: finance/ppic/ma
 customer_purchase_orders ──processed──> sales_orders ──< sales_order_lines ──> items (lines disalin dari PO)
 sales_order_lines ──< work_orders (1 SO line bisa dipecah jadi banyak WO)
 work_orders ──> items, boms, routings, production_plants
-work_orders ──< work_order_outputs ──> items, lots (bisa multi-output)
-work_orders ──< work_order_consumption ──> lots
-work_orders ──< work_order_assignments ──> employees
+work_orders ──< production_batches (1 WO dipecah jadi banyak batch fisik — 3-5 per shift)
+production_batches ──< work_order_outputs ──> items, lots (bisa multi-output)
+production_batches ──< work_order_consumption ──> lots
+production_batches ──< work_order_assignments ──> employees (siapa terlibat di batch mana)
+production_batches ──< work_order_step_progress (progres per batch, karena bisa beda tahap bersamaan)
 work_orders ──< system_alerts (dipantau untuk status "Ready to Start"/"Blocked")
 companies ──< invoices ──> subscription_plans
 ```

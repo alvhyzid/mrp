@@ -69,6 +69,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 
 **Database Resep/Komposisi** (`boms`)
 - ID BOM (bom_id) · ID Perusahaan (company_id) · ID Item Induk (parent_item_id) · Versi (version) · Jumlah Hasil Standar (standard_yield_qty) · Satuan Hasil (standard_yield_uom) · Status (status)
+- Persentase Buffer — diatur PPIC, kompensasi kehilangan produksi (buffer_percentage)
 
 **Database Detail Komponen Resep** (`bom_lines`)
 - ID Baris (bom_line_id) · ID BOM (bom_id) · ID Item Komponen (component_item_id) · Jumlah per Unit Output (qty_per_unit_output) · Satuan (uom)
@@ -175,18 +176,25 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 
 > WO dianggap "siap mulai" kalau tidak ada `system_alerts` terbuka yang terkait WO itu (bahan kurang/SDM kurang/mesin rusak) — mekanisme dependency otomatis, bukan link manual antar-WO.
 
+**Database Batch Produksi** (`production_batches`)
+- ID Batch (production_batch_id) · ID Perusahaan (company_id) · ID Work Order (work_order_id) · Nomor Batch (batch_number)
+- ID Shift (shift_id) · Jumlah Rencana — bebas diatur PPIC, tidak terpaku ukuran standar BOM (planned_qty) · Satuan (uom)
+- Status: rencana/berjalan/selesai/batal (status) · Waktu Mulai (started_at) · Waktu Selesai (completed_at)
+
+> 1 Work Order biasanya dikerjakan lewat 3-5 batch fisik per shift — masing-masing punya bahan, hasil, dan jejak lot sendiri untuk traceability BPOM/halal.
+
 **Database Hasil Produksi** (`work_order_outputs`)
-- ID Hasil (work_order_output_id) · ID Work Order (work_order_id) · ID Item Hasil (item_id) · ID Shift (shift_id) · Jenis Output (output_type) · Jumlah (qty) · ID Lot Baru (lot_id)
+- ID Hasil (work_order_output_id) · ID Work Order (work_order_id) · ID Batch (production_batch_id) · ID Item Hasil (item_id) · ID Shift (shift_id) · Jenis Output (output_type) · Jumlah (qty) · ID Lot Baru (lot_id)
 
 **Database Bahan Terpakai** (`work_order_consumption`)
-- ID Pemakaian (work_order_consumption_id) · ID Work Order (work_order_id) · ID Lot Komponen (component_lot_id) · Jumlah Terpakai (qty_consumed) · ID Shift (shift_id) · Waktu Dicatat (recorded_at)
+- ID Pemakaian (work_order_consumption_id) · ID Work Order (work_order_id) · ID Batch (production_batch_id) · ID Lot Komponen (component_lot_id) · Jumlah Terpakai (qty_consumed) · ID Shift (shift_id) · Waktu Dicatat (recorded_at)
 
 **Database Penugasan Pekerja** (`work_order_assignments`) — *biaya SDM sensitif, lihat kontrol akses*
-- ID Penugasan (work_order_assignment_id) · ID Work Order (work_order_id) · ID Pekerja (employee_id) · ID Tahap (routing_step_id) · ID Shift (shift_id)
+- ID Penugasan (work_order_assignment_id) · ID Work Order (work_order_id) · ID Batch (production_batch_id) · ID Pekerja (employee_id) · ID Tahap (routing_step_id) · ID Shift (shift_id)
 - Status (status) · ID Penugasan Digantikan (replacement_for_assignment_id) · Jam Rencana (scheduled_hours) · Jam Aktual (actual_hours) · Jumlah Dihasilkan (qty_produced)
 
 **Database Progres Tahap Produksi** (`work_order_step_progress`)
-- ID Progres (work_order_step_progress_id) · ID Work Order (work_order_id) · ID Tahap (routing_step_id) · ID Shift (shift_id) · Status (status) · Jumlah Tercatat (qty_recorded) · Satuan (uom) · Waktu Mulai (started_at) · Waktu Selesai (completed_at) · Catatan (notes)
+- ID Progres (work_order_step_progress_id) · ID Work Order (work_order_id) · ID Batch (production_batch_id) · ID Tahap (routing_step_id) · ID Shift (shift_id) · Status (status) · Jumlah Tercatat (qty_recorded) · Satuan (uom) · Waktu Mulai (started_at) · Waktu Selesai (completed_at) · Catatan (notes)
 
 **Database Notifikasi Sistem** (`system_alerts`)
 - ID Alert (system_alert_id) · ID Perusahaan (company_id)

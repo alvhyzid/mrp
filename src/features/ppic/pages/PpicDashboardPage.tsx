@@ -219,8 +219,23 @@ export default function PpicDashboardPage() {
     async (path: string, options: RequestInit = {}) => {
       const accessToken = await getAccessToken();
       if (!accessToken) throw new Error('Sesi tidak valid.');
-      const response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}`, ...(options.headers || {}) } });
-      return { ok: response.ok, body: await response.json() };
+      let response: Response;
+      try {
+        response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}`, ...(options.headers || {}) } });
+      } catch {
+        // Gagal terkoneksi sama sekali (mis. Supabase/jaringan sedang gangguan sesaat) —
+        // jangan biarkan exception ini lolos tanpa pesan ke pemanggil.
+        return { ok: false, body: { error: 'Tidak bisa terhubung ke server. Coba lagi dalam beberapa saat.' } };
+      }
+      // Kalau respons BUKAN JSON valid (mis. halaman error dari Cloudflare/Supabase saat
+      // gangguan), response.json() akan throw — tangkap di sini supaya pemanggil selalu
+      // dapat pesan yang jelas, bukan promise rejection yang tidak tertangani.
+      try {
+        const body = await response.json();
+        return { ok: response.ok, body };
+      } catch {
+        return { ok: false, body: { error: 'Server memberi respons yang tidak dikenali (kemungkinan gangguan sesaat di layanan database). Coba lagi dalam beberapa saat.' } };
+      }
     },
     [getAccessToken]
   );

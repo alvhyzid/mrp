@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { canAccessProductionDashboard } from '@/lib/roles';
+import { canAccessProductionDashboard, canManageProductionDisruptions } from '@/lib/roles';
 
 const statusLabels: Record<string, string> = { planned: 'Direncanakan', in_progress: 'Berjalan', paused: 'Dijeda', completed: 'Selesai', cancelled: 'Batal' };
 const statusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical' | 'secondary'> = {
@@ -34,10 +34,46 @@ type ProductionBatch = { production_batch_id: number; batch_number: string; plan
 const batchStatusLabels: Record<string, string> = { planned: 'Direncanakan', in_progress: 'Berjalan', completed: 'Selesai', cancelled: 'Batal' };
 const batchStatusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical'> = { planned: 'info', in_progress: 'warning', completed: 'success', cancelled: 'critical' };
 
+const disruptionTypeLabels: Record<string, string> = { equipment_breakdown: 'Mesin Rusak', utility_outage: 'Listrik/Utilitas Padam', external_factor: 'Faktor Eksternal', reprioritized: 'Dialihkan ke Pekerjaan Lain', other: 'Lainnya' };
+type ProductionPlant = { production_plant_id: number; name: string };
+type WorkCenterOption = { work_center_id: number; name: string; code: string | null; production_plant_id: number };
+type Disruption = {
+  production_disruption_id: number;
+  disruption_type: string;
+  production_plant_id: number;
+  production_plant_name: string | null;
+  work_center_id: number | null;
+  work_center_name: string | null;
+  work_order_id: number | null;
+  work_order_item_code: string | null;
+  started_at: string;
+  resolved_at: string | null;
+  description: string | null;
+};
+
+function formatDateTimeShort(value: string | null): string {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 export default function ProductionDashboardPage() {
   const router = useRouter();
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
+
+  const [plants, setPlants] = useState<ProductionPlant[]>([]);
+  const [workCenterOptions, setWorkCenterOptions] = useState<WorkCenterOption[]>([]);
+  const [disruptions, setDisruptions] = useState<Disruption[]>([]);
+  const [disruptionsLoading, setDisruptionsLoading] = useState(true);
+  const [disruptionsError, setDisruptionsError] = useState('');
+  const emptyDisruptionForm = { disruption_type: 'equipment_breakdown', production_plant_id: '', work_center_id: '', description: '' };
+  const [disruptionForm, setDisruptionForm] = useState(emptyDisruptionForm);
+  const [disruptionFormStatus, setDisruptionFormStatus] = useState<'idle' | 'saving' | 'error'>('idle');
+  const [disruptionFormMessage, setDisruptionFormMessage] = useState('');
+  const [resolvingId, setResolvingId] = useState<number | null>(null);
 
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [woError, setWoError] = useState('');
@@ -80,6 +116,25 @@ export default function ProductionDashboardPage() {
     setWoLoading(false);
   }, [authedFetch]);
 
+  const loadDisruptions = useCallback(async () => {
+    setDisruptionsLoading(true);
+    const { ok, body } = await authedFetch('/api/production-disruptions');
+    if (!ok) {
+      setDisruptionsError(body.error || 'Gagal memuat gangguan produksi.');
+      setDisruptionsLoading(false);
+      return;
+    }
+    setDisruptions(body.disruptions || []);
+    setDisruptionsError('');
+    setDisruptionsLoading(false);
+  }, [authedFetch]);
+
+  const loadPlantsAndWorkCenters = useCallback(async () => {
+    const [plantsRes, wcRes] = await Promise.all([authedFetch('/api/production-plants'), authedFetch('/api/work-centers')]);
+    if (plantsRes.ok) setPlants(plantsRes.body.plants || []);
+    if (wcRes.ok) setWorkCenterOptions(wcRes.body.workCenters || []);
+  }, [authedFetch]);
+
   useEffect(() => {
     const checkAccessAndLoad = async () => {
       if (!hasSupabaseConfig || !supabase) {
@@ -100,11 +155,51 @@ export default function ProductionDashboardPage() {
         setCheckingAccess(false);
         return;
       }
+      setRole(meData?.user?.role ?? null);
       setCheckingAccess(false);
-      await loadWorkOrders();
+      await Promise.all([loadWorkOrders(), loadDisruptions(), loadPlantsAndWorkCenters()]);
     };
     checkAccessAndLoad();
-  }, [router, loadWorkOrders]);
+  }, [router, loadWorkOrders, loadDisruptions, loadPlantsAndWorkCenters]);
+
+  const handleCreateDisruption = async () => {
+    if (!disruptionForm.production_plant_id) {
+      setDisruptionFormStatus('error');
+      setDisruptionFormMessage('Lokasi pabrik wajib dipilih.');
+      return;
+    }
+    setDisruptionFormStatus('saving');
+    setDisruptionFormMessage('');
+    const { ok, body } = await authedFetch('/api/production-disruptions', {
+      method: 'POST',
+      body: JSON.stringify({
+        disruption_type: disruptionForm.disruption_type,
+        production_plant_id: Number(disruptionForm.production_plant_id),
+        work_center_id: disruptionForm.work_center_id ? Number(disruptionForm.work_center_id) : null,
+        description: disruptionForm.description || null
+      })
+    });
+    if (!ok) {
+      setDisruptionFormStatus('error');
+      setDisruptionFormMessage(body.error || 'Gagal mencatat gangguan.');
+      return;
+    }
+    setDisruptionFormStatus('idle');
+    setDisruptionFormMessage('');
+    setDisruptionForm(emptyDisruptionForm);
+    await Promise.all([loadDisruptions(), loadWorkOrders()]);
+  };
+
+  const handleResolveDisruption = async (id: number) => {
+    setResolvingId(id);
+    const { ok, body } = await authedFetch('/api/production-disruptions', { method: 'PATCH', body: JSON.stringify({ production_disruption_id: id }) });
+    setResolvingId(null);
+    if (!ok) {
+      setDisruptionsError(body.error || 'Gagal menandai gangguan selesai.');
+      return;
+    }
+    await Promise.all([loadDisruptions(), loadWorkOrders()]);
+  };
 
   const toggleExpand = async (wo: WorkOrder) => {
     if (expandedWoId === wo.work_order_id) {
@@ -232,6 +327,111 @@ export default function ProductionDashboardPage() {
           <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Dashboard Department</p>
           <h1 className="text-2xl font-semibold text-foreground">Production</h1>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardDescription className="uppercase tracking-[0.2em]">Produksi</CardDescription>
+            <CardTitle className="text-xl">Gangguan Produksi</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <p className="text-sm text-muted-foreground">
+              Kosongkan &quot;Work Center&quot; untuk gangguan MENYELURUH 1 lokasi pabrik (mis. listrik padam se-pabrik) — semua Work Order aktif di lokasi itu otomatis ter-flag &quot;Terhambat&quot;, dan otomatis kembali &quot;Siap&quot;/&quot;Berjalan&quot; begitu ditandai selesai.
+            </p>
+
+            {canManageProductionDisruptions(role) ? (
+              <div className="grid grid-cols-2 gap-3 border-b pb-4 sm:grid-cols-4">
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Jenis Gangguan</label>
+                  <Select value={disruptionForm.disruption_type} onValueChange={(v) => setDisruptionForm((prev) => ({ ...prev, disruption_type: v }))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(disruptionTypeLabels).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Lokasi Pabrik</label>
+                  <Select value={disruptionForm.production_plant_id} onValueChange={(v) => setDisruptionForm((prev) => ({ ...prev, production_plant_id: v, work_center_id: '' }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih lokasi..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {plants.map((p) => (
+                        <SelectItem key={p.production_plant_id} value={String(p.production_plant_id)}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Work Center (opsional)</label>
+                  <Select value={disruptionForm.work_center_id || '__none__'} onValueChange={(v) => setDisruptionForm((prev) => ({ ...prev, work_center_id: v === '__none__' ? '' : v }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="(Menyeluruh)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">(Menyeluruh — semua Work Center)</SelectItem>
+                      {workCenterOptions
+                        .filter((wc) => !disruptionForm.production_plant_id || String(wc.production_plant_id) === disruptionForm.production_plant_id)
+                        .map((wc) => (
+                          <SelectItem key={wc.work_center_id} value={String(wc.work_center_id)}>
+                            {wc.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Keterangan (opsional)</label>
+                  <Input value={disruptionForm.description} onChange={(e) => setDisruptionForm((prev) => ({ ...prev, description: e.target.value }))} />
+                </div>
+                <div className="col-span-2 sm:col-span-4">
+                  {disruptionFormMessage ? <p className="mb-2 text-sm text-destructive">{disruptionFormMessage}</p> : null}
+                  <Button size="sm" disabled={disruptionFormStatus === 'saving'} onClick={handleCreateDisruption}>
+                    {disruptionFormStatus === 'saving' ? 'Menyimpan...' : 'Catat Gangguan'}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            {disruptionsError ? <p className="text-sm text-destructive">{disruptionsError}</p> : null}
+            {disruptionsLoading ? (
+              <p className="text-sm text-muted-foreground">Memuat...</p>
+            ) : disruptions.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Tidak ada gangguan produksi yang sedang terbuka.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {disruptions.map((d) => (
+                  <div key={d.production_disruption_id} className="flex items-center justify-between border-b pb-2 last:border-0">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-foreground">{disruptionTypeLabels[d.disruption_type] ?? d.disruption_type}</span>
+                        <Badge variant={d.work_center_id ? 'warning' : 'critical'}>{d.work_center_id ? (d.work_center_name ?? 'Work Center') : 'Menyeluruh 1 Plant'}</Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {d.production_plant_name} · Mulai {formatDateTimeShort(d.started_at)}
+                        {d.work_order_item_code ? ` · WO ${d.work_order_item_code}` : ''}
+                        {d.description ? ` · ${d.description}` : ''}
+                      </p>
+                    </div>
+                    {canManageProductionDisruptions(role) ? (
+                      <Button size="sm" variant="outline" disabled={resolvingId === d.production_disruption_id} onClick={() => handleResolveDisruption(d.production_disruption_id)}>
+                        {resolvingId === d.production_disruption_id ? '...' : 'Tandai Selesai'}
+                      </Button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>

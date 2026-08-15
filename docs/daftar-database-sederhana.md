@@ -42,8 +42,8 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 **Database Gangguan Produksi** (`production_disruptions`)
 - ID Gangguan (production_disruption_id) · ID Perusahaan (company_id)
 - Jenis: mesin/listrik padam/faktor eksternal/dialihkan ke pekerjaan lain/lainnya (disruption_type)
-- ID Mesin (work_center_id) · ID Work Order (work_order_id) · ID Tahap (routing_step_id) · ID Shift (shift_id) · Waktu Mulai (started_at) · Waktu Selesai (resolved_at) · Keterangan (description)
-- **[RENCANA — BELUM DIBANGUN]** ID Lokasi Pabrik — wajib diisi (production_plant_id) · ID Batch (production_batch_id) — untuk mendukung gangguan menyeluruh 1 plant yang otomatis blokir semua batch aktif di plant itu; detail di `rancangan-skema-database-mrp.md`
+- ID Lokasi Pabrik — wajib diisi (production_plant_id)
+- ID Mesin — kosong kalau gangguan menyeluruh (work_center_id) · ID Work Order (work_order_id) · ID Batch (production_batch_id) · ID Tahap (routing_step_id) · ID Shift (shift_id) · Waktu Mulai (started_at) · Waktu Selesai (resolved_at) · Keterangan (description)
 
 **Database Pekerja** (`employees`) — *akses gaji dibatasi, lihat kontrol akses di atas*
 - ID Pekerja (employee_id) · ID Perusahaan (company_id) · ID Lokasi Pabrik — nullable (production_plant_id) · Nama (name) · Posisi (position)

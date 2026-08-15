@@ -196,3 +196,14 @@ export function canManageWorkCenterCapacity(role: string | undefined | null): bo
 export function canRecordStepProgress(role: string | undefined | null): boolean {
   return canManageWorkOrder(role);
 }
+
+// Role yang boleh mencatat/menyelesaikan production_disruptions — harus sinkron
+// dengan policy production_disruptions_write_production di
+// supabase/migrations/20260812154000_system_alerts_and_wo_readiness.sql. Sengaja
+// BUKAN termasuk ppic_staff (beda dari WORK_ORDER_MANAGE_ROLES) — sama seperti
+// policy DB-nya.
+export const PRODUCTION_DISRUPTION_MANAGE_ROLES = [...LEADERSHIP_ROLES, 'production_manager', 'production_staff', 'ppic_manager'];
+
+export function canManageProductionDisruptions(role: string | undefined | null): boolean {
+  return !!role && PRODUCTION_DISRUPTION_MANAGE_ROLES.includes(role);
+}

@@ -44,6 +44,23 @@ export function canViewFinancialData(role: string | undefined | null): boolean {
   return !!role && FINANCIAL_DATA_ROLES.includes(role);
 }
 
+// Role yang boleh mengelola suppliers/purchase_orders/purchase_order_lines — harus
+// sinkron dengan policy suppliers_write_purchasing / purchase_orders_write_purchasing
+// / purchase_order_lines_write_purchasing di
+// supabase/migrations/20260812152000_suppliers_purchase_orders.sql.
+export const PURCHASING_MANAGE_ROLES = [...LEADERSHIP_ROLES, 'purchasing_manager', 'purchasing_staff'];
+
+export function canManagePurchasing(role: string | undefined | null): boolean {
+  return !!role && PURCHASING_MANAGE_ROLES.includes(role);
+}
+
+// unit_price di purchase_order_lines: boleh dilihat Purchasing (mereka yang input)
+// SELAIN role finansial gabungan — lihat "Kontrol Akses Data Finansial" di docs,
+// baris "Harga di PO ke supplier". Sejalan dengan view purchase_order_lines_secure.
+export function canViewPurchaseOrderPrice(role: string | undefined | null): boolean {
+  return canViewFinancialData(role) || (!!role && ['purchasing_manager', 'purchasing_staff'].includes(role));
+}
+
 // Role yang boleh mengelola BOM (resep) — harus sinkron dengan policy
 // boms_write_ppic / bom_lines_write_ppic di
 // supabase/migrations/20260812153000_bom_routing_workcenters.sql.
@@ -117,11 +134,11 @@ export function canAccessHrDashboard(role: string | undefined | null): boolean {
 
 // Prinsip Desain #8 (docs/rancangan-skema-database-mrp.md): begitu login, user
 // diarahkan ke dashboard sesuai role/department mereka — murni routing/tampilan,
-// data yang dipakai tetap sama (cuma difilter beda). Role yang belum punya dashboard
-// khusus (Purchasing/Finance staff & manager) sengaja TIDAK dipetakan di sini dulu —
-// mereka tetap di /dashboard (ringkasan umum) sampai dashboard department-nya
-// dibangun menyusul. company_admin/general_manager/super_admin/viewer SENGAJA juga
-// tidak dipetakan — mereka melihat ringkasan lintas-department di /dashboard, bukan
+// data yang dipakai tetap sama (cuma difilter beda). Purchasing dipetakan ke
+// /purchasing sejak halaman itu dibangun (Prioritas 1, 15 Agu 2026). Finance
+// staff & manager sengaja MASIH TIDAK dipetakan — belum ada dashboard department
+// finance. company_admin/general_manager/super_admin/viewer SENGAJA juga tidak
+// dipetakan — mereka melihat ringkasan lintas-department di /dashboard, bukan
 // diarahkan ke satu department tertentu.
 const ROLE_DASHBOARD_ROUTES: Record<string, string> = {
   warehouse_manager: '/warehouse',
@@ -131,7 +148,9 @@ const ROLE_DASHBOARD_ROUTES: Record<string, string> = {
   ppic_manager: '/ppic',
   ppic_staff: '/ppic',
   production_manager: '/production',
-  production_staff: '/production'
+  production_staff: '/production',
+  purchasing_manager: '/purchasing',
+  purchasing_staff: '/purchasing'
 };
 
 export function getDashboardRouteForRole(role: string | undefined | null): string | null {

@@ -215,8 +215,14 @@ export default function WorkOrdersPage() {
         return;
       }
       setRole(meData?.user?.role ?? null);
-      setCheckingAccess(false);
+      // setCheckingAccess(false) SENGAJA menunggu Promise.all ini selesai dulu
+      // (bukan sebelum, seperti pola di halaman lain) — toggleExpand() langsung
+      // butuh `boms` sudah terisi begitu tabel WO jadi interaktif, supaya klik
+      // "Detail" tidak pernah mencocokkan bom_id ke array yang masih kosong
+      // (yang bikin komponen lot gagal ke-fetch sama sekali, tampak seolah lot
+      // belum tersedia padahal datanya ada).
       await Promise.all([loadWorkOrders(), loadSalesOrders(), loadBoms(), loadRoutings(), loadPlants()]);
+      setCheckingAccess(false);
     };
     checkAccessAndLoad();
   }, [router, loadWorkOrders, loadSalesOrders, loadBoms, loadRoutings, loadPlants]);
@@ -401,8 +407,17 @@ export default function WorkOrdersPage() {
         )
       }
     ],
+    // boms WAJIB ada di sini — tombol "Detail" ini menutup (closure) atas
+    // toggleExpand, yang membaca `boms` untuk cari komponen BOM & fetch lot-nya.
+    // Tanpa `boms` di deps, useMemo cuma menghitung ulang saat expandedWoId
+    // berubah — closure "Detail" yang pertama kali dirender KE-STUCK dengan
+    // boms=[] dari render pertama (sebelum /api/boms selesai), jadi klik
+    // "Detail" pertama kali SELALU gagal menemukan lot walau datanya ada di DB
+    // (baru "sembuh sendiri" di klik kedua, setelah expandedWoId berubah memicu
+    // recompute). Bug nyata ini ketemu & diperbaiki saat verifikasi FASE
+    // Purchasing/Goods Receipt/Lot Genealogy, 16 Agu 2026.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [expandedWoId]
+    [expandedWoId, boms]
   );
 
   const expandedWo = workOrders.find((wo) => wo.work_order_id === expandedWoId) ?? null;

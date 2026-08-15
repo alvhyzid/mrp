@@ -12,6 +12,7 @@ import {
   Task,
   InventoryManagement,
   Cube,
+  ShoppingCart,
   ChartLine,
   Industry,
   UserMultiple,
@@ -107,6 +108,10 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Routing', href: '/routing', visible: () => true, icon: FlowConnection },
       { label: 'Work Order', href: '/work-orders', visible: () => true, icon: Task }
     ]
+  },
+  {
+    title: 'Purchasing',
+    items: [{ label: 'PO Supplier', href: '/purchasing', visible: () => true, icon: ShoppingCart }]
   },
   {
     title: 'Warehouse',

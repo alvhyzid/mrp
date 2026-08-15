@@ -24,6 +24,7 @@ const statusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'criti
 const readinessLabels: Record<string, string> = { ready: 'Siap Mulai', blocked: 'Terhambat' };
 const readinessBadgeVariant: Record<string, 'success' | 'critical'> = { ready: 'success', blocked: 'critical' };
 const stepStatusLabels: Record<string, string> = { pending: 'Belum Mulai', in_progress: 'Berjalan', completed: 'Selesai' };
+const outputTypeLabels: Record<string, string> = { main_output: 'Produk Utama', reprocessable_waste: 'Sisa Bisa Diproses Ulang', disposed_waste: 'Sisa Dibuang' };
 const stepStatuses = ['pending', 'in_progress', 'completed'];
 
 type WorkOrder = { work_order_id: number; item_code: string | null; item_name: string | null; item_base_uom: string | null; routing_id: number | null; planned_qty: number; status: string; readiness: string; open_alert_count: number; so_number: string | null };
@@ -86,6 +87,11 @@ export default function ProductionDashboardPage() {
   const [stepMessage, setStepMessage] = useState<Record<number, string>>({});
   const [batchesForExpanded, setBatchesForExpanded] = useState<ProductionBatch[]>([]);
   const [selectedBatchId, setSelectedBatchId] = useState('');
+
+  const emptyOutputForm = { qty: '', output_type: 'main_output', lot_number: '', expiry_date: '' };
+  const [outputForm, setOutputForm] = useState(emptyOutputForm);
+  const [outputStatus, setOutputStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [outputMessage, setOutputMessage] = useState('');
 
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
@@ -219,12 +225,48 @@ export default function ProductionDashboardPage() {
 
   const handleSelectBatch = async (batchId: string) => {
     setSelectedBatchId(batchId);
+    setOutputForm(emptyOutputForm);
+    setOutputStatus('idle');
+    setOutputMessage('');
     if (!expandedWoId || !batchId) {
       setStepProgress([]);
       return;
     }
     const progressRes = await authedFetch(`/api/work-order-step-progress?work_order_id=${expandedWoId}&production_batch_id=${batchId}`);
     setStepProgress(progressRes.ok ? progressRes.body.stepProgress || [] : []);
+  };
+
+  const handleRecordOutput = async (wo: WorkOrder) => {
+    if (!selectedBatchId) return;
+    if (!outputForm.qty || Number(outputForm.qty) <= 0) {
+      setOutputStatus('error');
+      setOutputMessage('Jumlah hasil produksi harus lebih besar dari 0.');
+      return;
+    }
+    setOutputStatus('saving');
+    setOutputMessage('');
+    const { ok, body } = await authedFetch('/api/work-order-outputs', {
+      method: 'POST',
+      body: JSON.stringify({
+        work_order_id: wo.work_order_id,
+        production_batch_id: Number(selectedBatchId),
+        qty: Number(outputForm.qty),
+        output_type: outputForm.output_type,
+        lot_number: outputForm.lot_number || null,
+        expiry_date: outputForm.expiry_date || null
+      })
+    });
+    if (!ok) {
+      setOutputStatus('error');
+      setOutputMessage(body.error || 'Gagal mencatat hasil produksi.');
+      return;
+    }
+    setOutputStatus('success');
+    setOutputMessage(
+      `Lot baru "${body.lot_number}" berhasil dibuat (${outputForm.qty} ${wo.item_base_uom ?? ''}).` +
+        (body.genealogy_rows_created > 0 ? ` Genealogy tercatat otomatis dari ${body.genealogy_rows_created} lot bahan yang dipakai batch ini.` : ' Belum ada pemakaian bahan tercatat di batch ini, jadi belum ada genealogy.')
+    );
+    setOutputForm(emptyOutputForm);
   };
 
   const handleSaveStep = async (wo: WorkOrder, step: RoutingStep) => {
@@ -537,6 +579,48 @@ export default function ProductionDashboardPage() {
                   })}
                 </div>
               )}
+              {selectedBatchId ? (
+                <div className="mt-4 border-t pt-3">
+                  <p className="mb-2 text-sm font-medium text-foreground">Catat Hasil Produksi (Output)</p>
+                  <p className="mb-2 text-xs text-muted-foreground">
+                    Membuat lot baru untuk batch ini — lot bahan yang sudah tercatat dipakai (Catat Pemakaian Bahan di halaman Work Order) untuk batch yang sama otomatis ditautkan sebagai asal-usulnya (genealogy).
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs font-medium text-muted-foreground">Jumlah Hasil ({expandedWo.item_base_uom})</span>
+                      <Input type="number" min="0" step="any" value={outputForm.qty} onChange={(e) => setOutputForm((prev) => ({ ...prev, qty: e.target.value }))} />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs font-medium text-muted-foreground">Jenis Output</span>
+                      <Select value={outputForm.output_type} onValueChange={(v) => setOutputForm((prev) => ({ ...prev, output_type: v }))}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(outputTypeLabels).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                              {label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs font-medium text-muted-foreground">Nomor Lot (opsional)</span>
+                      <Input value={outputForm.lot_number} onChange={(e) => setOutputForm((prev) => ({ ...prev, lot_number: e.target.value }))} placeholder="auto kalau kosong" />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs font-medium text-muted-foreground">Tanggal Kadaluarsa (opsional)</span>
+                      <Input type="date" value={outputForm.expiry_date} onChange={(e) => setOutputForm((prev) => ({ ...prev, expiry_date: e.target.value }))} />
+                    </label>
+                  </div>
+                  {outputMessage ? <p className={`mt-2 text-sm ${outputStatus === 'error' ? 'text-destructive' : 'text-success'}`}>{outputMessage}</p> : null}
+                  <Button size="sm" className="mt-2" disabled={outputStatus === 'saving'} onClick={() => handleRecordOutput(expandedWo)}>
+                    {outputStatus === 'saving' ? 'Menyimpan...' : 'Catat Hasil Produksi'}
+                  </Button>
+                </div>
+              ) : null}
+
               <div className="mt-3">
                 <Link href="/work-orders" className="text-sm text-muted-foreground underline">
                   Buka halaman Work Order lengkap (termasuk catat pemakaian bahan)

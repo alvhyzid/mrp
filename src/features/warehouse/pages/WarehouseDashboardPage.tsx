@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { DataTable } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { canAccessWarehouseDashboard } from '@/lib/roles';
 import { typeLabels, typeBadgeVariant } from '@/features/mrp';
 
@@ -44,6 +45,15 @@ type AlertRow = {
   created_at: string;
 };
 
+type PoPendingLine = {
+  purchase_order_line_id: number;
+  item_id: number;
+  item_code: string | null;
+  item_name: string | null;
+  purchase_uom: string | null;
+  qty_ordered: number;
+  qty_received: number;
+};
 type PoPendingRow = {
   purchase_order_id: number;
   supplier_name: string | null;
@@ -52,7 +62,10 @@ type PoPendingRow = {
   order_date: string | null;
   expected_date: string | null;
   line_count: number;
+  lines: PoPendingLine[];
 };
+
+const poStatusLabels: Record<string, string> = { draft: 'Draft', ordered: 'Dipesan', partially_received: 'Sebagian Diterima' };
 
 export default function WarehouseDashboardPage() {
   const router = useRouter();
@@ -71,11 +84,26 @@ export default function WarehouseDashboardPage() {
   const [pendingPosError, setPendingPosError] = useState('');
   const [pendingPosLoading, setPendingPosLoading] = useState(true);
 
+  const [expandedPoId, setExpandedPoId] = useState<number | null>(null);
+  const [receiptQty, setReceiptQty] = useState<Record<number, string>>({});
+  const [receiptStatus, setReceiptStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [receiptMessage, setReceiptMessage] = useState('');
+
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
     const { data } = await supabase.auth.getSession();
     return data?.session?.access_token ?? null;
   }, []);
+
+  const authedFetch = useCallback(
+    async (path: string, options: RequestInit = {}) => {
+      const accessToken = await getAccessToken();
+      if (!accessToken) throw new Error('Sesi tidak valid.');
+      const response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}`, ...(options.headers || {}) } });
+      return { ok: response.ok, body: await response.json() };
+    },
+    [getAccessToken]
+  );
 
   const loadStock = useCallback(async () => {
     const accessToken = await getAccessToken();
@@ -124,6 +152,40 @@ export default function WarehouseDashboardPage() {
     setPendingPosError('');
     setPendingPosLoading(false);
   }, [getAccessToken]);
+
+  const handleToggleExpand = (po: PoPendingRow) => {
+    if (expandedPoId === po.purchase_order_id) {
+      setExpandedPoId(null);
+      return;
+    }
+    setExpandedPoId(po.purchase_order_id);
+    setReceiptQty({});
+    setReceiptStatus('idle');
+    setReceiptMessage('');
+  };
+
+  const handleSubmitReceipt = async (po: PoPendingRow) => {
+    const lines = po.lines
+      .filter((l) => receiptQty[l.purchase_order_line_id] && Number(receiptQty[l.purchase_order_line_id]) > 0)
+      .map((l) => ({ purchase_order_line_id: l.purchase_order_line_id, qty_received: Number(receiptQty[l.purchase_order_line_id]) }));
+    if (lines.length === 0) {
+      setReceiptStatus('error');
+      setReceiptMessage('Isi jumlah diterima minimal 1 baris.');
+      return;
+    }
+    setReceiptStatus('saving');
+    setReceiptMessage('');
+    const { ok, body } = await authedFetch('/api/goods-receipts', { method: 'POST', body: JSON.stringify({ purchase_order_id: po.purchase_order_id, lines }) });
+    if (!ok) {
+      setReceiptStatus('error');
+      setReceiptMessage(body.error || 'Gagal mencatat penerimaan barang.');
+      return;
+    }
+    setReceiptStatus('success');
+    setReceiptMessage('Barang diterima — lot baru otomatis dibuat dan stok bertambah.');
+    setReceiptQty({});
+    await Promise.all([loadPendingPos(), loadStock(), loadAlerts()]);
+  };
 
   useEffect(() => {
     const checkAccessAndLoad = async () => {
@@ -199,13 +261,24 @@ export default function WarehouseDashboardPage() {
 
   const pendingPoColumns = useMemo<ColumnDef<PoPendingRow>[]>(
     () => [
+      { id: 'po', header: 'No. PO', cell: ({ row }) => `PO-${String(row.original.purchase_order_id).padStart(4, '0')}` },
       { accessorKey: 'supplier_name', header: 'Supplier' },
       { id: 'plant', header: 'Tujuan Plant', cell: ({ row }) => row.original.production_plant_name },
-      { accessorKey: 'status', header: 'Status' },
+      { id: 'status', header: 'Status', cell: ({ row }) => poStatusLabels[row.original.status] ?? row.original.status },
       { accessorKey: 'expected_date', header: 'Perkiraan Datang', cell: ({ row }) => row.original.expected_date ?? '-' },
-      { accessorKey: 'line_count', header: 'Jumlah Baris' }
+      { accessorKey: 'line_count', header: 'Jumlah Baris' },
+      {
+        id: 'actions',
+        header: 'Aksi',
+        cell: ({ row }) => (
+          <Button size="sm" variant="outline" onClick={() => handleToggleExpand(row.original)}>
+            {expandedPoId === row.original.purchase_order_id ? 'Tutup' : 'Terima Barang'}
+          </Button>
+        )
+      }
     ],
-    []
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [expandedPoId]
   );
 
   if (checkingAccess) {
@@ -272,13 +345,62 @@ export default function WarehouseDashboardPage() {
             <CardDescription className="uppercase tracking-[0.2em]">Penerimaan Barang</CardDescription>
             <CardTitle className="text-xl">PO Supplier Menunggu Konfirmasi Datang</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col gap-2">
+          <CardContent className="flex flex-col gap-3">
             {pendingPosError ? <p className="text-sm text-destructive">{pendingPosError}</p> : null}
             {pendingPosLoading ? (
               <p className="text-sm text-muted-foreground">Memuat PO...</p>
             ) : (
-              <DataTable columns={pendingPoColumns} data={pendingPos} emptyMessage="Belum ada PO ke supplier (modul Purchasing belum dibangun)." />
+              <DataTable columns={pendingPoColumns} data={pendingPos} emptyMessage="Tidak ada PO ke supplier yang masih menunggu barang datang." />
             )}
+
+            {expandedPoId
+              ? (() => {
+                  const po = pendingPos.find((p) => p.purchase_order_id === expandedPoId);
+                  if (!po) return null;
+                  return (
+                    <div className="rounded-md border p-3">
+                      <p className="mb-2 text-sm font-medium text-foreground">
+                        Terima Barang — PO-{String(po.purchase_order_id).padStart(4, '0')} ({po.supplier_name})
+                      </p>
+                      {po.lines.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Semua baris PO ini sudah diterima penuh.</p>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {po.lines.map((line) => (
+                            <div key={line.purchase_order_line_id} className="grid grid-cols-[2fr_1fr_1fr_1fr] items-end gap-2">
+                              <div className="text-sm">
+                                <span className="font-medium text-foreground">{line.item_code}</span> <span className="text-muted-foreground">{line.item_name}</span>
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                Dipesan: {line.qty_ordered} {line.purchase_uom}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                Sudah diterima: {line.qty_received} {line.purchase_uom}
+                              </div>
+                              <div>
+                                <label className="mb-1 block text-xs text-muted-foreground">Diterima Sekarang ({line.purchase_uom})</label>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  step="any"
+                                  value={receiptQty[line.purchase_order_line_id] ?? ''}
+                                  onChange={(e) => setReceiptQty((prev) => ({ ...prev, [line.purchase_order_line_id]: e.target.value }))}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {receiptMessage ? <p className={`mt-2 text-sm ${receiptStatus === 'error' ? 'text-destructive' : 'text-success'}`}>{receiptMessage}</p> : null}
+                      {po.lines.length > 0 ? (
+                        <Button size="sm" className="mt-2" disabled={receiptStatus === 'saving'} onClick={() => handleSubmitReceipt(po)}>
+                          {receiptStatus === 'saving' ? 'Menyimpan...' : 'Konfirmasi Barang Diterima'}
+                        </Button>
+                      ) : null}
+                    </div>
+                  );
+                })()
+              : null}
           </CardContent>
         </Card>
       </div>

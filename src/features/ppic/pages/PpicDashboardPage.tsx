@@ -48,7 +48,7 @@ function utilizationBadgeVariant(pct: number): 'success' | 'warning' | 'critical
   return 'success';
 }
 
-type GanttWorkCenter = { work_center_id: number; name: string; code: string | null };
+type GanttWorkCenter = { work_center_id: number; name: string; code: string | null; capacity_hours_per_day: number | null };
 type GanttBlock = {
   work_center_id: number;
   date: string;
@@ -62,7 +62,10 @@ type GanttBlock = {
   sequence_no: number;
   duration_minutes: number;
   day_offset: number;
+  minute_of_day: number;
 };
+type MonthlySummaryEntry = { work_center_id: number; date: string; batch_count: number; active_minutes: number };
+type GanttView = 'weekly' | 'daily' | 'monthly';
 
 type BlockDetailAssignment = {
   work_order_assignment_id: number;
@@ -113,10 +116,26 @@ type UnscheduledBatch = {
 };
 
 const DAY_LABELS = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+const MONTH_LABELS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
 function formatDayLabel(dateStr: string, index: number): string {
   const [, m, d] = dateStr.split('-');
   return `${DAY_LABELS[index]} ${d}/${m}`;
+}
+
+// Format YYYY-MM-DD dari waktu LOKAL — duplikat sengaja dari weekRange.ts
+// (server-only) supaya komponen client ini tidak import kode server.
+function dateToDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function formatHourLabel(minuteOfDay: number): string {
+  const h = Math.floor(minuteOfDay / 60) % 24;
+  const m = minuteOfDay % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
 // Geser tanggal (string YYYY-MM-DD) sejumlah hari — dipakai buat hitung
@@ -238,10 +257,14 @@ export default function PpicDashboardPage() {
   const [capacitySavingId, setCapacitySavingId] = useState<number | null>(null);
   const [capacityMessage, setCapacityMessage] = useState('');
 
+  const [ganttView, setGanttView] = useState<GanttView>('weekly');
   const [ganttWeekOffset, setGanttWeekOffset] = useState(0);
+  const [ganttDailyDate, setGanttDailyDate] = useState(() => dateToDateString(new Date()));
+  const [ganttMonth, setGanttMonth] = useState(() => { const now = new Date(); return { year: now.getFullYear(), month: now.getMonth() + 1 }; });
   const [ganttDays, setGanttDays] = useState<string[]>([]);
   const [ganttWorkCenters, setGanttWorkCenters] = useState<GanttWorkCenter[]>([]);
   const [ganttBlocks, setGanttBlocks] = useState<GanttBlock[]>([]);
+  const [ganttMonthlySummary, setGanttMonthlySummary] = useState<MonthlySummaryEntry[]>([]);
   const [ganttUnscheduled, setGanttUnscheduled] = useState<UnscheduledBatch[]>([]);
   const [ganttError, setGanttError] = useState('');
   const [ganttLoading, setGanttLoading] = useState(true);
@@ -340,9 +363,15 @@ export default function PpicDashboardPage() {
   }, [authedFetch]);
 
   const loadGantt = useCallback(
-    async (offset: number) => {
+    async (view: GanttView, weekOffset: number, dailyDate: string, month: { year: number; month: number }) => {
       setGanttLoading(true);
-      const { ok, body } = await authedFetch(`/api/work-centers/gantt?week_offset=${offset}`);
+      const query =
+        view === 'daily'
+          ? `view=daily&date=${dailyDate}`
+          : view === 'monthly'
+            ? `view=monthly&year=${month.year}&month=${month.month}`
+            : `view=weekly&week_offset=${weekOffset}`;
+      const { ok, body } = await authedFetch(`/api/work-centers/gantt?${query}`);
       if (!ok) {
         setGanttError(body.error || 'Gagal memuat Gantt produksi.');
         setGanttLoading(false);
@@ -351,6 +380,7 @@ export default function PpicDashboardPage() {
       setGanttDays(body.days || []);
       setGanttWorkCenters(body.workCenters || []);
       setGanttBlocks(body.blocks || []);
+      setGanttMonthlySummary(body.monthlySummary || []);
       setGanttUnscheduled(body.unscheduled || []);
       setGanttError('');
       setGanttLoading(false);
@@ -403,13 +433,14 @@ export default function PpicDashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, loadApprovals, loadWorkOrders, loadBoms, loadCapacity]);
 
-  // Terpisah dari effect di atas supaya navigasi minggu (ganttWeekOffset berubah)
-  // cukup reload Gantt-nya saja, tidak mengulang approval/WO/BOM/capacity.
+  // Terpisah dari effect di atas supaya navigasi minggu/hari/bulan (ganttView,
+  // ganttWeekOffset, dst berubah) cukup reload Gantt-nya saja, tidak mengulang
+  // approval/WO/BOM/capacity.
   useEffect(() => {
     if (checkingAccess || accessDenied) return;
-    loadGantt(ganttWeekOffset);
+    loadGantt(ganttView, ganttWeekOffset, ganttDailyDate, ganttMonth);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ganttWeekOffset, checkingAccess, accessDenied]);
+  }, [ganttView, ganttWeekOffset, ganttDailyDate, ganttMonth, checkingAccess, accessDenied]);
 
   const handleSaveCapacity = async (workCenterId: number) => {
     const raw = capacityEdits[workCenterId];
@@ -462,7 +493,7 @@ export default function PpicDashboardPage() {
       setDragMessage(body.error || 'Gagal menjadwalkan ulang batch.');
       return;
     }
-    await Promise.all([loadGantt(ganttWeekOffset), loadCapacity()]);
+    await Promise.all([loadGantt(ganttView, ganttWeekOffset, ganttDailyDate, ganttMonth), loadCapacity()]);
   };
 
   const handleApprove = async (approvalId: number, status: 'approved' | 'rejected') => {
@@ -535,6 +566,47 @@ export default function PpicDashboardPage() {
     for (const list of map.values()) list.sort((a, b) => a.sequence_no - b.sequence_no);
     return map;
   }, [ganttBlocks]);
+
+  // Tampilan Harian: sel = (Work Center, JAM), bukan (Work Center, tanggal) —
+  // blok dikelompokkan pakai jam dari minute_of_day (jangkar shift.start_time
+  // + offset kumulatif yang sama dengan Mingguan). Kalau beberapa blok jatuh
+  // di jam yang sama, ditumpuk berurutan (diurutkan jam lalu sequence_no) —
+  // BUKAN dijadwalkan ulang otomatis, cuma ditampilkan berurutan.
+  const ganttBlocksByHourCell = useMemo(() => {
+    const map = new Map<string, GanttBlock[]>();
+    for (const block of ganttBlocks) {
+      const hour = Math.floor(block.minute_of_day / 60);
+      const key = `${block.work_center_id}_${hour}`;
+      const list = map.get(key) ?? [];
+      list.push(block);
+      map.set(key, list);
+    }
+    for (const list of map.values()) list.sort((a, b) => a.minute_of_day - b.minute_of_day || a.sequence_no - b.sequence_no);
+    return map;
+  }, [ganttBlocks]);
+
+  const ganttMonthlySummaryByCell = useMemo(() => {
+    const map = new Map<string, MonthlySummaryEntry>();
+    for (const entry of ganttMonthlySummary) {
+      map.set(`${entry.work_center_id}_${entry.date}`, entry);
+    }
+    return map;
+  }, [ganttMonthlySummary]);
+
+  const handleShiftDailyDate = (deltaDays: number) => setGanttDailyDate((prev) => addDaysToDateString(prev, deltaDays));
+  const handleShiftMonth = (deltaMonths: number) => {
+    setGanttMonth((prev) => {
+      let newMonth = prev.month + deltaMonths;
+      let newYear = prev.year;
+      if (newMonth < 1) { newMonth = 12; newYear -= 1; }
+      if (newMonth > 12) { newMonth = 1; newYear += 1; }
+      return { year: newYear, month: newMonth };
+    });
+  };
+  const handleGoToDaily = (date: string) => {
+    setGanttDailyDate(date);
+    setGanttView('daily');
+  };
 
   const bomColumns = useMemo<ColumnDef<Bom>[]>(
     () => [
@@ -700,27 +772,78 @@ export default function PpicDashboardPage() {
           <CardContent className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm text-muted-foreground">
-                Blok = 1 tahap routing per batch. Posisi tanggal dihitung dari waktu aktif + waktu tunggu tahap-tahap sebelumnya (mis. tahap sesudah curing 48 jam baru muncul 2 hari kemudian); lebar blok cuma durasi aktif mesin (waktu tunggu tidak menyibukkan mesin, beda dari posisinya). Klik blok untuk lihat detail. Seret batch berstatus Direncanakan untuk jadwalkan ulang (tetap di Work Center yang sama) — batch yang sudah berjalan/selesai tidak bisa diseret.
+                Blok = 1 tahap routing per batch. Posisi tanggal dihitung dari waktu aktif + waktu tunggu tahap-tahap sebelumnya (mis. tahap sesudah curing 48 jam baru muncul 2 hari kemudian); lebar blok cuma durasi aktif mesin (waktu tunggu tidak menyibukkan mesin, beda dari posisinya). Klik blok untuk lihat detail.
+                {ganttView === 'weekly' ? ' Seret batch berstatus Direncanakan untuk jadwalkan ulang (tetap di Work Center yang sama) — batch yang sudah berjalan/selesai tidak bisa diseret.' : ''}
               </p>
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline" onClick={() => setGanttWeekOffset((prev) => prev - 1)}>
-                  ← Minggu Sebelumnya
+              <div className="flex items-center gap-1 border">
+                <Button size="sm" variant={ganttView === 'daily' ? 'default' : 'ghost'} className="rounded-none" onClick={() => setGanttView('daily')}>
+                  Harian
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => setGanttWeekOffset(0)} disabled={ganttWeekOffset === 0}>
-                  Minggu Ini
+                <Button size="sm" variant={ganttView === 'weekly' ? 'default' : 'ghost'} className="rounded-none" onClick={() => setGanttView('weekly')}>
+                  Mingguan
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => setGanttWeekOffset((prev) => prev + 1)}>
-                  Minggu Berikutnya →
+                <Button size="sm" variant={ganttView === 'monthly' ? 'default' : 'ghost'} className="rounded-none" onClick={() => setGanttView('monthly')}>
+                  Bulanan
                 </Button>
               </div>
             </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              {ganttView === 'weekly' ? (
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setGanttWeekOffset((prev) => prev - 1)}>
+                    ← Minggu Sebelumnya
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setGanttWeekOffset(0)} disabled={ganttWeekOffset === 0}>
+                    Minggu Ini
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setGanttWeekOffset((prev) => prev + 1)}>
+                    Minggu Berikutnya →
+                  </Button>
+                </div>
+              ) : ganttView === 'daily' ? (
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => handleShiftDailyDate(-1)}>
+                    ← Hari Sebelumnya
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setGanttDailyDate(dateToDateString(new Date()))} disabled={ganttDailyDate === dateToDateString(new Date())}>
+                    Hari Ini
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => handleShiftDailyDate(1)}>
+                    Hari Berikutnya →
+                  </Button>
+                  <span className="text-sm font-medium text-foreground">{ganttDailyDate}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => handleShiftMonth(-1)}>
+                    ← Bulan Sebelumnya
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { const now = new Date(); setGanttMonth({ year: now.getFullYear(), month: now.getMonth() + 1 }); }}
+                    disabled={(() => { const now = new Date(); return ganttMonth.year === now.getFullYear() && ganttMonth.month === now.getMonth() + 1; })()}
+                  >
+                    Bulan Ini
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => handleShiftMonth(1)}>
+                    Bulan Berikutnya →
+                  </Button>
+                  <span className="text-sm font-medium text-foreground">
+                    {MONTH_LABELS[ganttMonth.month - 1]} {ganttMonth.year}
+                  </span>
+                </div>
+              )}
+            </div>
+
             {ganttError ? <p className="text-sm text-destructive">{ganttError}</p> : null}
             {dragMessage ? <p className="text-sm text-destructive">{dragMessage}</p> : null}
             {ganttLoading ? (
               <p className="text-sm text-muted-foreground">Memuat...</p>
             ) : ganttWorkCenters.length === 0 ? (
               <p className="text-sm text-muted-foreground">Belum ada Work Center aktif.</p>
-            ) : (
+            ) : ganttView === 'weekly' ? (
               // pointerWithin (bukan default rectIntersection) — target drop ditentukan dari
               // posisi KURSOR, bukan dari area tumpang-tindih rect elemen yang diseret. Penting
               // untuk baris "Belum Dijadwalkan" yang jauh lebih lebar dari 1 kolom hari: dengan
@@ -786,6 +909,106 @@ export default function PpicDashboardPage() {
 
                 <DragOverlay>{activeDragLabel ? <div className="border-l-2 border-info bg-info-subtle px-2 py-1 text-xs font-medium text-info-subtle-foreground shadow">{activeDragLabel}</div> : null}</DragOverlay>
               </DndContext>
+            ) : ganttView === 'daily' ? (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  Tampilan Harian cuma untuk lihat jadwal (tidak bisa diseret) — jangkar jam pakai jam mulai shift batch (kalau ada), pakai offset kumulatif yang sama dengan tampilan Mingguan.
+                </p>
+                <div className="overflow-x-auto rounded-md border">
+                  <table className="w-full table-fixed text-data">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="h-8 w-36 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Work Center</th>
+                        {Array.from({ length: 24 }, (_, h) => h).map((hour) => (
+                          <th key={hour} className="h-8 w-20 px-1 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            {String(hour).padStart(2, '0')}:00
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ganttWorkCenters.map((wc) => (
+                        <tr key={wc.work_center_id} className="border-b align-top last:border-0">
+                          <td className="px-3 py-2 font-medium text-foreground">
+                            {wc.name}
+                            {wc.code ? <span className="text-xs font-normal text-muted-foreground"> ({wc.code})</span> : null}
+                          </td>
+                          {Array.from({ length: 24 }, (_, h) => h).map((hour) => {
+                            const cellBlocks = ganttBlocksByHourCell.get(`${wc.work_center_id}_${hour}`) ?? [];
+                            return (
+                              <td key={hour} className="px-1 py-1.5 align-top">
+                                <div className="flex flex-col gap-1">
+                                  {cellBlocks.map((block, i) => (
+                                    <div
+                                      key={`${block.production_batch_id}_${block.sequence_no}_${i}`}
+                                      onClick={() => handleOpenBlockDetail(block)}
+                                      title="Klik untuk lihat detail"
+                                      className="cursor-pointer select-none border-l-2 border-info bg-info-subtle px-1 py-1 text-[10px] text-info-subtle-foreground"
+                                    >
+                                      <div className="font-medium">{formatHourLabel(block.minute_of_day)} · {block.batch_number}</div>
+                                      <div className="truncate">{block.item_code ?? block.item_name}</div>
+                                      <div className="text-muted-foreground">{block.step_name}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground">Angka = jumlah batch yang punya tahap pada hari itu di Work Center tersebut. Klik tanggal untuk lihat detail Harian.</p>
+                <div className="overflow-x-auto rounded-md border">
+                  <table className="w-full table-fixed text-data">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="h-8 w-36 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Work Center</th>
+                        {ganttDays.map((day) => (
+                          <th key={day} className="h-8 w-12 px-0 text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            <button type="button" onClick={() => handleGoToDaily(day)} className="w-full hover:underline" title={`Lihat tampilan Harian untuk ${day}`}>
+                              {day.slice(-2)}
+                            </button>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ganttWorkCenters.map((wc) => (
+                        <tr key={wc.work_center_id} className="border-b align-top last:border-0">
+                          <td className="px-3 py-2 font-medium text-foreground">
+                            {wc.name}
+                            {wc.code ? <span className="text-xs font-normal text-muted-foreground"> ({wc.code})</span> : null}
+                          </td>
+                          {ganttDays.map((day) => {
+                            const entry = ganttMonthlySummaryByCell.get(`${wc.work_center_id}_${day}`);
+                            if (!entry) {
+                              return (
+                                <td key={day} className="px-1 py-2 text-center text-muted-foreground">
+                                  ·
+                                </td>
+                              );
+                            }
+                            const capacityMinutes = wc.capacity_hours_per_day ? wc.capacity_hours_per_day * 60 : null;
+                            const variant = capacityMinutes ? utilizationBadgeVariant((entry.active_minutes / capacityMinutes) * 100) : 'secondary';
+                            return (
+                              <td key={day} className="px-1 py-2 text-center">
+                                <button type="button" onClick={() => handleGoToDaily(day)} title={`${entry.batch_count} batch · ${Math.round(entry.active_minutes)} mnt aktif — klik untuk detail Harian`}>
+                                  <Badge variant={variant}>{entry.batch_count}</Badge>
+                                </button>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>

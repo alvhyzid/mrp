@@ -17,10 +17,23 @@ type RoutingStep = {
   wait_duration_minutes: number | null;
 };
 
-// Tampilan Gantt VIEW-ONLY (bukan drag-and-drop — itu iterasi terpisah menyusul).
-// Lihat docs/rencana-ams-mvp.md Bagian 3 poin 2. Blok = 1 kemunculan routing_step
-// untuk 1 batch, diproyeksikan dari production_batches.planned_date secara
-// berurutan sesuai routing_steps.sequence_no.
+type Shift = { shift_id: number; start_time: string };
+
+function parseTimeToMinutes(time: string): number {
+  const [h, m] = time.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+// Tampilan Gantt — Mingguan (SUDAH ADA sejak awal, logikanya TIDAK DIUBAH),
+// Harian, dan Bulanan (rencana-ams-mvp.md Bagian 3 poin 4). Ketiganya BERBAGI
+// SATU loop kumulatif di bawah (per batch, per routing_step, cumulativeMinutes
+// = active + wait tahap-tahap SEBELUMNYA) — beda view cuma beda rentang
+// tanggal yang di-filter dan beda bentuk agregasi hasil akhirnya, BUKAN beda
+// rumus penempatan.
 //
 // POSISI (tanggal mulai tiap tahap) vs LEBAR (durasi visual blok) SENGAJA pakai
 // dua besaran berbeda:
@@ -34,6 +47,13 @@ type RoutingStep = {
 // active_duration_minutes untuk kalkulasi total jam terjadwal per minggu —
 // dua kalkulasi itu menjawab pertanyaan berbeda (kapan tahap ini terjadi, vs
 // berapa total jam mesin benar-benar aktif) dan SENGAJA tidak disamakan.
+//
+// TAMPILAN HARIAN: hari (dayOffset/stepDateStr) tetap dihitung PERSIS seperti
+// Mingguan (jangkar tengah malam planned_date) — supaya 1 tahap yang sama
+// selalu jatuh di tanggal yang sama di kedua tampilan. Yang BEDA cuma posisi
+// JAM di dalam hari itu (minute_of_day), ditambahkan sebagai info tampilan
+// SETELAH hari ditentukan: jangkar jam = shifts.start_time batch itu (kalau
+// ada shift_id), + cumulativeMinutes yang SAMA dipakai untuk posisi hari.
 const MINUTES_PER_DAY = 24 * 60;
 export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResult> {
   try {
@@ -42,24 +62,48 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
       return { status: 400, body: { error: 'User belum terkait dengan perusahaan yang valid.' } };
     }
 
-    const weekOffsetRaw = Number(request.nextUrl.searchParams.get('week_offset') ?? '0');
-    const weekOffset = Number.isFinite(weekOffsetRaw) ? Math.trunc(weekOffsetRaw) : 0;
-
+    const view = (request.nextUrl.searchParams.get('view') ?? 'weekly') as 'weekly' | 'daily' | 'monthly';
     const adminClient = getAdminClient();
-    const { weekStart, weekEnd } = getWeekRange(weekOffset);
 
-    const days: string[] = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(weekStart);
-      d.setDate(weekStart.getDate() + i);
-      days.push(dateToDateString(d));
+    let days: string[] = [];
+    let weekStart: Date | null = null;
+    let weekEnd: Date | null = null;
+    let weekOffset = 0;
+    let year = 0;
+    let month = 0;
+
+    if (view === 'daily') {
+      const dateParam = request.nextUrl.searchParams.get('date');
+      const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : dateToDateString(new Date());
+      days = [date];
+    } else if (view === 'monthly') {
+      const now = new Date();
+      year = Number(request.nextUrl.searchParams.get('year') ?? now.getFullYear());
+      month = Number(request.nextUrl.searchParams.get('month') ?? now.getMonth() + 1);
+      if (!Number.isFinite(year) || year < 2000) year = now.getFullYear();
+      if (!Number.isFinite(month) || month < 1 || month > 12) month = now.getMonth() + 1;
+      const daysInMonth = new Date(year, month, 0).getDate();
+      for (let d = 1; d <= daysInMonth; d++) {
+        days.push(`${year}-${pad2(month)}-${pad2(d)}`);
+      }
+    } else {
+      const weekOffsetRaw = Number(request.nextUrl.searchParams.get('week_offset') ?? '0');
+      weekOffset = Number.isFinite(weekOffsetRaw) ? Math.trunc(weekOffsetRaw) : 0;
+      const range = getWeekRange(weekOffset);
+      weekStart = range.weekStart;
+      weekEnd = range.weekEnd;
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(weekStart);
+        d.setDate(weekStart.getDate() + i);
+        days.push(dateToDateString(d));
+      }
     }
     const firstDay = days[0];
     const lastDay = days[days.length - 1];
 
     const { data: workCenters, error: wcError } = await adminClient
       .from('work_centers')
-      .select('work_center_id, name, code')
+      .select('work_center_id, name, code, capacity_hours_per_day')
       .eq('company_id', appUser.company_id)
       .eq('is_active', true)
       .order('name', { ascending: true });
@@ -67,20 +111,26 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
 
     const { data: batches, error: batchError } = await adminClient
       .from('production_batches')
-      .select('production_batch_id, batch_number, work_order_id, planned_qty, uom, planned_date, status')
+      .select('production_batch_id, batch_number, work_order_id, planned_qty, uom, planned_date, status, shift_id')
       .eq('company_id', appUser.company_id)
       .in('status', ['planned', 'in_progress']);
     if (batchError) return { status: 500, body: { error: batchError.message } };
 
     const woIds = Array.from(new Set((batches ?? []).map((b) => b.work_order_id)));
-    const { data: workOrders, error: woError } = woIds.length
-      ? await adminClient.from('work_orders').select('work_order_id, routing_id, item_id').in('work_order_id', woIds)
-      : { data: [] as { work_order_id: number; routing_id: number | null; item_id: number }[], error: null };
-    if (woError) return { status: 500, body: { error: woError.message } };
+    const shiftIds = Array.from(new Set((batches ?? []).map((b) => b.shift_id).filter((id): id is number => !!id)));
+    const [woRes, shiftsRes] = await Promise.all([
+      woIds.length
+        ? adminClient.from('work_orders').select('work_order_id, routing_id, item_id').in('work_order_id', woIds)
+        : Promise.resolve({ data: [] as { work_order_id: number; routing_id: number | null; item_id: number }[], error: null }),
+      shiftIds.length ? adminClient.from('shifts').select('shift_id, start_time').in('shift_id', shiftIds) : Promise.resolve({ data: [] as Shift[], error: null })
+    ]);
+    if (woRes.error) return { status: 500, body: { error: woRes.error.message } };
+    if (shiftsRes.error) return { status: 500, body: { error: shiftsRes.error.message } };
 
-    const woById = new Map((workOrders ?? []).map((wo) => [wo.work_order_id, wo]));
-    const itemIds = Array.from(new Set((workOrders ?? []).map((wo) => wo.item_id)));
-    const routingIds = Array.from(new Set((workOrders ?? []).map((wo) => wo.routing_id).filter((id): id is number => !!id)));
+    const woById = new Map((woRes.data ?? []).map((wo) => [wo.work_order_id, wo]));
+    const shiftsById = new Map((shiftsRes.data ?? []).map((s) => [s.shift_id, s]));
+    const itemIds = Array.from(new Set((woRes.data ?? []).map((wo) => wo.item_id)));
+    const routingIds = Array.from(new Set((woRes.data ?? []).map((wo) => wo.routing_id).filter((id): id is number => !!id)));
 
     const [itemsRes, stepsRes] = await Promise.all([
       itemIds.length
@@ -115,6 +165,7 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
       sequence_no: number;
       duration_minutes: number;
       day_offset: number;
+      minute_of_day: number;
     }[] = [];
     const unscheduled: {
       production_batch_id: number;
@@ -150,13 +201,21 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
       }
 
       const baseDate = new Date(`${batch.planned_date}T00:00:00`);
+      const shift = batch.shift_id ? shiftsById.get(batch.shift_id) : undefined;
+      const anchorMinutes = shift ? parseTimeToMinutes(shift.start_time) : 0;
       let cumulativeMinutes = 0;
 
       for (const step of steps) {
+        // Hari (dayOffset/stepDateStr): PERSIS logika Mingguan, jangkar tengah
+        // malam planned_date — tidak boleh berubah walau ada shift, supaya 1
+        // tahap selalu jatuh di tanggal yang sama lintas semua tampilan.
         const dayOffset = Math.floor(cumulativeMinutes / MINUTES_PER_DAY);
         const stepDate = new Date(baseDate);
         stepDate.setDate(baseDate.getDate() + dayOffset);
         const stepDateStr = dateToDateString(stepDate);
+        // Jam dalam hari itu: cuma dipakai tampilan Harian — jangkar shift
+        // start_time + cumulativeMinutes yang SAMA (bukan rumus baru).
+        const minuteOfDay = (anchorMinutes + cumulativeMinutes) % MINUTES_PER_DAY;
 
         if (step.work_center_id && stepDateStr >= firstDay && stepDateStr <= lastDay) {
           blocks.push({
@@ -171,23 +230,60 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
             step_name: step.step_name,
             sequence_no: step.sequence_no,
             duration_minutes: step.active_duration_minutes ?? 0,
-            day_offset: dayOffset
+            day_offset: dayOffset,
+            minute_of_day: minuteOfDay
           });
         }
         // Kumulatif (posisi) tetap jalan biar urutan step berikutnya tetap benar,
-        // terlepas dari step ini punya work_center atau jatuh di luar minggu yang
+        // terlepas dari step ini punya work_center atau jatuh di luar rentang yang
         // dilihat — dan SENGAJA ikut wait_duration_minutes (beda dari lebar blok
         // di atas, yang cuma active_duration_minutes).
         cumulativeMinutes += (step.active_duration_minutes ?? 0) + (step.wait_duration_minutes ?? 0);
       }
     }
 
+    if (view === 'monthly') {
+      // Bulanan: TIDAK menampilkan blok tahap detail (tidak terbaca di skala
+      // ini) — cukup agregat jumlah batch + total menit aktif per hari per
+      // Work Center, diturunkan dari `blocks` yang sama di atas (bukan hitungan
+      // baru), supaya tetap konsisten dengan Mingguan/Harian.
+      const summaryMap = new Map<string, { work_center_id: number; date: string; batchNumbers: Set<string>; activeMinutes: number }>();
+      for (const block of blocks) {
+        const key = `${block.work_center_id}_${block.date}`;
+        const entry = summaryMap.get(key) ?? { work_center_id: block.work_center_id, date: block.date, batchNumbers: new Set<string>(), activeMinutes: 0 };
+        entry.batchNumbers.add(block.batch_number);
+        entry.activeMinutes += block.duration_minutes;
+        summaryMap.set(key, entry);
+      }
+      const monthlySummary = Array.from(summaryMap.values()).map((e) => ({
+        work_center_id: e.work_center_id,
+        date: e.date,
+        batch_count: e.batchNumbers.size,
+        active_minutes: e.activeMinutes
+      }));
+
+      return {
+        status: 200,
+        body: {
+          view,
+          year,
+          month,
+          days,
+          workCenters: workCenters ?? [],
+          monthlySummary,
+          unscheduled
+        }
+      };
+    }
+
     return {
       status: 200,
       body: {
-        weekStart: weekStart.toISOString(),
-        weekEnd: weekEnd.toISOString(),
+        view,
+        weekStart: weekStart ? weekStart.toISOString() : null,
+        weekEnd: weekEnd ? weekEnd.toISOString() : null,
         weekOffset,
+        date: view === 'daily' ? days[0] : null,
         days,
         workCenters: workCenters ?? [],
         blocks,

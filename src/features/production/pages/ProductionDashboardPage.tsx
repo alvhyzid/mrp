@@ -88,8 +88,8 @@ export default function ProductionDashboardPage() {
   const [batchesForExpanded, setBatchesForExpanded] = useState<ProductionBatch[]>([]);
   const [selectedBatchId, setSelectedBatchId] = useState('');
 
-  const emptyOutputForm = { qty: '', output_type: 'main_output', lot_number: '', expiry_date: '' };
-  const [outputForm, setOutputForm] = useState(emptyOutputForm);
+  const emptyOutputLine = { qty: '', output_type: 'main_output', lot_number: '', expiry_date: '' };
+  const [outputLines, setOutputLines] = useState([{ ...emptyOutputLine }]);
   const [outputStatus, setOutputStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [outputMessage, setOutputMessage] = useState('');
 
@@ -225,7 +225,7 @@ export default function ProductionDashboardPage() {
 
   const handleSelectBatch = async (batchId: string) => {
     setSelectedBatchId(batchId);
-    setOutputForm(emptyOutputForm);
+    setOutputLines([{ ...emptyOutputLine }]);
     setOutputStatus('idle');
     setOutputMessage('');
     if (!expandedWoId || !batchId) {
@@ -236,11 +236,17 @@ export default function ProductionDashboardPage() {
     setStepProgress(progressRes.ok ? progressRes.body.stepProgress || [] : []);
   };
 
+  const addOutputLine = () => setOutputLines((prev) => [...prev, { ...emptyOutputLine }]);
+  const removeOutputLine = (index: number) => setOutputLines((prev) => prev.filter((_, i) => i !== index));
+  const updateOutputLine = (index: number, field: keyof typeof emptyOutputLine, value: string) =>
+    setOutputLines((prev) => prev.map((line, i) => (i === index ? { ...line, [field]: value } : line)));
+
   const handleRecordOutput = async (wo: WorkOrder) => {
     if (!selectedBatchId) return;
-    if (!outputForm.qty || Number(outputForm.qty) <= 0) {
+    const payloadLines = outputLines.filter((l) => l.qty && Number(l.qty) > 0);
+    if (payloadLines.length === 0) {
       setOutputStatus('error');
-      setOutputMessage('Jumlah hasil produksi harus lebih besar dari 0.');
+      setOutputMessage('Jumlah hasil produksi harus lebih besar dari 0 di minimal 1 baris.');
       return;
     }
     setOutputStatus('saving');
@@ -250,10 +256,7 @@ export default function ProductionDashboardPage() {
       body: JSON.stringify({
         work_order_id: wo.work_order_id,
         production_batch_id: Number(selectedBatchId),
-        qty: Number(outputForm.qty),
-        output_type: outputForm.output_type,
-        lot_number: outputForm.lot_number || null,
-        expiry_date: outputForm.expiry_date || null
+        outputs: payloadLines.map((l) => ({ qty: Number(l.qty), output_type: l.output_type, lot_number: l.lot_number || null, expiry_date: l.expiry_date || null }))
       })
     });
     if (!ok) {
@@ -262,11 +265,13 @@ export default function ProductionDashboardPage() {
       return;
     }
     setOutputStatus('success');
+    const outputsCreated = body.outputs as { lot_number: string; qty: number; output_type: string; genealogy_rows_created: number }[];
     setOutputMessage(
-      `Lot baru "${body.lot_number}" berhasil dibuat (${outputForm.qty} ${wo.item_base_uom ?? ''}).` +
-        (body.genealogy_rows_created > 0 ? ` Genealogy tercatat otomatis dari ${body.genealogy_rows_created} lot bahan yang dipakai batch ini.` : ' Belum ada pemakaian bahan tercatat di batch ini, jadi belum ada genealogy.')
+      outputsCreated
+        .map((o) => `Lot "${o.lot_number}" (${outputTypeLabels[o.output_type] ?? o.output_type}, ${o.qty} ${wo.item_base_uom ?? ''}) — genealogy dari ${o.genealogy_rows_created} lot bahan.`)
+        .join(' ')
     );
-    setOutputForm(emptyOutputForm);
+    setOutputLines([{ ...emptyOutputLine }]);
   };
 
   const handleSaveStep = async (wo: WorkOrder, step: RoutingStep) => {
@@ -581,38 +586,50 @@ export default function ProductionDashboardPage() {
               )}
               {selectedBatchId ? (
                 <div className="mt-4 border-t pt-3">
-                  <p className="mb-2 text-sm font-medium text-foreground">Catat Hasil Produksi (Output)</p>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-sm font-medium text-foreground">Catat Hasil Produksi (Output)</p>
+                    <Button size="sm" variant="outline" onClick={addOutputLine}>
+                      + Tambah Baris Output
+                    </Button>
+                  </div>
                   <p className="mb-2 text-xs text-muted-foreground">
-                    Membuat lot baru untuk batch ini — lot bahan yang sudah tercatat dipakai (Catat Pemakaian Bahan di halaman Work Order) untuk batch yang sama otomatis ditautkan sebagai asal-usulnya (genealogy).
+                    Bisa lebih dari 1 baris sekaligus (mis. produk utama + sisa reprocessable) — semua baris dari batch yang sama mewarisi genealogy yang sama, dari lot bahan yang tercatat dipakai (Catat Pemakaian Bahan di halaman Work Order).
                   </p>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    <label className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-muted-foreground">Jumlah Hasil ({expandedWo.item_base_uom})</span>
-                      <Input type="number" min="0" step="any" value={outputForm.qty} onChange={(e) => setOutputForm((prev) => ({ ...prev, qty: e.target.value }))} />
-                    </label>
-                    <label className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-muted-foreground">Jenis Output</span>
-                      <Select value={outputForm.output_type} onValueChange={(v) => setOutputForm((prev) => ({ ...prev, output_type: v }))}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(outputTypeLabels).map(([value, label]) => (
-                            <SelectItem key={value} value={value}>
-                              {label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </label>
-                    <label className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-muted-foreground">Nomor Lot (opsional)</span>
-                      <Input value={outputForm.lot_number} onChange={(e) => setOutputForm((prev) => ({ ...prev, lot_number: e.target.value }))} placeholder="auto kalau kosong" />
-                    </label>
-                    <label className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-muted-foreground">Tanggal Kadaluarsa (opsional)</span>
-                      <Input type="date" value={outputForm.expiry_date} onChange={(e) => setOutputForm((prev) => ({ ...prev, expiry_date: e.target.value }))} />
-                    </label>
+                  <div className="flex flex-col gap-2">
+                    {outputLines.map((line, index) => (
+                      <div key={index} className="grid grid-cols-2 gap-2 rounded-md border p-2 sm:grid-cols-[1fr_1fr_1fr_1fr_auto]">
+                        <label className="flex flex-col gap-1">
+                          <span className="text-xs font-medium text-muted-foreground">Jumlah Hasil ({expandedWo.item_base_uom})</span>
+                          <Input type="number" min="0" step="any" value={line.qty} onChange={(e) => updateOutputLine(index, 'qty', e.target.value)} />
+                        </label>
+                        <label className="flex flex-col gap-1">
+                          <span className="text-xs font-medium text-muted-foreground">Jenis Output</span>
+                          <Select value={line.output_type} onValueChange={(v) => updateOutputLine(index, 'output_type', v)}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Object.entries(outputTypeLabels).map(([value, label]) => (
+                                <SelectItem key={value} value={value}>
+                                  {label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </label>
+                        <label className="flex flex-col gap-1">
+                          <span className="text-xs font-medium text-muted-foreground">Nomor Lot (opsional)</span>
+                          <Input value={line.lot_number} onChange={(e) => updateOutputLine(index, 'lot_number', e.target.value)} placeholder="auto kalau kosong" />
+                        </label>
+                        <label className="flex flex-col gap-1">
+                          <span className="text-xs font-medium text-muted-foreground">Tanggal Kadaluarsa (opsional)</span>
+                          <Input type="date" value={line.expiry_date} onChange={(e) => updateOutputLine(index, 'expiry_date', e.target.value)} />
+                        </label>
+                        <Button size="sm" variant="destructive" disabled={outputLines.length === 1} onClick={() => removeOutputLine(index)}>
+                          Hapus
+                        </Button>
+                      </div>
+                    ))}
                   </div>
                   {outputMessage ? <p className={`mt-2 text-sm ${outputStatus === 'error' ? 'text-destructive' : 'text-success'}`}>{outputMessage}</p> : null}
                   <Button size="sm" className="mt-2" disabled={outputStatus === 'saving'} onClick={() => handleRecordOutput(expandedWo)}>

@@ -34,7 +34,7 @@ Fitur ini sudah ada di roadmap Fase 3-6 dan skema database yang sudah kita ranca
 | Penambahan pekerja mendadak di luar rencana | 🟡 Sama seperti di atas — kolom `unplanned_addition` siap di skema, tidak bisa dicoba tanpa UI penugasan pekerja |
 | Pencatatan gangguan produksi (mesin, listrik padam, faktor eksternal lain) sebagai penjelasan selisih target vs hasil | ✅ Halaman `/production` — termasuk gangguan menyeluruh 1 plant (FASE 5, diverifikasi 15 Agu 2026), plus gangguan spesifik 1 mesin |
 | Multi-tenant (bukan fitur MRPeasy, tapi requirement Anda) | ✅ `company_id` + RLS aktif sejak Fase 1 |
-| *(bukan dari tabel di atas, tapi terdeteksi saat audit)* Proyeksi stok habis & risiko kadaluarsa (`stock_depletion_forecast`, `expiry_risk_low_usage`) | 🟡 Fungsi + trigger otomatis (`recompute_stock_projection_for_item`, terpasang di `work_order_consumption`) sudah ada dan sudah terpicu 13 kali dari data nyata — TAPI belum pernah sekali pun menghasilkan alert. Lihat investigasi terpisah untuk penjelasan kenapa. |
+| *(bukan dari tabel di atas, tapi terdeteksi saat audit)* Proyeksi stok habis & risiko kadaluarsa (`stock_depletion_forecast`, `expiry_risk_low_usage`) | ✅ `stock_depletion_forecast` diverifikasi BENAR-BENAR menghasilkan alert nyata (16 Agu 2026): item RM-GLUTATHIONE sengaja dikonsumsi sampai tersisa 1g → alert "Proyeksi stok habis dalam 3.3 hari (lead time pemasok 14 hari)" muncul otomatis di `system_alerts`, severity `critical`. `expiry_risk_low_usage` masih belum pernah teruji — sampai sekarang tidak ada satu pun lot di database yang punya `expiry_date` terisi (bukan bug, memang belum pernah ada yang mengisi), jadi kondisinya belum pernah bisa dicek. |
 
 ---
 

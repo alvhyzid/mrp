@@ -12,6 +12,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { canAccessPpicDashboard, canManageWorkCenterCapacity, canManageWorkOrder } from '@/lib/roles';
 
 const statusLabels: Record<string, string> = { planned: 'Direncanakan', in_progress: 'Berjalan', paused: 'Dijeda', completed: 'Selesai', cancelled: 'Batal' };
@@ -56,11 +57,50 @@ type GanttBlock = {
   batch_status: string;
   item_code: string | null;
   item_name: string | null;
+  routing_step_id: number;
   step_name: string;
   sequence_no: number;
   duration_minutes: number;
   day_offset: number;
 };
+
+type BlockDetailAssignment = {
+  work_order_assignment_id: number;
+  employee_name: string | null;
+  employee_position: string | null;
+  status: string;
+  scheduled_hours: number | null;
+  actual_hours: number | null;
+  qty_produced: number | null;
+};
+type BlockDetailProgress = {
+  work_order_step_progress_id: number;
+  status: string;
+  qty_recorded: number | null;
+  uom: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  notes: string | null;
+};
+type BlockDetail = {
+  batch: { production_batch_id: number; batch_number: string; planned_qty: number; uom: string; planned_date: string | null; status: string; started_at: string | null; completed_at: string | null };
+  item: { item_code: string | null; item_name: string | null } | null;
+  step: { step_name: string; sequence_no: number; active_duration_minutes: number; wait_duration_minutes: number };
+  workCenter: { name: string; code: string | null } | null;
+  shift: { name: string; start_time: string; end_time: string } | null;
+  assignments: BlockDetailAssignment[];
+  progress: BlockDetailProgress[];
+};
+
+const assignmentStatusLabels: Record<string, string> = { planned: 'Direncanakan', confirmed: 'Dikonfirmasi', absent: 'Tidak Hadir', replaced: 'Digantikan', completed: 'Selesai', unplanned_addition: 'Tambahan Dadakan' };
+const progressStatusLabels: Record<string, string> = { pending: 'Belum Mulai', in_progress: 'Berjalan', completed: 'Selesai' };
+
+function formatDateTime(value: string | null): string {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
 type UnscheduledBatch = {
   production_batch_id: number;
   batch_number: string;
@@ -95,7 +135,7 @@ type DragData =
   | { type: 'block'; production_batch_id: number; batch_number: string; work_center_id: number; day_offset: number }
   | { type: 'unscheduled'; production_batch_id: number; batch_number: string; primary_work_center_id: number | null };
 
-function DraggableBlock({ block, canDrag }: { block: GanttBlock; canDrag: boolean }) {
+function DraggableBlock({ block, canDrag, onOpenDetail }: { block: GanttBlock; canDrag: boolean; onOpenDetail: (block: GanttBlock) => void }) {
   const draggable = canDrag && block.batch_status === 'planned';
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `block-${block.production_batch_id}-${block.sequence_no}-${block.date}`,
@@ -107,10 +147,11 @@ function DraggableBlock({ block, canDrag }: { block: GanttBlock; canDrag: boolea
       ref={setNodeRef}
       {...(draggable ? listeners : {})}
       {...(draggable ? attributes : {})}
-      title={draggable ? 'Seret untuk jadwalkan ulang batch ini' : 'Batch yang sudah berjalan/selesai tidak bisa dijadwalkan ulang'}
+      onClick={() => onOpenDetail(block)}
+      title={draggable ? 'Klik untuk detail, seret untuk jadwalkan ulang' : 'Klik untuk lihat detail tahap ini'}
       style={draggable ? { touchAction: 'none' } : undefined}
       className={`select-none border-l-2 border-info bg-info-subtle px-1.5 py-1 text-xs text-info-subtle-foreground ${
-        draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-not-allowed opacity-60'
+        draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer opacity-70'
       } ${isDragging ? 'opacity-30' : ''}`}
     >
       <div className="font-medium">{block.batch_number}</div>
@@ -208,6 +249,11 @@ export default function PpicDashboardPage() {
   const [activeDragLabel, setActiveDragLabel] = useState<string | null>(null);
   const [dragMessage, setDragMessage] = useState('');
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [blockDetail, setBlockDetail] = useState<BlockDetail | null>(null);
+  const [blockDetailLoading, setBlockDetailLoading] = useState(false);
+  const [blockDetailError, setBlockDetailError] = useState('');
 
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
@@ -308,6 +354,23 @@ export default function PpicDashboardPage() {
       setGanttUnscheduled(body.unscheduled || []);
       setGanttError('');
       setGanttLoading(false);
+    },
+    [authedFetch]
+  );
+
+  const handleOpenBlockDetail = useCallback(
+    async (block: GanttBlock) => {
+      setDetailOpen(true);
+      setBlockDetail(null);
+      setBlockDetailError('');
+      setBlockDetailLoading(true);
+      const { ok, body } = await authedFetch(`/api/production-batches/step-detail?production_batch_id=${block.production_batch_id}&routing_step_id=${block.routing_step_id}`);
+      setBlockDetailLoading(false);
+      if (!ok) {
+        setBlockDetailError(body.error || 'Gagal memuat detail tahap ini.');
+        return;
+      }
+      setBlockDetail(body as BlockDetail);
     },
     [authedFetch]
   );
@@ -637,7 +700,7 @@ export default function PpicDashboardPage() {
           <CardContent className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm text-muted-foreground">
-                Blok = 1 tahap routing per batch. Posisi tanggal dihitung dari waktu aktif + waktu tunggu tahap-tahap sebelumnya (mis. tahap sesudah curing 48 jam baru muncul 2 hari kemudian); lebar blok cuma durasi aktif mesin (waktu tunggu tidak menyibukkan mesin, beda dari posisinya). Seret batch berstatus Direncanakan untuk jadwalkan ulang (tetap di Work Center yang sama) — batch yang sudah berjalan/selesai tidak bisa diseret.
+                Blok = 1 tahap routing per batch. Posisi tanggal dihitung dari waktu aktif + waktu tunggu tahap-tahap sebelumnya (mis. tahap sesudah curing 48 jam baru muncul 2 hari kemudian); lebar blok cuma durasi aktif mesin (waktu tunggu tidak menyibukkan mesin, beda dari posisinya). Klik blok untuk lihat detail. Seret batch berstatus Direncanakan untuk jadwalkan ulang (tetap di Work Center yang sama) — batch yang sudah berjalan/selesai tidak bisa diseret.
               </p>
               <div className="flex items-center gap-2">
                 <Button size="sm" variant="outline" onClick={() => setGanttWeekOffset((prev) => prev - 1)}>
@@ -696,7 +759,7 @@ export default function PpicDashboardPage() {
                               return (
                                 <DroppableCell key={day} workCenterId={wc.work_center_id} date={day} restrictedRow={restrictedRow}>
                                   {cellBlocks.map((block, i) => (
-                                    <DraggableBlock key={`${block.production_batch_id}_${block.sequence_no}_${i}`} block={block} canDrag={canManageWorkOrder(role)} />
+                                    <DraggableBlock key={`${block.production_batch_id}_${block.sequence_no}_${i}`} block={block} canDrag={canManageWorkOrder(role)} onOpenDetail={handleOpenBlockDetail} />
                                   ))}
                                 </DroppableCell>
                               );
@@ -743,6 +806,100 @@ export default function PpicDashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>{blockDetail ? `${blockDetail.batch.batch_number} — ${blockDetail.step.step_name}` : 'Detail Tahap Produksi'}</DialogTitle>
+            <DialogDescription>{blockDetail?.item ? (blockDetail.item.item_code ?? blockDetail.item.item_name) : ''}</DialogDescription>
+          </DialogHeader>
+
+          {blockDetailLoading ? <p className="text-sm text-muted-foreground">Memuat detail...</p> : null}
+          {blockDetailError ? <p className="text-sm text-destructive">{blockDetailError}</p> : null}
+
+          {blockDetail && !blockDetailLoading ? (
+            <div className="flex flex-col gap-4 text-sm">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-none border p-3">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">No. Batch</div>
+                <div className="text-right font-medium">{blockDetail.batch.batch_number}</div>
+
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Item</div>
+                <div className="text-right">{blockDetail.item?.item_code ?? blockDetail.item?.item_name ?? '-'}</div>
+
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Nama Tahap</div>
+                <div className="text-right">{blockDetail.step.step_name}</div>
+
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Work Center</div>
+                <div className="text-right">{blockDetail.workCenter ? `${blockDetail.workCenter.name}${blockDetail.workCenter.code ? ` (${blockDetail.workCenter.code})` : ''}` : '-'}</div>
+
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Tanggal Rencana</div>
+                <div className="text-right">{blockDetail.batch.planned_date ?? '-'}</div>
+
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Durasi Aktif</div>
+                <div className="text-right">{blockDetail.step.active_duration_minutes} mnt</div>
+
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Durasi Tunggu</div>
+                <div className="text-right">{blockDetail.step.wait_duration_minutes} mnt</div>
+
+                {blockDetail.shift ? (
+                  <>
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Shift</div>
+                    <div className="text-right">
+                      {blockDetail.shift.name} ({blockDetail.shift.start_time}–{blockDetail.shift.end_time})
+                    </div>
+                  </>
+                ) : null}
+
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Status Batch</div>
+                <div className="text-right">
+                  <Badge variant={statusBadgeVariant[blockDetail.batch.status] ?? 'secondary'}>{statusLabels[blockDetail.batch.status] ?? blockDetail.batch.status}</Badge>
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Pekerja Ditugaskan</p>
+                {blockDetail.assignments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Belum ada pekerja yang ditugaskan ke tahap ini.</p>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    {blockDetail.assignments.map((a) => (
+                      <div key={a.work_order_assignment_id} className="flex items-center justify-between border-b py-1 last:border-0">
+                        <div>
+                          <span className="font-medium text-foreground">{a.employee_name ?? '-'}</span>
+                          {a.employee_position ? <span className="text-xs text-muted-foreground"> · {a.employee_position}</span> : null}
+                        </div>
+                        <span className="text-xs text-muted-foreground">{assignmentStatusLabels[a.status] ?? a.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Progres Tercatat</p>
+                {blockDetail.progress.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Belum ada progres tercatat untuk tahap ini.</p>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    {blockDetail.progress.map((p) => (
+                      <div key={p.work_order_step_progress_id} className="border-b py-1 last:border-0">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-foreground">{progressStatusLabels[p.status] ?? p.status}</span>
+                          <span className="text-xs text-muted-foreground">{p.qty_recorded !== null ? `${p.qty_recorded} ${p.uom ?? ''}` : '-'}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Mulai: {formatDateTime(p.started_at)} · Selesai: {formatDateTime(p.completed_at)}
+                        </div>
+                        {p.notes ? <div className="text-xs text-muted-foreground">Catatan: {p.notes}</div> : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

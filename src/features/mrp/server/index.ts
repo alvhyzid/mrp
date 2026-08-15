@@ -39,3 +39,4 @@ export * from './listWorkCenters';
 export * from './listRoutings';
 export * from './createRouting';
 export * from './updateRouting';
+export * from './getGanttBlockDetail';

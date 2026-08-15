@@ -8,6 +8,7 @@ interface ApiResult {
 }
 
 type RoutingStep = {
+  routing_step_id: number;
   routing_id: number;
   sequence_no: number;
   step_name: string;
@@ -86,7 +87,7 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
         ? adminClient.from('items').select('item_id, item_code, name').in('item_id', itemIds)
         : Promise.resolve({ data: [] as { item_id: number; item_code: string | null; name: string }[], error: null }),
       routingIds.length
-        ? adminClient.from('routing_steps').select('routing_id, sequence_no, step_name, work_center_id, active_duration_minutes, wait_duration_minutes').in('routing_id', routingIds)
+        ? adminClient.from('routing_steps').select('routing_step_id, routing_id, sequence_no, step_name, work_center_id, active_duration_minutes, wait_duration_minutes').in('routing_id', routingIds)
         : Promise.resolve({ data: [] as RoutingStep[], error: null })
     ]);
     if (itemsRes.error) return { status: 500, body: { error: itemsRes.error.message } };
@@ -109,6 +110,7 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
       batch_status: string;
       item_code: string | null;
       item_name: string | null;
+      routing_step_id: number;
       step_name: string;
       sequence_no: number;
       duration_minutes: number;
@@ -165,6 +167,7 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
             batch_status: batch.status,
             item_code: item?.item_code ?? null,
             item_name: item?.name ?? null,
+            routing_step_id: step.routing_step_id,
             step_name: step.step_name,
             sequence_no: step.sequence_no,
             duration_minutes: step.active_duration_minutes ?? 0,

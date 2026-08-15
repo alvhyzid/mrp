@@ -8,6 +8,7 @@ import {
   Document,
   Receipt,
   Assembly,
+  FlowConnection,
   Task,
   InventoryManagement,
   Cube,
@@ -103,6 +104,7 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'PO Client', href: '/customer-purchase-orders', visible: () => true, icon: Document },
       { label: 'Sales Order', href: '/sales-orders', visible: () => true, icon: Receipt },
       { label: 'BOM (Resep)', href: '/boms', visible: () => true, icon: Assembly },
+      { label: 'Routing', href: '/routing', visible: () => true, icon: FlowConnection },
       { label: 'Work Order', href: '/work-orders', visible: () => true, icon: Task }
     ]
   },

@@ -294,9 +294,15 @@ export default function BomsPage() {
       return;
     }
 
+    // SENGAJA tidak panggil resetForm() di sini — resetForm() juga membersihkan
+    // formStatus/formMessage, jadi kalau dipanggil tepat setelah set 'success' di
+    // atas, pesan konfirmasi akan langsung ketimpa 'idle'/kosong sebelum sempat
+    // dirender (React 18 membatch semua setState di handler yang sama). Reset
+    // field form saja di sini, biarkan pesan sukses tetap tampil.
     setFormStatus('success');
     setFormMessage(editingBomId ? 'BOM berhasil diperbarui.' : 'BOM baru berhasil dibuat.');
-    resetForm();
+    setEditingBomId(null);
+    setForm(emptyForm);
     await loadBoms();
   };
 

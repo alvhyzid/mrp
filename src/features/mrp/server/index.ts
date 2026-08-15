@@ -35,3 +35,7 @@ export * from './getWorkCenterCapacity';
 export * from './updateWorkCenterCapacity';
 export * from './getWorkCenterGantt';
 export * from './updateProductionBatchSchedule';
+export * from './listWorkCenters';
+export * from './listRoutings';
+export * from './createRouting';
+export * from './updateRouting';

@@ -70,6 +70,7 @@ type Bom = {
   lines: { component_item_id: number; component_item_code: string | null; component_item_name: string | null; qty_per_unit_output: number; uom: string }[];
 };
 type PlantOption = { production_plant_id: number; name: string };
+type RoutingOption = { routing_id: number; item_id: number; version: number; steps: unknown[] };
 
 type ProductionBatch = {
   production_batch_id: number;
@@ -114,6 +115,7 @@ export default function WorkOrdersPage() {
 
   const [salesOrders, setSalesOrders] = useState<SalesOrder[]>([]);
   const [boms, setBoms] = useState<Bom[]>([]);
+  const [routings, setRoutings] = useState<RoutingOption[]>([]);
   const [plants, setPlants] = useState<PlantOption[]>([]);
 
   const [expandedWoId, setExpandedWoId] = useState<number | null>(null);
@@ -132,6 +134,7 @@ export default function WorkOrdersPage() {
     sales_order_id: '',
     sales_order_line_id: '',
     bom_id: '',
+    routing_id: '',
     production_plant_id: '',
     planned_qty: '',
     priority: 'normal',
@@ -181,6 +184,11 @@ export default function WorkOrdersPage() {
     if (ok) setBoms(body.boms || []);
   }, [authedFetch]);
 
+  const loadRoutings = useCallback(async () => {
+    const { ok, body } = await authedFetch('/api/routings');
+    if (ok) setRoutings(body.routings || []);
+  }, [authedFetch]);
+
   const loadPlants = useCallback(async () => {
     const { ok, body } = await authedFetch('/api/production-plants');
     if (ok) setPlants(body.plants || []);
@@ -208,14 +216,15 @@ export default function WorkOrdersPage() {
       }
       setRole(meData?.user?.role ?? null);
       setCheckingAccess(false);
-      await Promise.all([loadWorkOrders(), loadSalesOrders(), loadBoms(), loadPlants()]);
+      await Promise.all([loadWorkOrders(), loadSalesOrders(), loadBoms(), loadRoutings(), loadPlants()]);
     };
     checkAccessAndLoad();
-  }, [router, loadWorkOrders, loadSalesOrders, loadBoms, loadPlants]);
+  }, [router, loadWorkOrders, loadSalesOrders, loadBoms, loadRoutings, loadPlants]);
 
   const selectedSo = salesOrders.find((so) => String(so.sales_order_id) === form.sales_order_id) ?? null;
   const selectedSoLine = selectedSo?.lines.find((line) => String(line.sales_order_line_id) === form.sales_order_line_id) ?? null;
   const availableBomsForLine = selectedSoLine ? boms.filter((bom) => bom.parent_item_id === selectedSoLine.item_id) : [];
+  const availableRoutingsForLine = selectedSoLine ? routings.filter((r) => r.item_id === selectedSoLine.item_id) : [];
 
   const handleSelectSo = (soId: string) => {
     const so = salesOrders.find((s) => String(s.sales_order_id) === soId);
@@ -224,6 +233,7 @@ export default function WorkOrdersPage() {
       sales_order_id: soId,
       sales_order_line_id: '',
       bom_id: '',
+      routing_id: '',
       production_plant_id: so ? String(so.production_plant_id) : prev.production_plant_id
     }));
   };
@@ -237,6 +247,7 @@ export default function WorkOrdersPage() {
       production_plant_id: Number(form.production_plant_id),
       sales_order_line_id: Number(form.sales_order_line_id),
       bom_id: Number(form.bom_id),
+      routing_id: form.routing_id ? Number(form.routing_id) : null,
       planned_qty: Number(form.planned_qty),
       priority: form.priority,
       scheduled_start: form.scheduled_start || null,
@@ -252,7 +263,7 @@ export default function WorkOrdersPage() {
 
     setFormStatus('success');
     setFormMessage('Work Order berhasil dibuat.');
-    setForm({ sales_order_id: '', sales_order_line_id: '', bom_id: '', production_plant_id: '', planned_qty: '', priority: 'normal', scheduled_start: '', scheduled_end: '' });
+    setForm({ sales_order_id: '', sales_order_line_id: '', bom_id: '', routing_id: '', production_plant_id: '', planned_qty: '', priority: 'normal', scheduled_start: '', scheduled_end: '' });
     await loadWorkOrders();
   };
 
@@ -689,7 +700,7 @@ export default function WorkOrdersPage() {
                   </label>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-3">
                   <label className="flex flex-col gap-1.5">
                     <span className="text-sm font-medium text-foreground">BOM</span>
                     <Select value={form.bom_id} onValueChange={(value) => setForm((prev) => ({ ...prev, bom_id: value }))} disabled={!selectedSoLine}>
@@ -705,6 +716,25 @@ export default function WorkOrdersPage() {
                       </SelectContent>
                     </Select>
                     {selectedSoLine && availableBomsForLine.length === 0 ? <span className="text-xs text-destructive">Belum ada BOM untuk item ini — buat dulu di halaman BOM.</span> : null}
+                  </label>
+
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-medium text-foreground">Routing (opsional)</span>
+                    <Select value={form.routing_id} onValueChange={(value) => setForm((prev) => ({ ...prev, routing_id: value }))} disabled={!selectedSoLine}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={selectedSoLine ? '(Tidak ada)' : 'Pilih SO line dulu'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableRoutingsForLine.map((r) => (
+                          <SelectItem key={r.routing_id} value={String(r.routing_id)}>
+                            v{r.version} — {r.steps.length} tahap
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedSoLine && availableRoutingsForLine.length === 0 ? (
+                      <span className="text-xs text-muted-foreground">Belum ada Routing untuk item ini — WO tetap bisa dibuat, tapi tidak akan muncul di Gantt Produksi.</span>
+                    ) : null}
                   </label>
 
                   <label className="flex flex-col gap-1.5">

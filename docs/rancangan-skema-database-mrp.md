@@ -16,6 +16,8 @@ Dokumen ini adalah rancangan struktur database sistem MRP. Ditulis dalam bahasa 
 7. **Data finansial dibatasi ketat** — lihat bagian "Kontrol Akses Data Finansial" di bawah, ini prinsip lintas-tabel yang berlaku di banyak tempat.
 8. **Dashboard per-department, data tetap satu sumber** — begitu login, tampilan diarahkan sesuai `role`/`department` user (Warehouse lihat dashboard ala WMS, HRD lihat data karyawan, dst) — TAPI ini murni soal TAMPILAN/ROUTING di aplikasi, BUKAN pemisahan tabel. `items`, `work_orders`, dan tabel lain yang lintas-department (dipakai lebih dari 1 department) TETAP satu tabel, satu sumber kebenaran — cukup difilter/ditata beda sesuai sudut pandang department yang login.
 
+> **Cara baca dokumen ini:** daftar kolom di tiap tabel di bawah menggambarkan skema yang SUDAH ADA di database sungguhan (sudah lewat migrasi, sudah bisa dipakai aplikasi). Bagian yang masih berupa rencana yang DISEPAKATI tapi BELUM diimplementasikan ditandai eksplisit dengan blockquote **`[RENCANA — BELUM DIBANGUN]`**, terpisah dari daftar kolom yang sudah nyata — supaya "sudah didokumentasikan" tidak pernah tertukar dengan "sudah jalan di database".
+
 ---
 
 ## Kontrol Akses Data Finansial
@@ -87,8 +89,10 @@ Definisi shift kerja pabrik (mis. Shift Pagi 07:00-15:00, Shift Malam 15:00-23:0
 Mencatat gangguan operasional yang menyebabkan produksi terhambat/terhenti — mesin rusak, listrik padam, faktor eksternal, ATAU produksi dialihkan ke pekerjaan lain yang lebih mendesak.
 - `production_disruption_id`, `company_id`
 - `disruption_type` (equipment_breakdown / utility_outage / external_factor / reprioritized / other) — `reprioritized` dipakai saat WO di-pause karena dialihkan ke pekerjaan lain
-- `work_center_id` (nullable), `work_order_id`, `routing_step_id` (nullable), `shift_id`
+- `work_center_id` (nullable), `work_order_id` (nullable), `routing_step_id` (nullable), `shift_id`
 - `started_at`, `resolved_at`, `description`
+
+> **[RENCANA — BELUM DIBANGUN] Gangguan menyeluruh 1 plant:** tabel di atas belum punya `production_plant_id` maupun `production_batch_id`. Rencana yang disepakati: tambah `production_plant_id` (WAJIB diisi) dan `production_batch_id` (nullable); `work_center_id` dikosongkan kalau gangguan MENYELURUH 1 plant (mis. listrik padam se-pabrik, bukan 1 mesin spesifik). Begitu gangguan menyeluruh dicatat, SEMUA `production_batches` berstatus `in_progress` di `production_plant_id` itu harus otomatis ikut ter-flag "Blocked" (lewat `system_alerts`) — bukan cuma satu WO yang kebetulan disebut di `work_order_id`. Begitu `resolved_at` diisi, semua yang tadi ter-flag harus otomatis kembali "Ready". **Catatan status saat ini:** mekanisme Ready/Blocked yang SUDAH jalan (`recompute_work_order_machine_readiness`, migrasi `20260813160000`) baru menangani gangguan `work_center_id` terisi (mesin spesifik) — kalau `work_center_id` dikosongkan tanpa `work_order_id` eksplisit, trigger yang ada SAAT INI tidak mencocokkan WO/batch manapun, jadi cascade menyeluruh ini betul-betul belum berfungsi.
 
 ### `employees`
 Data pekerja pabrik untuk keperluan biaya SDM — terpisah dari `users`. **Akses ke kolom gaji dibatasi ketat, lihat "Kontrol Akses Data Finansial" di atas.**
@@ -142,8 +146,10 @@ Master data mesin/stasiun kerja — fisiknya ada di SATU lokasi pabrik.
 - `capacity_hours_per_day` (nullable — dasar Dashboard Kapasitas per Work Center, lihat `rencana-ams-mvp.md` Bagian 3 poin 1)
 
 ### `routings`
-Header urutan tahapan produksi per item — sengaja TETAP generik (tidak diikat 1 plant), dianggap sama di semua lokasi yang memproduksi item itu.
+Header urutan tahapan produksi per item — sengaja TETAP generik (tidak diikat 1 plant), dianggap sama di semua lokasi yang memproduksi item itu. Master data yang dipakai ULANG lintas banyak Work Order (persis BOM) — bukan didefinisikan ulang tiap WO.
 - `routing_id`, `company_id`, `item_id`, `version`
+
+> **[RENCANA — BELUM DIBANGUN] Status & versioning saat edit:** tabel di atas belum punya kolom `status`. Rencana yang disepakati: tambah `status` (draft / active / archived), dengan aturan **edit = versi baru, BUKAN menimpa data lama** — kalau estimasi durasi tahap perlu diperbarui (mis. "Mixing" ternyata cuma 20 menit, bukan 1 jam seperti rencana awal) SETELAH routing berstatus `active` (sudah dipakai WO), buat baris `routings` baru dengan `version` naik + `routing_steps` baru, lalu `status` versi lama diubah jadi `archived`. WO yang SUDAH ADA tetap merujuk `routing_id` versi lamanya (riwayat tidak berubah), WO BARU otomatis pakai versi `active` terbaru. Kalau routing masih `draft` (belum pernah dipakai WO manapun), boleh diedit langsung di tempat tanpa perlu versi baru. **Catatan status saat ini:** halaman Routing yang sudah jalan (`/routing`) memakai `updateRouting` pola hapus-lalu-tulis-ulang `routing_steps` (sama seperti BOM) — BUKAN pola versioning ini; mengedit routing yang sudah pernah dipakai produksi bisa gagal kena constraint foreign key (kegagalan aman, tidak merusak data, tapi belum ada pesan error yang ramah).
 
 ### `routing_steps`
 - `routing_step_id`, `routing_id`, `sequence_no`, `step_name`
@@ -281,7 +287,10 @@ Penugasan pekerja per BATCH — sumber data biaya SDM (nilai sensitif, lihat "Ko
 ### `work_order_step_progress`
 Visibilitas real-time tahap produksi per BATCH — penting karena batch-batch dalam 1 shift bisa berada di tahap BERBEDA secara bersamaan (mis. Batch 1 sedang curing 48 jam, sementara Batch 3 baru mixing) — juga basis kalkulasi proyeksi stok (lihat `system_alerts`).
 - `work_order_step_progress_id`, `work_order_id`, `production_batch_id`, `routing_step_id`, `shift_id`
-- `status` (pending / in_progress / completed), `qty_recorded`, `uom`, `started_at`, `completed_at`, `notes`
+- `qty_input` (nullable — jumlah yang MASUK ke tahap ini), `uom_input` (nullable — satuan bisa beda dari output, mis. kg masuk → pcs keluar di tahap Cetak)
+- `status` (pending / in_progress / completed), `qty_recorded` (jumlah yang KELUAR/dihasilkan tahap ini — nama kolom dipertahankan apa adanya, cuma diperjelas maknanya sebagai "output"), `uom`, `started_at`, `completed_at`, `notes`
+
+> **Tracking penyusutan antar-tahap (SUDAH BERJALAN):** saat operator mulai suatu tahap, `qty_input` otomatis DISARANKAN dari `qty_recorded` (output) tahap sebelumnya pada `production_batch` yang sama — BUKAN dari `production_batches.planned_qty` (itu cuma jangkar untuk tahap PERTAMA/kalau tahap sebelumnya belum ada datanya). Operator tetap bisa mengubah angka yang disarankan. Ini yang bikin sistem tahu "yang benar-benar masuk Cetak cuma 9,5kg, bukan 10kg teoritis," dan penyusutan (`qty_input − qty_recorded`) di tiap tahap dilaporkan & diakumulasikan sampai akhir produksi ("Ringkasan Yield per Batch", diklik dari panel detail Gantt) — DIHITUNG dari data yang ada, bukan tabel baru.
 
 ### `system_alerts`
 Peringatan otomatis dari sistem.

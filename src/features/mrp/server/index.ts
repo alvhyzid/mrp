@@ -40,3 +40,5 @@ export * from './listRoutings';
 export * from './createRouting';
 export * from './updateRouting';
 export * from './getGanttBlockDetail';
+export * from './suggestStepInputQty';
+export * from './getBatchYieldSummary';

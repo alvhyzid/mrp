@@ -13,7 +13,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { canAccessPpicDashboard, canManageWorkCenterCapacity, canManageWorkOrder } from '@/lib/roles';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { canAccessPpicDashboard, canManageWorkCenterCapacity, canManageWorkOrder, canRecordStepProgress } from '@/lib/roles';
 
 const statusLabels: Record<string, string> = { planned: 'Direncanakan', in_progress: 'Berjalan', paused: 'Dijeda', completed: 'Selesai', cancelled: 'Batal' };
 const statusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical' | 'secondary'> = {
@@ -79,21 +80,26 @@ type BlockDetailAssignment = {
 type BlockDetailProgress = {
   work_order_step_progress_id: number;
   status: string;
+  qty_input: number | null;
+  uom_input: string | null;
   qty_recorded: number | null;
   uom: string | null;
   started_at: string | null;
   completed_at: string | null;
   notes: string | null;
+  shrinkage_pct: number | null;
 };
 type BlockDetail = {
-  batch: { production_batch_id: number; batch_number: string; planned_qty: number; uom: string; planned_date: string | null; status: string; started_at: string | null; completed_at: string | null };
+  batch: { production_batch_id: number; work_order_id: number; batch_number: string; planned_qty: number; uom: string; planned_date: string | null; status: string; started_at: string | null; completed_at: string | null };
   item: { item_code: string | null; item_name: string | null } | null;
-  step: { step_name: string; sequence_no: number; active_duration_minutes: number; wait_duration_minutes: number };
+  step: { routing_step_id: number; step_name: string; sequence_no: number; active_duration_minutes: number; wait_duration_minutes: number };
   workCenter: { name: string; code: string | null } | null;
   shift: { name: string; start_time: string; end_time: string } | null;
   assignments: BlockDetailAssignment[];
   progress: BlockDetailProgress[];
 };
+type YieldStep = { routing_step_id: number; sequence_no: number; step_name: string; status: string | null; qty_input: number | null; uom_input: string | null; qty_recorded: number | null; uom: string | null; shrinkage_pct: number | null };
+type YieldSummary = { batch_number: string; steps: YieldStep[]; total_yield_pct: number | null };
 
 const assignmentStatusLabels: Record<string, string> = { planned: 'Direncanakan', confirmed: 'Dikonfirmasi', absent: 'Tidak Hadir', replaced: 'Digantikan', completed: 'Selesai', unplanned_addition: 'Tambahan Dadakan' };
 const progressStatusLabels: Record<string, string> = { pending: 'Belum Mulai', in_progress: 'Berjalan', completed: 'Selesai' };
@@ -278,6 +284,17 @@ export default function PpicDashboardPage() {
   const [blockDetailLoading, setBlockDetailLoading] = useState(false);
   const [blockDetailError, setBlockDetailError] = useState('');
 
+  const emptyProgressForm = { status: 'in_progress', qty_input: '', uom_input: '', qty_recorded: '', uom: '', notes: '' };
+  const [progressForm, setProgressForm] = useState(emptyProgressForm);
+  const [progressSuggestion, setProgressSuggestion] = useState<{ qty: number; uom: string | null; source: 'previous_step' | 'planned_qty' } | null>(null);
+  const [progressFormStatus, setProgressFormStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [progressFormMessage, setProgressFormMessage] = useState('');
+
+  const [yieldOpen, setYieldOpen] = useState(false);
+  const [yieldSummary, setYieldSummary] = useState<YieldSummary | null>(null);
+  const [yieldLoading, setYieldLoading] = useState(false);
+  const [yieldError, setYieldError] = useState('');
+
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
     const { data } = await supabase.auth.getSession();
@@ -394,16 +411,93 @@ export default function PpicDashboardPage() {
       setBlockDetail(null);
       setBlockDetailError('');
       setBlockDetailLoading(true);
-      const { ok, body } = await authedFetch(`/api/production-batches/step-detail?production_batch_id=${block.production_batch_id}&routing_step_id=${block.routing_step_id}`);
+      setProgressFormStatus('idle');
+      setProgressFormMessage('');
+      setProgressSuggestion(null);
+      const [detailRes, suggestRes] = await Promise.all([
+        authedFetch(`/api/production-batches/step-detail?production_batch_id=${block.production_batch_id}&routing_step_id=${block.routing_step_id}`),
+        authedFetch(`/api/work-order-step-progress/suggest-input?production_batch_id=${block.production_batch_id}&routing_step_id=${block.routing_step_id}`)
+      ]);
       setBlockDetailLoading(false);
-      if (!ok) {
-        setBlockDetailError(body.error || 'Gagal memuat detail tahap ini.');
+      if (!detailRes.ok) {
+        setBlockDetailError(detailRes.body.error || 'Gagal memuat detail tahap ini.');
         return;
       }
-      setBlockDetail(body as BlockDetail);
+      const detail = detailRes.body as BlockDetail;
+      setBlockDetail(detail);
+
+      const latestProgress = detail.progress[0] ?? null;
+      if (latestProgress && latestProgress.status !== 'completed') {
+        // Tahap ini sudah pernah dicatat (belum selesai) — edit baris yang ada,
+        // BUKAN timpa dengan saran baru.
+        setProgressForm({
+          status: latestProgress.status,
+          qty_input: latestProgress.qty_input !== null ? String(latestProgress.qty_input) : '',
+          uom_input: latestProgress.uom_input ?? '',
+          qty_recorded: latestProgress.qty_recorded !== null ? String(latestProgress.qty_recorded) : '',
+          uom: latestProgress.uom ?? '',
+          notes: latestProgress.notes ?? ''
+        });
+      } else if (suggestRes.ok) {
+        const suggestion = suggestRes.body as { suggested_qty: number | null; suggested_uom: string | null; source: 'previous_step' | 'planned_qty' };
+        if (suggestion.suggested_qty !== null) {
+          setProgressSuggestion({ qty: suggestion.suggested_qty, uom: suggestion.suggested_uom, source: suggestion.source });
+        }
+        setProgressForm({ ...emptyProgressForm, qty_input: suggestion.suggested_qty !== null ? String(suggestion.suggested_qty) : '', uom_input: suggestion.suggested_uom ?? '' });
+      } else {
+        setProgressForm(emptyProgressForm);
+      }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [authedFetch]
   );
+
+  const handleSubmitProgress = async () => {
+    if (!blockDetail) return;
+    setProgressFormStatus('saving');
+    setProgressFormMessage('');
+    const { ok, body } = await authedFetch('/api/work-order-step-progress', {
+      method: 'POST',
+      body: JSON.stringify({
+        work_order_id: blockDetail.batch.work_order_id,
+        production_batch_id: blockDetail.batch.production_batch_id,
+        routing_step_id: blockDetail.step.routing_step_id,
+        status: progressForm.status,
+        qty_input: progressForm.qty_input === '' ? null : Number(progressForm.qty_input),
+        uom_input: progressForm.uom_input || null,
+        qty_recorded: progressForm.qty_recorded === '' ? null : Number(progressForm.qty_recorded),
+        uom: progressForm.uom || null,
+        notes: progressForm.notes || null
+      })
+    });
+    if (!ok) {
+      setProgressFormStatus('error');
+      setProgressFormMessage(body.error || 'Gagal menyimpan progres.');
+      return;
+    }
+    setProgressFormStatus('success');
+    setProgressFormMessage('Progres tahap berhasil disimpan.');
+    const { ok: detailOk, body: detailBody } = await authedFetch(
+      `/api/production-batches/step-detail?production_batch_id=${blockDetail.batch.production_batch_id}&routing_step_id=${blockDetail.step.routing_step_id}`
+    );
+    if (detailOk) setBlockDetail(detailBody as BlockDetail);
+    await loadGantt(ganttView, ganttWeekOffset, ganttDailyDate, ganttMonth);
+  };
+
+  const handleOpenYieldSummary = async () => {
+    if (!blockDetail) return;
+    setYieldOpen(true);
+    setYieldSummary(null);
+    setYieldError('');
+    setYieldLoading(true);
+    const { ok, body } = await authedFetch(`/api/production-batches/yield-summary?production_batch_id=${blockDetail.batch.production_batch_id}`);
+    setYieldLoading(false);
+    if (!ok) {
+      setYieldError(body.error || 'Gagal memuat ringkasan yield.');
+      return;
+    }
+    setYieldSummary(body as YieldSummary);
+  };
 
   useEffect(() => {
     const checkAccessAndLoad = async () => {
@@ -1099,7 +1193,12 @@ export default function PpicDashboardPage() {
               </div>
 
               <div>
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Progres Tercatat</p>
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Progres Tercatat</p>
+                  <Button size="sm" variant="outline" onClick={handleOpenYieldSummary}>
+                    Ringkasan Yield Batch
+                  </Button>
+                </div>
                 {blockDetail.progress.length === 0 ? (
                   <p className="text-sm text-muted-foreground">Belum ada progres tercatat untuk tahap ini.</p>
                 ) : (
@@ -1108,7 +1207,10 @@ export default function PpicDashboardPage() {
                       <div key={p.work_order_step_progress_id} className="border-b py-1 last:border-0">
                         <div className="flex items-center justify-between">
                           <span className="font-medium text-foreground">{progressStatusLabels[p.status] ?? p.status}</span>
-                          <span className="text-xs text-muted-foreground">{p.qty_recorded !== null ? `${p.qty_recorded} ${p.uom ?? ''}` : '-'}</span>
+                          <span className="text-xs text-muted-foreground">
+                            Input: {p.qty_input !== null ? `${p.qty_input} ${p.uom_input ?? ''}` : '-'} → Output: {p.qty_recorded !== null ? `${p.qty_recorded} ${p.uom ?? ''}` : '-'}
+                            {p.shrinkage_pct !== null ? ` · Susut ${p.shrinkage_pct}%` : ''}
+                          </span>
                         </div>
                         <div className="text-xs text-muted-foreground">
                           Mulai: {formatDateTime(p.started_at)} · Selesai: {formatDateTime(p.completed_at)}
@@ -1119,6 +1221,101 @@ export default function PpicDashboardPage() {
                   </div>
                 )}
               </div>
+
+              {canRecordStepProgress(role) ? (
+                <div className="border-t pt-3">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Catat Progres Tahap Ini</p>
+                  {progressSuggestion ? (
+                    <p className="mb-2 text-xs text-muted-foreground">
+                      Jumlah masuk disarankan: <span className="font-medium text-foreground">{progressSuggestion.qty} {progressSuggestion.uom ?? ''}</span>{' '}
+                      ({progressSuggestion.source === 'previous_step' ? 'dari output tahap sebelumnya' : 'dari planned_qty batch — tahap pertama/belum ada data sebelumnya'}) — bisa diubah.
+                    </p>
+                  ) : null}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="col-span-2">
+                      <label className="mb-1 block text-xs text-muted-foreground">Status</label>
+                      <Select value={progressForm.status} onValueChange={(v) => setProgressForm((prev) => ({ ...prev, status: v }))}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">Belum Mulai</SelectItem>
+                          <SelectItem value="in_progress">Berjalan</SelectItem>
+                          <SelectItem value="completed">Selesai</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-muted-foreground">Jumlah Masuk (Input)</label>
+                      <Input type="number" step="any" value={progressForm.qty_input} onChange={(e) => setProgressForm((prev) => ({ ...prev, qty_input: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-muted-foreground">Satuan Masuk</label>
+                      <Input value={progressForm.uom_input} onChange={(e) => setProgressForm((prev) => ({ ...prev, uom_input: e.target.value }))} placeholder="mis. kg" />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-muted-foreground">Jumlah Keluar (Output)</label>
+                      <Input type="number" step="any" value={progressForm.qty_recorded} onChange={(e) => setProgressForm((prev) => ({ ...prev, qty_recorded: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-muted-foreground">Satuan Keluar</label>
+                      <Input value={progressForm.uom} onChange={(e) => setProgressForm((prev) => ({ ...prev, uom: e.target.value }))} placeholder="mis. kg" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="mb-1 block text-xs text-muted-foreground">Catatan (opsional)</label>
+                      <Input value={progressForm.notes} onChange={(e) => setProgressForm((prev) => ({ ...prev, notes: e.target.value }))} />
+                    </div>
+                  </div>
+                  {progressFormMessage ? <p className={`mt-2 text-sm ${progressFormStatus === 'error' ? 'text-destructive' : 'text-success'}`}>{progressFormMessage}</p> : null}
+                  <Button size="sm" className="mt-2" disabled={progressFormStatus === 'saving'} onClick={handleSubmitProgress}>
+                    {progressFormStatus === 'saving' ? 'Menyimpan...' : 'Simpan Progres'}
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={yieldOpen} onOpenChange={setYieldOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Ringkasan Yield {yieldSummary ? `— ${yieldSummary.batch_number}` : 'Batch'}</DialogTitle>
+            <DialogDescription>Input → output → % susut tiap tahap, dan total yield keseluruhan batch.</DialogDescription>
+          </DialogHeader>
+          {yieldLoading ? <p className="text-sm text-muted-foreground">Memuat ringkasan yield...</p> : null}
+          {yieldError ? <p className="text-sm text-destructive">{yieldError}</p> : null}
+          {yieldSummary && !yieldLoading ? (
+            <div className="flex flex-col gap-3 text-sm">
+              <div className="overflow-x-auto rounded-none border">
+                <table className="w-full text-data">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="h-8 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Tahap</th>
+                      <th className="h-8 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Input</th>
+                      <th className="h-8 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Output</th>
+                      <th className="h-8 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Susut</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {yieldSummary.steps.map((s) => (
+                      <tr key={s.routing_step_id} className="border-b last:border-0">
+                        <td className="px-2 py-1.5">
+                          {s.sequence_no}. {s.step_name}
+                        </td>
+                        <td className="px-2 py-1.5">{s.qty_input !== null ? `${s.qty_input} ${s.uom_input ?? ''}` : '-'}</td>
+                        <td className="px-2 py-1.5">{s.qty_recorded !== null ? `${s.qty_recorded} ${s.uom ?? ''}` : '-'}</td>
+                        <td className="px-2 py-1.5">{s.shrinkage_pct !== null ? `${s.shrinkage_pct}%` : '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex items-center justify-between border-t pt-2">
+                <span className="text-sm font-medium text-foreground">Total Yield Batch</span>
+                <span className="text-lg font-semibold text-foreground">{yieldSummary.total_yield_pct !== null ? `${yieldSummary.total_yield_pct}%` : 'Belum bisa dihitung'}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">Total Yield = Output tahap terakhir ÷ Input tahap pertama × 100%.</p>
             </div>
           ) : null}
         </DialogContent>

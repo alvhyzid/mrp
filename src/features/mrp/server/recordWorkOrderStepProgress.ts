@@ -35,6 +35,8 @@ export async function recordWorkOrderStepProgress(request: NextRequest): Promise
     const status = String(body.status ?? '').trim();
     const qtyRecorded = body.qty_recorded === undefined || body.qty_recorded === null || body.qty_recorded === '' ? null : Number(body.qty_recorded);
     const uom = body.uom ? String(body.uom).trim() : null;
+    const qtyInput = body.qty_input === undefined || body.qty_input === null || body.qty_input === '' ? null : Number(body.qty_input);
+    const uomInput = body.uom_input ? String(body.uom_input).trim() : null;
     const notes = body.notes ? String(body.notes).trim() : null;
 
     if (!workOrderId || !routingStepId) {
@@ -95,6 +97,8 @@ export async function recordWorkOrderStepProgress(request: NextRequest): Promise
         .from('work_order_step_progress')
         .update({
           status,
+          qty_input: qtyInput,
+          uom_input: uomInput,
           qty_recorded: qtyRecorded,
           uom,
           notes,
@@ -110,6 +114,8 @@ export async function recordWorkOrderStepProgress(request: NextRequest): Promise
           production_batch_id: productionBatchId,
           routing_step_id: routingStepId,
           status,
+          qty_input: qtyInput,
+          uom_input: uomInput,
           qty_recorded: qtyRecorded,
           uom,
           notes,

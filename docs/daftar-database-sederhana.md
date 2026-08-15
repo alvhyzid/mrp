@@ -4,6 +4,8 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 
 **Konvensi penamaan ID:** setiap primary key memakai pola `nama_tabel_tunggal_id`.
 
+**Cara baca dokumen ini:** daftar field di tiap tabel menggambarkan skema yang SUDAH ADA di database sungguhan. Bagian yang masih rencana yang disepakati tapi BELUM dibangun ditandai eksplisit **`[RENCANA — BELUM DIBANGUN]`**, terpisah dari field yang sudah nyata.
+
 **Kontrol Akses Data Finansial (berlaku lintas tabel):**
 - Harga jual/margin/biaya gabungan → HANYA `company_admin`, `general_manager`, `finance_manager`
 - Gaji individual (`employees.wage_rate`) → HANYA `company_admin` + `hr_manager`/`hr_staff` + karyawan sendiri. `general_manager` dan `finance_manager` TIDAK termasuk (cuma dapat angka total, bukan rincian per-orang)
@@ -41,6 +43,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 - ID Gangguan (production_disruption_id) · ID Perusahaan (company_id)
 - Jenis: mesin/listrik padam/faktor eksternal/dialihkan ke pekerjaan lain/lainnya (disruption_type)
 - ID Mesin (work_center_id) · ID Work Order (work_order_id) · ID Tahap (routing_step_id) · ID Shift (shift_id) · Waktu Mulai (started_at) · Waktu Selesai (resolved_at) · Keterangan (description)
+- **[RENCANA — BELUM DIBANGUN]** ID Lokasi Pabrik — wajib diisi (production_plant_id) · ID Batch (production_batch_id) — untuk mendukung gangguan menyeluruh 1 plant yang otomatis blokir semua batch aktif di plant itu; detail di `rancangan-skema-database-mrp.md`
 
 **Database Pekerja** (`employees`) — *akses gaji dibatasi, lihat kontrol akses di atas*
 - ID Pekerja (employee_id) · ID Perusahaan (company_id) · ID Lokasi Pabrik — nullable (production_plant_id) · Nama (name) · Posisi (position)
@@ -80,6 +83,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 
 **Database Header Alur Produksi** (`routings`)
 - ID Routing (routing_id) · ID Perusahaan (company_id) · ID Item (item_id) · Versi (version)
+- **[RENCANA — BELUM DIBANGUN]** Status: draft/aktif/diarsipkan (status) — dengan aturan edit = versi baru begitu status `aktif`; detail di `rancangan-skema-database-mrp.md`
 
 **Database Tahapan Produksi** (`routing_steps`)
 - ID Tahap (routing_step_id) · ID Routing (routing_id) · Nomor Urut (sequence_no) · Nama Tahap (step_name) · Durasi Aktif Menit (active_duration_minutes) · Durasi Tunggu Menit (wait_duration_minutes) · ID Mesin (work_center_id)
@@ -196,7 +200,9 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 - Status (status) · ID Penugasan Digantikan (replacement_for_assignment_id) · Jam Rencana (scheduled_hours) · Jam Aktual (actual_hours) · Jumlah Dihasilkan (qty_produced)
 
 **Database Progres Tahap Produksi** (`work_order_step_progress`)
-- ID Progres (work_order_step_progress_id) · ID Work Order (work_order_id) · ID Batch (production_batch_id) · ID Tahap (routing_step_id) · ID Shift (shift_id) · Status (status) · Jumlah Tercatat (qty_recorded) · Satuan (uom) · Waktu Mulai (started_at) · Waktu Selesai (completed_at) · Catatan (notes)
+- ID Progres (work_order_step_progress_id) · ID Work Order (work_order_id) · ID Batch (production_batch_id) · ID Tahap (routing_step_id) · ID Shift (shift_id)
+- Jumlah Masuk ke Tahap Ini (qty_input) · Satuan Masuk — bisa beda dari keluaran (uom_input)
+- Status (status) · Jumlah Keluar/Dihasilkan (qty_recorded) · Satuan Keluar (uom) · Waktu Mulai (started_at) · Waktu Selesai (completed_at) · Catatan (notes)
 
 **Database Notifikasi Sistem** (`system_alerts`)
 - ID Alert (system_alert_id) · ID Perusahaan (company_id)

@@ -72,7 +72,7 @@ export async function getGanttBlockDetail(request: NextRequest): Promise<ApiResu
         .eq('routing_step_id', routingStepId),
       adminClient
         .from('work_order_step_progress')
-        .select('work_order_step_progress_id, status, qty_recorded, uom, started_at, completed_at, notes')
+        .select('work_order_step_progress_id, status, qty_input, uom_input, qty_recorded, uom, started_at, completed_at, notes')
         .eq('production_batch_id', productionBatchId)
         .eq('routing_step_id', routingStepId)
         .order('work_order_step_progress_id', { ascending: false })
@@ -95,6 +95,7 @@ export async function getGanttBlockDetail(request: NextRequest): Promise<ApiResu
       body: {
         batch: {
           production_batch_id: batch.production_batch_id,
+          work_order_id: batch.work_order_id,
           batch_number: batch.batch_number,
           planned_qty: batch.planned_qty,
           uom: batch.uom,
@@ -105,6 +106,7 @@ export async function getGanttBlockDetail(request: NextRequest): Promise<ApiResu
         },
         item: itemRes.data ? { item_code: itemRes.data.item_code, item_name: itemRes.data.name } : null,
         step: {
+          routing_step_id: step.routing_step_id,
           step_name: step.step_name,
           sequence_no: step.sequence_no,
           active_duration_minutes: step.active_duration_minutes ?? 0,
@@ -121,7 +123,12 @@ export async function getGanttBlockDetail(request: NextRequest): Promise<ApiResu
           actual_hours: a.actual_hours,
           qty_produced: a.qty_produced
         })),
-        progress: progressRes.data ?? []
+        progress: (progressRes.data ?? []).map((p) => ({
+          ...p,
+          // % susut = (input - output) / input × 100 — cuma dihitung kalau input DAN
+          // output sama-sama ada (mis. baru mulai, output belum dicatat -> null).
+          shrinkage_pct: p.qty_input !== null && p.qty_input > 0 && p.qty_recorded !== null ? Math.round(((p.qty_input - p.qty_recorded) / p.qty_input) * 10000) / 100 : null
+        }))
       }
     };
   } catch (error) {

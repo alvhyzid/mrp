@@ -37,7 +37,7 @@ export async function listWorkOrderStepProgress(request: NextRequest): Promise<A
 
     let query = adminClient
       .from('work_order_step_progress')
-      .select('work_order_step_progress_id, production_batch_id, routing_step_id, status, qty_recorded, uom, started_at, completed_at, notes')
+      .select('work_order_step_progress_id, production_batch_id, routing_step_id, status, qty_input, uom_input, qty_recorded, uom, started_at, completed_at, notes')
       .eq('work_order_id', workOrderId);
     if (productionBatchId) {
       query = query.eq('production_batch_id', productionBatchId);

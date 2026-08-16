@@ -28,6 +28,23 @@ export async function createCustomerPurchaseOrder(request: NextRequest): Promise
 
     const adminClient = getAdminClient();
 
+    // Idempotency: kalau client mengirim idempotency_key yang PERNAH sukses dipakai
+    // sebelumnya (submit ganda — double-click atau retry jaringan mengulang request
+    // yang sama persis), kembalikan PO yang sudah ada itu sebagai sukses — jangan
+    // buat baris baru, jangan juga dianggap error.
+    if (input.idempotency_key) {
+      const { data: existingPo, error: existingPoError } = await adminClient
+        .from('customer_purchase_orders')
+        .select('customer_purchase_order_id')
+        .eq('company_id', appUser.company_id)
+        .eq('idempotency_key', input.idempotency_key)
+        .maybeSingle();
+      if (existingPoError) return { status: 500, body: { error: existingPoError.message } };
+      if (existingPo) {
+        return { status: 200, body: { success: true, customer_purchase_order_id: existingPo.customer_purchase_order_id, replayed: true } };
+      }
+    }
+
     const { data: customer, error: customerError } = await adminClient
       .from('customers')
       .select('customer_id')
@@ -78,13 +95,34 @@ export async function createCustomerPurchaseOrder(request: NextRequest): Promise
           pic_phone: input.pic_phone,
           pic_email: input.pic_email,
           payment_terms: input.payment_terms,
-          status: 'new'
+          status: 'new',
+          idempotency_key: input.idempotency_key
         }
       ])
       .select('customer_purchase_order_id')
       .single();
 
     if (poInsertError || !insertedPo) {
+      // 23505 = unique_violation. Dulu ini bocor sebagai raw 500 dari Postgres
+      // ("duplicate key value violates unique constraint ..."). Sekarang: pesan
+      // yang jelas, DAN kalau pemicunya idempotency_key (bukan po_number), berarti
+      // request lain dengan key yang sama barusan menang race — kembalikan PO yang
+      // dia buat sebagai sukses, bukan error, supaya tetap idempotent walau
+      // pre-check di atas kebetulan tidak sempat menangkapnya.
+      if (poInsertError?.code === '23505') {
+        if (input.idempotency_key && poInsertError.message.includes('idempotency_key')) {
+          const { data: winnerPo } = await adminClient
+            .from('customer_purchase_orders')
+            .select('customer_purchase_order_id')
+            .eq('company_id', appUser.company_id)
+            .eq('idempotency_key', input.idempotency_key)
+            .maybeSingle();
+          if (winnerPo) {
+            return { status: 200, body: { success: true, customer_purchase_order_id: winnerPo.customer_purchase_order_id, replayed: true } };
+          }
+        }
+        return { status: 409, body: { error: `Nomor PO client "${input.po_number}" sudah dipakai — coba nomor lain.` } };
+      }
       return { status: 500, body: { error: poInsertError?.message ?? 'Gagal membuat PO client.' } };
     }
 

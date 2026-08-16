@@ -17,6 +17,7 @@ export interface CustomerPoInput {
   pic_email: string | null;
   payment_terms: string | null;
   lines: CustomerPoLineInput[];
+  idempotency_key: string | null;
 }
 
 function parsePositiveInt(value: unknown, fieldLabel: string): { value?: number; error?: string } {
@@ -85,7 +86,11 @@ export function parseCustomerPoInput(body: Record<string, unknown>): { input?: C
       pic_phone: optionalString(body.pic_phone),
       pic_email: optionalString(body.pic_email),
       payment_terms: paymentTerms,
-      lines
+      lines,
+      // Opsional — dikirim client untuk mencegah submit ganda (double-click/retry
+      // jaringan) bikin dokumen duplikat. Kalau kosong, endpoint tetap jalan seperti
+      // biasa (cuma diandalkan lewat unique(company_id, po_number) seperti sebelumnya).
+      idempotency_key: optionalString(body.idempotency_key)
     }
   };
 }

@@ -85,6 +85,27 @@ export async function processCustomerPurchaseOrder(request: NextRequest): Promis
       return { status: 400, body: { error: 'Lokasi pabrik tidak valid untuk perusahaan Anda.' } };
     }
 
+    // Idempotency: 1 PO client cuma boleh menghasilkan 1 SO — "cpo-<id>" adalah
+    // key yang bisa ditentukan ulang persis sama dari data yang sudah ada (tidak
+    // bergantung client mengirim apa pun), jadi request "Process" yang sama
+    // di-double-click/diulang jaringan TIDAK PERNAH bisa membuat SO kedua, bahkan
+    // kalau 2 request-nya benar-benar berjalan bersamaan (race ditutup oleh
+    // unique(company_id, idempotency_key) di database, bukan cuma pre-check ini).
+    const soIdempotencyKey = `cpo-${po.customer_purchase_order_id}`;
+
+    const { data: existingSo, error: existingSoError } = await adminClient
+      .from('sales_orders')
+      .select('sales_order_id, so_number')
+      .eq('company_id', po.company_id)
+      .eq('idempotency_key', soIdempotencyKey)
+      .maybeSingle();
+    if (existingSoError) {
+      return { status: 500, body: { error: existingSoError.message } };
+    }
+    if (existingSo) {
+      return { status: 200, body: { success: true, sales_order_id: existingSo.sales_order_id, so_number: existingSo.so_number, replayed: true } };
+    }
+
     const so_number = await generateSoNumber(adminClient, po.company_id);
 
     const { data: insertedSo, error: soInsertError } = await adminClient
@@ -96,13 +117,33 @@ export async function processCustomerPurchaseOrder(request: NextRequest): Promis
           customer_id: po.customer_id,
           production_plant_id: productionPlantId,
           status: 'confirmed',
-          so_number
+          so_number,
+          idempotency_key: soIdempotencyKey
         }
       ])
       .select('sales_order_id')
       .single();
 
     if (soInsertError || !insertedSo) {
+      // Race: request lain untuk PO client YANG SAMA menang duluan. Bisa kena DUA
+      // constraint unique berbeda (sales_orders.customer_purchase_order_id yang
+      // SUDAH ADA sejak awal skema, ATAU idempotency_key yang baru ditambahkan) —
+      // keduanya berarti hal yang sama persis di sini (1 PO cuma boleh 1 SO), jadi
+      // ditangani sama: ambil SO yang sudah dibuat request lain, kembalikan sebagai
+      // sukses (bukan error/duplikat), bukan cuma kalau constraint idempotency_key
+      // spesifik yang kena.
+      if (soInsertError?.code === '23505') {
+        const { data: winnerSo } = await adminClient
+          .from('sales_orders')
+          .select('sales_order_id, so_number')
+          .eq('company_id', po.company_id)
+          .eq('customer_purchase_order_id', po.customer_purchase_order_id)
+          .maybeSingle();
+        if (winnerSo) {
+          return { status: 200, body: { success: true, sales_order_id: winnerSo.sales_order_id, so_number: winnerSo.so_number, replayed: true } };
+        }
+        return { status: 409, body: { error: 'PO client ini sedang/sudah diproses oleh permintaan lain.' } };
+      }
       return { status: 500, body: { error: soInsertError?.message ?? 'Gagal membuat sales order.' } };
     }
 

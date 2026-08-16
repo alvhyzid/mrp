@@ -9,10 +9,17 @@ import { DataTable } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { canAccessWarehouseDashboard } from '@/lib/roles';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { canAccessWarehouseDashboard, canAdjustStock } from '@/lib/roles';
 import { typeLabels, typeBadgeVariant } from '@/features/mrp';
 
 const STOCK_ALERT_TYPES = ['stock_depletion_forecast', 'expiry_risk_low_usage', 'low_stock', 'material_shortage'];
+
+const adjustmentReasonLabels: Record<string, string> = {
+  stock_opname_variance: 'Selisih Stok Opname',
+  damaged: 'Kerusakan',
+  other: 'Lainnya'
+};
 
 const severityBadgeVariant: Record<string, 'info' | 'warning' | 'critical'> = { info: 'info', warning: 'warning', critical: 'critical' };
 const alertTypeLabels: Record<string, string> = {
@@ -67,10 +74,21 @@ type PoPendingRow = {
 
 const poStatusLabels: Record<string, string> = { draft: 'Draft', ordered: 'Dipesan', partially_received: 'Sebagian Diterima' };
 
+type LotOption = {
+  lot_id: number;
+  item_id: number;
+  item_code: string | null;
+  item_name: string | null;
+  item_base_uom: string | null;
+  lot_number: string;
+  quantity_on_hand: number;
+};
+
 export default function WarehouseDashboardPage() {
   const router = useRouter();
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
 
   const [stock, setStock] = useState<StockRow[]>([]);
   const [stockError, setStockError] = useState('');
@@ -88,6 +106,11 @@ export default function WarehouseDashboardPage() {
   const [receiptQty, setReceiptQty] = useState<Record<number, string>>({});
   const [receiptStatus, setReceiptStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [receiptMessage, setReceiptMessage] = useState('');
+
+  const [lots, setLots] = useState<LotOption[]>([]);
+  const [adjustmentForm, setAdjustmentForm] = useState({ lot_id: '', qty_delta: '', reason_code: '', notes: '' });
+  const [adjustmentStatus, setAdjustmentStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [adjustmentMessage, setAdjustmentMessage] = useState('');
 
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
@@ -153,6 +176,56 @@ export default function WarehouseDashboardPage() {
     setPendingPosLoading(false);
   }, [getAccessToken]);
 
+  const loadLots = useCallback(async () => {
+    const { ok, body } = await authedFetch('/api/lots');
+    if (ok) setLots(body.lots || []);
+  }, [authedFetch]);
+
+  const handleSubmitAdjustment = async () => {
+    const qtyDelta = Number(adjustmentForm.qty_delta);
+    if (!adjustmentForm.lot_id) {
+      setAdjustmentStatus('error');
+      setAdjustmentMessage('Pilih lot dulu.');
+      return;
+    }
+    if (!Number.isFinite(qtyDelta) || qtyDelta === 0) {
+      setAdjustmentStatus('error');
+      setAdjustmentMessage('Isi jumlah penyesuaian (boleh negatif untuk mengurangi), tidak boleh 0.');
+      return;
+    }
+    if (!adjustmentForm.reason_code) {
+      setAdjustmentStatus('error');
+      setAdjustmentMessage('Pilih alasan penyesuaian.');
+      return;
+    }
+    if (adjustmentForm.reason_code === 'other' && !adjustmentForm.notes.trim()) {
+      setAdjustmentStatus('error');
+      setAdjustmentMessage('Alasan "Lainnya" wajib diisi catatan bebasnya.');
+      return;
+    }
+
+    setAdjustmentStatus('saving');
+    setAdjustmentMessage('');
+    const { ok, body } = await authedFetch('/api/stock-adjustments', {
+      method: 'POST',
+      body: JSON.stringify({
+        lot_id: Number(adjustmentForm.lot_id),
+        qty_delta: qtyDelta,
+        reason_code: adjustmentForm.reason_code,
+        notes: adjustmentForm.notes.trim() || null
+      })
+    });
+    if (!ok) {
+      setAdjustmentStatus('error');
+      setAdjustmentMessage(body.error || 'Gagal mencatat penyesuaian stok.');
+      return;
+    }
+    setAdjustmentStatus('success');
+    setAdjustmentMessage(`Penyesuaian tercatat — stok lot ini sekarang ${body.quantity_on_hand}.`);
+    setAdjustmentForm({ lot_id: '', qty_delta: '', reason_code: '', notes: '' });
+    await Promise.all([loadStock(), loadLots()]);
+  };
+
   const handleToggleExpand = (po: PoPendingRow) => {
     if (expandedPoId === po.purchase_order_id) {
       setExpandedPoId(null);
@@ -207,11 +280,12 @@ export default function WarehouseDashboardPage() {
         setCheckingAccess(false);
         return;
       }
+      setRole(meData?.user?.role ?? null);
       setCheckingAccess(false);
-      await Promise.all([loadStock(), loadAlerts(), loadPendingPos()]);
+      await Promise.all([loadStock(), loadAlerts(), loadPendingPos(), loadLots()]);
     };
     checkAccessAndLoad();
-  }, [router, loadStock, loadAlerts, loadPendingPos]);
+  }, [router, loadStock, loadAlerts, loadPendingPos, loadLots]);
 
   const stockColumns = useMemo<ColumnDef<StockRow>[]>(
     () => [
@@ -403,6 +477,78 @@ export default function WarehouseDashboardPage() {
               : null}
           </CardContent>
         </Card>
+
+        {canAdjustStock(role) ? (
+          <Card>
+            <CardHeader>
+              <CardDescription className="uppercase tracking-[0.2em]">Koreksi Stok</CardDescription>
+              <CardTitle className="text-xl">Penyesuaian Stok Manual</CardTitle>
+              <CardDescription>Khusus stok opname/kerusakan — bukan pengganti alur penerimaan/produksi/pengiriman normal. Setiap penyesuaian tercatat di riwayat pergerakan stok beserta alasannya.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col gap-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-medium text-foreground">Lot</span>
+                    <Select value={adjustmentForm.lot_id} onValueChange={(value) => setAdjustmentForm((prev) => ({ ...prev, lot_id: value }))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pilih lot..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {lots.map((lot) => (
+                          <SelectItem key={lot.lot_id} value={String(lot.lot_id)}>
+                            {lot.item_code} — {lot.lot_number} (stok: {lot.quantity_on_hand} {lot.item_base_uom})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-medium text-foreground">Jumlah Penyesuaian (+/-)</span>
+                    <Input
+                      type="number"
+                      step="any"
+                      placeholder="mis. -5 (berkurang) atau 5 (bertambah)"
+                      value={adjustmentForm.qty_delta}
+                      onChange={(event) => setAdjustmentForm((prev) => ({ ...prev, qty_delta: event.target.value }))}
+                    />
+                  </label>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-medium text-foreground">Alasan</span>
+                    <Select value={adjustmentForm.reason_code} onValueChange={(value) => setAdjustmentForm((prev) => ({ ...prev, reason_code: value }))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pilih alasan..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(adjustmentReasonLabels).map(([code, label]) => (
+                          <SelectItem key={code} value={code}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-medium text-foreground">Catatan {adjustmentForm.reason_code === 'other' ? '(wajib)' : '(opsional)'}</span>
+                    <Input
+                      value={adjustmentForm.notes}
+                      onChange={(event) => setAdjustmentForm((prev) => ({ ...prev, notes: event.target.value }))}
+                      placeholder="mis. hasil stok opname 15 Agustus, selisih -5 kg"
+                    />
+                  </label>
+                </div>
+
+                <Button className="w-fit" disabled={adjustmentStatus === 'saving'} onClick={handleSubmitAdjustment}>
+                  {adjustmentStatus === 'saving' ? 'Menyimpan...' : 'Catat Penyesuaian'}
+                </Button>
+                {adjustmentMessage ? <p className={`text-sm ${adjustmentStatus === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>{adjustmentMessage}</p> : null}
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
       </div>
     </main>
   );

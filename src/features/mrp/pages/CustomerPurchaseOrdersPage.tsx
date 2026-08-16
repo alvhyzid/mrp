@@ -117,6 +117,10 @@ export default function CustomerPurchaseOrdersPage() {
   const [form, setForm] = useState(emptyForm);
   const [formStatus, setFormStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [formMessage, setFormMessage] = useState('');
+  // Stabil untuk 1 percobaan submit (dipakai server buat cegah dokumen duplikat kalau
+  // tombol submit ke-double-click/request keulang) — baru diganti begitu submit SUKSES,
+  // supaya double-click tetap kirim key yang SAMA persis.
+  const [formIdempotencyKey, setFormIdempotencyKey] = useState(() => crypto.randomUUID());
 
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [newCustomer, setNewCustomer] = useState({ name: '', customer_type: 'company', contact_info: '' });
@@ -235,7 +239,8 @@ export default function CustomerPurchaseOrdersPage() {
     const payload = {
       ...form,
       customer_id: Number(form.customer_id),
-      lines: form.lines.map((line) => ({ item_id: Number(line.item_id), qty_ordered: Number(line.qty_ordered), unit_price: Number(line.unit_price) }))
+      lines: form.lines.map((line) => ({ item_id: Number(line.item_id), qty_ordered: Number(line.qty_ordered), unit_price: Number(line.unit_price) })),
+      idempotency_key: formIdempotencyKey
     };
 
     const { ok, body } = await authedFetch('/api/customer-purchase-orders', { method: 'POST', body: JSON.stringify(payload) });
@@ -248,6 +253,7 @@ export default function CustomerPurchaseOrdersPage() {
     setFormStatus('success');
     setFormMessage('PO client berhasil dibuat. 3 approval department otomatis dibuat (status pending).');
     resetForm();
+    setFormIdempotencyKey(crypto.randomUUID());
     await loadPurchaseOrders();
   };
 

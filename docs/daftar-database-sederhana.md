@@ -106,6 +106,9 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 
 **Database Pergerakan Stok** (`stock_movements`)
 - ID Pergerakan (stock_movement_id) · ID Perusahaan (company_id) · ID Lot (lot_id) · Jenis Pergerakan (movement_type) · Jumlah (qty) · Dokumen Referensi (reference_doc) · Tanggal (created_at) · Dibuat Oleh (created_by)
+- Kode Alasan — nullable, cuma untuk penyesuaian manual: selisih stok opname/kerusakan/lainnya (reason_code) · Catatan Bebas — nullable, wajib kalau alasan "lainnya" (notes)
+
+> Penyesuaian Stok Manual: form di Dashboard Warehouse (khusus Manager Warehouse + Direktur/GM, BUKAN staf Warehouse biasa) — pilih lot, isi jumlah (boleh minus), wajib pilih alasan. Stok lot dan riwayat pergerakan ter-update bersamaan (1 transaksi), tidak bisa bikin stok jadi minus.
 
 ---
 
@@ -140,6 +143,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 - Status: baru/ditunda/batal/sudah diproses (status)
 - Syarat Pembayaran (payment_terms) · Status Pembayaran (payment_status)
 - Diproses Oleh (processed_by) · Waktu Diproses (processed_at)
+- Kunci Anti-Duplikat — nullable, cegah submit ganda (idempotency_key)
 
 **Database Detail Item PO dari Client** (`customer_purchase_order_lines`)
 - ID Baris (customer_purchase_order_line_id) · ID PO Client (customer_purchase_order_id) · ID Item (item_id) · Jumlah Dipesan (qty_ordered)
@@ -155,6 +159,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 - Nomor SO Internal — format sendiri, beda dari nomor PO client (so_number)
 - ID Lokasi Pabrik — dipilih wajib saat "Process" (production_plant_id)
 - Status (status) · Tanggal Dibuat (created_at)
+- Kunci Anti-Duplikat — nullable, diisi otomatis server (bukan client) supaya double-click "Process" tidak bikin 2 SO untuk 1 PO yang sama (idempotency_key)
 
 **Database Detail Item SO** (`sales_order_lines`)
 - ID Baris (sales_order_line_id) · ID SO (sales_order_id) · ID Item (item_id) · Jumlah Dipesan (qty_ordered)
@@ -213,6 +218,17 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 > Proyeksi stok/kadaluarsa dihitung dari rata-rata pemakaian harian (`work_order_consumption`), dihitung ulang tiap ada data baru masuk (real-time, bukan terjadwal).
 
 > Department Tujuan ditentukan OTOMATIS dari jenis alert (bukan diisi manual): kekurangan bahan/proyeksi stok habis/risiko kadaluarsa/stok rendah → Purchasing + Warehouse; pekerja absen → Production + HR; gangguan produksi/produksi terlambat → Production + PPIC; SO siap produksi → PPIC; PO butuh approval → sesuai department approval yang bersangkutan (Finance/PPIC/Manajemen); PO telat → Purchasing. Kalau 1 alert relevan untuk lebih dari 1 department, dibuat lebih dari 1 baris (1 baris per department) — ditampilkan di Bell Icon Notifikasi header aplikasi, badge-nya cuma menghitung alert yang relevan untuk department user yang login.
+
+**Database Aturan Transisi Status** (`status_transition_rules`)
+- ID Aturan (status_transition_rule_id) · Nama Tabel (table_name) · Status Asal (from_status) · Status Tujuan (to_status)
+
+> Daftar transisi status yang SAH per tabel — ditegakkan LANGSUNG di database (bukan cuma di kode aplikasi) lewat trigger, jadi tidak bisa dilewati walau lewat koneksi service-role sekalipun. Diterapkan ke 5 tabel (16 Agu 2026): PO Client, SO, Work Order, Batch Produksi, Approval PO Client. Contoh yang DITOLAK: PO Client status "Batal" lompat jadi "Sudah Diproses".
+
+**Database Riwayat Transisi Status** (`status_transition_log`)
+- ID Riwayat (status_transition_log_id) · ID Perusahaan (company_id) · Nama Tabel (table_name) · ID Baris (record_id)
+- Status Asal (from_status) · Status Tujuan (to_status) · Diubah Oleh — nullable (changed_by) · Waktu (changed_at) · Alasan — nullable (reason)
+
+> Dicatat OTOMATIS oleh trigger yang sama di atas, setiap kali ada transisi status yang sah — audit trail terpusat, beda dari kolom `approved_by`/`acknowledged_by` per tabel yang cuma menyimpan aksi terakhir (riwayat sebelumnya hilang tertimpa).
 
 ---
 

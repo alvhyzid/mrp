@@ -183,6 +183,9 @@ Log setiap pergerakan stok (audit trail).
 - `stock_movement_id`, `company_id`, `lot_id`
 - `movement_type` (receipt / production_issue / production_output / shipment / adjustment)
 - `qty`, `reference_doc`, `created_at`, `created_by`
+- `reason_code` (nullable — cuma diisi untuk `movement_type = adjustment`: `stock_opname_variance` / `damaged` / `other`), `notes` (nullable, catatan bebas — WAJIB diisi kalau `reason_code = other`)
+
+> **Penyesuaian stok manual (16 Agu 2026):** Dashboard Warehouse punya form "Penyesuaian Stok Manual" — pilih lot, isi jumlah (+/-), WAJIB pilih alasan. Update `lots.quantity_on_hand` DAN insert baris `stock_movements` (`movement_type = adjustment`) dikerjakan ATOMIK oleh 1 fungsi database (`record_manual_stock_adjustment()`, dipanggil lewat RPC — bukan 2 query terpisah dari server, supaya benar-benar 1 transaksi, sama seperti pola `production_issue`). Penyesuaian yang bikin stok jadi negatif ditolak. **Akses sengaja lebih sempit dari dashboard Warehouse biasa** — `warehouse_manager` + `company_admin`/`general_manager`, BUKAN `warehouse_staff` (aksi sensitif, langsung ubah stok tanpa lewat penerimaan/produksi/pengiriman normal).
 
 ---
 
@@ -216,6 +219,7 @@ PO dari client — TERPISAH dari `sales_orders`. Statusnya berjalan sebelum jadi
 - `status` (new / on_hold / cancelled / processed) — `new` → `processed` HANYA boleh terjadi kalau ketiga baris `customer_po_approvals` berstatus `approved`
 - `payment_terms` (full / tempo), `payment_status` (pending / partial / confirmed)
 - `processed_by` (nullable, → `user_id`), `processed_at`
+- `idempotency_key` (nullable, unique per `company_id` — dikirim client saat submit, mencegah submit ganda/double-click bikin 2 baris PO. Kalau kosong, endpoint tetap jalan tapi cuma diandalkan lewat `unique(company_id, po_number)`)
 - Line: `customer_purchase_order_line_id`, `customer_purchase_order_id`, `item_id` (SETIAP VARIAN kemasan/ukuran = `item_id` terpisah), `qty_ordered`, `unit_price` (harga jual disepakati — nilai sensitif, lihat "Kontrol Akses Data Finansial")
 
 ### `customer_po_approvals`
@@ -233,6 +237,7 @@ Tercipta OTOMATIS saat `customer_purchase_orders` diproses — komitmen produksi
 - Header: `sales_order_id`, `company_id`, `customer_purchase_order_id`, `customer_id`
 - `so_number` (nomor SO internal yang bisa dibaca manusia, format sesuai kebiasaan Anda mis. "020/2-ITM/2026" — auto-generated saat "Process" diklik; BEDA dari `customer_purchase_orders.po_number` yang merujuk nomor PO milik client)
 - `production_plant_id` (dipilih saat "Process"), `status` (confirmed / in_production / completed / cancelled), `created_at`
+- `idempotency_key` (nullable, unique per `company_id` — diisi OTOMATIS oleh server sebagai `cpo-<customer_purchase_order_id>`, bukan dari client, karena 1 PO client memang cuma boleh menghasilkan 1 SO. Menutup celah double-click tombol "Process" bikin 2 SO untuk 1 PO yang sama — sebelumnya cuma kebetulan tertahan lewat `unique(customer_purchase_order_id)` yang sudah ada dari awal, tapi errornya bocor mentah ke user, sekarang ditangani rapi)
 - Line: `sales_order_line_id`, `sales_order_id`, `item_id`, `qty_ordered`, `unit_price` (disalin dari PO)
 
 > **Satu SO line bisa punya BANYAK Work Order** — PPIC bebas memecah 1 SO line jadi beberapa WO (mis. per hari/per kapasitas produksi: WO day 1, day 2, day 3), tidak harus 1:1. Dashboard PO tetap menjumlahkan total progres dari semua WO yang terhubung ke SO line yang sama.
@@ -305,6 +310,21 @@ Peringatan otomatis dari sistem.
 > **Proyeksi stok habis & risiko kadaluarsa (`stock_depletion_forecast`, `expiry_risk_low_usage`):** dihitung dari **rata-rata pemakaian harian** tiap item (dari riwayat `work_order_consumption`), **dihitung ULANG setiap kali ada data baru masuk** (tiap akhir shift/update batch) — real-time, bukan terjadwal.
 > - `stock_depletion_forecast`: sisa stok ÷ rata-rata pemakaian harian = perkiraan hari sampai habis. Kalau mendekati `suppliers.lead_time_days`, alert dini ke Purchasing.
 > - `expiry_risk_low_usage`: kalau proyeksi "habis terpakai" LEBIH LAMA dari `lots.expiry_date` (bahan keburu kadaluarsa sebelum habis, kasus khas bahan MOQ besar tapi pemakaian kecil) → alert risiko dini, bukan cuma H-berapa hari standar.
+
+### `status_transition_rules`
+Graf transisi status yang SAH per tabel — data-driven (nambah tabel baru = insert baris baru, bukan tulis ulang kode). Dipakai fungsi trigger `enforce_status_transition()` untuk MENOLAK transisi status yang tidak valid di level database, bukan cuma di kode aplikasi.
+- `status_transition_rule_id`, `table_name`, `from_status`, `to_status`
+
+> **Kenapa ini perlu (audit 16 Agu 2026):** kode aplikasi memang sudah mengecek urutan status yang benar (mis. `processCustomerPurchaseOrder.ts` menolak proses PO yang bukan status `new`), TAPI semua kode server pakai koneksi service-role yang melewati RLS — kalau ada bug di endpoint mana pun, atau ada yang mengubah data langsung lewat service-role/SQL, tidak ada apa pun sebelumnya yang mencegah transisi tidak masuk akal (mis. PO client `cancelled` lompat jadi `processed`). Trigger ini lapisan pertahanan KEDUA yang independen dari kode aplikasi — service-role BISA bypass RLS, tapi TIDAK BISA mematikan trigger (butuh hak pemilik tabel/superuser, bukan sekadar hak service-role).
+>
+> **Tabel yang sudah diterapkan (16 Agu 2026):** `customer_purchase_orders` (new→on_hold/cancelled/processed, on_hold→new/cancelled; transisi ke `processed` juga dicek ulang di trigger: HARUS 3 baris `customer_po_approvals` berstatus `approved`), `sales_orders` (confirmed→in_production→completed, cancelled dari confirmed/in_production), `work_orders` (planned→in_progress→completed, paused sebagai jeda, cancelled dari planned/in_progress/paused), `production_batches` (sama pola dengan work_orders tanpa paused), `customer_po_approvals` (pending→approved ATAU pending→rejected, keduanya final). `cancelled` dan `processed`/`completed`/`rejected`/`approved` semuanya status TERMINAL — begitu sampai situ, tidak ada transisi keluar lagi.
+
+### `status_transition_log`
+Jejak SETIAP transisi status yang benar-benar terjadi (ditulis OTOMATIS oleh trigger yang sama di atas, bukan tabel log terpisah per entitas) — audit trail generik lintas tabel, karena sebelumnya jejak "siapa-kapan" cuma tersebar di kolom `approved_by`/`acknowledged_by`/dst per tabel yang cuma menyimpan aksi TERAKHIR (riwayat sebelumnya tertimpa).
+- `status_transition_log_id`, `company_id`, `table_name`, `record_id`
+- `from_status`, `to_status`, `changed_by` (nullable), `changed_at`, `reason` (nullable)
+
+> **Keterbatasan `changed_by` saat ini:** trigger database tidak tahu siapa user aplikasi yang login (semua kode server pakai service-role, tidak membawa identitas user lewat sesi Postgres) — `changed_by` cuma terisi kalau tabelnya sudah punya kolom aktor yang relevan untuk transisi itu sendiri (mis. `customer_purchase_orders.processed_by` saat transisi ke `processed`, `customer_po_approvals.approved_by`). Tabel lain (`sales_orders`, `work_orders`, `production_batches`) belum punya kolom aktor seperti itu, jadi `changed_by`-nya NULL untuk sekarang — perlu kode aplikasi menitipkan identitas user lewat sesi Postgres (session variable) kalau mau diisi penuh, belum dikerjakan.
 
 ---
 

@@ -126,6 +126,16 @@ export function canAccessWarehouseDashboard(role: string | undefined | null): bo
   return !!role && WAREHOUSE_ROLES.includes(role);
 }
 
+// Penyesuaian stok manual (adjustment) SENGAJA lebih sempit dari
+// WAREHOUSE_ROLES di atas — bukan warehouse_staff biasa, ini aksi sensitif
+// (langsung ubah quantity_on_hand tanpa lewat penerimaan/produksi/pengiriman)
+// yang butuh level manager ke atas.
+export const STOCK_ADJUSTMENT_ROLES = [...LEADERSHIP_ROLES, 'warehouse_manager'];
+
+export function canAdjustStock(role: string | undefined | null): boolean {
+  return !!role && STOCK_ADJUSTMENT_ROLES.includes(role);
+}
+
 export const HR_DASHBOARD_ROLES = [...LEADERSHIP_ROLES, 'hr_manager', 'hr_staff'];
 
 export function canAccessHrDashboard(role: string | undefined | null): boolean {

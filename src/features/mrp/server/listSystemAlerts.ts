@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
+import { isCompanyLeadership, getDepartmentForRole } from '@/lib/roles';
 
 interface ApiResult {
   status: number;
@@ -20,11 +21,17 @@ export async function listSystemAlerts(request: NextRequest): Promise<ApiResult>
     const alertTypesParam = request.nextUrl.searchParams.get('alert_types');
     const alertTypes = alertTypesParam ? alertTypesParam.split(',').map((v) => v.trim()).filter(Boolean) : null;
     const status = request.nextUrl.searchParams.get('status') ?? 'open';
+    // scope=my_department: dipakai Bell Icon Notifikasi — company_admin/general_manager
+    // tetap lihat semua (leadership dikecualikan dari filter ini), role lain cuma lihat
+    // alert dengan target_department null (relevan semua department) ATAU department
+    // mereka sendiri. Department DIHITUNG DARI ROLE user yang login (server-side), bukan
+    // dari input client, supaya tidak bisa diminta lihat department orang lain.
+    const scope = request.nextUrl.searchParams.get('scope');
 
     const adminClient = getAdminClient();
     let query = adminClient
       .from('system_alerts')
-      .select('system_alert_id, alert_type, related_work_order_id, related_po_id, related_item_id, message, severity, status, created_at, acknowledged_by, acknowledged_at')
+      .select('system_alert_id, alert_type, target_department, related_work_order_id, related_po_id, related_item_id, message, severity, status, created_at, acknowledged_by, acknowledged_at')
       .eq('company_id', appUser.company_id)
       .order('created_at', { ascending: false });
 
@@ -33,6 +40,10 @@ export async function listSystemAlerts(request: NextRequest): Promise<ApiResult>
     }
     if (alertTypes && alertTypes.length > 0) {
       query = query.in('alert_type', alertTypes);
+    }
+    if (scope === 'my_department' && !isCompanyLeadership(appUser.role)) {
+      const department = getDepartmentForRole(appUser.role);
+      query = department ? query.or(`target_department.is.null,target_department.eq.${department}`) : query.is('target_department', null);
     }
 
     const { data: alerts, error } = await query;

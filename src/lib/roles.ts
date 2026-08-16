@@ -176,6 +176,32 @@ export function getManagedDepartmentForRole(role: string | undefined | null): st
   return MANAGED_DEPARTMENT_BY_ROLE[role] ?? null;
 }
 
+// Department SETIAP role (manager & staff), dipakai untuk menyaring
+// system_alerts.target_department yang relevan buat user login (Bell Icon
+// Notifikasi) — beda dari MANAGED_DEPARTMENT_BY_ROLE di atas yang cuma untuk
+// role manager (dipakai scoping employee_attendance). company_admin/
+// general_manager/admin_staff/viewer sengaja null di sini — leadership lihat
+// SEMUA alert lewat isCompanyLeadership(), bukan lewat department tunggal.
+const DEPARTMENT_BY_ROLE: Record<string, string> = {
+  production_manager: 'production',
+  production_staff: 'production',
+  ppic_manager: 'ppic',
+  ppic_staff: 'ppic',
+  finance_manager: 'finance',
+  finance_staff: 'finance',
+  purchasing_manager: 'purchasing',
+  purchasing_staff: 'purchasing',
+  warehouse_manager: 'warehouse',
+  warehouse_staff: 'warehouse',
+  hr_manager: 'hr',
+  hr_staff: 'hr'
+};
+
+export function getDepartmentForRole(role: string | undefined | null): string | null {
+  if (!role) return null;
+  return DEPARTMENT_BY_ROLE[role] ?? null;
+}
+
 // Kebalikan dari canApproveDepartment() — dipakai dashboard PPIC/Finance untuk
 // menyaring "PO client menunggu approval BAGIAN SAYA" tanpa perlu client menebak
 // nama department-nya sendiri. Tetap harus sinkron dengan canApproveDepartment().

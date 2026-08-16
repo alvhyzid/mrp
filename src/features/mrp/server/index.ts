@@ -25,6 +25,7 @@ export * from './recordWorkOrderConsumption';
 export * from './listLots';
 export * from './listSalesOrders';
 export * from './listSystemAlerts';
+export * from './acknowledgeSystemAlert';
 export * from './listStockSummary';
 export * from './listPurchaseOrdersPendingReceipt';
 export * from './listPendingApprovalsForMe';

@@ -207,9 +207,12 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 **Database Notifikasi Sistem** (`system_alerts`)
 - ID Alert (system_alert_id) · ID Perusahaan (company_id)
 - Jenis Alert: kekurangan bahan/PO telat/stok rendah/produksi terlambat/pekerja absen/gangguan produksi/SO siap produksi/PO butuh approval/**proyeksi stok habis**/**risiko kadaluarsa karena jarang dipakai** (alert_type)
+- Department Tujuan — nullable, null berarti terlihat semua department; company_admin/general_manager selalu lihat semua terlepas kolom ini (target_department)
 - ID Work Order Terkait, ID PO Terkait, ID Item Terkait (nullable) · Pesan (message) · Tingkat Keparahan (severity) · Status (status) · Tanggal Dibuat (created_at) · Dikonfirmasi Oleh (acknowledged_by) · Waktu Dikonfirmasi (acknowledged_at)
 
 > Proyeksi stok/kadaluarsa dihitung dari rata-rata pemakaian harian (`work_order_consumption`), dihitung ulang tiap ada data baru masuk (real-time, bukan terjadwal).
+
+> Department Tujuan ditentukan OTOMATIS dari jenis alert (bukan diisi manual): kekurangan bahan/proyeksi stok habis/risiko kadaluarsa/stok rendah → Purchasing + Warehouse; pekerja absen → Production + HR; gangguan produksi/produksi terlambat → Production + PPIC; SO siap produksi → PPIC; PO butuh approval → sesuai department approval yang bersangkutan (Finance/PPIC/Manajemen); PO telat → Purchasing. Kalau 1 alert relevan untuk lebih dari 1 department, dibuat lebih dari 1 baris (1 baris per department) — ditampilkan di Bell Icon Notifikasi header aplikasi, badge-nya cuma menghitung alert yang relevan untuk department user yang login.
 
 ---
 

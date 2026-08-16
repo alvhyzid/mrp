@@ -21,6 +21,7 @@ import {
 } from '@carbon/icons-react';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import { canAccessWarehouseDashboard, canAccessHrDashboard, canAccessPpicDashboard, canAccessProductionDashboard, canQuickCreateCustomerPo } from '@/lib/roles';
+import { NotificationBell } from '@/features/mrp';
 
 // UI Shell Carbon Design System (Header + SideNav) sebagai layout terpakai
 // bersama di semua halaman berlogin — perluasan dari tombol Logout yang
@@ -146,6 +147,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [userName, setUserName] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
+  const [companyId, setCompanyId] = useState<number | null>(null);
   const [companyName, setCompanyName] = useState<string | null>(null);
   const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
   // Beda dari companyLogoUrl (null = "sudah dicek, memang tidak ada logo"): flag
@@ -181,6 +183,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         if (response.ok) {
           setUserName(data?.user?.name ?? null);
           setRole(data?.user?.role ?? null);
+          setCompanyId(data?.company?.company_id ?? null);
           setCompanyName(data?.company?.name ?? null);
           setCompanyLogoUrl(data?.company?.logo_url ?? null);
         }
@@ -247,6 +250,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </span>
         </div>
         <div className="flex items-center gap-4">
+          {meLoaded ? <NotificationBell role={role} companyId={companyId} /> : null}
           <span className="text-xs text-[#525252]">
             {userName ?? '…'}
             {role ? (

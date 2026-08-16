@@ -124,9 +124,21 @@ serve(async (req) => {
     const users = await response.json();
     const user = Array.isArray(users) ? users[0] : null;
 
-    if (!user || !Object.prototype.hasOwnProperty.call(user, 'company_id')) {
-      return new Response(JSON.stringify({ error: 'company_id not found for auth_uid.' }), {
-        status: 401,
+    // Tidak ada baris public.users untuk auth_uid ini BUKAN kondisi error — ini
+    // keadaan sah sesaat setelah supabase.auth.signUp(): GoTrue langsung minta
+    // token begitu auth.users tercipta, TAPI baris company/users aplikasi baru
+    // dibuat setelah signUp() itu sendiri return (lihat registerCompanyAdmin.ts).
+    // Dulu ini mengembalikan 401, yang oleh GoTrue dibungkus jadi pesan generik
+    // "Hook requires authorization token" (lihat github.com/orgs/supabase/
+    // discussions/38579) — bikin signUp() SELALU gagal untuk user baru. Sekarang:
+    // kembalikan claims APA ADANYA (tanpa company_id/app_role) — user tetap dapat
+    // sesi, cukup tanpa klaim itu sampai baris users-nya dibuat & mereka login
+    // ulang. Tidak berubah untuk user yang SUDAH pernah dikaitkan ke company
+    // (baris ada, company_id null pun tetap lolos — cuma kasus "baris sama sekali
+    // tidak ada" yang berubah).
+    if (!user) {
+      return new Response(JSON.stringify({ claims }), {
+        status: 200,
         headers: { 'Content-Type': 'application/json' }
       });
     }

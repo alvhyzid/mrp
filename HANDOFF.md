@@ -4,63 +4,52 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
-## Sesi 2B — Setup Staging (16 Agu 2026) — SEBAGIAN SELESAI (utang untuk sesi berikutnya)
+## Sesi 2B — Setup Staging (16 Agu 2026) — SELESAI (termasuk perbaikan bug nyata di kode bersama)
 
-**Status kriteria:**
+**Status kriteria — semua 3 tercapai:**
 - [x] Aplikasi bisa diakses lewat URL Vercel staging: **https://mrp-staging-zeta.vercel.app**
-- [x] Terhubung ke Supabase project staging (`mrp-rebuild-test-2A`/`nclkepwlsgmfbslgsajq`), BUKAN project dev — dibuktikan lewat tes negatif (lihat di bawah)
-- [ ] **"signup" TIDAK terverifikasi asli** — endpoint publik `supabase.auth.signUp()` gagal konsisten di project staging ini. `login` dan `invite → accept` SUDAH terverifikasi lewat browser sungguhan, tapi memakai akun yang di-bootstrap lewat `admin.createUser()` (server-side), bukan lewat form "Daftar" yang sesungguhnya, karena form itu SELALU gagal.
+- [x] Terhubung ke Supabase project staging (`mrp-rebuild-test-2A`/`nclkepwlsgmfbslgsajq`), BUKAN project dev — dibuktikan lewat tes negatif
+- [x] Alur signup → login → invite → accept **jalan normal lewat form/UI sungguhan** (signup sempat gagal, akar masalahnya ditemukan & DIPERBAIKI — lihat di bawah)
 
-### BUG BELUM TERPECAHKAN: `signUp()` gagal di project staging — WAJIB diperbaiki sebelum Sesi 2C
+### BUG NYATA DITEMUKAN & DIPERBAIKI: `custom-access-token` hook gagal untuk user yang BELUM punya baris `public.users`
 
-**Gejala:** `supabase.auth.signUp({email, password})` (dipanggil dari `registerCompanyAdmin.ts`, dipakai halaman `/register`) selalu mengembalikan:
-```json
-{"code":500,"error_code":"unexpected_failure","msg":"Hook requires authorization token","error_id":"<berbeda tiap percobaan>"}
-```
-Efek samping: baris `auth.users` TETAP tercipta walau response error — jadi ada user "yatim" (auth account ada, tidak ada baris `companies`/`users` aplikasi) tiap kali form signup dicoba. **Semua baris yatim dari sesi ini sudah dibersihkan** (0 baris tersisa di `auth.users` staging per akhir sesi, di luar 2 akun yang sengaja dipertahankan sebagai bukti — lihat di bawah).
+**Kronologi:** percobaan pertama menyimpulkan "kemungkinan bug platform Supabase spesifik project staging" setelah 11 langkah eliminasi (semua tercatat di riwayat git). **Kesimpulan itu SALAH** — diralat sesi ini setelah pemilik produk meminta 1 diagnosa spesifik lagi (baca log INTERNAL fungsi, bukan pesan generik yang diterima klien; cek penanganan kasus "user belum punya company_id"; cek apakah bug yang sama ada di dev tapi belum pernah terpicu) berdasar referensi github.com/orgs/supabase/discussions/38579 (pesan "Hook requires authorization token" itu GENERIK untuk error internal APA PUN di dalam hook, bukan spesifik soal token).
 
-**Yang SUDAH dicoba dan TIDAK menyelesaikan** (jangan diulang tanpa ide baru):
-1. Toggle `hook_custom_access_token_enabled` true/false — error sama persis, termasuk saat hook DIMATIKAN. Jadi bukan soal hook aktif/nonaktif.
-2. Toggle `mailer_autoconfirm` true/false — error sama persis di kedua kondisi.
-3. `security_captcha_enabled` — sudah `false` di kedua project (dev & staging), bukan penyebab.
-4. Anon key (legacy JWT) vs publishable key (`sb_publishable_...`) — error sama di keduanya.
-5. Tunggu 3 menit (dugaan propagation delay project baru) — error tetap sama persis.
-6. **Regenerate + re-sync hook secret** (persis instruksi diagnosa yang diminta pemilik produk) — secret baru di-set BERSAMAAN ke Edge Function secret (`supabase secrets set CUSTOM_ACCESS_TOKEN_HOOK_SECRETS`) dan ke Auth config (`PATCH /v1/projects/.../config/auth`), dikonfirmasi keduanya menerima nilai yang SAMA PERSIS — error tetap sama persis setelahnya.
-7. Bandingkan konfigurasi Edge Function dev vs staging via Management API — **identik**: `verify_jwt: false` di kedua project, `ezbr_sha256` (hash kode yang di-deploy) SAMA PERSIS, nama-nama secret yang ter-set SAMA PERSIS.
-8. Cek log `auth_logs` project staging langsung (query lewat `/v1/projects/.../analytics/endpoints/logs.all`) untuk 1 percobaan gagal — hasil:
-   ```json
-   {"action":"run_hook","error":"500: Hook requires authorization token","hook":"https://nclkepwlsgmfbslgsajq.supabase.co/functions/v1/custom-access-token","msg":"Hook errored out", ...}
-   ```
-   Ini konfirmasi: GoTrue BENAR-BENAR memanggil hook (bukan gagal sebelum sampai ke situ), dan APAPUN yang dikembalikan hook itu (atau lapisan di depannya) direkam sebagai pesan ini — TAPI pesan "Hook requires authorization token" TIDAK ADA di kode `supabase/functions/custom-access-token/index.ts` manapun (sudah dicek langsung — semua pesan error di kode itu berbeda kata-katanya). Artinya pesan ini datang dari GoTrue sendiri atau lapisan gateway Edge Functions, BUKAN dari kode fungsi kita.
-9. Panggil URL Edge Function LANGSUNG (bukan lewat GoTrue) tanpa header apa pun — hasilnya kode KITA SENDIRI yang merespon (`{"error":"Invalid hook signature","detail":"Missing required headers"}`, 401) — BUKAN pesan "Hook requires authorization token". Ini membuktikan fungsi kita bisa dijangkau normal dan tidak diblokir gateway untuk panggilan LANGSUNG — masalahnya spesifik pada panggilan yang datang DARI GoTrue.
-10. `admin.auth.admin.createUser()` — **BERHASIL SEMPURNA**, termasuk hook berjalan benar (dibuktikan lewat login sukses dengan `company_id`/`app_role` yang benar di JWT). `admin.auth.admin.inviteUserByEmail()` — **BERHASIL SEMPURNA** juga. Jadi pipeline Hook+JWT claims TERBUKTI berfungsi penuh — cuma jalur spesifik `signUp()` publik (anon key, self-service) yang gagal.
-11. **Dikonfirmasi `signUp()` di project DEV masih normal** (dites langsung dengan email domain gmail.com acak yang tidak pernah dikirimi, langsung dihapus lagi) — jadi ini BUKAN regresi baru yang juga mengintai di dev, murni spesifik ke project staging yang baru dibuat.
+**Akar masalah sebenarnya** (`supabase/functions/custom-access-token/index.ts`): fungsi query `public.users` by `auth_uid`, dan kalau TIDAK ADA baris ditemukan, mengembalikan `401 {"error": "company_id not found for auth_uid."}`. Untuk user yang BARU SAJA `signUp()`, baris `public.users` memang belum ada — dibuat BELAKANGAN oleh `registerCompanyAdmin.ts` SETELAH `signUp()` return. Kalau GoTrue langsung minta token/sesi di titik itu (terjadi kalau `mailer_autoconfirm=true`, ATAU kalau login normal untuk auth-user yang tidak punya baris `users` sama sekali), hook mengembalikan 401 tadi — yang oleh GoTrue dibungkus jadi pesan generik "Hook requires authorization token" yang sama sekali tidak menyebut akar masalah sebenarnya.
 
-**Kesimpulan sementara:** kemungkinan besar bug/inkonsistensi platform Supabase spesifik untuk project staging ini (baru dibuat 16 Agu 2026), pada jalur internal GoTrue "buat sesi baru saat signUp() -> panggil hook custom-access-token" — BUKAN kesalahan konfigurasi yang bisa diperbaiki dari sisi kita (sudah dicoba semua yang masuk akal, termasuk exact match dev). `error_id` sample untuk laporan ke Supabase support kalau diperlukan: `01a00ac2-8bc6-722f-a7f8-78ba22a3b74e`, `01a00bb9-8648-7440-b3b2-636cc19639c8`.
+**Dikonfirmasi lewat `function_edge_logs` project staging** (bukan `auth_logs` yang cuma pesan generik) — log request MASUK ke fungsi dari GoTrue (`user_agent: Go-http-client/2.0`) dengan response **status_code 401** — persis cabang kode "company_id not found" di atas, bukan gagal token/secret sama sekali.
 
-**Opsi lanjutan yang BELUM dicoba** (untuk sesi berikutnya): (a) hapus & buat ulang project staging dari nol (ditawarkan ke pemilik produk, belum dipilih), (b) hubungi Supabase support dengan `error_id` di atas, (c) coba ganti pendekatan hook dari HTTPS Edge Function ke Postgres Function hook (mekanisme berbeda, belum pernah dicoba sama sekali untuk project ini).
+**Dikonfirmasi bug yang SAMA ADA DI DEV** — dites langsung (BUKAN lewat ubah config dev, murni panggilan API test): bikin 1 auth user via `admin.createUser()` TANPA baris `public.users` pendamping, coba `signInWithPassword` — **gagal dengan pesan generik yang SAMA PERSIS** di dev. Kesimpulan sesi sebelumnya ("dev masih normal") SALAH — dev cuma kebetulan tidak pernah memicu jalur ini karena (a) `mailer_autoconfirm=false` di dev membuat `signUp()` normal TIDAK langsung minta sesi (nunggu konfirmasi email dulu — baris `users` keburu dibuat oleh `registerCompanyAdmin.ts` di request yang sama sebelum user itu benar-benar login pertama kali), dan (b) semua akun test dev sejauh ini dibuat lewat seed script yang SELALU langsung membuat baris `users` pendamping, tidak pernah lewat form signup murni.
 
-### Yang TERVERIFIKASI bekerja lewat browser sungguhan (screenshot ada, lihat scratchpad sesi ini kalau perlu direproduksi)
-- App live di https://mrp-staging-zeta.vercel.app, terhubung ke Supabase staging (bukan dev) — dibuktikan dari isi `/api/me` & UI menampilkan data company staging.
-- **Login**: berhasil, redirect ke `/dashboard`, sesi valid dengan `company_id`/`app_role` benar di JWT (dibuktikan halaman ter-load sesuai role `company_admin` — semua menu department terlihat).
-- **Invite**: form "Undang anggota baru" di `/team` diisi & disubmit lewat UI sungguhan → baris `invitations` tercipta dengan token asli, DAN `admin.auth.admin.inviteUserByEmail()` (dipanggil `inviteTeamMember.ts`) otomatis membuat akun `auth.users` untuk calon anggota — TIDAK butuh signUp() terpisah untuk alur ini.
-- **Accept**: login sebagai akun calon anggota (password di-set lewat admin API karena `inviteUserByEmail` tidak mengirim password awal) → navigasi ke `/invite/accept?token=<token asli dari DB>` → "Undangan berhasil diterima" → diverifikasi di database: `invitations.status = accepted`, baris `users` baru tercipta dengan `role=general_manager` (sesuai yang dipilih saat invite) dan `company_id` benar.
-- **Negatif — isolasi environment**: kredensial user DEV asli (`ppic.a@debug.mrp`) dicoba login ke APLIKASI STAGING → ditolak bersih dengan "Invalid login credentials" (screenshot ada) — membuktikan staging benar-benar project terpisah, bukan kebetulan mengarah ke database yang sama.
+**Perbaikan** (di `supabase/functions/custom-access-token/index.ts`, dipakai bersama dev+staging — 1 kode sumber): kalau tidak ada baris `public.users` ditemukan, sekarang **mengembalikan claims apa adanya** (200 OK, tanpa `company_id`/`app_role`) alih-alih menolak dengan 401 — user tetap dapat sesi (belum ada klaim department/role sampai baris `users`-nya dibuat & mereka login ulang, yang memang sudah jadi alur normal `registerCompanyAdmin.ts`). Kasus lain (baris `users` ADA tapi `company_id`-nya `null`, mis. `super_admin`) TIDAK berubah perilakunya.
 
-### Konfigurasi yang dibuat sesi ini (semua di project staging, DEV tidak disentuh — diverifikasi berulang kali)
-- Vercel project baru `mrp-staging` (org/team `ams-3670`, akun `alvansecures-9901`) — terhubung ke branch git `staging` (bukan `main`), env var `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY` di-set untuk staging project, scoped ke Production DAN Preview+branch `staging` (perlu dua-duanya karena deploy pertama sebuah project baru di Vercel selalu ditandai "production" walau di branch non-main).
-- Edge Function `custom-access-token` di-deploy ke project staging dengan `--no-verify-jwt` (WAJIB untuk Auth Hook berbasis HTTPS — tanpa ini, deploy defaultnya menolak semua panggilan termasuk dari GoTrue sendiri).
-- Secret `CUSTOM_ACCESS_TOKEN_HOOK_SECRETS` di-generate BARU khusus staging (bukan pakai punya dev) — tersimpan di secrets Edge Function, TIDAK di git.
-- Auth config staging: `hook_custom_access_token_enabled=true` + uri + secret (lihat bug di atas), `site_url=https://mrp-staging-zeta.vercel.app`, `uri_allow_list` mencakup domain staging, `mailer_autoconfirm=true` (SENGAJA beda dari dev yang `false` — staging butuh ini supaya user test tidak perlu menerima email sungguhan; dampaknya: staging TIDAK 100% "identik jalur produksi" untuk alur email — dicatat sebagai penyimpangan yang disadari, bukan kelupaan).
-- Branch git `staging` dibuat & di-push ke `origin/staging`, terpisah dari `main`.
+**Di-deploy ulang ke KEDUA project** (`supabase functions deploy custom-access-token --no-verify-jwt`, ke `nclkepwlsgmfbslgsajq` dan `kfvtrwuuqcjfkkuqizxt`) dan diverifikasi:
+- Staging: `signUp()` asli lewat form `/register` → sukses → redirect `/login` → login sukses → dashboard ter-render lengkap dengan nama company yang baru didaftarkan (screenshot ada).
+- Dev: `signUp()` langsung (skrip test, email domain gmail.com acak, langsung dihapus setelah) → sukses tanpa error. Kasus reproduksi (login user tanpa baris `users`) → sekarang sukses dapat sesi. Regresi dicek: user existing dengan company_id (`ppic.a@debug.mrp`) → JWT `company_id`/`app_role` tetap benar seperti sebelumnya.
+- `npx vitest run` (18 test) + `npm run build` tetap lulus setelah perubahan.
 
-### Data yang sengaja DIBIARKAN di staging sebagai bukti hidup
-- 1 `companies` row "Staging Verify Co" + 1 `users` row `company_admin` (dibuat via `admin.createUser`, bukan lewat form) + 1 `users` row `general_manager` hasil accept undangan + 1 baris `invitations` berstatus `accepted`. Semua baris test lain (dari percobaan signUp yang gagal berkali-kali) sudah dibersihkan — 0 baris yatim tersisa di `auth.users` staging di luar 2 yang disebut di atas.
+**Pelajaran untuk sesi berikutnya:** jangan berhenti di kesimpulan "kemungkinan bug platform pihak ketiga" tanpa membaca log INTERNAL sistem yang benar-benar relevan (di sini: `function_edge_logs`, bukan cuma `auth_logs`) dan tanpa menguji ulang asumsi "sudah dicek di dev" dengan skenario yang BENAR-BENAR sama (bukan skenario yang kebetulan menghindari jalur kode bermasalah).
 
-### Belum dikerjakan (lanjutan, urutan prioritas)
-1. **Selesaikan bug `signUp()` di atas dulu** — tanpa ini, kriteria "signup" Sesi 2B belum bisa dicentang penuh, dan modul-modul lain yang mengandalkan self-registration publik (kalau ada) juga berisiko sama di staging.
-2. Setelah bug di atas selesai: re-run verifikasi signup ASLI lewat form (bukan admin.createUser), sertakan sebagai bukti pelengkap.
-3. Sesi 2C — CI GitHub Actions, WAJIB pakai `pg_dump` asli untuk uji rebuild-migrasi (lihat catatan Sesi 2A di bawah).
+### Yang TERVERIFIKASI bekerja lewat browser sungguhan (screenshot ada di scratchpad sesi ini kalau perlu direproduksi)
+- App live di https://mrp-staging-zeta.vercel.app, terhubung ke Supabase staging (bukan dev).
+- **Signup ASLI** lewat form `/register` → sukses (setelah perbaikan bug di atas).
+- **Login**: berhasil, redirect ke `/dashboard`, JWT `company_id`/`app_role` benar.
+- **Invite**: form "Undang anggota baru" di `/team` diisi & disubmit lewat UI sungguhan → baris `invitations` tercipta dengan token asli.
+- **Accept**: navigasi ke `/invite/accept?token=<token asli dari DB>` → "Undangan berhasil diterima" → diverifikasi di database: `invitations.status=accepted`, baris `users` baru dengan role & company_id benar.
+- **Negatif — isolasi environment**: kredensial user DEV asli (`ppic.a@debug.mrp`) ditolak bersih "Invalid login credentials" saat dicoba di APLIKASI STAGING — membuktikan staging benar-benar project terpisah.
+
+### Konfigurasi yang dibuat sesi ini (DEV hanya disentuh untuk deploy PERBAIKAN BUG di atas, tidak ada config lain yang diubah — diverifikasi berulang kali)
+- Vercel project baru `mrp-staging` (org/team `ams-3670`, akun `alvansecures-9901`) — terhubung ke branch git `staging` (bukan `main`), env var `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY` di-set untuk staging project, scoped ke Production DAN Preview+branch `staging`.
+- Edge Function `custom-access-token` di-deploy ke staging dengan `--no-verify-jwt` (WAJIB untuk Auth Hook berbasis HTTPS).
+- Secret `CUSTOM_ACCESS_TOKEN_HOOK_SECRETS` baru khusus staging (bukan pakai punya dev) — tersimpan di secrets Edge Function, TIDAK di git.
+- Auth config staging: `hook_custom_access_token_enabled=true` + uri + secret, `site_url=https://mrp-staging-zeta.vercel.app`, `uri_allow_list` mencakup domain staging, `mailer_autoconfirm=true` (SENGAJA beda dari dev yang `false` — staging butuh ini supaya user test tidak perlu menerima email sungguhan; dicatat sebagai penyimpangan yang disadari).
+- Branch git `staging` dibuat & di-push ke `origin/staging`.
+
+### Data test yang tersisa di staging (evidence, bukan sisa yatim)
+- 1 `companies` + 1 `users` company_admin (bootstrap awal sebelum bug ditemukan) + 1 `users` general_manager hasil accept undangan + 1 `invitations` berstatus accepted. Semua baris signUp yang gagal (sebelum perbaikan) dan test signup yang berhasil (setelah perbaikan) sudah dibersihkan.
+
+### Belum dikerjakan (lanjutan)
+- Sesi 2C — CI GitHub Actions, WAJIB pakai `pg_dump` asli untuk uji rebuild-migrasi (lihat catatan Sesi 2A di bawah).
 
 ---
 

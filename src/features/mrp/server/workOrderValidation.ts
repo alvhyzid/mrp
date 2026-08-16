@@ -2,7 +2,7 @@ export const workOrderPriorities = ['low', 'normal', 'high', 'urgent'];
 
 export interface WorkOrderInput {
   production_plant_id: number;
-  sales_order_line_id: number;
+  sales_order_line_id: number | null;
   bom_id: number;
   routing_id: number | null;
   planned_qty: number;
@@ -28,8 +28,12 @@ export function parseWorkOrderInput(body: Record<string, unknown>): { input?: Wo
   const plantId = parsePositiveInt(body.production_plant_id, 'Lokasi pabrik');
   if (plantId.error) return { error: plantId.error };
 
-  const salesOrderLineId = parsePositiveInt(body.sales_order_line_id, 'SO line');
-  if (salesOrderLineId.error) return { error: salesOrderLineId.error };
+  let salesOrderLineId: number | null = null;
+  if (body.sales_order_line_id !== undefined && body.sales_order_line_id !== null && body.sales_order_line_id !== '') {
+    const parsedSoLine = parsePositiveInt(body.sales_order_line_id, 'SO line');
+    if (parsedSoLine.error) return { error: parsedSoLine.error };
+    salesOrderLineId = parsedSoLine.value!;
+  }
 
   const bomId = parsePositiveInt(body.bom_id, 'BOM');
   if (bomId.error) return { error: bomId.error };
@@ -54,7 +58,7 @@ export function parseWorkOrderInput(body: Record<string, unknown>): { input?: Wo
   return {
     input: {
       production_plant_id: plantId.value!,
-      sales_order_line_id: salesOrderLineId.value!,
+      sales_order_line_id: salesOrderLineId,
       bom_id: bomId.value!,
       routing_id: routingId,
       planned_qty: plannedQty,

@@ -62,6 +62,8 @@ type SalesOrder = { sales_order_id: number; so_number: string; customer_id: numb
 type Bom = {
   bom_id: number;
   parent_item_id: number;
+  parent_item_code: string | null;
+  parent_item_name: string | null;
   version: number;
   status: string;
   standard_yield_qty: number;
@@ -229,8 +231,12 @@ export default function WorkOrdersPage() {
 
   const selectedSo = salesOrders.find((so) => String(so.sales_order_id) === form.sales_order_id) ?? null;
   const selectedSoLine = selectedSo?.lines.find((line) => String(line.sales_order_line_id) === form.sales_order_line_id) ?? null;
-  const availableBomsForLine = selectedSoLine ? boms.filter((bom) => bom.parent_item_id === selectedSoLine.item_id) : [];
-  const availableRoutingsForLine = selectedSoLine ? routings.filter((r) => r.item_id === selectedSoLine.item_id) : [];
+  const selectedBom = boms.find((bom) => String(bom.bom_id) === form.bom_id) ?? null;
+  // Kalau SO line dipilih, item WO ikut SO line itu. Kalau tidak (WO WIP di muka, belum
+  // terikat SO), item ditentukan dari BOM yang dipilih langsung — PPIC yang putuskan.
+  const effectiveItemId = selectedSoLine?.item_id ?? selectedBom?.parent_item_id ?? null;
+  const availableBoms = selectedSoLine ? boms.filter((bom) => bom.parent_item_id === selectedSoLine.item_id) : boms;
+  const availableRoutingsForItem = effectiveItemId ? routings.filter((r) => r.item_id === effectiveItemId) : [];
 
   const handleSelectSo = (soId: string) => {
     const so = salesOrders.find((s) => String(s.sales_order_id) === soId);
@@ -251,7 +257,7 @@ export default function WorkOrdersPage() {
 
     const payload = {
       production_plant_id: Number(form.production_plant_id),
-      sales_order_line_id: Number(form.sales_order_line_id),
+      sales_order_line_id: form.sales_order_line_id ? Number(form.sales_order_line_id) : null,
       bom_id: Number(form.bom_id),
       routing_id: form.routing_id ? Number(form.routing_id) : null,
       planned_qty: Number(form.planned_qty),
@@ -677,16 +683,17 @@ export default function WorkOrdersPage() {
           <Card>
             <CardHeader>
               <CardDescription className="uppercase tracking-[0.2em]">Buat WO</CardDescription>
-              <CardTitle className="text-xl">Buat Work Order dari SO Line</CardTitle>
+              <CardTitle className="text-xl">Buat Work Order</CardTitle>
+              <CardDescription>SO opsional — kosongkan untuk WO produksi WIP di muka yang belum terikat pesanan customer (mis. Base Gelatin).</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">Sales Order</span>
+                    <span className="text-sm font-medium text-foreground">Sales Order (opsional)</span>
                     <Select value={form.sales_order_id} onValueChange={handleSelectSo}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Pilih SO..." />
+                        <SelectValue placeholder="(Tanpa SO — WO WIP di muka)" />
                       </SelectTrigger>
                       <SelectContent>
                         {salesOrders.map((so) => (
@@ -700,7 +707,11 @@ export default function WorkOrdersPage() {
 
                   <label className="flex flex-col gap-1.5">
                     <span className="text-sm font-medium text-foreground">SO Line (item)</span>
-                    <Select value={form.sales_order_line_id} onValueChange={(value) => setForm((prev) => ({ ...prev, sales_order_line_id: value, bom_id: '' }))} disabled={!selectedSo}>
+                    <Select
+                      value={form.sales_order_line_id}
+                      onValueChange={(value) => setForm((prev) => ({ ...prev, sales_order_line_id: value, bom_id: '', routing_id: '' }))}
+                      disabled={!selectedSo}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Pilih baris SO..." />
                       </SelectTrigger>
@@ -718,36 +729,36 @@ export default function WorkOrdersPage() {
                 <div className="grid gap-3 sm:grid-cols-3">
                   <label className="flex flex-col gap-1.5">
                     <span className="text-sm font-medium text-foreground">BOM</span>
-                    <Select value={form.bom_id} onValueChange={(value) => setForm((prev) => ({ ...prev, bom_id: value }))} disabled={!selectedSoLine}>
+                    <Select value={form.bom_id} onValueChange={(value) => setForm((prev) => ({ ...prev, bom_id: value, routing_id: '' }))}>
                       <SelectTrigger>
-                        <SelectValue placeholder={selectedSoLine ? 'Pilih BOM...' : 'Pilih SO line dulu'} />
+                        <SelectValue placeholder="Pilih BOM..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {availableBomsForLine.map((bom) => (
+                        {availableBoms.map((bom) => (
                           <SelectItem key={bom.bom_id} value={String(bom.bom_id)}>
-                            v{bom.version} ({bom.status}) — yield {bom.standard_yield_qty} {bom.standard_yield_uom}
+                            {selectedSoLine ? '' : `${bom.parent_item_code} — `}v{bom.version} ({bom.status}) — yield {bom.standard_yield_qty} {bom.standard_yield_uom}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    {selectedSoLine && availableBomsForLine.length === 0 ? <span className="text-xs text-destructive">Belum ada BOM untuk item ini — buat dulu di halaman BOM.</span> : null}
+                    {selectedSoLine && availableBoms.length === 0 ? <span className="text-xs text-destructive">Belum ada BOM untuk item ini — buat dulu di halaman BOM.</span> : null}
                   </label>
 
                   <label className="flex flex-col gap-1.5">
                     <span className="text-sm font-medium text-foreground">Routing (opsional)</span>
-                    <Select value={form.routing_id} onValueChange={(value) => setForm((prev) => ({ ...prev, routing_id: value }))} disabled={!selectedSoLine}>
+                    <Select value={form.routing_id} onValueChange={(value) => setForm((prev) => ({ ...prev, routing_id: value }))} disabled={!effectiveItemId}>
                       <SelectTrigger>
-                        <SelectValue placeholder={selectedSoLine ? '(Tidak ada)' : 'Pilih SO line dulu'} />
+                        <SelectValue placeholder={effectiveItemId ? '(Tidak ada)' : 'Pilih BOM dulu'} />
                       </SelectTrigger>
                       <SelectContent>
-                        {availableRoutingsForLine.map((r) => (
+                        {availableRoutingsForItem.map((r) => (
                           <SelectItem key={r.routing_id} value={String(r.routing_id)}>
                             v{r.version} — {r.steps.length} tahap
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    {selectedSoLine && availableRoutingsForLine.length === 0 ? (
+                    {effectiveItemId && availableRoutingsForItem.length === 0 ? (
                       <span className="text-xs text-muted-foreground">Belum ada Routing untuk item ini — WO tetap bisa dibuat, tapi tidak akan muncul di Gantt Produksi.</span>
                     ) : null}
                   </label>

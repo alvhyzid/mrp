@@ -37,22 +37,6 @@ export async function createWorkOrder(request: NextRequest): Promise<ApiResult> 
     if (plantError) return { status: 500, body: { error: plantError.message } };
     if (!plant) return { status: 400, body: { error: 'Lokasi pabrik tidak ditemukan di perusahaan Anda.' } };
 
-    const { data: soLine, error: soLineError } = await adminClient
-      .from('sales_order_lines')
-      .select('sales_order_line_id, item_id, qty_ordered, sales_order_id')
-      .eq('sales_order_line_id', input.sales_order_line_id)
-      .maybeSingle();
-    if (soLineError) return { status: 500, body: { error: soLineError.message } };
-    if (!soLine) return { status: 400, body: { error: 'SO line tidak ditemukan.' } };
-
-    const { data: so, error: soError } = await adminClient
-      .from('sales_orders')
-      .select('company_id, status')
-      .eq('sales_order_id', soLine.sales_order_id)
-      .single();
-    if (soError) return { status: 500, body: { error: soError.message } };
-    if (so.company_id !== appUser.company_id) return { status: 400, body: { error: 'SO line tidak ditemukan di perusahaan Anda.' } };
-
     const { data: bom, error: bomError } = await adminClient
       .from('boms')
       .select('bom_id, company_id, parent_item_id')
@@ -62,8 +46,34 @@ export async function createWorkOrder(request: NextRequest): Promise<ApiResult> 
     if (!bom || bom.company_id !== appUser.company_id) {
       return { status: 400, body: { error: 'BOM tidak ditemukan di perusahaan Anda.' } };
     }
-    if (bom.parent_item_id !== soLine.item_id) {
-      return { status: 400, body: { error: 'BOM yang dipilih bukan untuk item pada SO line ini.' } };
+
+    let itemId = bom.parent_item_id;
+
+    // sales_order_line_id boleh kosong (nullable di skema) — dipakai untuk WO produksi WIP
+    // di muka (mis. Base Gelatin) yang belum terikat SO customer. PPIC yang menentukan
+    // kapan WO perlu ditaut ke SO line dan kapan tidak.
+    if (input.sales_order_line_id !== null) {
+      const { data: soLine, error: soLineError } = await adminClient
+        .from('sales_order_lines')
+        .select('sales_order_line_id, item_id, qty_ordered, sales_order_id')
+        .eq('sales_order_line_id', input.sales_order_line_id)
+        .maybeSingle();
+      if (soLineError) return { status: 500, body: { error: soLineError.message } };
+      if (!soLine) return { status: 400, body: { error: 'SO line tidak ditemukan.' } };
+
+      const { data: so, error: soError } = await adminClient
+        .from('sales_orders')
+        .select('company_id, status')
+        .eq('sales_order_id', soLine.sales_order_id)
+        .single();
+      if (soError) return { status: 500, body: { error: soError.message } };
+      if (so.company_id !== appUser.company_id) return { status: 400, body: { error: 'SO line tidak ditemukan di perusahaan Anda.' } };
+
+      if (bom.parent_item_id !== soLine.item_id) {
+        return { status: 400, body: { error: 'BOM yang dipilih bukan untuk item pada SO line ini.' } };
+      }
+
+      itemId = soLine.item_id;
     }
 
     if (input.routing_id) {
@@ -73,7 +83,7 @@ export async function createWorkOrder(request: NextRequest): Promise<ApiResult> 
         .eq('routing_id', input.routing_id)
         .maybeSingle();
       if (routingError) return { status: 500, body: { error: routingError.message } };
-      if (!routing || routing.company_id !== appUser.company_id || routing.item_id !== soLine.item_id) {
+      if (!routing || routing.company_id !== appUser.company_id || routing.item_id !== itemId) {
         return { status: 400, body: { error: 'Routing yang dipilih tidak valid untuk item ini.' } };
       }
     }
@@ -84,7 +94,7 @@ export async function createWorkOrder(request: NextRequest): Promise<ApiResult> 
         {
           company_id: appUser.company_id,
           production_plant_id: input.production_plant_id,
-          item_id: soLine.item_id,
+          item_id: itemId,
           bom_id: input.bom_id,
           routing_id: input.routing_id,
           sales_order_line_id: input.sales_order_line_id,

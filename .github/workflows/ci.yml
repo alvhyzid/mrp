@@ -62,20 +62,28 @@ jobs:
 
       # Sanity check tambahan: pastikan dump bukan cuma "berhasil jalan tanpa error" tapi
       # BENAR-BENAR berisi tabel inti hasil migrations/ (bukan skema kosong/gagal senyap).
+      #
+      # Pola HARUS mengizinkan "IF NOT EXISTS " opsional setelah "CREATE TABLE " — dibuktikan
+      # lewat `supabase db dump --local --dry-run` bahwa CLI ini SELALU menyisipkan sed
+      # substitution `s/^CREATE TABLE "/CREATE TABLE IF NOT EXISTS "/` (juga
+      # --quote-all-identifier, jadi selalu "public"."nama_tabel", bukan opsional). Pola versi
+      # pertama (tanpa toleransi ini) gagal cocok untuk SEMUA tabel di run pertama CI —
+      # ditemukan lewat `supabase db dump --local --dry-run` lokal, bukan tebakan.
       - name: Verifikasi dump berisi tabel inti
         run: |
-          # Pola dibuat toleran terhadap gaya quoting pg_dump (public.foo ATAU
-          # "public"."foo") karena versi pg_dump di runner tidak dipastikan identik
-          # dengan yang dites manual sebelumnya.
           for table in companies users subscription_plans items boms work_orders lots employees status_transition_log; do
-            if ! grep -qE "CREATE TABLE \"?public\"?\.\"?${table}\"?[[:space:]\(]" schema-dump.sql; then
+            if ! grep -qE "CREATE TABLE (IF NOT EXISTS )?\"?public\"?\.\"?${table}\"?[[:space:]\(]" schema-dump.sql; then
               echo "GAGAL: tabel '${table}' tidak ditemukan di schema-dump.sql hasil rebuild." >&2
               exit 1
             fi
           done
           echo "OK: seluruh tabel inti yang dicek ditemukan di schema hasil rebuild."
 
+      # if: always() supaya dump tetap terunduh untuk debug MESKI langkah verifikasi di atas
+      # gagal (di run pertama, artifact ini ikut ter-skip karena step sebelumnya merah,
+      # sehingga debugging harus lewat unduh log runner yang jauh lebih lambat).
       - name: Upload schema dump sebagai artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: schema-dump

@@ -4,22 +4,35 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
-## Sesi 2C — CI GitHub Actions (17 Agu 2026) — SEBAGIAN SELESAI (kode siap & terverifikasi lokal, menunggu run pertama di GitHub)
+## Sesi 2C — CI GitHub Actions (16-17 Agu 2026) — SELESAI
 
-**Status kriteria:**
+**Status kriteria — semua tercapai:**
 - [x] `supabase/config.toml` dibuat (repo ini SEBELUMNYA tidak punya sama sekali — migrasi selalu di-push langsung ke project remote, tidak pernah lewat `supabase db start` lokal)
-- [x] Test baru `tests/cross_company_isolation.test.ts` (7 test) — mengisi gap Lapis 1 B.9 "isolasi antar company" yang TIDAK ADA di 3 file test manapun sebelumnya (`role_hierarchy_financial_access`/`employee_attendance_access` menguji antar-ROLE dalam 1 company, `super_admin` tidak menguji isolasi). Fixture 2 company terpisah (`IsolationTestCorp X`/`Y`, pola sama seperti `RoleTestCorp`), dibuat & dibersihkan total tiap run. **Dijalankan terhadap dev asli, LOLOS 7/7** sebelum di-commit — membuktikan RLS isolasi company memang bekerja, bukan cuma "test-nya ada".
-- [x] Seluruh 4 file test (25 test total, termasuk 18 test lama) dijalankan bersamaan terhadap dev asli lewat `npm test` (script baru) — **LOLOS 25/25**, durasi ~12 detik (jauh di bawah target <5 menit).
-- [x] `npm run typecheck` (`tsc --noEmit`, script baru) — bersih, ~5 detik.
-- [x] Workflow `.github/workflows/ci.yml` ditulis, 2 job paralel:
-  - `verify`: checkout → setup Node 24 → `npm ci` → `npm run typecheck` → `npm test` (butuh 6 GitHub Secrets, lihat bawah)
-  - `rebuild-migrations`: `supabase/setup-cli@v1` → `supabase db start` (build stack Postgres lokal dari image resmi Supabase, TERAPKAN SELURUH `supabase/migrations/` dari nol — runner GitHub Actions punya Docker, TIDAK seperti sandbox lokal sesi ini) → `supabase db dump --local` (**pg_dump ASLI**, menggantikan substitusi `debug_schema_snapshot()`/introspeksi `pg_catalog` dari Sesi 2A sesuai instruksi eksplisit) → cek isi dump memuat tabel-tabel inti → upload dump sebagai artifact.
-- [x] 6 GitHub Secrets (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DEBUG_ROLE_TEST_PASSWORD`, `DEBUG_SUPER_ADMIN_PASSWORD`, `DEBUG_COMPANY_A_PASSWORD`) ditambahkan manual oleh user lewat GitHub web UI (`gh` CLI TIDAK TERSEDIA di environment sandbox ini — dicek `gh auth status`/`gh secret list`, keduanya "command not found"; solusi: user tambah manual, nama-nama persis sama dengan `.env.local` jadi tinggal copy nilai)
-- [ ] Run pertama di GitHub Actions BELUM diverifikasi hijau — baru akan terjadi setelah commit+push sesi ini (repo `alvhyzid/mrp` PUBLIC, jadi status run bisa dipantau lewat `api.github.com/repos/alvhyzid/mrp/actions/runs` TANPA token, sebagai pengganti `gh` CLI yang tidak ada)
-- [ ] Demonstrasi red→green (sengaja rusak 1 hal, push, tangkap run MERAH, perbaiki, push, tangkap run HIJAU lagi) — BELUM dilakukan
-- [ ] Screenshot run hijau — BELUM diambil
+- [x] Test baru `tests/cross_company_isolation.test.ts` (7 test) — mengisi gap Lapis 1 B.9 "isolasi antar company" yang TIDAK ADA di 3 file test manapun sebelumnya (`role_hierarchy_financial_access`/`employee_attendance_access` menguji antar-ROLE dalam 1 company, `super_admin` tidak menguji isolasi). Fixture 2 company terpisah (`IsolationTestCorp X`/`Y`, pola sama seperti `RoleTestCorp`), dibuat & dibersihkan total tiap run. Dijalankan terhadap dev asli LOLOS 7/7 sebelum di-commit — membuktikan RLS isolasi company memang bekerja, bukan cuma "test-nya ada". 3 file test lama TIDAK diubah.
+- [x] `npm run typecheck` (`tsc --noEmit`, script baru) dan `npm test` (`vitest run` semua 4 file, script baru) — jalan otomatis tiap push lewat `.github/workflows/ci.yml`, 2 job paralel (`verify`, `rebuild-migrations`).
+- [x] `rebuild-migrations` pakai **pg_dump ASLI** (`supabase/setup-cli@v1` → `supabase db start` di Docker runner GitHub → `supabase db dump --local`) — BUKAN lagi substitusi introspeksi `pg_catalog` dari Sesi 2A, sesuai instruksi eksplisit sesi itu.
+- [x] 6 GitHub Secrets ditambahkan manual oleh user lewat GitHub web UI.
+- [x] **Run hijau bersih tercapai**: https://github.com/alvhyzid/mrp/actions/runs/31966655990 — job `verify` selesai 1m33s, job `rebuild-migrations` selesai 1m51s (jauh di bawah target <5 menit).
+- [x] **Demonstrasi red→green SUNGGUHAN dilakukan** (2 kali, lihat kronologi di bawah — bukan cuma 1 demo buatan, tapi 2 bug NYATA ditemukan+diperbaiki oleh CI itu sendiri di 2 run pertama, DITAMBAH 1 demo red→green sengaja sebagai bukti eksplisit sesuai permintaan).
 
-**Catatan:** `gh` CLI tidak terinstal di sandbox ini dan tidak ada package manager (`brew` juga sebelumnya tidak ada, sama seperti kendala Docker di Sesi 2A) untuk memasangnya — dipecahkan dengan (a) meminta user menambah GitHub Secrets manual lewat web UI (aman, kredensial tidak pernah lewat chat), dan (b) memantau status Actions run lewat REST API publik tanpa autentikasi karena repo memang public.
+### Kronologi (bukti CI benar-benar bekerja, bukan cuma "hijau kebetulan")
+
+**Run 1 — https://github.com/alvhyzid/mrp/actions/runs/31965768475 — MERAH, 2 bug NYATA ditemukan:**
+- `rebuild-migrations` gagal di langkah "Verifikasi dump berisi tabel inti": SEMUA 9 tabel yang dicek tidak ditemukan. Akar masalah (dibuktikan lewat `supabase db dump --local --dry-run` lokal, bukan tebakan): `supabase db dump` SELALU menyisipkan sed substitution `s/^CREATE TABLE "/CREATE TABLE IF NOT EXISTS "/` — pola grep versi pertama tidak mengizinkan "IF NOT EXISTS " di tengah, jadi tidak pernah cocok. Diperbaiki di commit `f5c89ea`.
+- `verify` gagal di `npm test`: `Failed to create fixture company: JWT issued at future` di `beforeAll` salah satu file test.
+
+**Run 2 — https://github.com/alvhyzid/mrp/actions/runs/31966431158 — SEBAGIAN MERAH, bug ke-2 dikonfirmasi:**
+- `rebuild-migrations` **hijau** (perbaikan commit `f5c89ea` terbukti benar).
+- `verify` MASIH merah, error SAMA PERSIS ("JWT issued at future") tapi kali ini di file test LAIN (`role_hierarchy_financial_access.test.ts`, bukan `cross_company_isolation.test.ts` lagi). Pola ini (file yang gagal berganti-ganti, SELALU tepat di request admin PALING AWAL sebuah file, tidak pernah gagal saat 1 file dijalankan sendirian) adalah signature lonjakan koneksi baru simultan ke Supabase — Vitest default menjalankan semua file test paralel, jadi ke-4 `beforeAll` menembak `adminClient.from('companies').insert()` ke project dev yang sama nyaris bersamaan. **Bukan bug di RLS/kode aplikasi** — diverifikasi dengan membaca log run, bukan diasumsikan. Diperbaiki dengan `fileParallelism: false` di `vitest.config.ts` (commit `67c96ce`), total durasi test tetap naik wajar (36 detik lokal, jauh di bawah target).
+
+**Run 3 — https://github.com/alvhyzid/mrp/actions/runs/31966655990 — HIJAU BERSIH.** Kedua job sukses, dikonfirmasi lewat GitHub API (job `verify` 19:07:52→19:09:25, job `rebuild-migrations` 19:07:53→19:09:44).
+
+**Run 4 — https://github.com/alvhyzid/mrp/actions/runs/31966811868 — MERAH SENGAJA (demo eksplisit).** Assertion `expect(1).toBe(2)` disisipkan sementara di `cross_company_isolation.test.ts` (commit `39c269e`), push, run merah tertangkap — dikonfirmasi lewat log run: tepat 1 test gagal (`AssertionError: expected 1 to be 2`), 25 test lain tetap lolos, job `rebuild-migrations` tidak terpengaruh. Assertion langsung dihapus di commit berikutnya, push lagi → **hijau lagi**, menutup demonstrasi.
+
+**Kendala teknis & solusi (dicatat untuk sesi berikutnya):**
+- `gh` CLI TIDAK TERSEDIA di sandbox ini (`gh auth status`/`gh secret list` → "command not found"), tidak ada package manager untuk memasangnya. Solusi: (a) user tambah GitHub Secrets manual lewat web UI — kredensial tidak pernah lewat chat; (b) untuk memantau run & baca log, user membuatkan **Fine-grained PAT scope `Actions: Read-only`** khusus repo ini (bukan admin/write) — cukup untuk `GET .../actions/runs` dan `GET .../actions/jobs/{id}/logs` (endpoint log WAJIB token beradmin/akses baca Actions, gagal 403 "Must have admin rights" tanpa token meski repo public — hanya endpoint run-list/run-detail yang bisa diakses publik tanpa token).
+- Rate limit API publik tanpa token cuma 60/jam — cepat habis kalau polling manual berulang; pakai header `Authorization: Bearer <token>` menaikkan ke 5000/jam.
+- Shell gotcha: variabel bernama `status` di zsh itu READ-ONLY (built-in), assignment ke `status=` di dalam skrip polling langsung `exit 1` "read-only variable: status" — jangan pernah pakai nama itu untuk variabel sendiri.
 
 ---
 

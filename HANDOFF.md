@@ -4,6 +4,25 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Sesi 2C — CI GitHub Actions (17 Agu 2026) — SEBAGIAN SELESAI (kode siap & terverifikasi lokal, menunggu run pertama di GitHub)
+
+**Status kriteria:**
+- [x] `supabase/config.toml` dibuat (repo ini SEBELUMNYA tidak punya sama sekali — migrasi selalu di-push langsung ke project remote, tidak pernah lewat `supabase db start` lokal)
+- [x] Test baru `tests/cross_company_isolation.test.ts` (7 test) — mengisi gap Lapis 1 B.9 "isolasi antar company" yang TIDAK ADA di 3 file test manapun sebelumnya (`role_hierarchy_financial_access`/`employee_attendance_access` menguji antar-ROLE dalam 1 company, `super_admin` tidak menguji isolasi). Fixture 2 company terpisah (`IsolationTestCorp X`/`Y`, pola sama seperti `RoleTestCorp`), dibuat & dibersihkan total tiap run. **Dijalankan terhadap dev asli, LOLOS 7/7** sebelum di-commit — membuktikan RLS isolasi company memang bekerja, bukan cuma "test-nya ada".
+- [x] Seluruh 4 file test (25 test total, termasuk 18 test lama) dijalankan bersamaan terhadap dev asli lewat `npm test` (script baru) — **LOLOS 25/25**, durasi ~12 detik (jauh di bawah target <5 menit).
+- [x] `npm run typecheck` (`tsc --noEmit`, script baru) — bersih, ~5 detik.
+- [x] Workflow `.github/workflows/ci.yml` ditulis, 2 job paralel:
+  - `verify`: checkout → setup Node 24 → `npm ci` → `npm run typecheck` → `npm test` (butuh 6 GitHub Secrets, lihat bawah)
+  - `rebuild-migrations`: `supabase/setup-cli@v1` → `supabase db start` (build stack Postgres lokal dari image resmi Supabase, TERAPKAN SELURUH `supabase/migrations/` dari nol — runner GitHub Actions punya Docker, TIDAK seperti sandbox lokal sesi ini) → `supabase db dump --local` (**pg_dump ASLI**, menggantikan substitusi `debug_schema_snapshot()`/introspeksi `pg_catalog` dari Sesi 2A sesuai instruksi eksplisit) → cek isi dump memuat tabel-tabel inti → upload dump sebagai artifact.
+- [x] 6 GitHub Secrets (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DEBUG_ROLE_TEST_PASSWORD`, `DEBUG_SUPER_ADMIN_PASSWORD`, `DEBUG_COMPANY_A_PASSWORD`) ditambahkan manual oleh user lewat GitHub web UI (`gh` CLI TIDAK TERSEDIA di environment sandbox ini — dicek `gh auth status`/`gh secret list`, keduanya "command not found"; solusi: user tambah manual, nama-nama persis sama dengan `.env.local` jadi tinggal copy nilai)
+- [ ] Run pertama di GitHub Actions BELUM diverifikasi hijau — baru akan terjadi setelah commit+push sesi ini (repo `alvhyzid/mrp` PUBLIC, jadi status run bisa dipantau lewat `api.github.com/repos/alvhyzid/mrp/actions/runs` TANPA token, sebagai pengganti `gh` CLI yang tidak ada)
+- [ ] Demonstrasi red→green (sengaja rusak 1 hal, push, tangkap run MERAH, perbaiki, push, tangkap run HIJAU lagi) — BELUM dilakukan
+- [ ] Screenshot run hijau — BELUM diambil
+
+**Catatan:** `gh` CLI tidak terinstal di sandbox ini dan tidak ada package manager (`brew` juga sebelumnya tidak ada, sama seperti kendala Docker di Sesi 2A) untuk memasangnya — dipecahkan dengan (a) meminta user menambah GitHub Secrets manual lewat web UI (aman, kredensial tidak pernah lewat chat), dan (b) memantau status Actions run lewat REST API publik tanpa autentikasi karena repo memang public.
+
+---
+
 ## Sesi 2B — Setup Staging (16 Agu 2026) — SELESAI (termasuk perbaikan bug nyata di kode bersama)
 
 **Status kriteria — semua 3 tercapai:**

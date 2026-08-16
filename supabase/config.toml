@@ -1,0 +1,196 @@
+# For detailed configuration reference documentation, visit:
+# https://supabase.com/docs/guides/local-development/cli/config
+#
+# Ditambahkan Sesi 2C (docs/rencana-kerja-playbook-ams.md) — sebelumnya proyek ini
+# TIDAK PUNYA file ini sama sekali (migrasi selalu di-push langsung ke project remote
+# lewat `supabase db push --db-url`/`--linked`, tidak pernah lewat `supabase db start`
+# lokal). File ini WAJIB ada supaya CI (dan siapa pun yang mau coba lokal dengan
+# Docker) bisa menjalankan `supabase db start` — yang membangun ulang skema dari NOL
+# memakai SELURUH isi supabase/migrations/ ke Postgres lokal yang skema auth/storage-
+# nya sudah disiapkan sama seperti project cloud (bukan Postgres polos).
+project_id = "mrp"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[api.tls]
+enabled = false
+
+[db]
+port = 54322
+shadow_port = 54320
+health_timeout = "2m"
+# HARUS sama dengan versi Postgres project dev/staging (17.6.1) — dicek lewat
+# `SHOW server_version;` di project nyata, dikonfirmasi Sesi 2A.
+major_version = 17
+
+[db.pooler]
+enabled = false
+port = 54329
+pool_mode = "transaction"
+default_pool_size = 20
+max_client_conn = 100
+
+[db.migrations]
+enabled = true
+schema_paths = []
+
+[db.seed]
+# Repo ini tidak punya file seed.sql (data debug dibuat lewat scripts/seed-debug-*.js
+# yang jalan lewat Node terpisah, bukan lewat mekanisme seed bawaan CLI) — dimatikan
+# supaya `db start`/`db reset` tidak mencari file yang memang tidak ada.
+enabled = false
+
+[db.network_restrictions]
+enabled = false
+allowed_cidrs = ["0.0.0.0/0"]
+allowed_cidrs_v6 = ["::/0"]
+
+[realtime]
+# WAJIB aktif — migrasi 20260816100000 menambahkan system_alerts ke publication
+# supabase_realtime (dasar Bell Icon Notifikasi), jadi bagian dari skema yang harus
+# berhasil dibangun ulang.
+enabled = true
+
+[studio]
+# Dimatikan untuk CI — tidak dipakai untuk uji rebuild-migrasi, mempercepat startup.
+enabled = false
+port = 54323
+api_url = "http://127.0.0.1"
+
+[local_smtp]
+enabled = false
+
+[storage]
+# WAJIB aktif — migrasi 20260814160000 membuat storage bucket + RLS policy di
+# storage.objects (logo perusahaan, avatar user), bagian dari skema yang harus
+# berhasil dibangun ulang.
+enabled = true
+file_size_limit = "50MiB"
+
+[storage.s3_protocol]
+enabled = false
+
+[storage.analytics]
+enabled = false
+max_namespaces = 5
+max_tables = 10
+max_catalogs = 2
+
+[storage.vector]
+enabled = false
+max_buckets = 10
+max_indexes = 5
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = ["https://127.0.0.1:3000"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+enable_anonymous_sign_ins = false
+enable_manual_linking = false
+minimum_password_length = 6
+password_requirements = ""
+
+[auth.rate_limit]
+email_sent = 2
+sms_sent = 30
+anonymous_users = 30
+token_refresh = 150
+sign_in_sign_ups = 30
+token_verifications = 30
+web3 = 30
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+secure_password_change = false
+max_frequency = "1s"
+otp_length = 6
+otp_expiry = 3600
+
+[auth.sms]
+enable_signup = false
+enable_confirmations = false
+template = "Your code is {{ .Code }}"
+max_frequency = "5s"
+
+[auth.sms.twilio]
+enabled = false
+account_sid = ""
+message_service_sid = ""
+auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
+
+[auth.mfa]
+max_enrolled_factors = 10
+
+[auth.mfa.totp]
+enroll_enabled = false
+verify_enabled = false
+
+[auth.mfa.phone]
+enroll_enabled = false
+verify_enabled = false
+otp_length = 6
+template = "Your code is {{ .Code }}"
+max_frequency = "5s"
+
+[auth.external.apple]
+enabled = false
+client_id = ""
+secret = "env(SUPABASE_AUTH_EXTERNAL_APPLE_SECRET)"
+redirect_uri = ""
+url = ""
+skip_nonce_check = false
+email_optional = false
+
+[auth.web3.solana]
+enabled = false
+
+[auth.third_party.firebase]
+enabled = false
+
+[auth.third_party.auth0]
+enabled = false
+
+[auth.third_party.aws_cognito]
+enabled = false
+
+[auth.third_party.clerk]
+enabled = false
+
+[auth.oauth_server]
+enabled = false
+authorization_url_path = "/oauth/consent"
+allow_dynamic_registration = false
+
+[edge_runtime]
+# Dimatikan untuk CI — uji rebuild-migrasi tidak menjalankan Edge Function apa pun.
+enabled = false
+policy = "per_worker"
+inspector_port = 8083
+deno_version = 2
+
+[analytics]
+# Dimatikan untuk CI — mempercepat startup, tidak dipakai uji rebuild-migrasi.
+enabled = false
+port = 54327
+backend = "postgres"
+
+[experimental]
+orioledb_version = ""
+s3_host = "env(S3_HOST)"
+s3_region = "env(S3_REGION)"
+s3_access_key = "env(S3_ACCESS_KEY)"
+s3_secret_key = "env(S3_SECRET_KEY)"
+
+[experimental.pgdelta]
+enabled = true

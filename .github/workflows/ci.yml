@@ -1,0 +1,87 @@
+name: CI
+
+# Sesi 2C (docs/rencana-kerja-playbook-ams.md) — lapisan verifikasi paling dasar,
+# otomatis di setiap push: typecheck, seluruh test suite (termasuk RLS lintas-company),
+# dan bukti bahwa supabase/migrations/ sendirian cukup untuk membangun ulang skema dari
+# nol memakai pg_dump SUNGGUHAN (bukan lagi query information_schema seperti Sesi 2A —
+# runner GitHub Actions punya Docker, jadi `supabase db start` bisa jalan).
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    name: Typecheck & Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test suite (typecheck + 25 test lintas-role, termasuk isolasi antar company)
+        run: npm test
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DEBUG_ROLE_TEST_PASSWORD: ${{ secrets.DEBUG_ROLE_TEST_PASSWORD }}
+          DEBUG_SUPER_ADMIN_PASSWORD: ${{ secrets.DEBUG_SUPER_ADMIN_PASSWORD }}
+          DEBUG_COMPANY_A_PASSWORD: ${{ secrets.DEBUG_COMPANY_A_PASSWORD }}
+
+  rebuild-migrations:
+    name: Rebuild Schema from Migrations (real pg_dump)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # `db start` membangun stack Postgres lokal dari image resmi Supabase (bukan
+      # Postgres polos — sudah ada schema auth/storage bawaan) LALU menerapkan SELURUH
+      # file di supabase/migrations/ secara berurutan, persis proses yang dibuktikan
+      # manual di Sesi 2A. Kalau ADA migrasi yang gagal apply (urutan dependency salah,
+      # objek dobel, dst), langkah ini gagal dan job berhenti merah di sini.
+      - name: supabase db start (apply seluruh migrations/ dari nol)
+        run: supabase db start
+
+      # Bukti REAL pg_dump (bukan substitusi introspection pg_catalog dari Sesi 2A) atas
+      # database yang baru saja dibangun ulang dari nol lewat migrations/ saja.
+      - name: supabase db dump --local (bukti pg_dump asli)
+        run: supabase db dump --local -f schema-dump.sql
+
+      # Sanity check tambahan: pastikan dump bukan cuma "berhasil jalan tanpa error" tapi
+      # BENAR-BENAR berisi tabel inti hasil migrations/ (bukan skema kosong/gagal senyap).
+      - name: Verifikasi dump berisi tabel inti
+        run: |
+          # Pola dibuat toleran terhadap gaya quoting pg_dump (public.foo ATAU
+          # "public"."foo") karena versi pg_dump di runner tidak dipastikan identik
+          # dengan yang dites manual sebelumnya.
+          for table in companies users subscription_plans items boms work_orders lots employees status_transition_log; do
+            if ! grep -qE "CREATE TABLE \"?public\"?\.\"?${table}\"?[[:space:]\(]" schema-dump.sql; then
+              echo "GAGAL: tabel '${table}' tidak ditemukan di schema-dump.sql hasil rebuild." >&2
+              exit 1
+            fi
+          done
+          echo "OK: seluruh tabel inti yang dicek ditemukan di schema hasil rebuild."
+
+      - name: Upload schema dump sebagai artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: schema-dump
+          path: schema-dump.sql
+          retention-days: 14
+
+      - name: supabase stop
+        if: always()
+        run: supabase stop

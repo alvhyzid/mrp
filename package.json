@@ -7,6 +7,7 @@
     "build": "next build .",
     "start": "next start .",
     "lint": "eslint . --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit",
     "seed:test-tenants": "node scripts/seed-debug-tenants.js",
     "seed:debug-items": "node scripts/seed-debug-items.js",
     "seed:debug-boms": "node scripts/seed-debug-boms.js",
@@ -14,7 +15,9 @@
     "super-admin:test": "vitest run tests/super_admin.test.ts",
     "super-admin:seed": "node scripts/test-super-admin.js",
     "role-access:test": "vitest run tests/role_hierarchy_financial_access.test.ts",
-    "attendance-access:test": "vitest run tests/employee_attendance_access.test.ts"
+    "attendance-access:test": "vitest run tests/employee_attendance_access.test.ts",
+    "isolation-access:test": "vitest run tests/cross_company_isolation.test.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@carbon/icons-react": "^11.86.0",

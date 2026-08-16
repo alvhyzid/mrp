@@ -497,7 +497,7 @@ export default function WarehouseDashboardPage() {
                       <SelectContent>
                         {lots.map((lot) => (
                           <SelectItem key={lot.lot_id} value={String(lot.lot_id)}>
-                            {lot.item_code} — {lot.lot_number} (stok: {lot.quantity_on_hand} {lot.item_base_uom})
+                            {lot.item_code} — {lot.item_name} — {lot.lot_number} (stok: {lot.quantity_on_hand} {lot.item_base_uom})
                           </SelectItem>
                         ))}
                       </SelectContent>

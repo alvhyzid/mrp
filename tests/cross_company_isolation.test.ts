@@ -222,4 +222,10 @@ describe('cross-company RLS isolation verification', () => {
     expect(error).toBeNull();
     expect(Number(data!.quantity_on_hand)).toBe(50);
   });
+
+  // Demonstrasi SENGAJA untuk Sesi 2C (bukti red -> green CI) — assertion ini SELALU
+  // gagal, akan dihapus di commit berikutnya begitu run merah tertangkap.
+  it('CI RED DEMO — sengaja gagal, akan dihapus di commit berikutnya', () => {
+    expect(1).toBe(2);
+  });
 });

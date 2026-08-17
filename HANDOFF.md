@@ -14,6 +14,8 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 **Verifikasi:** `tests/shipments_physical_stage.test.ts` diperbarui (test lama "over-ship DIIZINKAN" diubah jadi "DITOLAK", ditambah 1 test baru "TEPAT SAMA dengan sisa -> DIIZINKAN" untuk batas atas). 7 test file ini lolos, 32 test seluruh suite lolos, ~46 detik. Dibuktikan konkret: insert baris qty=15 saat sisa=10 → DITOLAK sebelum baris sempat tercipta sama sekali (`shipment_lines` tetap 0 baris untuk shipment itu), `sales_order_lines.qty_shipped` TETAP 0 (bukan sebagian ter-update).
 
+**CI sempat merah 1x lagi** (pola SAMA seperti sebelumnya, limit default Vitest berbeda kali ini): "Test timed out in 5000ms" di 1 assertion `cross_company_isolation.test.ts` — bukan bug, `testTimeout` default Vitest (5 detik) kelewat di bawah latensi CI, sama seperti `hookTimeout` sebelumnya tapi ini limit PER-TEST bukan per-hook. Dinaikkan sekalian ke 30 detik di `vitest.config.ts`, run berikutnya hijau bersih di kedua job (https://github.com/alvhyzid/mrp/actions/runs/31990280125).
+
 **Belum dikerjakan:** Sesi 3B (UI) — termasuk instruksi baru "tampilkan sisa qty jelas SEBELUM submit" yang belum ada tempatnya karena UI shipments belum dibangun sama sekali.
 
 ---

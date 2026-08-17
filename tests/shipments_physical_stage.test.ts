@@ -166,7 +166,7 @@ describe('shipments physical stage — trigger stok & state machine', () => {
     expect(error!.message).toContain('tidak valid untuk tabel shipments');
   });
 
-  it('ship qty melebihi stok fisik lot -> DITOLAK, stok tidak berubah (tidak sampai negatif)', async () => {
+  it('ship qty melebihi stok fisik lot (tapi masih dalam sisa qty_ordered) -> DITOLAK saat status shipped, stok tidak berubah (tidak sampai negatif)', async () => {
     const { data: lotTiny } = await adminClient
       .from('lots')
       .insert([{ company_id: companyId, production_plant_id: plantId, item_id: itemId, lot_number: 'LOT-SHIPTEST-TINY', quantity_on_hand: 2, source_type: 'produced', status: 'available' }])
@@ -179,7 +179,11 @@ describe('shipments physical stage — trigger stok & state machine', () => {
       .select('shipment_id')
       .single();
 
-    await adminClient.from('shipment_lines').insert([{ shipment_id: shipment!.shipment_id, sales_order_line_id: solId, item_id: itemId, qty_shipped: 999, lot_id: lotTiny!.lot_id }]);
+    // qty_shipped=10 sengaja MASIH di bawah sisa qty_ordered solId (50) supaya baris ini
+    // lolos trigger enforce_shipment_line_qty_limit (INSERT), dan skenario yang benar-benar
+    // diuji di sini murni "stok fisik lot tidak cukup" (bukan tertukar dgn limit qty_ordered).
+    const { error: insertError } = await adminClient.from('shipment_lines').insert([{ shipment_id: shipment!.shipment_id, sales_order_line_id: solId, item_id: itemId, qty_shipped: 10, lot_id: lotTiny!.lot_id }]);
+    expect(insertError).toBeNull();
 
     const { error } = await adminClient.from('shipments').update({ status: 'shipped' }).eq('shipment_id', shipment!.shipment_id);
     expect(error).not.toBeNull();
@@ -187,9 +191,14 @@ describe('shipments physical stage — trigger stok & state machine', () => {
 
     const { data: lotAfter } = await adminClient.from('lots').select('quantity_on_hand').eq('lot_id', lotTiny!.lot_id).single();
     expect(Number(lotAfter!.quantity_on_hand)).toBe(2);
+
+    // Bersihkan supaya baris draft ini tidak ikut terhitung di sisa qty_ordered solId
+    // untuk test lain (trigger qty-limit menghitung SEMUA baris non-cancelled, termasuk draft).
+    await adminClient.from('shipment_lines').delete().eq('shipment_id', shipment!.shipment_id);
+    await adminClient.from('shipments').delete().eq('shipment_id', shipment!.shipment_id);
   });
 
-  it('ship qty melebihi sisa qty_ordered SO line -> DIIZINKAN (konsisten dgn pola goods_receipt_lines, tidak diblok)', async () => {
+  it('ship qty melebihi sisa qty_ordered SO line -> DITOLAK oleh database (penegakan diubah 17 Agu 2026, BUKAN lagi diizinkan)', async () => {
     const { data: solSmall } = await adminClient
       .from('sales_order_lines')
       .insert([{ sales_order_id: soId, item_id: itemId, qty_ordered: 10, unit_price: 5000 }])
@@ -208,14 +217,55 @@ describe('shipments physical stage — trigger stok & state machine', () => {
       .select('shipment_id')
       .single();
 
-    await adminClient.from('shipment_lines').insert([{ shipment_id: shipment!.shipment_id, sales_order_line_id: solSmall!.sales_order_line_id, item_id: itemId, qty_shipped: 15, lot_id: lotBig!.lot_id }]);
+    // Trigger enforce_shipment_line_qty_limit fires BEFORE INSERT -> baris ini DITOLAK
+    // sebelum sempat tercipta sama sekali (bukan ditolak belakangan saat status=shipped).
+    const { error: insertError } = await adminClient
+      .from('shipment_lines')
+      .insert([{ shipment_id: shipment!.shipment_id, sales_order_line_id: solSmall!.sales_order_line_id, item_id: itemId, qty_shipped: 15, lot_id: lotBig!.lot_id }]);
+
+    expect(insertError).not.toBeNull();
+    expect(insertError!.message).toContain('Jumlah melebihi sisa pesanan');
+    expect(insertError!.message).toContain('sisa 10');
+    expect(insertError!.message).toContain('diminta 15');
+
+    const { data: linesAfter } = await adminClient.from('shipment_lines').select('shipment_line_id').eq('shipment_id', shipment!.shipment_id);
+    expect(linesAfter).toEqual([]);
+
+    const { data: solSmallAfter } = await adminClient.from('sales_order_lines').select('qty_ordered, qty_shipped').eq('sales_order_line_id', solSmall!.sales_order_line_id).single();
+    expect(Number(solSmallAfter!.qty_ordered)).toBe(10);
+    expect(Number(solSmallAfter!.qty_shipped)).toBe(0);
+  });
+
+  it('ship qty TEPAT SAMA dengan sisa qty_ordered SO line -> DIIZINKAN (batas atas, bukan strictly-less-than)', async () => {
+    const { data: solExact } = await adminClient
+      .from('sales_order_lines')
+      .insert([{ sales_order_id: soId, item_id: itemId, qty_ordered: 20, unit_price: 5000 }])
+      .select('sales_order_line_id')
+      .single();
+
+    const { data: lotBig } = await adminClient
+      .from('lots')
+      .insert([{ company_id: companyId, production_plant_id: plantId, item_id: itemId, lot_number: 'LOT-SHIPTEST-EXACT', quantity_on_hand: 1000, source_type: 'produced', status: 'available' }])
+      .select('lot_id')
+      .single();
+
+    const { data: shipment } = await adminClient
+      .from('shipments')
+      .insert([{ company_id: companyId, sales_order_id: soId, shipment_number: 'SJ-EXACTSHIP/8-STC/2026', delivery_address: 'Jl. Exact Test' }])
+      .select('shipment_id')
+      .single();
+
+    const { error: insertError } = await adminClient
+      .from('shipment_lines')
+      .insert([{ shipment_id: shipment!.shipment_id, sales_order_line_id: solExact!.sales_order_line_id, item_id: itemId, qty_shipped: 20, lot_id: lotBig!.lot_id }]);
+    expect(insertError).toBeNull();
 
     const { error } = await adminClient.from('shipments').update({ status: 'shipped' }).eq('shipment_id', shipment!.shipment_id);
     expect(error).toBeNull();
 
-    const { data: solAfter } = await adminClient.from('sales_order_lines').select('qty_ordered, qty_shipped').eq('sales_order_line_id', solSmall!.sales_order_line_id).single();
-    expect(Number(solAfter!.qty_ordered)).toBe(10);
-    expect(Number(solAfter!.qty_shipped)).toBe(15);
+    const { data: solAfter } = await adminClient.from('sales_order_lines').select('qty_ordered, qty_shipped').eq('sales_order_line_id', solExact!.sales_order_line_id).single();
+    expect(Number(solAfter!.qty_ordered)).toBe(20);
+    expect(Number(solAfter!.qty_shipped)).toBe(20);
   });
 
   it('alur penuh: stok TIDAK berkurang saat baris ditambahkan (masih draft), berkurang TEPAT saat status jadi shipped', async () => {

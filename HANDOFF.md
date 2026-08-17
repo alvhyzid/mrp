@@ -4,6 +4,30 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Sesi 3B — UI Pencatatan Pengiriman (17 Agu 2026) — SELESAI
+
+**Kode baru:**
+- Halaman `/shipments` (`ShipmentsPage.tsx`) — akses `canManageShipments` (leadership + warehouse_manager/staff + ppic_manager, sinkron RLS `shipments_write_warehouse`). 2 bagian: tabel SO bersisa qty + tombol "Buat Pengiriman" (form inline: qty per baris + lot FEFO tersaran otomatis dari `/api/lots` yang sudah terurut expiry_date terdekat — bisa diganti manual — + alamat tujuan WAJIB + penerima/kendaraan opsional), dan "Daftar Pengiriman" (riwayat semua shipment perusahaan + tombol transisi status sesuai status saat ini).
+- Server: `createShipment.ts` (generate `shipment_number` format `SJ-{seq}/{bulan}-{kode}/{tahun}`, TERPISAH dari `so_number` tapi pola sama — sengaja HANYA 1 implementasi TypeScript, tidak diduplikasi jadi fungsi DB seperti `so_number` untuk menghindari utang sinkronisasi yang sama), `listShipments.ts`, `updateShipmentStatus.ts` — semua pesan error dari trigger Sesi 3A diteruskan APA ADANYA ke UI, tidak diterjemahkan ulang.
+- `listSalesOrders.ts` diperluas (BUKAN diganti): tiap baris SO line sekarang bawa `qty_shipped`/`qty_remaining_to_ship`, tiap SO bawa `shipments: [...]` (riwayat). `listLots.ts` dapat parameter opsional `production_plant_id` (tidak mengubah pemanggil lama).
+- `SalesOrdersPage.tsx` — HANYA ditambah kolom "Sudah Dikirim"/"Sisa Belum Dikirim" + section "Riwayat Pengiriman" (read-only), sesuai BATAS eksplisit ("jangan ubah halaman SO selain menambah info status pengiriman"). Trigger/logika Sesi 3A tidak disentuh sama sekali.
+- Role baru `canManageShipments` di `src/lib/roles.ts`. Nav "Pengiriman" ditambah ke section Warehouse di `AppShell.tsx`.
+
+**Verifikasi browser sungguhan** (login `warehouse.a@debug.mrp`, data real Company A/PT ITM, SO `001/8-ITM/2026` qty_ordered 300 pcs Gummy Strawberry Collagen):
+- Saran lot FEFO benar-benar terisi otomatis di dropdown (dibuktikan dengan menambah 1 lot baru berexpiry dekat — lot lama semua `expiry_date` NULL, jadi sebelum ini tidak ada cara membuktikan FEFO secara visual — lot baru itu MUNCUL PALING ATAS, sesuai `ORDER BY expiry_date ASC NULLS LAST`).
+- Pengiriman PARSIAL 2x untuk SO yang sama: SJ-001 (100 pcs, alamat "Jl. Melati No. 10, Jakarta Selatan") dan SJ-002 (50 pcs, alamat "Jl. Anggrek No. 25, Bandung") — ALAMAT BEDA per pengiriman, dibuktikan di screenshot Riwayat Pengiriman SO. Sisa qty terhitung benar di tiap tahap: 300→(draft, tetap 300)→(SJ-002 shipped)250→(SJ-001 shipped)150.
+- Percobaan kirim 999 pcs lewat UI (sisa saat itu 150) → DITOLAK, pesan persis dari trigger tampil di form: "Jumlah melebihi sisa pesanan — sisa 150.0000, diminta 999.0000."
+- Bonus (ditemukan organik, bukan direncanakan): sempat coba ship SJ-001 sebelum lot cukup stok (2 shipment draft kebetulan pakai lot FEFO yang sama, kombinasi qty-nya melebihi stok fisik lot itu) → DITOLAK bersih dengan pesan trigger asli: "Stok lot 234 tidak cukup untuk shipment_line 78 (stok tersedia 10.0000, diminta 100.0000)." — dibuktikan pengurangan stok TIDAK terjadi (status tetap draft). Lot ditambah stoknya (data demo milik sendiri) lalu ship ulang berhasil.
+- Kedua shipment berhasil sampai status `delivered` (2 klik "Tandai Diterima" terpisah, masing-masing dikonfirmasi lewat response API 200).
+- Halaman detail SO (`SalesOrdersPage.tsx`) menampilkan akurat: FG-GUMMY-STRAWCOL "Sudah Dikirim 150 pcs, Sisa 150 pcs", Riwayat Pengiriman 2 baris keduanya "Diterima" dengan alamat berbeda.
+- Build produksi (`npm run build`) sukses, route `/shipments`+`/api/shipments`+`/api/shipments/status` terdaftar. `npm run typecheck` bersih. Test suite 32/32 tetap lolos (tidak ada test baru ditambah untuk UI — sesuai konvensi sesi ini, verifikasi UI lewat browser bukan lewat test otomatis DB-level).
+
+**Catatan:** data demo (SO 001/8-ITM/2026, 2 shipment, 1 lot tambahan `GUMMY-FEFO-DEMO-NEAREXP`) SENGAJA TIDAK dibersihkan setelah verifikasi — ini bukan fixture test sekali-pakai seperti `tests/*.test.ts`, tapi penggunaan NYATA tenant debug Company A yang datanya memang dimaksudkan bisa dilihat langsung oleh user di browser.
+
+**Belum dikerjakan:** Sesi 3C — PDF Surat Jalan. Fungsi kalkulasi margin per pengiriman.
+
+---
+
 ## Sesi 3A (lanjutan sore) — Pembatasan qty_shipped vs qty_ordered (17 Agu 2026) — SELESAI
 
 **MEMBALIK keputusan Sesi 3A pagi**: sebelumnya kirim melebihi sisa `qty_ordered` SO line SENGAJA diizinkan (konsisten dengan `goods_receipt_lines`). Instruksi eksplisit membalik ini KHUSUS untuk shipments — sekarang DITOLAK DI DATABASE, bukan cuma validasi form. `goods_receipt_lines` sendiri TIDAK disentuh, tetap seperti semula.

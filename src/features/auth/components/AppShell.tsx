@@ -17,10 +17,11 @@ import {
   Industry,
   UserMultiple,
   Settings as SettingsIcon,
-  UserAvatar
+  UserAvatar,
+  DeliveryTruck
 } from '@carbon/icons-react';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { canAccessWarehouseDashboard, canAccessHrDashboard, canAccessPpicDashboard, canAccessProductionDashboard, canQuickCreateCustomerPo } from '@/lib/roles';
+import { canAccessWarehouseDashboard, canAccessHrDashboard, canAccessPpicDashboard, canAccessProductionDashboard, canQuickCreateCustomerPo, canManageShipments } from '@/lib/roles';
 import { NotificationBell } from '@/features/mrp';
 
 // UI Shell Carbon Design System (Header + SideNav) sebagai layout terpakai
@@ -118,7 +119,8 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'Warehouse',
     items: [
       { label: 'Dashboard', href: '/warehouse', visible: canAccessWarehouseDashboard, icon: InventoryManagement },
-      { label: 'Item Master', href: '/items', visible: () => true, icon: Cube }
+      { label: 'Item Master', href: '/items', visible: () => true, icon: Cube },
+      { label: 'Pengiriman', href: '/shipments', visible: canManageShipments, icon: DeliveryTruck }
     ]
   },
   {

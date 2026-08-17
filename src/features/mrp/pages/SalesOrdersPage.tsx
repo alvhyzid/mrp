@@ -26,6 +26,17 @@ type SoLine = {
   qty_ordered: number;
   unit_price: number | null;
   qty_already_planned_in_wo: number;
+  qty_shipped: number;
+  qty_remaining_to_ship: number;
+};
+
+type SoShipmentSummary = {
+  shipment_id: number;
+  shipment_number: string;
+  status: string;
+  shipment_date: string;
+  delivery_address: string;
+  created_at: string;
 };
 
 type SalesOrder = {
@@ -40,6 +51,15 @@ type SalesOrder = {
   status: string;
   created_at: string;
   lines: SoLine[];
+  shipments: SoShipmentSummary[];
+};
+
+const shipmentStatusLabels: Record<string, string> = { draft: 'Draft', shipped: 'Terkirim', delivered: 'Diterima', cancelled: 'Batal' };
+const shipmentStatusBadgeVariant: Record<string, 'secondary' | 'warning' | 'success' | 'critical'> = {
+  draft: 'secondary',
+  shipped: 'warning',
+  delivered: 'success',
+  cancelled: 'critical'
 };
 
 export default function SalesOrdersPage() {
@@ -219,6 +239,8 @@ export default function SalesOrdersPage() {
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Item</th>
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Qty Dipesan</th>
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Sudah Direncanakan di WO</th>
+                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Sudah Dikirim</th>
+                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Sisa Belum Dikirim</th>
                       {showPriceColumn ? <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Harga Satuan</th> : null}
                     </tr>
                   </thead>
@@ -234,11 +256,49 @@ export default function SalesOrdersPage() {
                         <td className="px-3 py-1.5">
                           {line.qty_already_planned_in_wo} {line.item_base_uom}
                         </td>
+                        <td className="px-3 py-1.5">
+                          {line.qty_shipped} {line.item_base_uom}
+                        </td>
+                        <td className="px-3 py-1.5">
+                          {line.qty_remaining_to_ship > 0 ? <span className="font-medium text-foreground">{line.qty_remaining_to_ship}</span> : <span className="text-muted-foreground">0</span>} {line.item_base_uom}
+                        </td>
                         {showPriceColumn ? <td className="px-3 py-1.5">{line.unit_price === null ? <span className="text-muted-foreground">-</span> : line.unit_price}</td> : null}
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
+
+              <div>
+                <p className="mb-2 text-sm font-medium text-foreground">Riwayat Pengiriman</p>
+                {expandedSo.shipments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Belum ada pengiriman untuk SO ini.</p>
+                ) : (
+                  <div className="overflow-hidden rounded-md border">
+                    <table className="w-full text-data">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">No. Surat Jalan</th>
+                          <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Status</th>
+                          <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Alamat Tujuan</th>
+                          <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Dibuat</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {expandedSo.shipments.map((shipment) => (
+                          <tr key={shipment.shipment_id} className="border-b last:border-0">
+                            <td className="px-3 py-1.5">{shipment.shipment_number}</td>
+                            <td className="px-3 py-1.5">
+                              <Badge variant={shipmentStatusBadgeVariant[shipment.status] ?? 'secondary'}>{shipmentStatusLabels[shipment.status] ?? shipment.status}</Badge>
+                            </td>
+                            <td className="px-3 py-1.5 text-xs">{shipment.delivery_address}</td>
+                            <td className="px-3 py-1.5">{new Date(shipment.created_at).toLocaleDateString('id-ID')}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

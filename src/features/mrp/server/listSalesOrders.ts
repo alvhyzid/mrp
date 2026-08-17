@@ -34,15 +34,23 @@ export async function listSalesOrders(request: NextRequest): Promise<ApiResult> 
     const plantIds = Array.from(new Set(salesOrders.map((so) => so.production_plant_id)));
     const poIds = Array.from(new Set(salesOrders.map((so) => so.customer_purchase_order_id).filter((id): id is number => !!id)));
 
-    const [linesRes, customersRes, itemsRes, workOrdersRes, plantsRes, posRes] = await Promise.all([
-      adminClient.from('sales_order_lines').select('sales_order_line_id, sales_order_id, item_id, qty_ordered, unit_price').in('sales_order_id', soIds),
+    const [linesRes, customersRes, itemsRes, workOrdersRes, plantsRes, posRes, shipmentsRes] = await Promise.all([
+      adminClient.from('sales_order_lines').select('sales_order_line_id, sales_order_id, item_id, qty_ordered, qty_shipped, unit_price').in('sales_order_id', soIds),
       adminClient.from('customers').select('customer_id, name').in('customer_id', customerIds),
       adminClient.from('items').select('item_id, item_code, name, base_uom').eq('company_id', appUser.company_id),
       adminClient.from('work_orders').select('sales_order_line_id, planned_qty').not('sales_order_line_id', 'is', null),
       adminClient.from('production_plants').select('production_plant_id, name').in('production_plant_id', plantIds),
       poIds.length
         ? adminClient.from('customer_purchase_orders').select('customer_purchase_order_id, po_number').in('customer_purchase_order_id', poIds)
-        : Promise.resolve({ data: [] as { customer_purchase_order_id: number; po_number: string }[], error: null })
+        : Promise.resolve({ data: [] as { customer_purchase_order_id: number; po_number: string }[], error: null }),
+      // Riwayat pengiriman (Sesi 3B) — ditambahkan di sini murni sebagai INFO
+      // read-only untuk detail SO, bukan pengelolaan (BATAS Sesi 3B: halaman ini
+      // tidak boleh diubah selain menambah info status pengiriman).
+      adminClient
+        .from('shipments')
+        .select('shipment_id, sales_order_id, shipment_number, status, shipment_date, delivery_address, created_at')
+        .in('sales_order_id', soIds)
+        .order('created_at', { ascending: false })
     ]);
 
     if (linesRes.error) return { status: 500, body: { error: linesRes.error.message } };
@@ -51,11 +59,19 @@ export async function listSalesOrders(request: NextRequest): Promise<ApiResult> 
     if (workOrdersRes.error) return { status: 500, body: { error: workOrdersRes.error.message } };
     if (plantsRes.error) return { status: 500, body: { error: plantsRes.error.message } };
     if (posRes.error) return { status: 500, body: { error: posRes.error.message } };
+    if (shipmentsRes.error) return { status: 500, body: { error: shipmentsRes.error.message } };
 
     const customersById = new Map((customersRes.data ?? []).map((c) => [c.customer_id, c]));
     const itemsById = new Map((itemsRes.data ?? []).map((i) => [i.item_id, i]));
     const plantsById = new Map((plantsRes.data ?? []).map((p) => [p.production_plant_id, p]));
     const posById = new Map((posRes.data ?? []).map((p) => [p.customer_purchase_order_id, p]));
+
+    const shipmentsBySoId = new Map<number, typeof shipmentsRes.data>();
+    for (const shipment of shipmentsRes.data ?? []) {
+      const list = shipmentsBySoId.get(shipment.sales_order_id) ?? [];
+      list.push(shipment);
+      shipmentsBySoId.set(shipment.sales_order_id, list);
+    }
 
     const woPlannedByLineId = new Map<number, number>();
     for (const wo of workOrdersRes.data ?? []) {
@@ -83,6 +99,7 @@ export async function listSalesOrders(request: NextRequest): Promise<ApiResult> 
       created_at: so.created_at,
       lines: (linesBySoId.get(so.sales_order_id) ?? []).map((line) => {
         const item = itemsById.get(line.item_id);
+        const qtyShipped = Number(line.qty_shipped ?? 0);
         return {
           sales_order_line_id: line.sales_order_line_id,
           item_id: line.item_id,
@@ -91,9 +108,21 @@ export async function listSalesOrders(request: NextRequest): Promise<ApiResult> 
           item_base_uom: item?.base_uom ?? null,
           qty_ordered: line.qty_ordered,
           unit_price: canSeeCost ? line.unit_price : null,
-          qty_already_planned_in_wo: woPlannedByLineId.get(line.sales_order_line_id) ?? 0
+          qty_already_planned_in_wo: woPlannedByLineId.get(line.sales_order_line_id) ?? 0,
+          qty_shipped: qtyShipped,
+          qty_remaining_to_ship: Number(line.qty_ordered) - qtyShipped
         };
-      })
+      }),
+      // Riwayat pengiriman (Sesi 3B) — read-only, dipakai halaman detail SO DAN
+      // halaman Shipments (untuk saring SO mana yang masih punya sisa qty).
+      shipments: (shipmentsBySoId.get(so.sales_order_id) ?? []).map((shipment) => ({
+        shipment_id: shipment.shipment_id,
+        shipment_number: shipment.shipment_number,
+        status: shipment.status,
+        shipment_date: shipment.shipment_date,
+        delivery_address: shipment.delivery_address,
+        created_at: shipment.created_at
+      }))
     }));
 
     return { status: 200, body: { salesOrders: result } };

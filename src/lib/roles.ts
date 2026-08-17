@@ -136,6 +136,14 @@ export function canAdjustStock(role: string | undefined | null): boolean {
   return !!role && STOCK_ADJUSTMENT_ROLES.includes(role);
 }
 
+// Shipments (Sesi 3B) — harus sinkron dengan policy shipments_write_warehouse /
+// shipment_lines_write_warehouse di supabase/migrations/20260812155000_shipments_and_invoices.sql.
+export const SHIPMENT_MANAGE_ROLES = [...LEADERSHIP_ROLES, 'warehouse_manager', 'warehouse_staff', 'ppic_manager'];
+
+export function canManageShipments(role: string | undefined | null): boolean {
+  return !!role && SHIPMENT_MANAGE_ROLES.includes(role);
+}
+
 export const HR_DASHBOARD_ROLES = [...LEADERSHIP_ROLES, 'hr_manager', 'hr_staff'];
 
 export function canAccessHrDashboard(role: string | undefined | null): boolean {

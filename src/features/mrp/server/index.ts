@@ -55,3 +55,6 @@ export * from './createPurchaseOrder';
 export * from './createGoodsReceipt';
 export * from './recordStockAdjustment';
 export * from './recordWorkOrderOutput';
+export * from './createShipment';
+export * from './listShipments';
+export * from './updateShipmentStatus';

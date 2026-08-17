@@ -25,6 +25,12 @@ export async function listLots(request: NextRequest): Promise<ApiResult> {
           .filter((value) => Number.isInteger(value) && value > 0)
       : null;
 
+    // Dipakai form Sesi 3B (Shipments) untuk membatasi saran lot FEFO ke plant asal
+    // SO yang sedang dikirim — parameter opsional, tidak mengubah perilaku pemanggil
+    // lama (Work Order) yang tidak mengirim parameter ini.
+    const productionPlantIdParam = request.nextUrl.searchParams.get('production_plant_id');
+    const productionPlantId = productionPlantIdParam ? Number(productionPlantIdParam) : null;
+
     const adminClient = getAdminClient();
     let query = adminClient
       .from('lots')
@@ -36,6 +42,9 @@ export async function listLots(request: NextRequest): Promise<ApiResult> {
 
     if (itemIds && itemIds.length > 0) {
       query = query.in('item_id', itemIds);
+    }
+    if (productionPlantId) {
+      query = query.eq('production_plant_id', productionPlantId);
     }
 
     const { data: lots, error } = await query;

@@ -15,6 +15,7 @@ type ShipmentDetail = {
   recipient_name: string | null;
   vehicle_number: string | null;
   driver_name: string | null;
+  pod_token: string | null;
   so_number: string;
   customer_name: string;
   lines: { item_code: string | null; item_name: string | null; item_base_uom: string | null; qty_shipped: number; lot_number: string | null }[];
@@ -100,6 +101,7 @@ export default function SuratJalanPrintPage({ shipmentId }: { shipmentId: number
           vehicleNumber={shipment.vehicle_number}
           driverName={shipment.driver_name}
           lines={lines}
+          podToken={shipment.pod_token}
           signatureImageUrl={signature?.signature_url_snapshot ?? null}
           signerName={signature?.signer_name ?? null}
           signerRole={signature?.signer_role_at_signing ?? null}

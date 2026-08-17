@@ -60,3 +60,5 @@ export * from './listShipments';
 export * from './updateShipmentStatus';
 export * from './getShipmentDetail';
 export * from './processShipmentDispatch';
+export * from './getShipmentByPodToken';
+export * from './confirmDelivery';

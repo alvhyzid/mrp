@@ -178,9 +178,15 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 - Nomor Surat Jalan (shipment_number, otomatis dibuat, unik per perusahaan) · Nomor Kendaraan (vehicle_number) · Nama Sopir (driver_name)
 - Alamat Tujuan (delivery_address, WAJIB diisi tiap pengiriman) · Nama Penerima (recipient_name) · No. HP Penerima (recipient_phone)
 - Foto Bukti Pengiriman (dispatch_photo_url, 17 Agu 2026) — WAJIB diupload staf gudang saat menekan "Proses Pengiriman", baru setelah foto tersimpan status berubah jadi "shipped" dan stok berkurang
+- Token Bukti Penerimaan (pod_token, 17 Agu 2026) — dibuat otomatis & acak saat status jadi "shipped", dipakai di link/QR code yang di-scan client untuk konfirmasi barang diterima TANPA perlu login
 
 **Database Detail Item Dikirim** (`shipment_lines`)
 - ID Baris (shipment_line_id) · ID Pengiriman (shipment_id) · ID SO Line (sales_order_line_id) · ID Item (item_id) · Jumlah Dikirim (qty_shipped) · ID Lot (lot_id, WAJIB diisi — jejak lot untuk tiap pengiriman)
+
+**Database Bukti Penerimaan dari Client** (`delivery_confirmations`, 17 Agu 2026)
+- ID Konfirmasi (delivery_confirmation_id) · ID Pengiriman (shipment_id)
+- Foto Bukti Diterima (photo_url, foto dari CLIENT saat scan QR — beda dari dispatch_photo_url yang dari staf gudang) · Nama Penerima (received_by_name, diisi manual oleh client, opsional) · Waktu Dikonfirmasi (confirmed_at)
+- Diisi lewat halaman publik `/pod/[token]` — client scan QR code di Surat Jalan fisik, TANPA perlu akun/login sama sekali. Setelah konfirmasi berhasil, status pengiriman otomatis berubah jadi "delivered" dan link/QR yang sama tidak bisa dipakai lagi.
 
 > **17 Agu 2026:** Stok baru benar-benar berkurang saat status pengiriman diubah jadi "shipped" lewat tombol "Proses Pengiriman" (bukan saat baris ditambahkan) — supaya staf bisa siapkan draft pengiriman dulu tanpa stok berkurang duluan sebelum benar-benar dikirim. Sejak revisi hari yang sama, tombol ini WAJIB disertai upload foto bukti pengiriman sebagai bukti visual barang benar-benar dimuat/dikirim.
 

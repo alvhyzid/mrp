@@ -1,7 +1,12 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import QRCode from 'qrcode';
+
 // Preview dokumen Surat Jalan — dipakai di Langkah 2 wizard "Buat Pengiriman"
-// (ShipmentsPage.tsx, draft belum tersimpan) DAN nanti dipakai ulang untuk cetak PDF
-// sungguhan (Sesi 3C) supaya tata letaknya SAMA PERSIS antara preview dan hasil cetak,
-// bukan 2 implementasi berbeda yang bisa melenceng.
+// (ShipmentsPage.tsx, draft belum tersimpan) DAN halaman cetak sungguhan
+// (SuratJalanPrintPage.tsx) supaya tata letaknya SAMA PERSIS antara preview dan hasil
+// cetak, bukan 2 implementasi berbeda yang bisa melenceng.
 export type SuratJalanLine = {
   itemCode: string | null;
   itemName: string | null;
@@ -25,6 +30,10 @@ export type SuratJalanPreviewProps = {
   signatureImageUrl?: string | null;
   signerName?: string | null;
   signerRole?: string | null;
+  // Diisi HANYA kalau shipment sudah punya pod_token (status sudah lewat draft) —
+  // di preview wizard (belum tersimpan) selalu null/undefined, QR sengaja tidak
+  // tampil sampai halaman /pod/[token] benar-benar berlaku untuk shipment ini.
+  podToken?: string | null;
 };
 
 const roleLabels: Record<string, string> = {
@@ -49,8 +58,30 @@ export default function SuratJalanPreview({
   lines,
   signatureImageUrl,
   signerName,
-  signerRole
+  signerRole,
+  podToken
 }: SuratJalanPreviewProps) {
+  const [podQrDataUrl, setPodQrDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!podToken || typeof window === 'undefined') {
+      setPodQrDataUrl(null);
+      return;
+    }
+    const podUrl = `${window.location.origin}/pod/${podToken}`;
+    let cancelled = false;
+    QRCode.toDataURL(podUrl, { margin: 1, width: 96 })
+      .then((dataUrl) => {
+        if (!cancelled) setPodQrDataUrl(dataUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setPodQrDataUrl(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [podToken]);
+
   return (
     <div className="bg-white text-[13px] text-black">
       <div className="flex items-center justify-between border-b-2 border-black pb-3">
@@ -132,7 +163,15 @@ export default function SuratJalanPreview({
         </div>
         <div>
           <div className="mb-1">Penerima,</div>
-          <div className="h-20" />
+          <div className="flex h-20 flex-col items-center justify-end gap-1">
+            {podQrDataUrl ? (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={podQrDataUrl} alt="QR konfirmasi Bukti Penerimaan" className="h-16 w-16 object-contain" />
+                <span className="text-[9px] leading-tight text-neutral-500">Scan untuk konfirmasi penerimaan</span>
+              </>
+            ) : null}
+          </div>
           <div className="border-t border-black pt-1">(...........................)</div>
         </div>
       </div>

@@ -4,6 +4,33 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Sesi 3 — Halaman Publik Bukti Penerimaan (POD) + QR Code di Surat Jalan (17 Agu 2026) — SELESAI
+
+Permintaan: halaman `/pod/[token]` TANPA login sama sekali — client scan QR di Surat Jalan fisik, konfirmasi barang diterima. Ditandai eksplisit sebagai "permukaan paling rawan diserang dari luar di seluruh sistem sejauh ini" dengan STOP CONDITION ketat (berhenti & lapor kalau ada keraguan keamanan, jangan improvisasi).
+
+**Migration baru `20260817210000_pod_public_confirmation.sql`:**
+- Bucket storage `delivery-confirmation-photos` (public read) — **SENGAJA TIDAK ADA policy insert untuk role apa pun** (anon MAUPUN authenticated), beda dari bucket lain di proyek ini yang masih punya policy insert 'authenticated' sebagai defense-in-depth. Di sini itu justru jadi CELAH (tidak ada pengunjung authenticated yang legal menulis ke bucket publik ini) — satu-satunya jalur tulis sah adalah service-role dari `confirmDelivery.ts` setelah validasi token+status sendiri.
+- Fungsi atomik baru `confirm_delivery(p_pod_token, p_photo_url, p_received_by_name)` — kunci baris (`for update`) + insert `delivery_confirmations` + transisi `shipments.status` shipped→delivered dalam 1 transaksi (lewat `enforce_status_transition()` yang sudah ada, TIDAK direstrukturisasi). Row lock menjamin token tidak bisa dipakai 2x meski 2 request datang hampir bersamaan.
+
+**Kode baru:**
+- `getShipmentByPodToken.ts` (`GET /api/pod/[token]`) — lookup TANPA `getCurrentUser()`/JWT sama sekali (pengunjung tidak login). Field yang dikembalikan dibatasi ketat: nomor surat jalan, tanggal, alamat, daftar item+qty+satuan — TIDAK PERNAH menyentuh `unit_price`/`unit_cost`/`standard_cost`. Token tidak ditemukan ATAU status bukan `shipped` → SATU pesan generik yang sama ("tidak valid"), tidak membedakan biar tidak jadi oracle. Pesan error selalu generik, tidak pernah meneruskan error Postgres mentah.
+- `confirmDelivery.ts` (`POST /api/pod/[token]/confirm`) — validasi ULANG token+status FRESH saat submit (bukan percaya state halaman lama), upload foto (PNG/JPG/WEBP, maks 5MB, nama file pakai UUID acak bukan cuma timestamp karena bucket ini public-read tanpa autentikasi), baru panggil `confirm_delivery()`.
+- Halaman `PodConfirmationPage.tsx` + route `app/pod/[token]/page.tsx` — DI LUAR grup `(shell)`, **TIDAK ADA pemeriksaan sesi Supabase sama sekali** (beda dari SEMUA halaman lain di aplikasi ini) — pertama kalinya di seluruh sistem. Form: foto wajib, nama penerima opsional, checkbox persis "Barang sudah sesuai jenis dan jumlahnya", tombol "Barang Sudah Diterima" disabled sampai foto+checkbox terisi. Sukses → halaman "Terima Kasih" sederhana, tanpa redirect ke sistem internal.
+
+**Bukti — 5 skenario negatif WAJIB, dijalankan lewat browser context BARU tanpa cookies/session sama sekali (bukan dugaan):**
+1. Akses tanpa login sama sekali → berhasil, 0 header Authorization pernah terkirim, 0 cookies tersimpan.
+2. Token tebakan/salah → "Link Tidak Valid" bersih, 0 data shipment tampil.
+3. Submit lengkap (foto+nama+checkbox) → `200 OK`, dicek LANGSUNG di database: `status='delivered'`, 1 baris `delivery_confirmations` dengan `photo_url` terisi & `received_by_name` sesuai input.
+4. Akses ulang token yang SAMA setelah sukses (baik lewat halaman maupun POST langsung ke endpoint confirm) → ditolak di KEDUA jalur.
+5. DOM halaman + respons JSON API diperiksa mentah (bukan cuma tampilan) → 0 kata kunci harga/biaya. Dibuktikan dengan menanam 1 nilai harga UNIK (`8171731`, sengaja bukan angka bulat biasa) di data uji `sales_order_lines.unit_price` company lain — angka itu tidak pernah muncul di mana pun.
+6. Isolasi lintas company — dibuat shipment `shipped` nyata untuk Company B (fixture terpisah: customer/item/lot/SO/CPO/shipment baru, prefix `PODTEST-B`), token masing-masing company HANYA mengembalikan data miliknya sendiri (dicek 2 arah: token A tidak bocorkan data B, token B tidak bocorkan data A).
+
+**QR code di Surat Jalan (setelah Sesi 3 terverifikasi, sesuai instruksi):** `SuratJalanPreview.tsx` (dijadikan `'use client'`) sekarang generate QR (`qrcode` npm package, dependency baru) meng-encode `{origin}/pod/{pod_token}` lewat `useEffect`, ditampilkan di area tanda tangan "Penerima" pada dokumen. **Sengaja HANYA tampil kalau `podToken` diisi** — di preview wizard Langkah 2 (draft belum tersimpan) prop ini tidak dikirim sama sekali (tidak ada pod_token untuk shipment yang belum di-dispatch), QR baru muncul di halaman cetak (`SuratJalanPrintPage.tsx`) untuk shipment yang statusnya sudah lewat draft. Diverifikasi lewat browser: QR ter-generate sebagai data URL & tampil visual di lokasi yang benar.
+
+**Build sukses, `tsc --noEmit` bersih, 33 test tetap lolos, tanpa regresi.**
+
+---
+
 ## Sesi — Gaya Data Table Carbon Design System Diterapkan ke Seluruh Aplikasi (17 Agu 2026) — SELESAI
 
 Permintaan: terapkan gaya Carbon Design System (https://carbondesignsystem.com/components/data-table/usage/) ke SEMUA data table di aplikasi, disesuaikan per fungsi tabelnya masing-masing (bukan seragam dipaksa sama semua).

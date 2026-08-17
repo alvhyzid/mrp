@@ -7,6 +7,7 @@ export { default as WorkOrdersPage } from './pages/WorkOrdersPage';
 export { default as SalesOrdersPage } from './pages/SalesOrdersPage';
 export { default as ShipmentsPage } from './pages/ShipmentsPage';
 export { default as SuratJalanPrintPage } from './pages/SuratJalanPrintPage';
+export { default as PodConfirmationPage } from './pages/PodConfirmationPage';
 export { default as NotificationBell } from './components/NotificationBell';
 export * from './server';
 export { typeLabels, typeBadgeVariant } from './itemTypeLabels';

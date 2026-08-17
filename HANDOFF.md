@@ -4,6 +4,29 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Sesi 1 — Tanda Tangan Digital, Fondasi Generik (17 Agu 2026) — SELESAI
+
+**Migration** `20260817160000_document_signatures.sql`: `users.signature_url` (nullable), tabel `document_signatures` (company_id, document_type, document_id — TANPA FK ketat karena lintas tabel beda-beda, signed_by, signer_role_at_signing, signature_url_snapshot, confirmation_text, signed_at), RLS select-only company-scoped (tidak ada policy insert/update/delete untuk role biasa — semua tulis lewat service-role, sama seperti mutation lain di app ini). Bucket storage `user-signatures` (public read, owner-write, **TIDAK ADA policy delete sama sekali** — sengaja, supaya retensi permanen ditegakkan juga di level RLS bukan cuma konvensi kode).
+
+**Penyimpangan SENGAJA dari pola avatar/logo yang sudah ada** (`uploadAvatar.ts`/`uploadCompanyLogo.ts`): keduanya pakai path TETAP + `upsert:true` (file lama TERTIMPA di storage, cuma query-string cache-bust yang berubah) — kalau signature meniru pola itu, dokumen yang sudah ditandatangani akan ikut berubah begitu user ganti tanda tangan, MELANGGAR requirement inti fitur ini. `uploadSignature.ts` pakai path UNIK per upload (`{auth_uid}/signature-{timestamp}.{ext}`, `upsert:false`) — dicatat jelas di komentar kode supaya sesi berikutnya tidak "menormalkan" balik ke pola lama.
+
+**Penyimpangan SENGAJA lain, dari deskripsi awal komponen** (bukan STOP CONDITION, tapi keputusan desain yang dilaporkan): instruksi awal menyiratkan `ConfirmAndSignModal` SENDIRI yang insert ke `document_signatures` lalu memanggil `onConfirm` terpisah — itu jadi 2 request/transaksi berbeda, bertentangan langsung dengan requirement Sesi 2 ("tanda tangan + transisi status HARUS 1 transaksi"). Diputuskan: `onConfirm` sepenuhnya dikendalikan PEMANGGIL (bisa panggil endpoint generik `/api/document-signatures` untuk kasus sederhana, atau 1 RPC gabungan untuk kasus butuh atomik) — modal murni "UI shell" (checkbox + preview + Process/Cancel), tidak insert apa pun sendiri. Endpoint generik `POST /api/document-signatures` (`recordDocumentSignature.ts`) tetap dibuat untuk kasus yang TIDAK butuh atomisitas.
+
+**Kode baru:** domain feature baru `src/features/signatures/` (component `ConfirmAndSignModal`, server `recordDocumentSignature`), `src/features/auth/server/uploadSignature.ts`, section "Tanda Tangan Digital" di halaman Profil (upload/ganti, preview `object-contain` bukan `rounded-full` seperti avatar). `getCurrentUser()` (`supabaseServer.ts`) diperluas ambil `signature_url` juga.
+
+**Verifikasi browser sungguhan** (login `warehouse.a@debug.mrp`):
+- Upload tanda tangan 3x berturut-turut (v1, v2, balik ke konten v1 lagi sebagai v3) — SEMUA 3 URL tetap bisa diakses langsung (HTTP 200) SETELAH upload berikutnya, dibuktikan lewat fetch langsung ke tiap URL, bukan cuma asumsi.
+- Halaman test sementara (`app/(shell)/debug-signature-test`, DIHAPUS lagi sebelum commit — bukan bagian permanen) dipakai untuk uji `ConfirmAndSignModal` dengan data dummy: tombol Process disabled sebelum checkbox dicentang, aktif setelah dicentang.
+- **Skenario kunci yang diminta eksplisit — tanda tangan dokumen LAMA tidak ikut berubah:** dokumen dummy #1 ditandatangani saat signature_url = v2 → `signature_url_snapshot` tercatat = url v2. User lalu GANTI tanda tangan ke v3. Dokumen dummy #2 ditandatangani → snapshot = v3 (benar, yang baru). Dicek ulang ke database: baris dokumen #1 TETAP snapshot v2, TIDAK ikut berubah ke v3 — dibuktikan lewat query langsung, bukan asumsi.
+- Cancel/Edit diuji: modal dibuka, TIDAK dicentang, klik Cancel — dicek tidak ada baris `document_signatures` baru tercipta.
+- Data dummy (`document_type='debug_test'`) dibersihkan setelah verifikasi (beda dari data demo Shipments Sesi 3B yang sengaja dibiarkan — ini murni data uji, bukan penggunaan nyata). Tanda tangan asli `warehouse.a@debug.mrp` (hasil upload terakhir) SENGAJA dibiarkan tersimpan — akun ini sekarang punya tanda tangan sungguhan untuk dipakai uji Sesi 2 nanti.
+
+**Build sukses, typecheck bersih, 32 test tetap lolos.**
+
+**Belum dikerjakan:** Sesi 2 — pasang ke Shipments/Surat Jalan (ganti tombol transisi draft→shipped jadi buka modal, atomik dengan pencatatan tanda tangan, tampilkan tanda tangan di PDF Surat Jalan Sesi 3C).
+
+---
+
 ## Sesi 3B — UI Pencatatan Pengiriman (17 Agu 2026) — SELESAI
 
 **Kode baru:**

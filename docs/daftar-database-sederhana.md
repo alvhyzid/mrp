@@ -24,7 +24,14 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 **Database Pengguna/Login** (`users`)
 - ID User (user_id) · ID Perusahaan (company_id) · Nama (name) · Email (email) · Penghubung Akun Login Supabase (auth_uid)
 - Peran/Role (role): super_admin / company_admin / general_manager / production_manager / production_staff / ppic_manager / ppic_staff / finance_manager / finance_staff / purchasing_manager / purchasing_staff / warehouse_manager / warehouse_staff / hr_manager / hr_staff / viewer
-- Status (status) · Foto Profil — file di Supabase Storage (avatar_url) · Tanggal Dibuat (created_at)
+- Status (status) · Foto Profil — file di Supabase Storage (avatar_url) · Tanda Tangan Digital — file di Supabase Storage (signature_url, 17 Agu 2026 — file LAMA tidak pernah dihapus/ditimpa saat ganti tanda tangan, supaya dokumen yang sudah ditandatangani tidak ikut berubah) · Tanggal Dibuat (created_at)
+
+**Database Tanda Tangan Dokumen** (`document_signatures`, 17 Agu 2026)
+- Fondasi GENERIK untuk dokumen apa pun yang butuh persetujuan bertanda tangan (dimulai dari Surat Jalan)
+- ID Tanda Tangan (document_signature_id) · ID Perusahaan (company_id) · Jenis Dokumen (document_type, mis. "shipment") · ID Dokumen (document_id)
+- Ditandatangani Oleh (signed_by) · Role Penandatangan Saat Itu (signer_role_at_signing — dicatat, tidak ikut berubah meski role user berubah kemudian)
+- Salinan Gambar Tanda Tangan Saat Itu (signature_url_snapshot — BUKAN link hidup ke tanda tangan user sekarang, supaya dokumen lama tetap menunjukkan tanda tangan yang berlaku saat ditandatangani)
+- Kalimat Konfirmasi (confirmation_text) · Waktu Tanda Tangan (signed_at)
 
 **Database Undangan Anggota Tim** (`invitations`)
 - ID Undangan (invitation_id) · ID Perusahaan (company_id) · Email Diundang (email) · Role (role) · Diundang Oleh (invited_by) · Status (status) · Kode Undangan (token) · Tanggal Kadaluarsa (expires_at) · Tanggal Dibuat (created_at) · Tanggal Diterima (accepted_at)

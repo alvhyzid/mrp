@@ -21,6 +21,11 @@ export default function ProfilePage() {
   const [avatarStatus, setAvatarStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [avatarMessage, setAvatarMessage] = useState('');
 
+  const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
+  const [signatureFile, setSignatureFile] = useState<File | null>(null);
+  const [signatureStatus, setSignatureStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
+  const [signatureMessage, setSignatureMessage] = useState('');
+
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordStatus, setPasswordStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
@@ -61,6 +66,7 @@ export default function ProfilePage() {
       setName(data.user.name || '');
       setEmail(data.user.email || '');
       setAvatarUrl(data.user.avatar_url || null);
+      setSignatureUrl(data.user.signature_url || null);
       setLoading(false);
     };
 
@@ -99,6 +105,40 @@ export default function ProfilePage() {
     setAvatarFile(null);
     setAvatarStatus('success');
     setAvatarMessage('Foto profil berhasil diperbarui.');
+  };
+
+  const handleSignatureUpload = async () => {
+    if (!signatureFile) return;
+    setSignatureStatus('pending');
+    setSignatureMessage('');
+
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      setSignatureStatus('error');
+      setSignatureMessage('Sesi Anda sudah tidak valid, silakan login ulang.');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('signature', signatureFile);
+
+    const response = await fetch('/api/profile/signature', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: formData
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      setSignatureStatus('error');
+      setSignatureMessage(data.error || 'Gagal mengunggah tanda tangan.');
+      return;
+    }
+
+    setSignatureUrl(data.signature_url);
+    setSignatureFile(null);
+    setSignatureStatus('success');
+    setSignatureMessage('Tanda tangan berhasil diperbarui. Dokumen yang sudah ditandatangani sebelumnya tetap memakai tanda tangan lama.');
   };
 
   const handleSaveName = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -211,6 +251,41 @@ export default function ProfilePage() {
             </div>
             {avatarMessage ? (
               <p className={`text-sm ${avatarStatus === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>{avatarMessage}</p>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardDescription className="uppercase tracking-[0.2em]">Profil Saya</CardDescription>
+            <CardTitle className="text-2xl">Tanda Tangan Digital</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <p className="text-sm text-muted-foreground">Dipakai untuk konfirmasi &amp; tanda tangan dokumen (mis. Surat Jalan). Mengganti tanda tangan TIDAK mengubah dokumen yang sudah ditandatangani sebelumnya — dokumen lama tetap memakai gambar tanda tangan yang berlaku saat itu.</p>
+            <div className="flex items-center gap-4">
+              <div className="flex h-20 w-32 items-center justify-center overflow-hidden rounded-none border border-[#e0e0e0] bg-muted">
+                {signatureUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={signatureUrl} alt="Tanda tangan digital" className="h-full w-full object-contain" />
+                ) : (
+                  <span className="text-center text-xs text-muted-foreground">Belum ada tanda tangan</span>
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={(event) => setSignatureFile(event.target.files?.[0] ?? null)}
+                  className="text-sm text-foreground file:mr-3 file:h-8 file:rounded-none file:border-0 file:bg-[#0f62fe] file:px-3 file:text-xs file:font-medium file:text-white hover:file:bg-[#0043ce]"
+                />
+                <span className="text-xs text-muted-foreground">PNG, JPG, atau WEBP, maksimal 2MB.</span>
+                <Button type="button" onClick={handleSignatureUpload} disabled={!signatureFile || signatureStatus === 'pending'} className="w-fit">
+                  {signatureStatus === 'pending' ? 'Mengunggah...' : signatureUrl ? 'Ganti Tanda Tangan' : 'Upload Tanda Tangan'}
+                </Button>
+              </div>
+            </div>
+            {signatureMessage ? (
+              <p className={`text-sm ${signatureStatus === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>{signatureMessage}</p>
             ) : null}
           </CardContent>
         </Card>

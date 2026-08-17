@@ -424,7 +424,15 @@ export default function BomsPage() {
             {bomsLoading ? (
               <p className="text-sm text-muted-foreground">Memuat BOM...</p>
             ) : (
-              <DataTable columns={columns} data={boms} emptyMessage="Belum ada BOM." />
+              <DataTable
+                columns={columns}
+                data={boms}
+                emptyMessage="Belum ada BOM."
+                searchPlaceholder="Cari kode atau nama item hasil..."
+                getSearchText={(bom) => `${bom.parent_item_code ?? ''} ${bom.parent_item_name ?? ''}`}
+                paginated
+                pageSize={15}
+              />
             )}
           </CardContent>
         </Card>

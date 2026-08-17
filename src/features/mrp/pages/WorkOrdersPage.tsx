@@ -468,7 +468,19 @@ export default function WorkOrdersPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             {woError ? <p className="text-sm text-destructive">{woError}</p> : null}
-            {woLoading ? <p className="text-sm text-muted-foreground">Memuat Work Order...</p> : <DataTable columns={columns} data={workOrders} emptyMessage="Belum ada Work Order." />}
+            {woLoading ? (
+              <p className="text-sm text-muted-foreground">Memuat Work Order...</p>
+            ) : (
+              <DataTable
+                columns={columns}
+                data={workOrders}
+                emptyMessage="Belum ada Work Order."
+                searchPlaceholder="Cari item atau No. SO..."
+                getSearchText={(wo) => `${wo.item_code ?? ''} ${wo.item_name ?? ''} ${wo.so_number ?? ''}`}
+                paginated
+                pageSize={15}
+              />
+            )}
           </CardContent>
         </Card>
 

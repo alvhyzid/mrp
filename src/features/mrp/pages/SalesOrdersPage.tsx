@@ -204,7 +204,19 @@ export default function SalesOrdersPage() {
               Sales Order tercipta otomatis begitu PO Client diproses (lihat halaman PO Client) — tidak dibuat manual di sini.
             </p>
             {soError ? <p className="text-sm text-destructive">{soError}</p> : null}
-            {soLoading ? <p className="text-sm text-muted-foreground">Memuat Sales Order...</p> : <DataTable columns={columns} data={salesOrders} emptyMessage="Belum ada Sales Order." />}
+            {soLoading ? (
+              <p className="text-sm text-muted-foreground">Memuat Sales Order...</p>
+            ) : (
+              <DataTable
+                columns={columns}
+                data={salesOrders}
+                emptyMessage="Belum ada Sales Order."
+                searchPlaceholder="Cari No. SO atau client..."
+                getSearchText={(so) => `${so.so_number} ${so.customer_name ?? ''}`}
+                paginated
+                pageSize={15}
+              />
+            )}
           </CardContent>
         </Card>
 

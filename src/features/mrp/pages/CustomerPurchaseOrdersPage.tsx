@@ -386,7 +386,19 @@ export default function CustomerPurchaseOrdersPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             {poError ? <p className="text-sm text-destructive">{poError}</p> : null}
-            {poLoading ? <p className="text-sm text-muted-foreground">Memuat PO client...</p> : <DataTable columns={columns} data={purchaseOrders} emptyMessage="Belum ada PO client." />}
+            {poLoading ? (
+              <p className="text-sm text-muted-foreground">Memuat PO client...</p>
+            ) : (
+              <DataTable
+                columns={columns}
+                data={purchaseOrders}
+                emptyMessage="Belum ada PO client."
+                searchPlaceholder="Cari No. PO atau client..."
+                getSearchText={(po) => `${po.po_number} ${po.customer_name ?? ''}`}
+                paginated
+                pageSize={15}
+              />
+            )}
           </CardContent>
         </Card>
 

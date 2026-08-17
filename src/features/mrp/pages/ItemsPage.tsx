@@ -314,7 +314,15 @@ export default function ItemsPage() {
             {itemsLoading ? (
               <p className="text-sm text-muted-foreground">Memuat item...</p>
             ) : (
-              <DataTable columns={columns} data={items} emptyMessage="Belum ada item." />
+              <DataTable
+                columns={columns}
+                data={items}
+                emptyMessage="Belum ada item."
+                searchPlaceholder="Cari kode atau nama item..."
+                getSearchText={(item) => `${item.item_code} ${item.name}`}
+                paginated
+                pageSize={15}
+              />
             )}
           </CardContent>
         </Card>

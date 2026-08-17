@@ -399,7 +399,19 @@ export default function WarehouseDashboardPage() {
           </CardHeader>
           <CardContent>
             {stockError ? <p className="text-sm text-destructive">{stockError}</p> : null}
-            {stockLoading ? <p className="text-sm text-muted-foreground">Memuat stok...</p> : <DataTable columns={stockColumns} data={stock} emptyMessage="Belum ada stok tercatat." />}
+            {stockLoading ? (
+              <p className="text-sm text-muted-foreground">Memuat stok...</p>
+            ) : (
+              <DataTable
+                columns={stockColumns}
+                data={stock}
+                emptyMessage="Belum ada stok tercatat."
+                searchPlaceholder="Cari kode atau nama item..."
+                getSearchText={(row) => `${row.item_code ?? ''} ${row.item_name ?? ''}`}
+                paginated
+                pageSize={15}
+              />
+            )}
           </CardContent>
         </Card>
 

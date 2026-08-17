@@ -787,6 +787,10 @@ export default function ShipmentsPage() {
                 getRowId={(s) => String(s.shipment_id)}
                 expandedRowId={detailShipmentId !== null ? String(detailShipmentId) : null}
                 renderExpandedRow={renderShipmentDetail}
+                searchPlaceholder="Cari No. Surat Jalan atau client..."
+                getSearchText={(s) => `${s.shipment_number} ${s.customer_name ?? ''} ${s.so_number ?? ''}`}
+                paginated
+                pageSize={15}
               />
             )}
           </CardContent>

@@ -339,7 +339,15 @@ export default function RoutingsPage() {
             {routingsLoading ? (
               <p className="text-sm text-muted-foreground">Memuat Routing...</p>
             ) : (
-              <DataTable columns={columns} data={routings} emptyMessage="Belum ada Routing." />
+              <DataTable
+                columns={columns}
+                data={routings}
+                emptyMessage="Belum ada Routing."
+                searchPlaceholder="Cari kode atau nama item..."
+                getSearchText={(routing) => `${routing.item_code ?? ''} ${routing.item_name ?? ''}`}
+                paginated
+                pageSize={15}
+              />
             )}
           </CardContent>
         </Card>

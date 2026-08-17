@@ -20,10 +20,19 @@ import { loadEnv } from 'vite';
 // 10000ms" di beforeAll role_hierarchy_financial_access.test.ts (bukan test itu sendiri yang
 // rusak — lolos normal begitu limitnya dinaikkan). Dinaikkan di config global (BUKAN di dalam
 // file test manapun) supaya tidak menyentuh test yang sudah ada.
+// testTimeout: 30000 — sama akar masalah dengan hookTimeout di atas, tapi kena limit
+// yang BEDA (default Vitest per-test 5000ms, bukan per-hook). CI berikutnya gagal
+// "Test timed out in 5000ms" di 1 assertion tests/cross_company_isolation.test.ts
+// (query tunggal ke Supabase, bukan beforeAll) — bukti pola yang sama: latensi network
+// CI lebih tinggi/lebih bervariasi dibanding sandbox lokal, bukan bug di query itu
+// sendiri (lolos normal begitu limitnya dinaikkan, dan lolos konsisten di lokal sejak
+// awal). Dinaikkan sekaligus di sini supaya tidak perlu tambal satu-satu tiap ada test
+// baru yang kena limit default yang sama.
 export default defineConfig({
   test: {
     env: loadEnv('', process.cwd(), ''),
     fileParallelism: false,
-    hookTimeout: 30000
+    hookTimeout: 30000,
+    testTimeout: 30000
   }
 });

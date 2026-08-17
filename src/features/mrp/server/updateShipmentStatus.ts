@@ -7,13 +7,15 @@ interface ApiResult {
   body: Record<string, unknown>;
 }
 
-// UI (Sesi 3B) cuma mengekspos 2 tombol transisi: draft->shipped dan shipped->delivered
-// (sesuai LANGKAH e) — route ini sengaja membatasi target status ke 2 nilai itu saja,
-// TAPI legalitas transisi sesungguhnya (termasuk pengurangan stok, insert stock_movements,
-// update sales_order_lines.qty_shipped) tetap sepenuhnya ditegakkan oleh trigger database
+// Route ini cuma menangani shipped->delivered. draft->shipped SEKARANG WAJIB lewat
+// processShipmentDispatch.ts (migration 20260817190000) karena butuh foto bukti
+// pengiriman WAJIB diupload dulu — sengaja DIKELUARKAN dari daftar target di sini
+// supaya transisi itu tidak bisa dilewati tanpa foto lewat endpoint ini. Legalitas
+// transisi sesungguhnya (termasuk pengurangan stok, insert stock_movements, update
+// sales_order_lines.qty_shipped) tetap sepenuhnya ditegakkan oleh trigger database
 // enforce_status_transition() + shipments_process_shipped (migration 20260817140000) —
 // pesan error dari trigger diteruskan APA ADANYA, tidak diterjemahkan ulang di sini.
-const ALLOWED_TARGET_STATUSES = ['shipped', 'delivered'];
+const ALLOWED_TARGET_STATUSES = ['delivered'];
 
 export async function updateShipmentStatus(request: NextRequest): Promise<ApiResult> {
   try {
@@ -34,7 +36,7 @@ export async function updateShipmentStatus(request: NextRequest): Promise<ApiRes
       return { status: 400, body: { error: 'ID pengiriman tidak valid.' } };
     }
     if (!ALLOWED_TARGET_STATUSES.includes(status)) {
-      return { status: 400, body: { error: 'Status tujuan tidak valid (harus shipped/delivered).' } };
+      return { status: 400, body: { error: 'Status tujuan tidak valid (harus delivered).' } };
     }
 
     const adminClient = getAdminClient();

@@ -11,12 +11,8 @@ type AdminClient = ReturnType<typeof getAdminClient>;
 
 // Format & mekanisme PERSIS meniru generateSoNumber() di processCustomerPurchaseOrder.ts
 // (sequence 3-digit reset tahunan per company, kode company dari company_settings key
-// 'so_number_company_code' — key-nya dipakai ulang apa adanya, konsepnya generik "kode
-// singkat perusahaan", bukan spesifik SO), TAPI prefix "SJ-" (Surat Jalan) supaya tidak
-// tertukar visual dengan so_number. SENGAJA cuma 1 implementasi di sini (bukan didup-
-// likasi juga sebagai fungsi database seperti process_customer_purchase_order()) — versi
-// DB itu diakui sebagai utang teknis sinkronisasi di komentar processCustomerPurchaseOrder.ts,
-// tidak direplikasi di sini (lihat migration 20260817140000).
+// 'so_number_company_code'), prefix "SJ-" (Surat Jalan) supaya tidak tertukar visual
+// dengan so_number. SENGAJA cuma 1 implementasi di sini, tidak diduplikasi jadi fungsi DB.
 async function generateShipmentNumber(adminClient: AdminClient, companyId: number): Promise<string> {
   const now = new Date();
   const year = now.getFullYear();
@@ -50,13 +46,17 @@ async function generateShipmentNumber(adminClient: AdminClient, companyId: numbe
   return `SJ-${sequenceStr}/${month}-${companyCode}/${year}`;
 }
 
-// Header shipments (status default 'draft') + shipment_lines ditulis di sini. Trigger
-// database enforce_shipment_line_qty_limit (migration 20260817150000) menolak baris
-// yang melebihi sisa qty_ordered SAAT insert — pesan errornya diteruskan APA ADANYA ke
-// client (bukan diterjemahkan ulang), supaya staf lihat persis kenapa ditolak. Kalau
-// insert baris gagal, header yang baru dibuat DIHAPUS lagi supaya tidak ada draft
-// kosong (0 baris) tertinggal di database.
-export async function createShipment(request: NextRequest): Promise<ApiResult> {
+// Sesi 2 (final, dikoreksi) — GANTI createShipment.ts lama: sekarang Langkah 2 wizard
+// (bukan form 1-langkah) SELALU menyertakan tanda tangan. shipments + shipment_lines +
+// document_signatures ditulis dalam SATU transaksi lewat RPC
+// create_shipment_with_signature() (migration 20260817180000) — kalau salah satu baris
+// gagal (mis. ditolak enforce_shipment_line_qty_limit), SEMUANYA batal termasuk header
+// shipments, TIDAK ADA lagi manual delete-compensation seperti versi lama.
+//
+// PENTING: status SELALU tetap 'draft' di sini, stok TIDAK berkurang — itu murni tugas
+// tombol "Dikirim" terpisah yang sudah ada (updateShipmentStatus.ts, Sesi 3A/3B),
+// TIDAK diubah oleh fungsi ini sama sekali.
+export async function createShipmentWithSignature(request: NextRequest): Promise<ApiResult> {
   try {
     const { appUser } = await getCurrentUser(request);
 
@@ -66,6 +66,9 @@ export async function createShipment(request: NextRequest): Promise<ApiResult> {
     if (!appUser.company_id) {
       return { status: 400, body: { error: 'User belum terkait dengan perusahaan yang valid.' } };
     }
+    if (!appUser.signature_url) {
+      return { status: 400, body: { error: 'Anda belum mengunggah tanda tangan digital. Unggah dulu lewat halaman Profil.' } };
+    }
 
     const body = await request.json();
     const salesOrderId = Number(body.sales_order_id);
@@ -74,12 +77,16 @@ export async function createShipment(request: NextRequest): Promise<ApiResult> {
     const recipientPhone = body.recipient_phone ? String(body.recipient_phone).trim() : null;
     const vehicleNumber = body.vehicle_number ? String(body.vehicle_number).trim() : null;
     const driverName = body.driver_name ? String(body.driver_name).trim() : null;
+    const confirmationText = String(body.confirmation_text ?? '').trim();
 
     if (!salesOrderId) {
       return { status: 400, body: { error: 'Sales Order wajib dipilih.' } };
     }
     if (!deliveryAddress) {
       return { status: 400, body: { error: 'Alamat tujuan wajib diisi.' } };
+    }
+    if (!confirmationText) {
+      return { status: 400, body: { error: 'confirmation_text wajib diisi.' } };
     }
     if (!Array.isArray(body.lines) || body.lines.length === 0) {
       return { status: 400, body: { error: 'Minimal 1 baris item wajib diisi.' } };
@@ -123,44 +130,36 @@ export async function createShipment(request: NextRequest): Promise<ApiResult> {
 
     const shipmentNumber = await generateShipmentNumber(adminClient, appUser.company_id);
 
-    const { data: shipment, error: shipmentError } = await adminClient
-      .from('shipments')
-      .insert([
-        {
-          company_id: appUser.company_id,
-          sales_order_id: salesOrderId,
-          shipment_number: shipmentNumber,
-          delivery_address: deliveryAddress,
-          recipient_name: recipientName,
-          recipient_phone: recipientPhone,
-          vehicle_number: vehicleNumber,
-          driver_name: driverName
-        }
-      ])
-      .select('shipment_id, shipment_number, status, shipment_date')
+    const { data: result, error: rpcError } = await adminClient
+      .rpc('create_shipment_with_signature', {
+        p_company_id: appUser.company_id,
+        p_sales_order_id: salesOrderId,
+        p_shipment_number: shipmentNumber,
+        p_delivery_address: deliveryAddress,
+        p_recipient_name: recipientName,
+        p_recipient_phone: recipientPhone,
+        p_vehicle_number: vehicleNumber,
+        p_driver_name: driverName,
+        p_lines: shipmentLines,
+        p_signed_by: appUser.user_id,
+        p_signer_role: appUser.role,
+        p_signature_url_snapshot: appUser.signature_url,
+        p_confirmation_text: confirmationText
+      })
       .single();
-    if (shipmentError) return { status: 500, body: { error: shipmentError.message } };
 
-    const { data: createdLines, error: linesError } = await adminClient
-      .from('shipment_lines')
-      .insert(shipmentLines.map((line) => ({ shipment_id: shipment.shipment_id, ...line })))
-      .select('shipment_line_id, sales_order_line_id, item_id, qty_shipped, lot_id');
-
-    if (linesError) {
-      // Baris gagal (mis. ditolak enforce_shipment_line_qty_limit) -> hapus header
-      // draft kosong yang baru dibuat, jangan ditinggal jadi sampah.
-      await adminClient.from('shipments').delete().eq('shipment_id', shipment.shipment_id);
-      return { status: 400, body: { error: linesError.message } };
+    if (rpcError) {
+      return { status: 400, body: { error: rpcError.message } };
     }
 
+    const row = result as { out_shipment_id: number; out_shipment_number: string; out_document_signature_id: number };
     return {
       status: 201,
       body: {
-        shipment_id: shipment.shipment_id,
-        shipment_number: shipment.shipment_number,
-        status: shipment.status,
-        shipment_date: shipment.shipment_date,
-        lines: createdLines
+        shipment_id: row.out_shipment_id,
+        shipment_number: row.out_shipment_number,
+        document_signature_id: row.out_document_signature_id,
+        status: 'draft'
       }
     };
   } catch (error) {

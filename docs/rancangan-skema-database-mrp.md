@@ -72,6 +72,12 @@ Tanda tangan digital GENERIK — dipakai lintas jenis dokumen apa pun yang butuh
 - `signed_at`
 
 > **Pola alur (berlaku umum, bukan cuma Surat Jalan):** buat dokumen (draft) → modal konfirmasi menampilkan preview + checkbox "[dokumen] sudah terkonfirmasi benar dan tambahkan signature saya" → tombol "Process" (mengunci dokumen + rekam tanda tangan + memicu transisi status kalau `document_type` itu punya state machine) — ATAU tombol "Cancel/Edit" untuk kembali ke draft tanpa apa pun tercatat.
+>
+> **Implementasi nyata pertama (Shipments, Sesi 2, 17 Agu 2026) SEDIKIT BEDA dari pola umum di atas** — tanda tangan direkam SAAT PENGIRIMAN DIBUAT (wizard 2 langkah: form → preview+tanda tangan), BUKAN saat status berubah. Transisi `draft→shipped` TETAP lewat aksi terpisah (sekarang bernama "Proses Pengiriman", lihat catatan `dispatch_photo_url` di bagian `shipments` di bawah — awalnya tombol "Dikirim" 1 klik, direvisi hari yang sama jadi wajib upload foto dulu), TIDAK terhubung ke `document_signatures` sama sekali — keduanya aksi independen. Fungsi `create_shipment_with_signature()` (migration `20260817180000`) menulis `shipments`+`shipment_lines`+`document_signatures` dalam 1 transaksi, status hasilnya TETAP `draft`.
+>
+> **Halaman cetak Surat Jalan (17 Agu 2026)** — dari "Daftar Pengiriman" (`/shipments`), tombol "Lihat / Cetak Surat Jalan" (di dalam panel detail baris, lihat catatan Expandable Data Table di bawah) membuka `/shipments/{shipment_id}/surat-jalan` (route BARU, sengaja DI LUAR grup layout `(shell)` supaya tidak ikut sidebar/header saat dicetak). Halaman ini query `document_signatures` untuk `document_type='shipment'` + `document_id=shipment_id` lalu menampilkan `signature_url_snapshot` yang TERSIMPAN (bukan `users.signature_url` langsung) — komponen `SuratJalanPreview` dipakai ulang persis sama dengan preview di Langkah 2 wizard, supaya tata letak preview dan hasil cetak identik. Tombol "Cetak / Simpan sebagai PDF" pakai print-to-PDF bawaan browser (`window.print()`), belum pakai library PDF khusus.
+>
+> **Panel detail per baris pengiriman (17 Agu 2026, revisi UI)** — awalnya tombol "Detail" membuka modal popup; direvisi HARI YANG SAMA jadi pola Carbon Design System *Expandable Data Table* (https://carbondesignsystem.com/components/data-table/usage/#expansion) — klik "Detail" membuka panel LANGSUNG di bawah baris terkait di tabel yang sama (bukan modal terpisah), berisi semua info pengiriman + tabel item + foto bukti pengiriman (kalau ada) + tombol aksi ("Lihat/Cetak Surat Jalan", "Proses Pengiriman" untuk draft, "Tandai Diterima" untuk shipped). Komponen `DataTable` generik (`src/components/ui/data-table.tsx`) diperluas dengan prop opsional `getRowId`/`expandedRowId`/`renderExpandedRow` untuk pola ini — reusable untuk tabel lain nanti, tidak cuma Shipments.
 
 ### `invitations`
 Undangan company_admin/manager ke calon anggota tim baru.
@@ -255,9 +261,22 @@ Tercipta OTOMATIS saat `customer_purchase_orders` diproses — komitmen produksi
 ### `shipments` & `shipment_lines`
 Satu SO bisa dikirim bertahap (parsial).
 - Header: `shipment_id`, `company_id`, `sales_order_id`, `shipment_date`, `status`
+- `pod_token` (nullable — dibuat otomatis, ACAK/tidak bisa ditebak, SAAT status jadi `shipped`; dipakai di URL halaman Bukti Penerimaan publik yang di-scan client, TANPA login)
+- `dispatch_photo_url` (nullable, terisi SAAT status jadi `shipped` — foto bukti dari sisi INTERNAL staf gudang saat memuat/mengirim barang, migration `20260817190000`. WAJIB diisi di alur UI sebelum transisi `draft→shipped` bisa dilakukan (lihat catatan implementasi di bawah) — BEDA dari `delivery_confirmations.photo_url` yang dari sisi CUSTOMER)
 - Line: `shipment_line_id`, `shipment_id`, `sales_order_line_id`, `item_id`, `qty_shipped`, `lot_id`
 
----
+> **Implementasi UI "Proses Pengiriman" (17 Agu 2026)** — transisi `draft→shipped` TIDAK LAGI 1 klik tombol biasa. Staf WAJIB upload foto bukti pengiriman lewat modal "Proses Pengiriman" (dibuka dari panel detail baris pengiriman di "Daftar Pengiriman", pola Carbon *Expandable Data Table*) — baru setelah foto sukses diupload, `shipments.status` diubah ke `shipped` (memicu trigger `process_shipment_shipped()` yang sudah ada, tidak direstrukturisasi) DAN `dispatch_photo_url` terisi dalam 1 `UPDATE` yang sama (`processShipmentDispatch.ts`). Endpoint status lama (`PATCH /api/shipments/status`) SEKARANG HANYA menerima target `delivered` — target `shipped` sengaja dikeluarkan dari situ supaya transisi ini tidak bisa dilewati tanpa foto.
+>
+> **Label kolom Status di UI (17 Agu 2026, TIDAK mengubah nilai `status` di database)** — di tabel "Daftar Pengiriman", nilai `shipped` ditampilkan sebagai **"Di Proses"** (barang sudah keluar gudang, dalam perjalanan) dan `delivered` sebagai **"Terkirim"** (sudah sampai ke penerima) — lebih sesuai arti kata sehari-hari daripada nama kolom database aslinya. `draft`/`cancelled` tetap "Draft"/"Batal". Panel detail baris pengiriman JUGA menampilkan, KHUSUS untuk status selain `draft`: stok lot TERKINI (`lots.quantity_on_hand` saat itu) dan total qty sudah dikirim untuk SO line yang sama di SELURUH pengiriman (`sales_order_lines.qty_shipped`/`qty_ordered`, bukan cuma qty di baris pengiriman ini) — supaya staf bisa langsung lihat bukti stok benar-benar berkurang tanpa perlu buka halaman lain.
+
+### `delivery_confirmations`
+Bukti Penerimaan (Proof of Delivery) dari CLIENT — diisi lewat halaman PUBLIK tanpa login (akses via `pod_token`, bukan lewat akun sistem). Client bukan user terdaftar, jadi tabel ini TIDAK terikat `user_id` seperti pola tanda tangan internal (`document_signatures`) — ini pengakuan dari pihak luar, bukan persetujuan staf internal.
+- `delivery_confirmation_id`, `shipment_id`
+- `photo_url` (foto bukti dari client, Supabase Storage)
+- `received_by_name` (nullable, diisi manual — bisa beda dari `shipments.recipient_name` yang direncanakan saat pengiriman dibuat)
+- `confirmed_at`
+
+> **Keamanan halaman publik:** akses HANYA lewat `pod_token` (acak, panjang, tidak bisa ditebak dari `shipment_id`) — bukan RLS berbasis JWT seperti tabel lain. Halaman ini TIDAK BOLEH menampilkan harga/biaya apa pun (sesuai Kontrol Akses Data Finansial — berlaku ganda di sini karena bukan cuma soal role, tapi diakses pihak LUAR perusahaan sama sekali). Submit sukses memicu transisi `shipped→delivered` (target status yang sudah ada di state machine `shipments`).
 
 ## Kelompok 5: Produksi
 

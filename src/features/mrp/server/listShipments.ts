@@ -21,7 +21,7 @@ export async function listShipments(request: NextRequest): Promise<ApiResult> {
 
     const { data: shipments, error: shipmentsError } = await adminClient
       .from('shipments')
-      .select('shipment_id, sales_order_id, shipment_number, shipment_date, status, delivery_address, recipient_name, recipient_phone, vehicle_number, driver_name, created_at')
+      .select('shipment_id, sales_order_id, shipment_number, shipment_date, status, delivery_address, recipient_name, recipient_phone, vehicle_number, driver_name, dispatch_photo_url, created_at')
       .eq('company_id', appUser.company_id)
       .order('created_at', { ascending: false });
     if (shipmentsError) return { status: 500, body: { error: shipmentsError.message } };
@@ -41,21 +41,29 @@ export async function listShipments(request: NextRequest): Promise<ApiResult> {
 
     const itemIds = Array.from(new Set((linesRes.data ?? []).map((l) => l.item_id)));
     const lotIds = Array.from(new Set((linesRes.data ?? []).map((l) => l.lot_id)));
+    const soLineIds = Array.from(new Set((linesRes.data ?? []).map((l) => l.sales_order_line_id)));
     const customerIds = Array.from(new Set((soRes.data ?? []).map((so) => so.customer_id)));
 
-    const [itemsRes, lotsRes, customersRes] = await Promise.all([
+    // lots.quantity_on_hand & sales_order_lines.qty_shipped/qty_ordered diambil di sini
+    // (BUKAN cuma lot_number/expiry_date seperti sebelumnya) — dipakai panel detail
+    // "Daftar Pengiriman" untuk menampilkan stok lot TERKINI + total sudah dikirim
+    // se-SO-line (bukan cuma qty di baris pengiriman ini) SAAT status sudah lewat draft.
+    const [itemsRes, lotsRes, customersRes, soLinesRes] = await Promise.all([
       itemIds.length ? adminClient.from('items').select('item_id, item_code, name, base_uom').in('item_id', itemIds) : Promise.resolve({ data: [], error: null }),
-      lotIds.length ? adminClient.from('lots').select('lot_id, lot_number, expiry_date').in('lot_id', lotIds) : Promise.resolve({ data: [], error: null }),
-      customerIds.length ? adminClient.from('customers').select('customer_id, name').in('customer_id', customerIds) : Promise.resolve({ data: [], error: null })
+      lotIds.length ? adminClient.from('lots').select('lot_id, lot_number, expiry_date, quantity_on_hand').in('lot_id', lotIds) : Promise.resolve({ data: [], error: null }),
+      customerIds.length ? adminClient.from('customers').select('customer_id, name').in('customer_id', customerIds) : Promise.resolve({ data: [], error: null }),
+      soLineIds.length ? adminClient.from('sales_order_lines').select('sales_order_line_id, qty_ordered, qty_shipped').in('sales_order_line_id', soLineIds) : Promise.resolve({ data: [], error: null })
     ]);
     if (itemsRes.error) return { status: 500, body: { error: itemsRes.error.message } };
     if (lotsRes.error) return { status: 500, body: { error: lotsRes.error.message } };
     if (customersRes.error) return { status: 500, body: { error: customersRes.error.message } };
+    if (soLinesRes.error) return { status: 500, body: { error: soLinesRes.error.message } };
 
     const soById = new Map((soRes.data ?? []).map((so) => [so.sales_order_id, so]));
     const itemsById = new Map((itemsRes.data ?? []).map((i) => [i.item_id, i]));
     const lotsById = new Map((lotsRes.data ?? []).map((l) => [l.lot_id, l]));
     const customersById = new Map((customersRes.data ?? []).map((c) => [c.customer_id, c]));
+    const soLinesById = new Map((soLinesRes.data ?? []).map((l) => [l.sales_order_line_id, l]));
 
     const linesByShipmentId = new Map<number, typeof linesRes.data>();
     for (const line of linesRes.data ?? []) {
@@ -76,6 +84,7 @@ export async function listShipments(request: NextRequest): Promise<ApiResult> {
         recipient_phone: shipment.recipient_phone,
         vehicle_number: shipment.vehicle_number,
         driver_name: shipment.driver_name,
+        dispatch_photo_url: shipment.dispatch_photo_url,
         created_at: shipment.created_at,
         sales_order_id: shipment.sales_order_id,
         so_number: so?.so_number ?? null,
@@ -84,6 +93,7 @@ export async function listShipments(request: NextRequest): Promise<ApiResult> {
         lines: (linesByShipmentId.get(shipment.shipment_id) ?? []).map((line) => {
           const item = itemsById.get(line.item_id);
           const lot = lotsById.get(line.lot_id);
+          const soLine = soLinesById.get(line.sales_order_line_id);
           return {
             shipment_line_id: line.shipment_line_id,
             sales_order_line_id: line.sales_order_line_id,
@@ -94,7 +104,10 @@ export async function listShipments(request: NextRequest): Promise<ApiResult> {
             qty_shipped: line.qty_shipped,
             lot_id: line.lot_id,
             lot_number: lot?.lot_number ?? null,
-            lot_expiry_date: lot?.expiry_date ?? null
+            lot_expiry_date: lot?.expiry_date ?? null,
+            lot_quantity_on_hand: lot?.quantity_on_hand ?? null,
+            so_line_qty_ordered: soLine?.qty_ordered ?? null,
+            so_line_qty_shipped: soLine?.qty_shipped ?? null
           };
         })
       };

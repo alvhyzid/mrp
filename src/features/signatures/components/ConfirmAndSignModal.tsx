@@ -27,9 +27,25 @@ export type ConfirmAndSignModalProps = {
   confirmationText: string;
   onConfirm: () => Promise<void>;
   children: React.ReactNode;
+  // Opsional — default "Cancel/Edit"/"Process" tetap sama seperti sebelumnya (tidak
+  // mengubah pemanggil lama). Dibutuhkan Sesi 2 (wizard Shipments): langkah 2 wizard
+  // butuh label "Kembali"/"Buat Pengiriman", BUKAN "Cancel/Edit" generik — perilaku
+  // "Kembali"-nya (balik ke langkah 1, data tetap ada, bukan tutup total) sepenuhnya
+  // ditentukan pemanggil lewat `onOpenChange`, komponen ini cuma soal LABEL tombolnya.
+  cancelLabel?: string;
+  confirmLabel?: string;
 };
 
-export default function ConfirmAndSignModal({ open, onOpenChange, title, confirmationText, onConfirm, children }: ConfirmAndSignModalProps) {
+export default function ConfirmAndSignModal({
+  open,
+  onOpenChange,
+  title,
+  confirmationText,
+  onConfirm,
+  children,
+  cancelLabel = 'Cancel/Edit',
+  confirmLabel = 'Process'
+}: ConfirmAndSignModalProps) {
   const [checked, setChecked] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -79,10 +95,10 @@ export default function ConfirmAndSignModal({ open, onOpenChange, title, confirm
 
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={handleCancel} disabled={processing}>
-            Cancel/Edit
+            {cancelLabel}
           </Button>
           <Button type="button" onClick={handleProcess} disabled={!checked || processing}>
-            {processing ? 'Memproses...' : 'Process'}
+            {processing ? 'Memproses...' : confirmLabel}
           </Button>
         </div>
       </DialogContent>

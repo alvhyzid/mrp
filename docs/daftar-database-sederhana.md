@@ -177,11 +177,12 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 - ID Pengiriman (shipment_id) · ID Perusahaan (company_id) · ID SO (sales_order_id) · Tanggal Kirim (shipment_date) · Status (status: draft/shipped/delivered/cancelled)
 - Nomor Surat Jalan (shipment_number, otomatis dibuat, unik per perusahaan) · Nomor Kendaraan (vehicle_number) · Nama Sopir (driver_name)
 - Alamat Tujuan (delivery_address, WAJIB diisi tiap pengiriman) · Nama Penerima (recipient_name) · No. HP Penerima (recipient_phone)
+- Foto Bukti Pengiriman (dispatch_photo_url, 17 Agu 2026) — WAJIB diupload staf gudang saat menekan "Proses Pengiriman", baru setelah foto tersimpan status berubah jadi "shipped" dan stok berkurang
 
 **Database Detail Item Dikirim** (`shipment_lines`)
 - ID Baris (shipment_line_id) · ID Pengiriman (shipment_id) · ID SO Line (sales_order_line_id) · ID Item (item_id) · Jumlah Dikirim (qty_shipped) · ID Lot (lot_id, WAJIB diisi — jejak lot untuk tiap pengiriman)
 
-> **17 Agu 2026:** Stok baru benar-benar berkurang saat status pengiriman diubah jadi "shipped" (bukan saat baris ditambahkan) — supaya staf bisa siapkan draft pengiriman dulu tanpa stok berkurang duluan sebelum benar-benar dikirim.
+> **17 Agu 2026:** Stok baru benar-benar berkurang saat status pengiriman diubah jadi "shipped" lewat tombol "Proses Pengiriman" (bukan saat baris ditambahkan) — supaya staf bisa siapkan draft pengiriman dulu tanpa stok berkurang duluan sebelum benar-benar dikirim. Sejak revisi hari yang sama, tombol ini WAJIB disertai upload foto bukti pengiriman sebagai bukti visual barang benar-benar dimuat/dikirim.
 
 ---
 

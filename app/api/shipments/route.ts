@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { listShipments, createShipment } from '@/features/mrp/server';
+import { listShipments, createShipmentWithSignature } from '@/features/mrp/server';
 
 export async function GET(request: NextRequest) {
   const result = await listShipments(request);
@@ -7,6 +7,6 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const result = await createShipment(request);
+  const result = await createShipmentWithSignature(request);
   return NextResponse.json(result.body, { status: result.status });
 }

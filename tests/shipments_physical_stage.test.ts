@@ -168,6 +168,44 @@ describe('shipments physical stage — trigger stok & state machine', () => {
     expect(error!.message).toContain('tidak valid untuk tabel shipments');
   });
 
+  // Hardening 17 Agu 2026 — "foto bukti pengiriman wajib" sebelumnya cuma dijaga di
+  // updateShipmentStatus.ts (aplikasi), bukan di database. Tes ini membuktikan jalur
+  // langsung ke DB (skip endpoint aplikasi sama sekali, persis seperti percobaan di
+  // sini) TETAP ditolak oleh enforce_status_transition() sendiri.
+  it('transisi draft -> shipped LANGSUNG lewat DB tanpa dispatch_photo_url -> DITOLAK', async () => {
+    const { data: shipment, error: shipmentError } = await adminClient
+      .from('shipments')
+      .insert([{ company_id: companyId, sales_order_id: soId, shipment_number: 'SJ-NOPHOTOTEST/8-STC/2026', delivery_address: 'Jl. No Photo Test' }])
+      .select('shipment_id')
+      .single();
+    if (shipmentError) throw new Error(`Failed to create shipment fixture: ${shipmentError.message}`);
+
+    const { data: updated, error } = await adminClient
+      .from('shipments')
+      .update({ status: 'shipped' })
+      .eq('shipment_id', shipment!.shipment_id)
+      .select('shipment_id, status')
+      .maybeSingle();
+
+    expect(updated).toBeNull();
+    expect(error).not.toBeNull();
+    expect(error!.code).toBe('23514');
+    expect(error!.message).toContain('Foto bukti pengiriman wajib');
+
+    const { data: afterAttempt } = await adminClient.from('shipments').select('status, dispatch_photo_url').eq('shipment_id', shipment!.shipment_id).single();
+    expect(afterAttempt!.status).toBe('draft');
+    expect(afterAttempt!.dispatch_photo_url).toBeNull();
+
+    // Jalur SAH (dispatch_photo_url diisi dalam UPDATE yang sama, persis
+    // processShipmentDispatch.ts) tetap harus berhasil — bukti guard ini tidak
+    // menghalangi transisi normal, cuma yang melewatkan foto.
+    const { error: legitError } = await adminClient
+      .from('shipments')
+      .update({ status: 'shipped', dispatch_photo_url: 'https://example.com/test-dispatch-photo.png' })
+      .eq('shipment_id', shipment!.shipment_id);
+    expect(legitError).toBeNull();
+  });
+
   it('ship qty melebihi stok fisik lot (tapi masih dalam sisa qty_ordered) -> DITOLAK saat status shipped, stok tidak berubah (tidak sampai negatif)', async () => {
     const { data: lotTiny, error: lotTinyError } = await adminClient
       .from('lots')
@@ -189,7 +227,7 @@ describe('shipments physical stage — trigger stok & state machine', () => {
     const { error: insertError } = await adminClient.from('shipment_lines').insert([{ shipment_id: shipment!.shipment_id, sales_order_line_id: solId, item_id: itemId, qty_shipped: 10, lot_id: lotTiny!.lot_id }]);
     expect(insertError).toBeNull();
 
-    const { error } = await adminClient.from('shipments').update({ status: 'shipped' }).eq('shipment_id', shipment!.shipment_id);
+    const { error } = await adminClient.from('shipments').update({ status: 'shipped', dispatch_photo_url: 'https://example.com/test-dispatch-photo.png' }).eq('shipment_id', shipment!.shipment_id);
     expect(error).not.toBeNull();
     expect(error!.message).toContain('tidak cukup');
 
@@ -270,7 +308,7 @@ describe('shipments physical stage — trigger stok & state machine', () => {
       .insert([{ shipment_id: shipment!.shipment_id, sales_order_line_id: solExact!.sales_order_line_id, item_id: itemId, qty_shipped: 20, lot_id: lotBig!.lot_id }]);
     expect(insertError).toBeNull();
 
-    const { error } = await adminClient.from('shipments').update({ status: 'shipped' }).eq('shipment_id', shipment!.shipment_id);
+    const { error } = await adminClient.from('shipments').update({ status: 'shipped', dispatch_photo_url: 'https://example.com/test-dispatch-photo.png' }).eq('shipment_id', shipment!.shipment_id);
     expect(error).toBeNull();
 
     const { data: solAfter } = await adminClient.from('sales_order_lines').select('qty_ordered, qty_shipped').eq('sales_order_line_id', solExact!.sales_order_line_id).single();
@@ -297,7 +335,7 @@ describe('shipments physical stage — trigger stok & state machine', () => {
     expect(Number(lotsWhileDraft![0].quantity_on_hand)).toBe(100);
     expect(Number(lotsWhileDraft![1].quantity_on_hand)).toBe(100);
 
-    const { error: shipError } = await adminClient.from('shipments').update({ status: 'shipped' }).eq('shipment_id', shipment!.shipment_id);
+    const { error: shipError } = await adminClient.from('shipments').update({ status: 'shipped', dispatch_photo_url: 'https://example.com/test-dispatch-photo.png' }).eq('shipment_id', shipment!.shipment_id);
     expect(shipError).toBeNull();
 
     const { data: lotsAfterShip } = await adminClient.from('lots').select('lot_id, quantity_on_hand').in('lot_id', [lotNearId, lotFarId]).order('lot_id');

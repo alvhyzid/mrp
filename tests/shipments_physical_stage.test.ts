@@ -139,11 +139,12 @@ describe('shipments physical stage — trigger stok & state machine', () => {
   });
 
   it('insert shipment_line dengan lot_id NULL -> DITOLAK (traceability wajib)', async () => {
-    const { data: shipment } = await adminClient
+    const { data: shipment, error: shipmentError } = await adminClient
       .from('shipments')
       .insert([{ company_id: companyId, sales_order_id: soId, shipment_number: 'SJ-NULLTEST/8-STC/2026', delivery_address: 'Jl. Null Test' }])
       .select('shipment_id')
       .single();
+    if (shipmentError) throw new Error(`Failed to create shipment fixture: ${shipmentError.message}`);
 
     const { error } = await adminClient
       .from('shipment_lines')
@@ -154,11 +155,12 @@ describe('shipments physical stage — trigger stok & state machine', () => {
   });
 
   it('transisi draft -> delivered langsung (skip shipped) -> DITOLAK oleh state machine', async () => {
-    const { data: shipment } = await adminClient
+    const { data: shipment, error: shipmentError } = await adminClient
       .from('shipments')
       .insert([{ company_id: companyId, sales_order_id: soId, shipment_number: 'SJ-SKIPTEST/8-STC/2026', delivery_address: 'Jl. Skip Test' }])
       .select('shipment_id')
       .single();
+    if (shipmentError) throw new Error(`Failed to create shipment fixture: ${shipmentError.message}`);
 
     const { error } = await adminClient.from('shipments').update({ status: 'delivered' }).eq('shipment_id', shipment!.shipment_id);
 
@@ -167,17 +169,19 @@ describe('shipments physical stage — trigger stok & state machine', () => {
   });
 
   it('ship qty melebihi stok fisik lot (tapi masih dalam sisa qty_ordered) -> DITOLAK saat status shipped, stok tidak berubah (tidak sampai negatif)', async () => {
-    const { data: lotTiny } = await adminClient
+    const { data: lotTiny, error: lotTinyError } = await adminClient
       .from('lots')
       .insert([{ company_id: companyId, production_plant_id: plantId, item_id: itemId, lot_number: 'LOT-SHIPTEST-TINY', quantity_on_hand: 2, source_type: 'produced', status: 'available' }])
       .select('lot_id')
       .single();
+    if (lotTinyError) throw new Error(`Failed to create lotTiny fixture: ${lotTinyError.message}`);
 
-    const { data: shipment } = await adminClient
+    const { data: shipment, error: shipmentError } = await adminClient
       .from('shipments')
       .insert([{ company_id: companyId, sales_order_id: soId, shipment_number: 'SJ-INSUFFICIENT/8-STC/2026', delivery_address: 'Jl. Insufficient Test' }])
       .select('shipment_id')
       .single();
+    if (shipmentError) throw new Error(`Failed to create shipment fixture: ${shipmentError.message}`);
 
     // qty_shipped=10 sengaja MASIH di bawah sisa qty_ordered solId (50) supaya baris ini
     // lolos trigger enforce_shipment_line_qty_limit (INSERT), dan skenario yang benar-benar
@@ -199,23 +203,26 @@ describe('shipments physical stage — trigger stok & state machine', () => {
   });
 
   it('ship qty melebihi sisa qty_ordered SO line -> DITOLAK oleh database (penegakan diubah 17 Agu 2026, BUKAN lagi diizinkan)', async () => {
-    const { data: solSmall } = await adminClient
+    const { data: solSmall, error: solSmallError } = await adminClient
       .from('sales_order_lines')
       .insert([{ sales_order_id: soId, item_id: itemId, qty_ordered: 10, unit_price: 5000 }])
       .select('sales_order_line_id')
       .single();
+    if (solSmallError) throw new Error(`Failed to create solSmall fixture: ${solSmallError.message}`);
 
-    const { data: lotBig } = await adminClient
+    const { data: lotBig, error: lotBigError } = await adminClient
       .from('lots')
       .insert([{ company_id: companyId, production_plant_id: plantId, item_id: itemId, lot_number: 'LOT-SHIPTEST-BIG', quantity_on_hand: 1000, source_type: 'produced', status: 'available' }])
       .select('lot_id')
       .single();
+    if (lotBigError) throw new Error(`Failed to create lotBig fixture: ${lotBigError.message}`);
 
-    const { data: shipment } = await adminClient
+    const { data: shipment, error: shipmentError } = await adminClient
       .from('shipments')
       .insert([{ company_id: companyId, sales_order_id: soId, shipment_number: 'SJ-OVERSHIP/8-STC/2026', delivery_address: 'Jl. Overship Test' }])
       .select('shipment_id')
       .single();
+    if (shipmentError) throw new Error(`Failed to create shipment fixture: ${shipmentError.message}`);
 
     // Trigger enforce_shipment_line_qty_limit fires BEFORE INSERT -> baris ini DITOLAK
     // sebelum sempat tercipta sama sekali (bukan ditolak belakangan saat status=shipped).
@@ -237,23 +244,26 @@ describe('shipments physical stage — trigger stok & state machine', () => {
   });
 
   it('ship qty TEPAT SAMA dengan sisa qty_ordered SO line -> DIIZINKAN (batas atas, bukan strictly-less-than)', async () => {
-    const { data: solExact } = await adminClient
+    const { data: solExact, error: solExactError } = await adminClient
       .from('sales_order_lines')
       .insert([{ sales_order_id: soId, item_id: itemId, qty_ordered: 20, unit_price: 5000 }])
       .select('sales_order_line_id')
       .single();
+    if (solExactError) throw new Error(`Failed to create solExact fixture: ${solExactError.message}`);
 
-    const { data: lotBig } = await adminClient
+    const { data: lotBig, error: lotBigError } = await adminClient
       .from('lots')
       .insert([{ company_id: companyId, production_plant_id: plantId, item_id: itemId, lot_number: 'LOT-SHIPTEST-EXACT', quantity_on_hand: 1000, source_type: 'produced', status: 'available' }])
       .select('lot_id')
       .single();
+    if (lotBigError) throw new Error(`Failed to create lotBig fixture: ${lotBigError.message}`);
 
-    const { data: shipment } = await adminClient
+    const { data: shipment, error: shipmentError } = await adminClient
       .from('shipments')
       .insert([{ company_id: companyId, sales_order_id: soId, shipment_number: 'SJ-EXACTSHIP/8-STC/2026', delivery_address: 'Jl. Exact Test' }])
       .select('shipment_id')
       .single();
+    if (shipmentError) throw new Error(`Failed to create shipment fixture: ${shipmentError.message}`);
 
     const { error: insertError } = await adminClient
       .from('shipment_lines')
@@ -269,17 +279,19 @@ describe('shipments physical stage — trigger stok & state machine', () => {
   });
 
   it('alur penuh: stok TIDAK berkurang saat baris ditambahkan (masih draft), berkurang TEPAT saat status jadi shipped', async () => {
-    const { data: shipment } = await adminClient
+    const { data: shipment, error: shipmentError } = await adminClient
       .from('shipments')
       .insert([{ company_id: companyId, sales_order_id: soId, shipment_number: 'SJ-FULLFLOW/8-STC/2026', delivery_address: 'Jl. Full Flow Test', recipient_name: 'Budi Penerima', recipient_phone: '08123456789', vehicle_number: 'B 1234 XYZ', driver_name: 'Pak Sopir' }])
       .select('shipment_id, status')
       .single();
+    if (shipmentError) throw new Error(`Failed to create shipment fixture: ${shipmentError.message}`);
     expect(shipment!.status).toBe('draft');
 
-    await adminClient.from('shipment_lines').insert([
+    const { error: linesError } = await adminClient.from('shipment_lines').insert([
       { shipment_id: shipment!.shipment_id, sales_order_line_id: solId, item_id: itemId, qty_shipped: 30, lot_id: lotNearId },
       { shipment_id: shipment!.shipment_id, sales_order_line_id: solId, item_id: itemId, qty_shipped: 10, lot_id: lotFarId }
     ]);
+    if (linesError) throw new Error(`Failed to insert shipment_lines fixture: ${linesError.message}`);
 
     const { data: lotsWhileDraft } = await adminClient.from('lots').select('lot_id, quantity_on_hand').in('lot_id', [lotNearId, lotFarId]).order('lot_id');
     expect(Number(lotsWhileDraft![0].quantity_on_hand)).toBe(100);

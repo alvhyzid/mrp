@@ -164,12 +164,17 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 **Database Detail Item SO** (`sales_order_lines`)
 - ID Baris (sales_order_line_id) · ID SO (sales_order_id) · ID Item (item_id) · Jumlah Dipesan (qty_ordered)
 - Harga Jual per Unit — SENSITIF, disalin dari PO (unit_price)
+- Jumlah Sudah Dikirim (qty_shipped) — otomatis bertambah tiap ada pengiriman berstatus "shipped" (17 Agu 2026)
 
 **Database Header Pengiriman** (`shipments`)
-- ID Pengiriman (shipment_id) · ID Perusahaan (company_id) · ID SO (sales_order_id) · Tanggal Kirim (shipment_date) · Status (status)
+- ID Pengiriman (shipment_id) · ID Perusahaan (company_id) · ID SO (sales_order_id) · Tanggal Kirim (shipment_date) · Status (status: draft/shipped/delivered/cancelled)
+- Nomor Surat Jalan (shipment_number, otomatis dibuat, unik per perusahaan) · Nomor Kendaraan (vehicle_number) · Nama Sopir (driver_name)
+- Alamat Tujuan (delivery_address, WAJIB diisi tiap pengiriman) · Nama Penerima (recipient_name) · No. HP Penerima (recipient_phone)
 
 **Database Detail Item Dikirim** (`shipment_lines`)
-- ID Baris (shipment_line_id) · ID Pengiriman (shipment_id) · ID SO Line (sales_order_line_id) · ID Item (item_id) · Jumlah Dikirim (qty_shipped) · ID Lot (lot_id)
+- ID Baris (shipment_line_id) · ID Pengiriman (shipment_id) · ID SO Line (sales_order_line_id) · ID Item (item_id) · Jumlah Dikirim (qty_shipped) · ID Lot (lot_id, WAJIB diisi — jejak lot untuk tiap pengiriman)
+
+> **17 Agu 2026:** Stok baru benar-benar berkurang saat status pengiriman diubah jadi "shipped" (bukan saat baris ditambahkan) — supaya staf bisa siapkan draft pengiriman dulu tanpa stok berkurang duluan sebelum benar-benar dikirim.
 
 ---
 

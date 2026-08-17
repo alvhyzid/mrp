@@ -238,7 +238,7 @@ Tercipta OTOMATIS saat `customer_purchase_orders` diproses — komitmen produksi
 - `so_number` (nomor SO internal yang bisa dibaca manusia, format sesuai kebiasaan Anda mis. "020/2-ITM/2026" — auto-generated saat "Process" diklik; BEDA dari `customer_purchase_orders.po_number` yang merujuk nomor PO milik client)
 - `production_plant_id` (dipilih saat "Process"), `status` (confirmed / in_production / completed / cancelled), `created_at`
 - `idempotency_key` (nullable, unique per `company_id` — diisi OTOMATIS oleh server sebagai `cpo-<customer_purchase_order_id>`, bukan dari client, karena 1 PO client memang cuma boleh menghasilkan 1 SO. Menutup celah double-click tombol "Process" bikin 2 SO untuk 1 PO yang sama — sebelumnya cuma kebetulan tertahan lewat `unique(customer_purchase_order_id)` yang sudah ada dari awal, tapi errornya bocor mentah ke user, sekarang ditangani rapi)
-- Line: `sales_order_line_id`, `sales_order_id`, `item_id`, `qty_ordered`, `unit_price` (disalin dari PO)
+- Line: `sales_order_line_id`, `sales_order_id`, `item_id`, `qty_ordered`, `unit_price` (disalin dari PO), `qty_shipped` (kumulatif, numeric(14,4) default 0 — di-increment OTOMATIS oleh trigger tiap `shipments` pindah status ke `shipped`, pola sama seperti `purchase_order_lines.qty_received`. Sesi 3A 17 Agu 2026: SENGAJA TIDAK ada batas atas terhadap `qty_ordered` — kirim melebihi yang dipesan DIIZINKAN, konsisten dengan `goods_receipt_lines.qty_received` yang juga tidak dibatasi terhadap `qty_ordered`-nya sendiri)
 
 > **Satu SO line bisa punya BANYAK Work Order** — PPIC bebas memecah 1 SO line jadi beberapa WO (mis. per hari/per kapasitas produksi: WO day 1, day 2, day 3), tidak harus 1:1. Dashboard PO tetap menjumlahkan total progres dari semua WO yang terhubung ke SO line yang sama.
 
@@ -246,8 +246,16 @@ Tercipta OTOMATIS saat `customer_purchase_orders` diproses — komitmen produksi
 
 ### `shipments` & `shipment_lines`
 Satu SO bisa dikirim bertahap (parsial).
-- Header: `shipment_id`, `company_id`, `sales_order_id`, `shipment_date`, `status`
-- Line: `shipment_line_id`, `shipment_id`, `sales_order_line_id`, `item_id`, `qty_shipped`, `lot_id`
+- Header: `shipment_id`, `company_id`, `sales_order_id`, `shipment_date`, `status` (`draft` / `shipped` / `delivered` / `cancelled`), `created_at`
+- `shipment_number` (nullable di level DB, SELALU diisi app-layer sebelum insert — pola & format persis `sales_orders.so_number` tapi dengan prefix `SJ-` biar tidak tertukar visual, mis. `SJ-001/8-ITM/2026`, unique per `company_id`), `vehicle_number` (nullable), `driver_name` (nullable)
+- `delivery_address` (text, **WAJIB diisi tiap pengiriman** — bisa beda tiap kali meski SO/customer sama, TIDAK auto-terisi permanen dari data customer), `recipient_name` (nullable, penerima di lokasi tujuan — bisa beda dari PIC PO asal), `recipient_phone` (nullable)
+- Line: `shipment_line_id`, `shipment_id`, `sales_order_line_id`, `item_id`, `qty_shipped`, `lot_id` (**WAJIB diisi, NOT NULL** sejak Sesi 3A 17 Agu 2026 — traceability lot untuk pengiriman bukan opsional)
+
+> **Kapan stok berkurang (Sesi 3A, 17 Agu 2026):** TEPAT saat `shipments.status` berubah jadi `shipped` — BUKAN saat baris `shipment_lines` ditambahkan (shipment biasa dibuat `draft` dulu, baris ditambah/diedit beberapa kali, baru disubmit). Trigger `shipments_process_shipped` (AFTER UPDATE OF status, WHEN draft→shipped) melakukan, untuk tiap `shipment_lines` milik shipment itu: kurangi `lots.quantity_on_hand`, insert `stock_movements` (`movement_type='shipment'`, qty negatif), tambah `sales_order_lines.qty_shipped`, panggil `recompute_stock_projection_for_item()` — pola stok/audit trail-nya SAMA PERSIS seperti `process_goods_receipt_line()`/`work_order_consumption`, cuma bentuknya trigger di HEADER (loop semua line), bukan trigger per-baris di tabel detail, karena efeknya memang harus tertunda sampai status berubah. Stok lot yang tidak cukup fisik DITOLAK (tidak sampai negatif); melebihi `sales_order_lines.qty_ordered` DIIZINKAN (lihat catatan di `sales_order_lines` di atas).
+>
+> **State machine (`enforce_status_transition()`):** `draft→shipped`, `draft→cancelled`, `shipped→delivered` — transisi lain (termasuk lompat `draft→delivered`) ditolak di level database, dicatat di `status_transition_log` seperti 5 tabel lain yang sudah pakai sistem ini.
+>
+> **Saran lot FEFO:** fungsi `suggest_fefo_lots(item_id, production_plant_id)` mengembalikan lot `available` berstok > 0 diurutkan `expiry_date` terdekat dulu — dipakai UI (Sesi 3B) untuk menyarankan lot saat menambah baris `shipment_lines`, bisa di-override manual.
 
 ---
 

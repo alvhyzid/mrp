@@ -17,6 +17,7 @@
     "role-access:test": "vitest run tests/role_hierarchy_financial_access.test.ts",
     "attendance-access:test": "vitest run tests/employee_attendance_access.test.ts",
     "isolation-access:test": "vitest run tests/cross_company_isolation.test.ts",
+    "shipments-physical:test": "vitest run tests/shipments_physical_stage.test.ts",
     "test": "vitest run"
   },
   "dependencies": {

@@ -102,6 +102,7 @@ export default function ShipmentsPage() {
 
   const [creatingForSoId, setCreatingForSoId] = useState<number | null>(null);
   const [lotsByItemId, setLotsByItemId] = useState<Record<number, LotOption[]>>({});
+  const [lotsLoaded, setLotsLoaded] = useState(false);
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [recipientName, setRecipientName] = useState('');
   const [recipientPhone, setRecipientPhone] = useState('');
@@ -209,11 +210,19 @@ export default function ShipmentsPage() {
 
       const remainingLines = so.lines.filter((line) => line.qty_remaining_to_ship > 0);
       setLineInputs(Object.fromEntries(remainingLines.map((line) => [line.sales_order_line_id, { qty_shipped: '', lot_id: '' }])));
+      setLotsByItemId({});
+      setLotsLoaded(false);
 
       const itemIds = Array.from(new Set(remainingLines.map((line) => line.item_id)));
-      if (itemIds.length === 0) return;
+      if (itemIds.length === 0) {
+        setLotsLoaded(true);
+        return;
+      }
       const { ok, body } = await authedFetch(`/api/lots?item_ids=${itemIds.join(',')}&production_plant_id=${so.production_plant_id}`);
-      if (!ok) return;
+      if (!ok) {
+        setLotsLoaded(true);
+        return;
+      }
       const lots = (body.lots || []) as LotOption[];
       const byItem: Record<number, LotOption[]> = {};
       for (const lot of lots) {
@@ -221,6 +230,7 @@ export default function ShipmentsPage() {
         byItem[lot.item_id].push(lot);
       }
       setLotsByItemId(byItem);
+      setLotsLoaded(true);
       // /api/lots sudah terurut expiry_date terdekat dulu (FEFO) — saran otomatis
       // adalah lot PERTAMA per item, staf bisa ganti manual lewat dropdown.
       setLineInputs((prev) => {
@@ -238,6 +248,7 @@ export default function ShipmentsPage() {
   const closeCreateForm = () => {
     setCreatingForSoId(null);
     setLotsByItemId({});
+    setLotsLoaded(false);
     setLineInputs({});
   };
 
@@ -454,18 +465,25 @@ export default function ShipmentsPage() {
                             type="number"
                             min={0}
                             step="any"
+                            disabled={lotsLoaded && (lotsByItemId[line.item_id] ?? []).length === 0}
                             value={lineInputs[line.sales_order_line_id]?.qty_shipped ?? ''}
                             onChange={(e) => setLineInputs((prev) => ({ ...prev, [line.sales_order_line_id]: { ...prev[line.sales_order_line_id], qty_shipped: e.target.value } }))}
                           />
                         </div>
                         <div>
                           <label className="mb-1 block text-xs text-muted-foreground">Lot (saran FEFO — bisa diganti)</label>
+                          {lotsLoaded && (lotsByItemId[line.item_id] ?? []).length === 0 ? (
+                            <p className="text-xs text-destructive">
+                              Sisa {line.qty_remaining_to_ship} {line.item_base_uom} ini masih BELUM DIKIRIM dari pesanan, TAPI stok fisiknya kosong (0 lot tersedia) — tidak bisa dikirim sampai ada barang masuk untuk item ini di lokasi pabrik SO ini.
+                            </p>
+                          ) : (
                           <Select
+                            disabled={!lotsLoaded}
                             value={lineInputs[line.sales_order_line_id]?.lot_id ?? ''}
                             onValueChange={(value) => setLineInputs((prev) => ({ ...prev, [line.sales_order_line_id]: { ...prev[line.sales_order_line_id], lot_id: value } }))}
                           >
                             <SelectTrigger>
-                              <SelectValue placeholder="Pilih lot..." />
+                              <SelectValue placeholder={lotsLoaded ? 'Pilih lot...' : 'Memuat lot...'} />
                             </SelectTrigger>
                             <SelectContent>
                               {(lotsByItemId[line.item_id] ?? []).map((lot) => (
@@ -476,6 +494,7 @@ export default function ShipmentsPage() {
                               ))}
                             </SelectContent>
                           </Select>
+                          )}
                         </div>
                       </div>
                     ))}

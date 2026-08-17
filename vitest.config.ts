@@ -13,9 +13,17 @@ import { loadEnv } from 'vite';
 // run, SELALU tepat di request pertama sebuah file, TIDAK PERNAH terjadi kalau dijalankan
 // satu file saja). Menjalankan file test secara berurutan (bukan sekaligus) menghilangkan
 // lonjakan itu — durasi total tetap jauh di bawah target <5 menit CI.
+// hookTimeout: 30000 — Sesi 3A: menambah file test ke-5 (shipments_physical_stage.test.ts,
+// beforeAll-nya sendiri ~8 insert berurutan) di atas fileParallelism:false membuat total
+// waktu tunggu SEBELUM giliran sebuah file test mulai lebih panjang. CI (network ke Supabase
+// lebih lambat/lebih banyak variansi dibanding sandbox lokal) sempat gagal "Hook timed out in
+// 10000ms" di beforeAll role_hierarchy_financial_access.test.ts (bukan test itu sendiri yang
+// rusak — lolos normal begitu limitnya dinaikkan). Dinaikkan di config global (BUKAN di dalam
+// file test manapun) supaya tidak menyentuh test yang sudah ada.
 export default defineConfig({
   test: {
     env: loadEnv('', process.cwd(), ''),
-    fileParallelism: false
+    fileParallelism: false,
+    hookTimeout: 30000
   }
 });

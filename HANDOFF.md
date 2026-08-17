@@ -4,6 +4,35 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Sesi — Carbon "DataTable with Toolbar": Toolbar + Modal untuk Semua Form "Tambah Baru" (17 Agu 2026) — SELESAI
+
+Lanjutan dari sesi Carbon Data Table sebelumnya. Permintaan: pindahkan SEMUA form "tambah baru" dari Card/section inline di bawah tabel ke modal yang dipicu tombol di toolbar `DataTable` (bukan cuma spacing/style), naikkan spacing baris tabel, JANGAN ubah logika bisnis/validasi form yang sudah ada — murni pindah LOKASI & WADAH.
+
+**FASE 1 — perluas komponen dasar (`src/components/ui/data-table.tsx`, `src/components/ui/table.tsx`):**
+1. Prop baru `primaryAction?: { label: string; onClick: () => void }` — tombol aksi utama di kanan toolbar (di sebelah kotak pencarian, atau sendirian kalau tabel itu tidak punya pencarian). Toolbar sekarang muncul kalau SALAH SATU dari pencarian/primaryAction diisi (sebelumnya cuma kalau pencarian diisi).
+2. Densitas baris dinaikkan signifikan — `TableHead` `h-8`→`h-12`, `TableCell` `py-1.5`→`py-3`, padding horizontal `px-3`→`px-4` (Carbon "Medium" density, ~48px/baris, sebelumnya setara "Compact" Carbon ~32px). Diukur langsung di browser: header 48px, baris data 61px (dengan teks 2 baris).
+3. Dialog/modal generik (`src/components/ui/dialog.tsx`, Radix-based) SUDAH ADA dari sesi Shipments — dipakai ulang APA ADANYA untuk semua modal baru di bawah, tidak ada implementasi modal baru.
+
+**FASE 2 — audit (dilaporkan, DIKONFIRMASI user sebelum eksekusi):** disurvei semua halaman dengan form "tambah baru" (lewat sub-agent Explore), dikategorikan:
+- **Kategori A** (toolbar+modal): Item, BOM, Routing, Work Order, PO Client, Supplier, PO Supplier, undangan Tim, Gangguan Produksi (ditambahkan atas konfirmasi user, awalnya tidak disebut eksplisit).
+- **Kategori B** (cuma ikut naik density dari FASE 1, TANPA tombol create dipaksakan): Sales Order (dikonfirmasi TIDAK ADA form create — tercipta otomatis dari proses PO Client), sub-tabel "SO belum terkirim" di Shipments (tampilan terfilter dari Sales Order, bukan entitas independen), tabel "Stok Saat Ini" Warehouse (hasil goods receipt/produksi, bukan input manual).
+- **Kasus khusus, dikonfirmasi user**: Karyawan (Employees) — TIDAK disentuh (fitur create-nya memang belum pernah ada sama sekali di app manapun, bukan cuma "belum dipindah" — dicatat sebagai tugas TERPISAH setelah FASE 3, nanti langsung pakai pola toolbar+modal ini). Nested Customer di form PO Client — TETAP sebagai section expand INLINE di dalam modal PO Client yang sama (bukan modal-di-dalam-modal), sesuai keputusan eksplisit user.
+- **Sengaja TIDAK disentuh** (beda pola, bukan "tabel + form di bawahnya"): "Buat Batch" & pencatatan hasil produksi di `WorkOrdersPage`/`ProductionDashboardPage` — aksi nested di dalam panel detail baris yang sudah expand, mirip modal "Proses Pengiriman" Shipments yang memang sengaja dipertahankan.
+
+**FASE 3 — eksekusi bertahap, tiap kelompok diverifikasi lewat browser sebelum lanjut:**
+1. **`WorkOrdersPage`** (contoh pola pertama) — tombol "Buat Work Order" pindah ke toolbar, form (SO/BOM/Routing/plant/qty/prioritas) pindah ke `Dialog`, auto-close saat sukses. Diverifikasi end-to-end: submit sungguhan → `200 OK` → modal tertutup → WO baru muncul di tabel.
+2. **`PurchasingPage`** — KONVERSI dulu (langkah baru ditemukan saat audit): kedua tabel (Supplier, PO Supplier) SEBELUMNYA `<table>` mentah, sekarang `DataTable` penuh (search+pagination+expand-baris untuk detail baris item PO, menggantikan tampilan kartu-bertumpuk lama). Kedua form "tambah baru" pindah ke modal toolbar. Diverifikasi: buat Supplier baru sungguhan → sukses, expand-baris PO menampilkan detail item dengan benar.
+3. **`ItemsPage`, `BomsPage`, `RoutingsPage`, `TeamManagePage`, `ProductionDashboardPage`** — form pindah ke modal toolbar. `ItemsPage` (form ganda create+edit, tombol "Edit" per baris JUGA buka modal yang sama) auto-close saat sukses. **`BomsPage`/`RoutingsPage` SENGAJA TIDAK auto-close saat sukses** — kode aslinya punya alasan teknis terdokumentasi (komentar di `handleSubmit`: `resetForm()` sengaja tidak dipanggil supaya pesan sukses tidak langsung ke-reset oleh React batching) untuk menjaga pesan konfirmasi tetap terlihat; perilaku itu dipertahankan APA ADANYA, modal ditutup manual oleh user. `ProductionDashboardPage`: daftar gangguan produksi (sebelumnya `<div>` list manual) JUGA dikonversi ke `DataTable`, sejalan dengan konversi PurchasingPage. Diverifikasi: submit Item baru sungguhan → sukses, modal tertutup, muncul di tabel.
+4. **`CustomerPurchaseOrdersPage`** — form "Buat PO Client" (multi-section + daftar item dinamis) pindah ke modal toolbar; section "+ Baru" untuk Customer (SUDAH inline sejak awal, tidak perlu restrukturisasi) TETAP expand di dalam modal yang SAMA — dicek langsung: cuma ADA 1 elemen `[role="dialog"]` di halaman saat section Customer dibuka, bukan modal kedua. Diverifikasi: submit PO Client baru sungguhan (pilih client existing, isi baris item) → `200 OK`, modal tertutup, PO baru muncul di tabel.
+
+**Build sukses, `tsc --noEmit` bersih, 33 test tetap lolos di SETIAP kelompok** (dicek ulang berkali-kali, tanpa regresi kumulatif).
+
+**Insiden operasional berulang (bukan bug kode, sama seperti sesi-sesi sebelumnya)**: skrip Playwright beberapa kali menghasilkan `count()` 0 untuk elemen yang sebenarnya ADA — SELALU terjadi tepat setelah `npm run build` + restart dev server (cold-start Turbopack, screenshot pertama kadang menangkap state sebelum hydration selesai) — dikonfirmasi bukan bug aplikasi karena percobaan berikutnya (klik langsung, tanpa cek `count()` dulu) selalu berhasil.
+
+**Belum dikerjakan (di luar cakupan sesi ini, dicatat eksplisit):** sorting kolom (klik header) — masih belum ditambahkan (keputusan sesi Carbon sebelumnya, belum berubah). Fitur create Karyawan — sengaja dilewati, jadi tugas terpisah.
+
+---
+
 ## Sesi 3 — Halaman Publik Bukti Penerimaan (POD) + QR Code di Surat Jalan (17 Agu 2026) — SELESAI
 
 Permintaan: halaman `/pod/[token]` TANPA login sama sekali — client scan QR di Surat Jalan fisik, konfirmasi barang diterima. Ditandai eksplisit sebagai "permukaan paling rawan diserang dari luar di seluruh sistem sejauh ini" dengan STOP CONDITION ketat (berhenti & lapor kalau ada keraguan keamanan, jangan improvisasi).

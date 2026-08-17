@@ -73,7 +73,10 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-8 px-3 text-left align-middle text-xs font-medium uppercase tracking-wide text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+      // Densitas "Medium" Carbon (~48px tinggi baris header) — sebelumnya h-8 (32px,
+      // setara densitas "Compact" Carbon), dinaikkan sesuai umpan balik "tabel terasa
+      // terlalu padat", bukan cuma perubahan kecil.
+      "h-12 px-4 text-left align-middle text-xs font-medium uppercase tracking-wide text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
       className
     )}
     {...props}
@@ -88,7 +91,9 @@ const TableCell = React.forwardRef<
   <td
     ref={ref}
     className={cn(
-      "px-3 py-1.5 align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+      // Sama alasannya dengan TableHead di atas — py-1.5 (12px total) -> py-3 (24px
+      // total), baris data sekarang senapas dengan header yang sudah dilonggarkan.
+      "px-4 py-3 align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
       className
     )}
     {...props}

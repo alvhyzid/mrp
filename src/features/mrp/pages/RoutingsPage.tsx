@@ -9,6 +9,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { canManageBom } from '@/lib/roles';
 
 type RoutingStep = {
@@ -68,6 +69,11 @@ export default function RoutingsPage() {
   const [form, setForm] = useState(emptyForm);
   const [formStatus, setFormStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [formMessage, setFormMessage] = useState('');
+  // FASE 3 (Carbon "DataTable with toolbar") — form tambah/edit Routing pindah ke
+  // modal. TIDAK auto-close saat sukses, sama alasannya dengan BomsPage: handleSubmit
+  // sengaja tidak memanggil resetForm() supaya pesan sukses tetap terlihat; modal
+  // ditutup manual oleh user.
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
 
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
@@ -154,9 +160,11 @@ export default function RoutingsPage() {
   const startCreate = () => {
     setViewingRoutingId(null);
     resetForm();
+    setIsFormModalOpen(true);
   };
 
   const startEdit = (routing: Routing) => {
+    setIsFormModalOpen(true);
     setEditingRoutingId(routing.routing_id);
     setViewingRoutingId(null);
     setForm({
@@ -320,16 +328,9 @@ export default function RoutingsPage() {
     <main className="min-h-screen bg-muted/30 py-10">
       <div className="flex w-full flex-col gap-6 px-6">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardDescription className="uppercase tracking-[0.2em]">Master Data</CardDescription>
-              <CardTitle className="text-2xl">Routing (Alur Produksi)</CardTitle>
-            </div>
-            {canManage ? (
-              <Button size="sm" onClick={startCreate}>
-                Tambah Routing
-              </Button>
-            ) : null}
+          <CardHeader>
+            <CardDescription className="uppercase tracking-[0.2em]">Master Data</CardDescription>
+            <CardTitle className="text-2xl">Routing (Alur Produksi)</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <p className="text-sm text-muted-foreground">
@@ -347,6 +348,7 @@ export default function RoutingsPage() {
                 getSearchText={(routing) => `${routing.item_code ?? ''} ${routing.item_name ?? ''}`}
                 paginated
                 pageSize={15}
+                primaryAction={canManage ? { label: 'Tambah Routing', onClick: startCreate } : undefined}
               />
             )}
           </CardContent>
@@ -399,14 +401,19 @@ export default function RoutingsPage() {
         ) : null}
 
         {canManage ? (
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em]">{editingRoutingId ? 'Ubah Routing' : 'Tambah Routing'}</CardDescription>
-              <CardTitle className="text-xl">
-                {editingRoutingId ? `Edit: ${form.item_id ? itemsById.get(Number(form.item_id))?.item_code : ''}` : 'Buat Routing baru'}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+          <Dialog
+            open={isFormModalOpen}
+            onOpenChange={(open) => {
+              if (!open) {
+                resetForm();
+                setIsFormModalOpen(false);
+              }
+            }}
+          >
+            <DialogContent className="max-w-3xl">
+              <DialogHeader>
+                <DialogTitle>{editingRoutingId ? `Edit: ${form.item_id ? itemsById.get(Number(form.item_id))?.item_code : ''}` : 'Buat Routing baru'}</DialogTitle>
+              </DialogHeader>
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 <label className="flex max-w-sm flex-col gap-1.5">
                   <span className="text-sm font-medium text-foreground">Item</span>
@@ -486,17 +493,22 @@ export default function RoutingsPage() {
                   <Button type="submit" disabled={formStatus === 'pending'}>
                     {formStatus === 'pending' ? 'Menyimpan...' : editingRoutingId ? 'Simpan Perubahan' : 'Buat Routing'}
                   </Button>
-                  {editingRoutingId ? (
-                    <Button type="button" variant="outline" onClick={resetForm}>
-                      Batal
-                    </Button>
-                  ) : null}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      resetForm();
+                      setIsFormModalOpen(false);
+                    }}
+                  >
+                    {formStatus === 'success' ? 'Tutup' : 'Batal'}
+                  </Button>
                 </div>
 
                 {formMessage ? <p className={`text-sm ${formStatus === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>{formMessage}</p> : null}
               </form>
-            </CardContent>
-          </Card>
+            </DialogContent>
+          </Dialog>
         ) : null}
       </div>
     </main>

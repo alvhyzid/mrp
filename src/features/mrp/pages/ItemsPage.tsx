@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { canViewFinancialData, isCompanyLeadership } from '@/lib/roles';
 import { itemTypes, typeLabels, typeBadgeVariant } from '../itemTypeLabels';
 
@@ -61,6 +62,10 @@ export default function ItemsPage() {
   const [form, setForm] = useState(emptyForm);
   const [formStatus, setFormStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [formMessage, setFormMessage] = useState('');
+  // FASE 3 (Carbon "DataTable with toolbar") — form tambah/edit item pindah dari Card
+  // inline ke modal, dipicu tombol toolbar ("Tambah Item") ATAU tombol "Edit" per baris.
+  // Field, validasi, handleSubmit TIDAK diubah, cuma wadahnya.
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
 
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
@@ -132,6 +137,7 @@ export default function ItemsPage() {
   };
 
   const startEdit = (item: Item) => {
+    setIsFormModalOpen(true);
     setEditingItemId(item.item_id);
     setForm({
       item_code: item.item_code,
@@ -200,6 +206,7 @@ export default function ItemsPage() {
     setFormStatus('success');
     setFormMessage(editingItemId ? 'Item berhasil diperbarui.' : 'Item baru berhasil ditambahkan.');
     resetForm();
+    setIsFormModalOpen(false);
     await loadItems();
   };
 
@@ -322,18 +329,26 @@ export default function ItemsPage() {
                 getSearchText={(item) => `${item.item_code} ${item.name}`}
                 paginated
                 pageSize={15}
+                primaryAction={canManage ? { label: 'Tambah Item', onClick: () => { resetForm(); setIsFormModalOpen(true); } } : undefined}
               />
             )}
           </CardContent>
         </Card>
 
         {canManage ? (
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em]">{editingItemId ? 'Ubah Item' : 'Tambah Item'}</CardDescription>
-              <CardTitle className="text-xl">{editingItemId ? `Edit: ${form.item_code}` : 'Tambah item baru'}</CardTitle>
-            </CardHeader>
-            <CardContent>
+          <Dialog
+            open={isFormModalOpen}
+            onOpenChange={(open) => {
+              if (!open) {
+                resetForm();
+                setIsFormModalOpen(false);
+              }
+            }}
+          >
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>{editingItemId ? `Edit: ${form.item_code}` : 'Tambah item baru'}</DialogTitle>
+              </DialogHeader>
               <form onSubmit={handleSubmit} className="grid gap-3 sm:grid-cols-2">
                 <label className="flex flex-col gap-1.5">
                   <span className="text-sm font-medium text-foreground">Kode Item</span>
@@ -468,11 +483,16 @@ export default function ItemsPage() {
                   <Button type="submit" disabled={formStatus === 'pending'}>
                     {formStatus === 'pending' ? 'Menyimpan...' : editingItemId ? 'Simpan Perubahan' : 'Tambah Item'}
                   </Button>
-                  {editingItemId ? (
-                    <Button type="button" variant="outline" onClick={resetForm}>
-                      Batal
-                    </Button>
-                  ) : null}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      resetForm();
+                      setIsFormModalOpen(false);
+                    }}
+                  >
+                    Batal
+                  </Button>
                 </div>
 
                 {formMessage ? (
@@ -481,8 +501,8 @@ export default function ItemsPage() {
                   </p>
                 ) : null}
               </form>
-            </CardContent>
-          </Card>
+            </DialogContent>
+          </Dialog>
         ) : null}
       </div>
     </main>

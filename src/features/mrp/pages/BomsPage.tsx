@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { canManageBom, canViewFinancialData } from '@/lib/roles';
 import { typeLabels, typeBadgeVariant } from '../itemTypeLabels';
 
@@ -95,6 +96,12 @@ export default function BomsPage() {
   const [form, setForm] = useState(emptyForm);
   const [formStatus, setFormStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [formMessage, setFormMessage] = useState('');
+  // FASE 3 (Carbon "DataTable with toolbar") — form tambah/edit BOM pindah ke modal.
+  // TIDAK auto-close saat sukses (beda dari halaman lain) — sengaja mempertahankan
+  // perilaku asli di atas (pesan sukses tetap harus terlihat, resetForm() TIDAK
+  // dipanggil di handleSubmit supaya formMessage tidak ikut ke-reset); modal ditutup
+  // manual oleh user (Batal/X/klik luar), yang barulah memanggil resetForm().
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
 
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
@@ -183,9 +190,11 @@ export default function BomsPage() {
   const startCreate = () => {
     setViewingBomId(null);
     resetForm();
+    setIsFormModalOpen(true);
   };
 
   const startEdit = (bom: Bom) => {
+    setIsFormModalOpen(true);
     setEditingBomId(bom.bom_id);
     setViewingBomId(null);
     setForm({
@@ -408,16 +417,9 @@ export default function BomsPage() {
     <main className="min-h-screen bg-muted/30 py-10">
       <div className="flex w-full flex-col gap-6 px-6">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardDescription className="uppercase tracking-[0.2em]">Master Data</CardDescription>
-              <CardTitle className="text-2xl">BOM (Resep/Komposisi)</CardTitle>
-            </div>
-            {canManage ? (
-              <Button size="sm" onClick={startCreate}>
-                Tambah BOM
-              </Button>
-            ) : null}
+          <CardHeader>
+            <CardDescription className="uppercase tracking-[0.2em]">Master Data</CardDescription>
+            <CardTitle className="text-2xl">BOM (Resep/Komposisi)</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             {bomsError ? <p className="text-sm text-destructive">{bomsError}</p> : null}
@@ -432,6 +434,7 @@ export default function BomsPage() {
                 getSearchText={(bom) => `${bom.parent_item_code ?? ''} ${bom.parent_item_name ?? ''}`}
                 paginated
                 pageSize={15}
+                primaryAction={canManage ? { label: 'Tambah BOM', onClick: startCreate } : undefined}
               />
             )}
           </CardContent>
@@ -505,15 +508,20 @@ export default function BomsPage() {
         ) : null}
 
         {canManage ? (
-          <Card>
-              <CardHeader>
-                <CardDescription className="uppercase tracking-[0.2em]">{editingBomId ? 'Ubah BOM' : 'Tambah BOM'}</CardDescription>
-                <CardTitle className="text-xl">
-                  {editingBomId ? `Edit: ${form.parent_item_id ? itemsById.get(Number(form.parent_item_id))?.item_code : ''}` : 'Buat BOM baru'}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <Dialog
+            open={isFormModalOpen}
+            onOpenChange={(open) => {
+              if (!open) {
+                resetForm();
+                setIsFormModalOpen(false);
+              }
+            }}
+          >
+            <DialogContent className="max-w-3xl">
+              <DialogHeader>
+                <DialogTitle>{editingBomId ? `Edit: ${form.parent_item_id ? itemsById.get(Number(form.parent_item_id))?.item_code : ''}` : 'Buat BOM baru'}</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                   <div className="grid gap-3 sm:grid-cols-3">
                     <label className="flex flex-col gap-1.5">
                       <span className="text-sm font-medium text-foreground">Item Hasil (Induk)</span>
@@ -653,20 +661,25 @@ export default function BomsPage() {
                     <Button type="submit" disabled={formStatus === 'pending'}>
                       {formStatus === 'pending' ? 'Menyimpan...' : editingBomId ? 'Simpan Perubahan' : 'Buat BOM'}
                     </Button>
-                    {editingBomId ? (
-                      <Button type="button" variant="outline" onClick={resetForm}>
-                        Batal
-                      </Button>
-                    ) : null}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        resetForm();
+                        setIsFormModalOpen(false);
+                      }}
+                    >
+                      {formStatus === 'success' ? 'Tutup' : 'Batal'}
+                    </Button>
                   </div>
 
                   {formMessage ? (
                     <p className={`text-sm ${formStatus === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>{formMessage}</p>
                   ) : null}
                 </form>
-              </CardContent>
-            </Card>
-          ) : null}
+            </DialogContent>
+          </Dialog>
+        ) : null}
       </div>
     </main>
   );

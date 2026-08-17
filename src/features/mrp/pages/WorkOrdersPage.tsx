@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { canManageWorkOrder } from '@/lib/roles';
 import { workOrderPriorities } from '../server/workOrderValidation';
 
@@ -145,6 +146,10 @@ export default function WorkOrdersPage() {
   });
   const [formStatus, setFormStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [formMessage, setFormMessage] = useState('');
+  // FASE 3 (Carbon "DataTable with toolbar") — form "Buat Work Order" pindah dari
+  // Card inline di bawah tabel ke modal, dipicu tombol di toolbar DataTable. Field,
+  // validasi, dan handleSubmit di bawah TIDAK diubah sama sekali, cuma wadahnya.
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
@@ -276,6 +281,7 @@ export default function WorkOrdersPage() {
     setFormStatus('success');
     setFormMessage('Work Order berhasil dibuat.');
     setForm({ sales_order_id: '', sales_order_line_id: '', bom_id: '', routing_id: '', production_plant_id: '', planned_qty: '', priority: 'normal', scheduled_start: '', scheduled_end: '' });
+    setIsCreateModalOpen(false);
     await loadWorkOrders();
   };
 
@@ -479,6 +485,7 @@ export default function WorkOrdersPage() {
                 getSearchText={(wo) => `${wo.item_code ?? ''} ${wo.item_name ?? ''} ${wo.so_number ?? ''}`}
                 paginated
                 pageSize={15}
+                primaryAction={canManage ? { label: 'Buat Work Order', onClick: () => setIsCreateModalOpen(true) } : undefined}
               />
             )}
           </CardContent>
@@ -692,13 +699,12 @@ export default function WorkOrdersPage() {
         ) : null}
 
         {canManage ? (
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em]">Buat WO</CardDescription>
-              <CardTitle className="text-xl">Buat Work Order</CardTitle>
-              <CardDescription>SO opsional — kosongkan untuk WO produksi WIP di muka yang belum terikat pesanan customer (mis. Base Gelatin).</CardDescription>
-            </CardHeader>
-            <CardContent>
+          <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+            <DialogContent className="max-w-3xl">
+              <DialogHeader>
+                <DialogTitle>Buat Work Order</DialogTitle>
+                <DialogDescription>SO opsional — kosongkan untuk WO produksi WIP di muka yang belum terikat pesanan customer (mis. Base Gelatin).</DialogDescription>
+              </DialogHeader>
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="flex flex-col gap-1.5">
@@ -818,14 +824,19 @@ export default function WorkOrdersPage() {
                   </label>
                 </div>
 
-                <Button type="submit" disabled={formStatus === 'pending'} className="w-fit">
-                  {formStatus === 'pending' ? 'Menyimpan...' : 'Buat Work Order'}
-                </Button>
+                <div className="flex items-center gap-3">
+                  <Button type="submit" disabled={formStatus === 'pending'} className="w-fit">
+                    {formStatus === 'pending' ? 'Menyimpan...' : 'Buat Work Order'}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setIsCreateModalOpen(false)}>
+                    Batal
+                  </Button>
+                </div>
 
                 {formMessage ? <p className={`text-sm ${formStatus === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>{formMessage}</p> : null}
               </form>
-            </CardContent>
-          </Card>
+            </DialogContent>
+          </Dialog>
         ) : null}
       </div>
     </main>

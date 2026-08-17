@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { canManageCustomerPo, canApproveDepartment, isCompanyLeadership } from '@/lib/roles';
 
 const paymentTermsOptions = ['full', 'tempo'];
@@ -126,6 +127,12 @@ export default function CustomerPurchaseOrdersPage() {
   const [newCustomer, setNewCustomer] = useState({ name: '', customer_type: 'company', contact_info: '' });
   const [newCustomerStatus, setNewCustomerStatus] = useState<'idle' | 'pending' | 'error'>('idle');
   const [newCustomerMessage, setNewCustomerMessage] = useState('');
+
+  // FASE 3 (Carbon "DataTable with toolbar") — form "Buat PO client baru" pindah ke
+  // modal toolbar. Customer TETAP sebagai section expand INLINE di dalam modal yang
+  // SAMA (showNewCustomer, sudah begitu sejak awal) — BUKAN modal terpisah/modal-di-
+  // dalam-modal, sesuai keputusan eksplisit. Validasi/handleSubmit TIDAK diubah.
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
 
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
@@ -254,6 +261,7 @@ export default function CustomerPurchaseOrdersPage() {
     setFormMessage('PO client berhasil dibuat. 3 approval department otomatis dibuat (status pending).');
     resetForm();
     setFormIdempotencyKey(crypto.randomUUID());
+    setIsFormModalOpen(false);
     await loadPurchaseOrders();
   };
 
@@ -397,6 +405,7 @@ export default function CustomerPurchaseOrdersPage() {
                 getSearchText={(po) => `${po.po_number} ${po.customer_name ?? ''}`}
                 paginated
                 pageSize={15}
+                primaryAction={canManagePo ? { label: 'Buat PO Client', onClick: () => setIsFormModalOpen(true) } : undefined}
               />
             )}
           </CardContent>
@@ -540,12 +549,17 @@ export default function CustomerPurchaseOrdersPage() {
         ) : null}
 
         {canManagePo ? (
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em]">Tambah PO</CardDescription>
-              <CardTitle className="text-xl">Buat PO client baru</CardTitle>
-            </CardHeader>
-            <CardContent>
+          <Dialog
+            open={isFormModalOpen}
+            onOpenChange={(open) => {
+              setIsFormModalOpen(open);
+              if (!open) resetForm();
+            }}
+          >
+            <DialogContent className="max-w-3xl">
+              <DialogHeader>
+                <DialogTitle>Buat PO client baru</DialogTitle>
+              </DialogHeader>
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="flex flex-col gap-1.5">
@@ -685,14 +699,19 @@ export default function CustomerPurchaseOrdersPage() {
                   ))}
                 </div>
 
-                <Button type="submit" disabled={formStatus === 'pending'} className="w-fit">
-                  {formStatus === 'pending' ? 'Menyimpan...' : 'Buat PO Client'}
-                </Button>
+                <div className="flex items-center gap-3">
+                  <Button type="submit" disabled={formStatus === 'pending'}>
+                    {formStatus === 'pending' ? 'Menyimpan...' : 'Buat PO Client'}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setIsFormModalOpen(false)}>
+                    Batal
+                  </Button>
+                </div>
 
                 {formMessage ? <p className={`text-sm ${formStatus === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>{formMessage}</p> : null}
               </form>
-            </CardContent>
-          </Card>
+            </DialogContent>
+          </Dialog>
         ) : null}
       </div>
     </main>

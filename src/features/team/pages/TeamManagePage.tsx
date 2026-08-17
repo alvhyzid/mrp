@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { COMPANY_ROLES, INVITABLE_ROLES } from '@/lib/roles';
 
 const inviteRoles = INVITABLE_ROLES;
@@ -44,6 +45,9 @@ export default function TeamManagePage() {
   const [inviteRole, setInviteRole] = useState(inviteRoles[0]);
   const [inviteStatus, setInviteStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [inviteMessage, setInviteMessage] = useState('');
+  // FASE 3 (Carbon "DataTable with toolbar") — form undangan pindah dari Card inline
+  // ke modal toolbar. Validasi/handleInvite TIDAK diubah, cuma wadahnya.
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
 
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
@@ -162,6 +166,7 @@ export default function TeamManagePage() {
     setInviteStatus('success');
     setInviteMessage('Undangan berhasil dikirim. Email anggota telah diundang.');
     setInviteEmail('');
+    setIsInviteModalOpen(false);
     await loadMembers();
   };
 
@@ -291,18 +296,31 @@ export default function TeamManagePage() {
             {membersLoading ? (
               <p className="text-sm text-muted-foreground">Memuat anggota...</p>
             ) : (
-              <DataTable columns={columns} data={members} emptyMessage="Belum ada anggota tim." />
+              <DataTable
+                columns={columns}
+                data={members}
+                emptyMessage="Belum ada anggota tim."
+                primaryAction={{ label: 'Undang Anggota Baru', onClick: () => setIsInviteModalOpen(true) }}
+              />
             )}
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardDescription className="uppercase tracking-[0.2em]">Undang Tim</CardDescription>
-            <CardTitle className="text-xl">Undang anggota baru</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleInvite} className="grid gap-3 sm:grid-cols-[1fr_180px_auto] sm:items-end">
+        <Dialog
+          open={isInviteModalOpen}
+          onOpenChange={(open) => {
+            setIsInviteModalOpen(open);
+            if (!open) {
+              setInviteStatus('idle');
+              setInviteMessage('');
+            }
+          }}
+        >
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Undang anggota baru</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleInvite} className="flex flex-col gap-4">
               <label className="flex flex-col gap-1.5">
                 <span className="text-sm font-medium text-foreground">Email anggota</span>
                 <Input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} required />
@@ -324,18 +342,21 @@ export default function TeamManagePage() {
                 </Select>
               </label>
 
-              <Button type="submit" disabled={inviteStatus === 'pending'}>
-                {inviteStatus === 'pending' ? 'Mengirim...' : 'Kirim Undangan'}
-              </Button>
+              <div className="flex items-center gap-3">
+                <Button type="submit" disabled={inviteStatus === 'pending'}>
+                  {inviteStatus === 'pending' ? 'Mengirim...' : 'Kirim Undangan'}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setIsInviteModalOpen(false)}>
+                  Batal
+                </Button>
+              </div>
 
               {inviteMessage ? (
-                <p className={`sm:col-span-3 text-sm ${inviteStatus === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>
-                  {inviteMessage}
-                </p>
+                <p className={`text-sm ${inviteStatus === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>{inviteMessage}</p>
               ) : null}
             </form>
-          </CardContent>
-        </Card>
+          </DialogContent>
+        </Dialog>
       </div>
     </main>
   );

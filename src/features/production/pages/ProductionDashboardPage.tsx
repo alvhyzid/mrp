@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { canAccessProductionDashboard, canManageProductionDisruptions } from '@/lib/roles';
 
 const statusLabels: Record<string, string> = { planned: 'Direncanakan', in_progress: 'Berjalan', paused: 'Dijeda', completed: 'Selesai', cancelled: 'Batal' };
@@ -75,6 +76,11 @@ export default function ProductionDashboardPage() {
   const [disruptionFormStatus, setDisruptionFormStatus] = useState<'idle' | 'saving' | 'error'>('idle');
   const [disruptionFormMessage, setDisruptionFormMessage] = useState('');
   const [resolvingId, setResolvingId] = useState<number | null>(null);
+  // FASE 3 (Carbon "DataTable with toolbar") — form "Catat Gangguan" pindah ke modal
+  // toolbar; daftar gangguan (sebelumnya list <div> manual) dikonversi ke DataTable
+  // sejalan dengan konversi serupa di PurchasingPage. handleCreateDisruption TIDAK
+  // diubah, cuma tambah penutupan modal saat sukses.
+  const [isDisruptionModalOpen, setIsDisruptionModalOpen] = useState(false);
 
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [woError, setWoError] = useState('');
@@ -193,6 +199,7 @@ export default function ProductionDashboardPage() {
     setDisruptionFormStatus('idle');
     setDisruptionFormMessage('');
     setDisruptionForm(emptyDisruptionForm);
+    setIsDisruptionModalOpen(false);
     await Promise.all([loadDisruptions(), loadWorkOrders()]);
   };
 
@@ -338,6 +345,46 @@ export default function ProductionDashboardPage() {
 
   const expandedWo = workOrders.find((wo) => wo.work_order_id === expandedWoId) ?? null;
 
+  const disruptionColumns = useMemo<ColumnDef<Disruption>[]>(
+    () => [
+      { id: 'type', header: 'Jenis', cell: ({ row }) => <span className="font-medium text-foreground">{disruptionTypeLabels[row.original.disruption_type] ?? row.original.disruption_type}</span> },
+      {
+        id: 'scope',
+        header: 'Cakupan',
+        cell: ({ row }) => (
+          <Badge variant={row.original.work_center_id ? 'warning' : 'critical'}>{row.original.work_center_id ? (row.original.work_center_name ?? 'Work Center') : 'Menyeluruh 1 Plant'}</Badge>
+        )
+      },
+      { id: 'plant', header: 'Lokasi', cell: ({ row }) => row.original.production_plant_name ?? '-' },
+      { id: 'started_at', header: 'Mulai', cell: ({ row }) => formatDateTimeShort(row.original.started_at) },
+      {
+        id: 'context',
+        header: 'Keterangan',
+        cell: ({ row }) => (
+          <span className="text-xs text-muted-foreground">
+            {row.original.work_order_item_code ? `WO ${row.original.work_order_item_code}` : ''}
+            {row.original.work_order_item_code && row.original.description ? ' · ' : ''}
+            {row.original.description ?? ''}
+          </span>
+        )
+      },
+      {
+        id: 'actions',
+        header: 'Aksi',
+        cell: ({ row }) =>
+          canManageProductionDisruptions(role) ? (
+            <Button size="sm" variant="outline" disabled={resolvingId === row.original.production_disruption_id} onClick={() => handleResolveDisruption(row.original.production_disruption_id)}>
+              {resolvingId === row.original.production_disruption_id ? '...' : 'Tandai Selesai'}
+            </Button>
+          ) : (
+            <span className="text-xs text-muted-foreground">-</span>
+          )
+      }
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [role, resolvingId]
+  );
+
   if (checkingAccess) {
     return (
       <main className="min-h-screen bg-muted/30 py-16">
@@ -385,100 +432,90 @@ export default function ProductionDashboardPage() {
               Kosongkan &quot;Work Center&quot; untuk gangguan MENYELURUH 1 lokasi pabrik (mis. listrik padam se-pabrik) — semua Work Order aktif di lokasi itu otomatis ter-flag &quot;Terhambat&quot;, dan otomatis kembali &quot;Siap&quot;/&quot;Berjalan&quot; begitu ditandai selesai.
             </p>
 
-            {canManageProductionDisruptions(role) ? (
-              <div className="grid grid-cols-2 gap-3 border-b pb-4 sm:grid-cols-4">
-                <div>
-                  <label className="mb-1 block text-xs text-muted-foreground">Jenis Gangguan</label>
-                  <Select value={disruptionForm.disruption_type} onValueChange={(v) => setDisruptionForm((prev) => ({ ...prev, disruption_type: v }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(disruptionTypeLabels).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs text-muted-foreground">Lokasi Pabrik</label>
-                  <Select value={disruptionForm.production_plant_id} onValueChange={(v) => setDisruptionForm((prev) => ({ ...prev, production_plant_id: v, work_center_id: '' }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Pilih lokasi..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {plants.map((p) => (
-                        <SelectItem key={p.production_plant_id} value={String(p.production_plant_id)}>
-                          {p.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs text-muted-foreground">Work Center (opsional)</label>
-                  <Select value={disruptionForm.work_center_id || '__none__'} onValueChange={(v) => setDisruptionForm((prev) => ({ ...prev, work_center_id: v === '__none__' ? '' : v }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="(Menyeluruh)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">(Menyeluruh — semua Work Center)</SelectItem>
-                      {workCenterOptions
-                        .filter((wc) => !disruptionForm.production_plant_id || String(wc.production_plant_id) === disruptionForm.production_plant_id)
-                        .map((wc) => (
-                          <SelectItem key={wc.work_center_id} value={String(wc.work_center_id)}>
-                            {wc.name}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs text-muted-foreground">Keterangan (opsional)</label>
-                  <Input value={disruptionForm.description} onChange={(e) => setDisruptionForm((prev) => ({ ...prev, description: e.target.value }))} />
-                </div>
-                <div className="col-span-2 sm:col-span-4">
-                  {disruptionFormMessage ? <p className="mb-2 text-sm text-destructive">{disruptionFormMessage}</p> : null}
-                  <Button size="sm" disabled={disruptionFormStatus === 'saving'} onClick={handleCreateDisruption}>
-                    {disruptionFormStatus === 'saving' ? 'Menyimpan...' : 'Catat Gangguan'}
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-
             {disruptionsError ? <p className="text-sm text-destructive">{disruptionsError}</p> : null}
             {disruptionsLoading ? (
               <p className="text-sm text-muted-foreground">Memuat...</p>
-            ) : disruptions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Tidak ada gangguan produksi yang sedang terbuka.</p>
             ) : (
-              <div className="flex flex-col gap-2">
-                {disruptions.map((d) => (
-                  <div key={d.production_disruption_id} className="flex items-center justify-between border-b pb-2 last:border-0">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-foreground">{disruptionTypeLabels[d.disruption_type] ?? d.disruption_type}</span>
-                        <Badge variant={d.work_center_id ? 'warning' : 'critical'}>{d.work_center_id ? (d.work_center_name ?? 'Work Center') : 'Menyeluruh 1 Plant'}</Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {d.production_plant_name} · Mulai {formatDateTimeShort(d.started_at)}
-                        {d.work_order_item_code ? ` · WO ${d.work_order_item_code}` : ''}
-                        {d.description ? ` · ${d.description}` : ''}
-                      </p>
-                    </div>
-                    {canManageProductionDisruptions(role) ? (
-                      <Button size="sm" variant="outline" disabled={resolvingId === d.production_disruption_id} onClick={() => handleResolveDisruption(d.production_disruption_id)}>
-                        {resolvingId === d.production_disruption_id ? '...' : 'Tandai Selesai'}
-                      </Button>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
+              <DataTable
+                columns={disruptionColumns}
+                data={disruptions}
+                emptyMessage="Tidak ada gangguan produksi yang sedang terbuka."
+                primaryAction={canManageProductionDisruptions(role) ? { label: 'Catat Gangguan', onClick: () => setIsDisruptionModalOpen(true) } : undefined}
+              />
             )}
           </CardContent>
         </Card>
+
+        <Dialog open={isDisruptionModalOpen} onOpenChange={setIsDisruptionModalOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Catat Gangguan Produksi</DialogTitle>
+            </DialogHeader>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">Jenis Gangguan</label>
+                <Select value={disruptionForm.disruption_type} onValueChange={(v) => setDisruptionForm((prev) => ({ ...prev, disruption_type: v }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(disruptionTypeLabels).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">Lokasi Pabrik</label>
+                <Select value={disruptionForm.production_plant_id} onValueChange={(v) => setDisruptionForm((prev) => ({ ...prev, production_plant_id: v, work_center_id: '' }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih lokasi..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {plants.map((p) => (
+                      <SelectItem key={p.production_plant_id} value={String(p.production_plant_id)}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">Work Center (opsional)</label>
+                <Select value={disruptionForm.work_center_id || '__none__'} onValueChange={(v) => setDisruptionForm((prev) => ({ ...prev, work_center_id: v === '__none__' ? '' : v }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="(Menyeluruh)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">(Menyeluruh — semua Work Center)</SelectItem>
+                    {workCenterOptions
+                      .filter((wc) => !disruptionForm.production_plant_id || String(wc.production_plant_id) === disruptionForm.production_plant_id)
+                      .map((wc) => (
+                        <SelectItem key={wc.work_center_id} value={String(wc.work_center_id)}>
+                          {wc.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">Keterangan (opsional)</label>
+                <Input value={disruptionForm.description} onChange={(e) => setDisruptionForm((prev) => ({ ...prev, description: e.target.value }))} />
+              </div>
+            </div>
+            {disruptionFormMessage ? <p className="text-sm text-destructive">{disruptionFormMessage}</p> : null}
+            <div className="flex items-center gap-3">
+              <Button disabled={disruptionFormStatus === 'saving'} onClick={handleCreateDisruption}>
+                {disruptionFormStatus === 'saving' ? 'Menyimpan...' : 'Catat Gangguan'}
+              </Button>
+              <Button variant="outline" onClick={() => setIsDisruptionModalOpen(false)}>
+                Batal
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <Card>
           <CardHeader>

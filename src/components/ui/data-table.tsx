@@ -29,6 +29,12 @@ interface DataTableProps<TData, TValue> {
   // pencarian, dipasang selektif di tabel yang datanya realistis bisa melebihi 1 layar.
   paginated?: boolean;
   pageSize?: number;
+  // Tombol aksi utama toolbar (Carbon "DataTable with toolbar",
+  // https://carbondesignsystem.com/components/data-table/usage/#toolbar) — dipakai
+  // buat "tambah baru" yang sebelumnya form/card inline di bawah tabel. Opsional:
+  // toolbar tetap tampil tanpa tombol ini kalau tidak diisi (mis. tabel yang cuma
+  // butuh pencarian, tanpa aksi "tambah baru").
+  primaryAction?: { label: string; onClick: () => void };
 }
 
 // Baris selang-seling (Carbon "zebra striping") — SATU gaya baku dipakai SEMUA
@@ -48,7 +54,8 @@ export function DataTable<TData, TValue>({
   searchPlaceholder,
   getSearchText,
   paginated = false,
-  pageSize = 10
+  pageSize = 10,
+  primaryAction
 }: DataTableProps<TData, TValue>) {
   const [searchTerm, setSearchTerm] = useState('');
   const [pageIndex, setPageIndex] = useState(0);
@@ -76,27 +83,39 @@ export function DataTable<TData, TValue>({
     getCoreRowModel: getCoreRowModel()
   });
 
-  const showToolbar = !!searchPlaceholder && !!getSearchText;
+  const searchEnabled = !!searchPlaceholder && !!getSearchText;
+  const showToolbar = searchEnabled || !!primaryAction;
 
   return (
     <div className="flex flex-col gap-0">
       {showToolbar ? (
-        <div className="relative border border-b-0">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="text"
-            name="data-table-search"
-            autoComplete="off"
-            autoCorrect="off"
-            spellCheck={false}
-            value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setPageIndex(0);
-            }}
-            placeholder={searchPlaceholder}
-            className="border-0 pl-9"
-          />
+        <div className="flex h-12 items-stretch gap-0 border border-b-0">
+          {searchEnabled ? (
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="text"
+                name="data-table-search"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setPageIndex(0);
+                }}
+                placeholder={searchPlaceholder}
+                className="h-full border-0 pl-9"
+              />
+            </div>
+          ) : (
+            <div className="flex-1 bg-background" />
+          )}
+          {primaryAction ? (
+            <Button className="h-full rounded-none px-4" onClick={primaryAction.onClick}>
+              {primaryAction.label}
+            </Button>
+          ) : null}
         </div>
       ) : null}
       <div className="overflow-hidden rounded-none border">

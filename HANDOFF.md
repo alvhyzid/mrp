@@ -4,6 +4,74 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## GELOMBANG 1 & 2 — Seed Real Case + Implementasi Margin v1 (18 Agu 2026)
+
+Lanjutan GELOMBANG 0 (di bawah) setelah pemilik produk melengkapi 2 blocker data yang dicatat sebelumnya: `docs/data-produksi-itm-ekstrak.md` (ekstrak `DATA_PRODUKSI_PT_ITM.pdf` + koreksi pemilik produk — 33 karyawan, SOP gummy/serbuk, 28 harga bahan baku individual, harga kemasan final). Kedua angka premix serbuk (PMSW/PMAC/PMFL/PMVITC/PMSRH) **diverifikasi cocok PERSIS** dengan agregat `Bahan/g` di spec §5 Contoh 2 sebelum dipakai (mis. PMSW: 50g maltodextrin×Rp20 + 20g stevia×Rp900 + 30g sucralose×Rp40 = Rp20.200/100g = **Rp202,00/g**, sama persis dengan tabel spec) — bukti data ekstrak konsisten dengan spec, bukan sekadar dipercaya begitu saja.
+
+### GELOMBANG 1 — SEBAGIAN BESAR SELESAI, 2 hal SENGAJA belum (lihat "BLOCKER BARU" di bawah)
+
+Script idempotent `scripts/seed-realcase-itm.js` (jalankan `node scripts/seed-realcase-itm.js`, dev server harus hidup di port 3000 karena bagian PO client lewat API asli, bukan insert DB langsung):
+
+1. **28 item bahan baku** + harga (`items.standard_cost`, per gram/ml dari harga/kg ekstrak §4), **10 item kemasan** (item lama dikoreksi harganya, item baru dibuat — botol PET N200, label, inner/outer box, stiker segel, karton gummy isi 27, sachet, box isi 14, plastic wrap, karton serbuk isi 42).
+2. **BOM lengkap & TERVERIFIKASI**: Premix Gelatin (WIP baru `WIP-PREMIX-GELATIN-ZALA`, 3 bahan) dan Gummy Zala (FG baru `FG-GUMMY-ZALA-N200`, 14 bahan + 6 baris kemasan, per 1 botol) — SEMUA rasio & harga dari spec §5 Contoh 1, diverifikasi cocok lewat acceptance test (lihat GELOMBANG 2 di bawah). 5 premix serbuk (`PMSW001ITM`/`PMAC001ITM`/`PMFLV001ITM` dikoreksi dari BOM fiktif lama, `PM-VITC-001ITM`/`PM-SRH-001ITM` baru) — rasio dari spec, harga dari ekstrak, **cocok persis** dengan agregat spec (lihat verifikasi di atas).
+3. **Routing**: Premix Gelatin (1 langkah, wait 12 jam), Gummy Zala (9 langkah dari ekstrak §2 Cooking→Pengepakan, wait Setting 1 jam + Curing 3 hari sesuai SOP), 5 premix serbuk (1 langkah "Mixing Premix" masing-masing). **`active_duration_minutes` SEMUA berlabel ESTIMASI_MANUAL** (K8) — ekstrak eksplisit bilang PDF tidak beri angka durasi aktif, jadi diisi estimasi kasar sesuai instruksi ("estimasi kasar BERLABEL", bukan blocker).
+4. **`production_standards`** (tabel baru, pola K8): yield_percentage & unit_per_batch untuk Gummy Zala (85%, 51 botol/batch) dan Box Serbuk (95%, 226,19 box/batch), **batches_per_day=5** untuk Gummy Zala (dari ekstrak "kapasitas pipeline... 5 batch gummy/hari").
+5. **33 karyawan** persis daftar ekstrak §1 (nama, jabatan, department, gaji/skema) — idempotent by (name, position), diverifikasi tidak dobel setelah run ulang.
+6. **Konfigurasi biaya** (`company_settings`): `labor_costing_method=labor_log`, `scrap_valuation=zero`, `overhead_allocation=off`, `monthly_overhead_baseline=60500000`, `work_calendar_weekday_hours=7`, `work_calendar_saturday_hours=5`, `standard_hours_per_month=173.3333`.
+7. **Customer PT Sastro Media + 2 PO REAL lewat API RESMI** (bukan insert status langsung) — SAS001 (10 Agu→10 Sep, 20.000 botol Gummy Zala @ Rp108.000) dan SAS005 (12 Agu→12 Sep, 10.000 box Drinkme @ Rp33.000): create → approve 3 department (finance/ppic/manager, akun debug approver) → Process→SO, semua via `POST /api/customer-purchase-orders`, `/approve`, `/process` sungguhan. Hasil: SO `003/8-ITM/2026` & `004/8-ITM/2026`, status `confirmed`.
+8. **Stok**: seluruh bahan baku baru = 0 (tidak ada lot dibuat). Supplier "Vendor China (Botol PET)", PO 30.500 pcs Botol PET N200, `order_date` 17 Agu, `expected_date` **22 Agu 2026**, status `ordered` (belum diterima) — persis skenario real case.
+
+**BLOCKER BARU ditemukan saat eksekusi (dicatat di sini, sesuai protokol "catat & lewati"):**
+
+1. **Resep top-level Drinkme Lemon (item `PMBX001ITM`) TIDAK bisa dibangun** — spec §5 Contoh 2 cuma memberi AGREGAT biaya per premix (mis. PMSW Rp203,1538/g) dan 3 kontributor terbesar batch (PMFL/sorbitol powder/psylium), TIDAK memberi rasio LENGKAP berapa gram tiap 1 dari 5 premix + bahan curah (sorbitol powder/psylium/inulin/dll) per 1 box output. Ekstrak §3 (SOP 12 proses) juga cuma menjelaskan URUTAN PROSES, bukan rasio resep. BOM lama (fiktif, dari `scripts/seed-debug-powder-drink.js`, komentarnya sendiri bilang "data UJI bukan resep asli") **DIBIARKAN APA ADANYA** — tidak ditimpa dengan angka karangan. Nama item `PMBX001ITM`/`PMSC001ITM` TIDAK diubah brandingnya ke "Drinkme Lemon" (masih generik) karena BOM-nya sendiri belum benar.
+   **Yang dibutuhkan:** rasio resep top-level Drinkme (gram tiap 5 premix + bahan curah lain per 1 box isi 14 sachet, atau per 1 sachet).
+2. **Pembersihan data demo lama (poin 8 instruksi asli) BELUM dijalankan** — environment kerja ini **tidak punya Docker** (dicoba ulang: `pg_dump` langsung tidak ada di PATH, dan bahkan `supabase db dump --linked --data-only` — versi yang seharusnya tidak butuh Docker karena connect ke remote — TETAP gagal dengan `LegacyDockerRunError`, CLI Supabase selalu shell-out ke pg_dump lewat container terlepas dari target lokal/remote). Syarat WAJIB instruksi asli ("pg_dump backup dulu, staging dulu, baru dev") tidak bisa dipenuhi jujur dari sini. Data real-case baru TETAP ADITIF (tidak menghapus apa pun) — demo lama & data baru berdampingan untuk sementara.
+   **Yang dibutuhkan:** jalankan `supabase db dump --linked --data-only -f backup.sql` dari environment YANG PUNYA Docker Desktop (mesin lokal Anda, atau CI runner) sebagai backup, baru beri lampu hijau untuk pembersihan.
+
+### GELOMBANG 2 — Implementasi Margin v1 — SELESAI (inti), acceptance test 4/4 lulus dengan angka literal
+
+**1. Biaya lot hasil produksi** (`recordWorkOrderOutput.ts`, diperluas) — saat "Catat Hasil Produksi" bikin lot output baru:
+- `lots.unit_cost` = (Σ bahan NON-KEMASAN dari `work_order_consumption` × `unit_cost` lot yang dipakai + Σ biaya SDM batch) ÷ qty output UTAMA.
+- **`lots.packaging_cost`** (kolom baru) = Σ bahan KEMASAN (item `type='packaging'`) dari batch yang sama ÷ qty output utama — **DIPISAH dari `unit_cost`**, koreksi penting: verifikasi ulang terhadap spec §5 Contoh 1 menunjukkan spec menampilkan & menghitung "Biaya produksi per botol" (Rp22.891,33) dan "Kemasan per botol" (Rp8.829,63) sebagai **2 ANGKA TERPISAH** (baru dijumlah di langkah Margin, rumus §3), BUKAN 1 angka gabungan seperti asumsi awal GELOMBANG 0A. Mekanisme konsumsi kemasan (GELOMBANG 0A, `work_order_consumption`) tetap TIDAK berubah — cuma bagaimana `unit_cost` lot DIHITUNG dari konsumsi itu yang dikoreksi.
+- reprocessable_waste/disposed_waste: `unit_cost=0, packaging_cost=0` (K7).
+- Biaya SDM dihitung lewat `compute_production_batch_labor_cost()` (fungsi DB baru, TANPA gate JWT — dipanggil endpoint yang jalan lewat service-role) — SATU sumber kebenaran yang sama dipakai fungsi tampilan.
+
+**2. Labor log** — **DITEMUKAN: sebelum ini TIDAK ADA satu pun endpoint yang menulis ke `work_order_assignments`** (tabel & fungsi agregat WO-level sudah ada dari sesi lama, tapi tidak pernah dipakai). Dibangun dari nol:
+- `POST /api/work-orders/labor-log` (`recordLaborLog.ts`) — catat `actual_hours`/`qty_produced`/`work_date` per (batch, karyawan), upsert (1 baris per orang per batch).
+- `work_order_assignments.work_date` (kolom baru) — dibutuhkan supaya tarif PHL/harian tahu hari itu Sabtu atau bukan (K4).
+- **Bug presisi ditemukan & diperbaiki**: `actual_hours`/`scheduled_hours` sebelumnya `numeric(6,2)` — MEMBULATKAN jam kerja saat DISIMPAN (bukan cuma tampilan), pelanggaran K10 nyata (ditemukan lewat acceptance test: "20 menit" premix tersimpan jadi 0,33 jam bukan 0,3333, selisih ~Rp38 di batch nyata). Diperlebar ke `numeric(9,4)`.
+- `get_production_batch_labor_cost_total()` (TOTAL, akses `company_admin`/`general_manager`/`finance_manager`/HR) dan `get_production_batch_labor_cost_detail()` (RINCIAN PER-ORANG, akses **company_admin SAJA** — K1 "Aturan tampilan": GM/finance cuma lihat total) — `GET /api/production-batches/[batchId]/labor-cost`.
+
+**3. Margin** — `get_sales_order_margin()` (per SO) & `get_monthly_operating_profit()` (bulanan): `biaya = qty_shipped × (lots.unit_cost + lots.packaging_cost)`, `margin = revenue − biaya`. **DIHITUNG DARI DATA YANG ADA** (`shipment_lines`/`lots`), tidak ada tabel baru untuk margin itu sendiri. Akses `canViewFinancialData` (company_admin/GM/finance_manager) — `GET /api/sales-orders/[salesOrderId]/margin`, `GET /api/reports/monthly-operating-profit?year=&month=`.
+
+**4. Acceptance test literal — `tests/margin_v1_acceptance.test.ts`, 4/4 LULUS:**
+- **Contoh 1a & 1b (Premix Gelatin + Gummy Zala) — END-TO-END lewat operasi DB SUNGGUHAN** (fixture company terisolasi, insert lot/`work_order_consumption`/`work_order_assignments` sungguhan + RPC produksi asli `compute_production_batch_labor_cost`) — total premix Rp166.156,23 ✓, Rp80,5922/g ✓, bahan gummy Rp997.814,95 ✓, SDM Rp169.642,86 ✓, Rp22.891,33/botol ✓, kemasan Rp8.829,63/botol ✓, margin Rp76.279,04/botol ✓. Kuantitas bahan diturunkan presisi penuh dari (subtotal spec ÷ harga) — BUKAN dari kolom kuantitas yang sudah dibulatkan 2 desimal di tabel spec — supaya reproduksi tidak kena efek berantai pembulatan tampilan.
+- **Contoh 2 (serbuk Drinkme) & Contoh 3 (agregasi) — FORMULA-LEVEL** (bukan lewat DB sungguhan) — karena resep top-level Drinkme masih blocked (lihat atas), test ini memvalidasi RUMUS (pembagian biaya/output, margin, agregasi − overhead) memakai angka literal yang MEMANG diberikan spec, bukan seluruh pipeline produksi sungguhan.
+
+**5. Deteksi Konflik Perencanaan** — `getPlanningFeasibility.ts`, `GET /api/sales-order-lines/[salesOrderLineId]/planning-feasibility`: kebutuhan batch (qty÷unit_per_batch), kapasitas (batches_per_day), hari kerja tersedia (kalender kerja tenant), deteksi blocker material (komponen BOM stok 0 + PO supplier belum diterima → tanggal mulai paling awal = `expected_date` PO itu). **Diverifikasi hidup terhadap SAS001 sungguhan** (bukan simulasi):
+  ```
+  batches_needed: 393, days_needed: 79
+  material_blocked_until: "2026-08-22"  <- PERSIS ETA PO botol China
+  total_working_days_to_deadline: 21    <- PERSIS "21 hari tersisa per 18 Agu" di spec
+  effective_working_days_after_material_block: 17  <- PERSIS "17 hari kerja terakhir" di spec
+  feasible: false
+  realistic_qty_deliverable_on_time: 4335
+  ```
+  **SAS005 belum bisa dihitung** — `batches_per_day` untuk item serbuk TIDAK ADA di spec maupun ekstrak (cuma disebut eksplisit untuk gummy: "5 batch gummy/hari"), endpoint dengan BENAR melaporkan "data belum ada" (bukan menebak angka kapasitas). Instruksi asli minta "SAS005 harus tampil feasible/ketat" — ini MENUNGGU angka kapasitas batch/hari serbuk dari pemilik produk, bukan bug.
+
+**File migrasi baru** (7 file, `20260818100000` s.d. `20260818160000`): `production_standards` + job pembelajaran K8, `work_order_assignments.work_date`, primitif biaya SDM internal, kalkulasi margin, metric `batches_per_day`, `lots.packaging_cost`, dan perbaikan presisi `actual_hours`.
+
+Typecheck bersih, `npm run build` sukses (semua route baru terdaftar), **37/37 test lulus** (33 lama + 4 acceptance baru).
+
+### Yang MENUNGGU keputusan/data dari pemilik produk (ringkasan lengkap)
+1. Rasio resep top-level Drinkme Lemon (gram tiap komponen per 1 box/sachet) — blocker BOM Drinkme.
+2. Backup `pg_dump`/`supabase db dump` dari environment yang punya Docker — blocker pembersihan data demo.
+3. Angka kapasitas `batches_per_day` untuk lini produksi serbuk — blocker verifikasi SAS005 di fitur Deteksi Konflik Perencanaan.
+
+Begitu ketiganya tersedia: (1) BOM Drinkme bisa dilengkapi + acceptance Contoh 2 diulang end-to-end lewat DB sungguhan, (2) pembersihan demo bisa dieksekusi sesuai urutan asli (backup→staging→dev), (3) SAS005 bisa diverifikasi "feasible/ketat" sesuai kriteria selesai asli.
+
+---
+
 ## GELOMBANG 0 — Prasyarat Margin v1 (18 Agu 2026) — SELESAI. GELOMBANG 1/2 — BLOCKED, lihat catatan di bawah
 
 Instruksi: kerjakan GELOMBANG 0 → 1 → 2 otonom, boleh lewati bagian yang butuh keputusan bisnis (catat di sini, jangan improvisasi/tunggu). GELOMBANG 0 selesai penuh & terverifikasi. GELOMBANG 1 & 2 **BELUM dimulai** — bukan lupa, tapi 2 blocker data konkret ditemukan di awal (lihat bagian "BLOCKER" di bawah) yang membuat sebagian besar isi Gelombang 1/2 tidak bisa dikerjakan jujur tanpa mengarang data bisnis.

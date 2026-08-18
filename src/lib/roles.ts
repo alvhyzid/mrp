@@ -44,6 +44,16 @@ export function canViewFinancialData(role: string | undefined | null): boolean {
   return !!role && FINANCIAL_DATA_ROLES.includes(role);
 }
 
+// Role yang boleh melihat gaji individual (employees.wage_rate/wage_type, & rincian
+// SDM per-orang di batch produksi) — harus sinkron dengan jwt_can_view_wages() di
+// supabase/migrations/20260812150000_role_hierarchy_helpers.sql. general_manager &
+// finance_manager SENGAJA tidak termasuk di sini (lihat docs).
+export const WAGE_VIEW_ROLES = ['company_admin', 'hr_manager', 'hr_staff'];
+
+export function canViewWages(role: string | undefined | null): boolean {
+  return !!role && WAGE_VIEW_ROLES.includes(role);
+}
+
 // Role yang boleh mengelola suppliers/purchase_orders/purchase_order_lines — harus
 // sinkron dengan policy suppliers_write_purchasing / purchase_orders_write_purchasing
 // / purchase_order_lines_write_purchasing di

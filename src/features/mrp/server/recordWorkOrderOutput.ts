@@ -95,10 +95,60 @@ export async function recordWorkOrderOutput(request: NextRequest): Promise<ApiRe
       qtyByComponentLot.set(row.component_lot_id, (qtyByComponentLot.get(row.component_lot_id) ?? 0) + Number(row.qty_consumed));
     }
 
-    const results: { work_order_output_id: number; lot_id: number; lot_number: string; output_type: string; qty: number; genealogy_rows_created: number }[] = [];
+    // Biaya lot output (spesifikasi-aturan-biaya-v1.md §1 K5/K6 & §3, §5 Contoh 1):
+    // unit_cost lot = (Σ biaya bahan NON-KEMASAN batch INI + Σ biaya SDM batch INI) ÷
+    // qty output UTAMA. Kemasan DIKONSUMSI lewat mekanisme yang SAMA (work_order_
+    // consumption, K6 — dikonfirmasi GELOMBANG 0A) TAPI dihitung TERPISAH ke
+    // packaging_cost (kolom sendiri, migration 20260818140000) — spec §5 Contoh 1
+    // secara eksplisit menampilkan "Biaya produksi per botol" (bahan+SDM) dan
+    // "Kemasan per botol" sebagai 2 angka TERPISAH, baru dijumlah di langkah Margin
+    // (rumus §3: "Biaya produksi order = Σ biaya batch + biaya kemasan").
+    let materialCost = 0;
+    let packagingCost = 0;
+    if (qtyByComponentLot.size > 0) {
+      const componentLotIds = Array.from(qtyByComponentLot.keys());
+      const { data: componentLots, error: componentLotsError } = await adminClient.from('lots').select('lot_id, unit_cost, item_id').in('lot_id', componentLotIds);
+      if (componentLotsError) return { status: 500, body: { error: componentLotsError.message } };
+      const componentItemIds = Array.from(new Set((componentLots ?? []).map((l) => l.item_id)));
+      const { data: componentItems, error: componentItemsError } = await adminClient.from('items').select('item_id, type').in('item_id', componentItemIds);
+      if (componentItemsError) return { status: 500, body: { error: componentItemsError.message } };
+      const typeByItemId = new Map((componentItems ?? []).map((i) => [i.item_id, i.type]));
+      const lotInfoById = new Map((componentLots ?? []).map((l) => [l.lot_id, l]));
+
+      for (const [lotId, qty] of qtyByComponentLot.entries()) {
+        const lotInfo = lotInfoById.get(lotId);
+        const cost = qty * Number(lotInfo?.unit_cost ?? 0);
+        if (lotInfo && typeByItemId.get(lotInfo.item_id) === 'packaging') {
+          packagingCost += cost;
+        } else {
+          materialCost += cost;
+        }
+      }
+    }
+
+    // Biaya SDM batch — lewat compute_production_batch_labor_cost() (primitif internal
+    // TANPA gate JWT, migration 20260818110000), SATU sumber kebenaran yang sama
+    // dipakai fungsi tampilan Margin (get_production_batch_labor_cost_total/detail) —
+    // endpoint ini jalan lewat service-role client yang tidak punya konteks JWT user,
+    // jadi tidak bisa lolos gate privasi di fungsi tampilan (itu memang bukan tujuannya
+    // di sini — nilai unit_cost yang tersimpan tetap dimask saat DIBACA lewat lots_secure).
+    const { data: laborCostRaw, error: laborCostError } = await adminClient.rpc('compute_production_batch_labor_cost', { p_production_batch_id: productionBatchId });
+    if (laborCostError) return { status: 500, body: { error: laborCostError.message } };
+    const laborCost = Number(laborCostRaw ?? 0);
+
+    const totalBatchCost = materialCost + laborCost;
+    const totalMainOutputQty = outputLines.filter((l) => l.output_type === 'main_output').reduce((sum, l) => sum + l.qty, 0);
+    const mainOutputUnitCost = totalMainOutputQty > 0 ? totalBatchCost / totalMainOutputQty : 0;
+    const mainOutputPackagingCostPerUnit = totalMainOutputQty > 0 ? packagingCost / totalMainOutputQty : 0;
+
+    const results: { work_order_output_id: number; lot_id: number; lot_number: string; output_type: string; qty: number; unit_cost: number; packaging_cost: number; genealogy_rows_created: number }[] = [];
 
     for (const line of outputLines) {
       const finalLotNumber = line.lot_number || `WO-${workOrderId}-${line.output_type.toUpperCase()}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      // K7: sisa reprocessable/disposed bernilai NOL — seluruh biaya batch dibebankan
+      // ke output UTAMA saja (spesifikasi-aturan-biaya-v1.md §1 K7).
+      const lineUnitCost = line.output_type === 'main_output' ? mainOutputUnitCost : 0;
+      const linePackagingCost = line.output_type === 'main_output' ? mainOutputPackagingCostPerUnit : 0;
 
       const { data: newLot, error: lotError } = await adminClient
         .from('lots')
@@ -112,7 +162,9 @@ export async function recordWorkOrderOutput(request: NextRequest): Promise<ApiRe
             produced_or_received_date: new Date().toISOString().slice(0, 10),
             quantity_on_hand: line.qty,
             source_type: 'produced',
-            status: 'available'
+            status: 'available',
+            unit_cost: lineUnitCost,
+            packaging_cost: linePackagingCost
           }
         ])
         .select('lot_id')
@@ -143,7 +195,16 @@ export async function recordWorkOrderOutput(request: NextRequest): Promise<ApiRe
         genealogyRowsCreated = genealogyRows.length;
       }
 
-      results.push({ work_order_output_id: output.work_order_output_id, lot_id: newLot.lot_id, lot_number: finalLotNumber, output_type: line.output_type, qty: line.qty, genealogy_rows_created: genealogyRowsCreated });
+      results.push({
+        work_order_output_id: output.work_order_output_id,
+        lot_id: newLot.lot_id,
+        lot_number: finalLotNumber,
+        output_type: line.output_type,
+        qty: line.qty,
+        unit_cost: lineUnitCost,
+        packaging_cost: linePackagingCost,
+        genealogy_rows_created: genealogyRowsCreated
+      });
     }
 
     return { status: 201, body: { outputs: results } };

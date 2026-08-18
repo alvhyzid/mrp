@@ -4,6 +4,39 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Fase Produksi Nyata — PEKERJAAN 1 (Employee CRUD) & PEKERJAAN 2 (K8 Hardening) — 19 Agu 2026
+
+Rencana lengkap: `docs/rencana-kerja-fase-produksi-nyata.md` (dari konsultan). Siklus domain-per-domain DIJEDA — prioritas satu-satunya fase ini: sistem dipakai sungguhan oleh staf pabrik selama SAS001 & SAS005 berjalan.
+
+### PEKERJAAN 1 (B-1) — Fitur create/edit Karyawan lewat UI — SELESAI
+
+HRD sekarang bisa kelola 33+ karyawan lewat UI (`/hr`, tombol "Tambah Karyawan" di toolbar + modal, pola sama persis dengan `ItemsPage.tsx`) — bukan lagi lewat seed script. `POST`/`PATCH /api/employees` digerbang `canManageHr` (company_admin/hr_manager/hr_staff), **sinkron persis** dengan policy RLS `employees_write_hr`/`employees_update_hr` yang sudah ada. Tidak ada hard delete — "nonaktifkan" = `is_active=false` lewat form edit yang sama (karyawan terikat FK ke labor log/absensi).
+
+**Terverifikasi** (11 test otomatis baru di `tests/employee_crud_and_k8_standards.test.ts`, ditambah verifikasi browser sungguhan terhadap dev):
+- (a) hr_manager tambah karyawan lewat **browser sungguhan** (`hr.a@debug.mrp`, screenshot diambil) → muncul di Daftar Karyawan, hitung Karyawan Aktif naik 33→34, terpakai lewat UI yang sama yang dibaca labor log (`/api/employees`, filter `is_active`). Data uji sudah dibersihkan dari dev setelah verifikasi.
+- (b) NEGATIF — general_manager coba tambah/ubah gaji karyawan → **403** keduanya; `employees_secure` tetap kembalikan `wage_rate: null` untuk GM (general_manager SENGAJA tidak termasuk `jwt_can_view_wages()`).
+- (c) NEGATIF — production_staff coba tambah/ubah karyawan → **403** keduanya.
+- (d) hr_manager nonaktifkan karyawan yang punya baris `work_order_assignments` → sukses, baris assignment (riwayat labor log) **tetap ada, tidak terhapus**.
+
+### PEKERJAAN 2 (bagian D) — Pengerasan K8 sebelum data nyata masuk — SELESAI
+
+**Temuan penting sebelum mulai kerja:** `recompute_production_standard()` (dibangun gelombang sebelumnya) **ternyata dead code** — tidak ada satu baris kode aplikasi pun yang pernah memanggilnya (dicek lewat grep total). Jadi pekerjaan ini bukan "mengeraskan" mekanisme yang sudah hidup, tapi menggantikannya total dengan versi yang dari awal sudah punya keempat pengaman:
+
+1. **Flip butuh persetujuan** — fungsi baru `propose_production_standard()` (migration `20260819110000`) HANYA menulis ke tabel baru `production_standard_proposals` (status `pending`/`approved`/`rejected`) — `production_standards.value/source` tidak pernah tersentuh langsung. Satu-satunya jalur mengubahnya adalah `decide_production_standard_proposal()`, dipanggil endpoint `POST /api/production-standards/proposals/decide`, digerbang role baru `canDecideProductionStandardProposal` (company_admin/general_manager/**ppic_manager** — SENGAJA lebih sempit dari yang boleh menulis `production_standards` secara umum). UI planner: card "Usulan Standar Produksi Menunggu Keputusan" di `/ppic` (nilai lama vs usulan vs dampak %, tombol Sahkan/Tolak) — sudah dicek render sungguhan di browser (`ppic.a@debug.mrp`), tidak error.
+2. **Median untuk sampel kecil** — n<10 pakai `percentile_cont(0.5)` (median) TANPA buang outlier; n≥10 baru mean dengan buang outlier ±2σ (perilaku lama, sekarang hanya aktif di n besar). Diuji: 5 sampel `[98,99,101,102,50]` → usulan = **99** (median), bukan 90 (mean yang tertarik nilai ekstrem 50).
+3. **Gerbang kelengkapan** — `learnFromBatch.ts` (endpoint `POST /api/production-batches/learn-standard-sample`) cek SEMUA `routing_steps` item itu punya baris `work_order_step_progress` berstatus `completed` sebelum batch itu boleh jadi sampel. Batch berlubang datanya DIKECUALIKAN dan dicatat di tabel baru `production_standard_exclusions` (dilaporkan, bukan dilewati diam-diam) — diuji nyata.
+4. **Snapshot standar per rencana** — `getPlanningFeasibility.ts` sekarang mengunci `unit_per_batch`/`batches_per_day` yang dipakai SEKALI per `sales_order_line` (tabel baru `sales_order_line_feasibility_snapshots`, insert sekali, tidak pernah di-UPDATE). Panggilan berikutnya tetap pakai standar yang terkunci itu; kalau standar live sekarang berbeda, response menambahkan `standard_drift` (nilai lama vs sekarang) — TIDAK PERNAH mengubah angka rencana yang sudah dihitung. Diuji: ubah standar SETELAH rencana dihitung → `batches_needed` tetap sama, `standard_drift` muncul.
+
+**Perbaikan tambahan yang ditemukan perlu saat wiring** (bukan diminta eksplisit, tapi tanpa ini D.2/D.3 tidak benar): `production_standard_samples` tidak punya kolom `routing_step_id` — padahal `active_duration_minutes` levelnya per-tahap. Tanpa kolom ini, sampel durasi dari tahap BERBEDA pada item yang sama akan tercampur jadi satu rolling window yang salah. Ditambahkan di migration yang sama.
+
+**Terverifikasi** (test otomatis + smoke test manual di staging sebelum ke dev): flip tidak otomatis (poin 6a-d instruksi asli) semua lulus — lihat detail di atas. Migrasi dijalankan ke staging dulu, di-smoke-test manual lewat RPC langsung (median 99 vs mean 90 dikonfirmasi), baru ke dev.
+
+**Batasan yang perlu diketahui sesi depan:** tidak ada UI "Selesaikan Batch" di aplikasi ini — `production_batches.status` tidak pernah ditransisikan oleh kode aplikasi manapun (dicek, bukan asumsi). "Batch selesai" untuk keperluan pembelajaran K8 didefinisikan secara pragmatis sebagai "semua tahap routingnya sudah `completed` di `work_order_step_progress`" (data yang memang sudah diisi operator lewat alur yang ada), bukan dari status batch itu sendiri. Tombol "Ajukan sebagai Sampel Standar" ditaruh di dialog "Ringkasan Yield Batch" (`/ppic`) sebagai titik pemicu manual — belum otomatis terpicu saat tahap terakhir selesai.
+
+Build + typecheck + `npm run build` sukses. Test suite: 7 file / 48 test lulus (termasuk 11 test baru).
+
+---
+
 ## Ringkasan Status Proyek untuk Review Konsultan — 19 Agu 2026
 
 Ditulis atas permintaan eksplisit pemilik produk sebagai bahan laporan kondisi proyek. Detail teknis & bukti lengkap dari tiap poin ada di bagian "Perintah Gabungan A + B" tepat di bawah ringkasan ini.
@@ -28,7 +61,7 @@ Ditulis atas permintaan eksplisit pemilik produk sebagai bahan laporan kondisi p
 - **2 company orphan tersisa di dev**: `Company B` (SENGAJA dibiarkan — akun debug `company.b@debug.mrp` dipakai test suite CI, bukan sampah) dan `E2E RealSMTP Co 1786463644300` (kemungkinan besar sampah tes lama, tapi belum diuji eksplisit di staging bahwa aman dihapus total — sengaja tidak ikut skrip pembersihan sesi ini supaya tidak menyimpang dari yang sudah divalidasi).
 - **Sorting kolom di halaman daftar (tabel list)** — belum diimplementasikan di beberapa halaman, ditunda karena bukan blocker untuk alur kerja inti MVP.
 - **Pola "Detail expand-baris" belum dipakai konsisten di semua halaman daftar** — sudah ada di sebagian halaman tapi belum dimigrasikan ke halaman-halaman lain yang sebenarnya cocok pakai pola sama, demi konsistensi UI.
-- **Fitur create Karyawan lewat UI belum pernah dibangun** — dikonfirmasi sesi ini (dicek langsung, tidak ada route/handler `POST /api/employees` maupun form tambah karyawan). Seluruh 33 karyawan real case saat ini masuk lewat `scripts/seed-realcase-itm.js`, bukan lewat form yang bisa dipakai user non-teknis — perlu dibangun sebelum modul kepegawaian bisa dipakai mandiri.
+- ~~Fitur create Karyawan lewat UI belum pernah dibangun~~ — **SELESAI** (sesi lanjutan hari sama, lihat bagian "Fase Produksi Nyata — PEKERJAAN 1" di paling atas dokumen ini). HRD sekarang bisa tambah/edit/nonaktifkan karyawan lewat `/hr`, tidak perlu lagi seed script.
 
 ---
 

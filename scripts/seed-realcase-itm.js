@@ -109,7 +109,12 @@ const premixGelatinLines = [
   { component_item_code: 'RM-AIR', qtyPerBatch: 1280.55, uom: 'ml' }
 ];
 
-// Gummy Zala per 1 botol = (batch @ skala 27.440419) / 51 botol.
+// Gummy Zala per 1 botol = (batch @ skala 27.440419) / 51 botol. CATATAN rev.4: spec
+// dikoreksi batch gummy 9kg->10kg (skala jadi 30.489354, 56,6667 botol/batch) — rasio
+// PER BOTOL di bawah ini TIDAK PERLU diubah (resep sama, cuma di-scale-up linear;
+// diverifikasi: Maltitol lama 1097,62/51=21,5227g/botol, baru 1219,57/56,6667=
+// 21,5229g/botol — identik selain floating-point). production_standards.unit_per_batch
+// yang perlu dikoreksi (lihat bagian 3b di bawah), bukan bom_lines ini.
 const GUMMY_ZALA_YIELD_BOTOL = 51;
 const gummyZalaLines = [
   { component_item_code: 'RM-MALTITOL', qtyPerBatch: 1097.62, uom: 'g' },
@@ -158,7 +163,7 @@ const premixGelatinRoutingSteps = [{ step_name: 'Dry Mix & Masak Air', active: 3
 const gummyZalaRoutingSteps = [
   { step_name: 'Proses Cooking', active: 90, wait: 0 },
   { step_name: 'Molding', active: 20, wait: 0 },
-  { step_name: 'Setting', active: 5, wait: 60 }, // wait 1 jam
+  { step_name: 'Setting', active: 5, wait: 960 }, // wait ~16 jam (rev.4: realitas lapangan semalaman, bukan 1 jam SOP PDF)
   { step_name: 'Demolding', active: 30, wait: 0 },
   { step_name: 'Coating', active: 15, wait: 0 },
   { step_name: 'Curing', active: 5, wait: 4320 }, // wait 3 hari
@@ -351,10 +356,11 @@ async function main() {
   console.log('\n=== 3b. Production Standards (K8, cold-start ESTIMASI_MANUAL) ===');
   const standardsSeed = [
     { item: 'FG-GUMMY-ZALA-N200', metric: 'yield_percentage', value: 85 },
-    { item: 'FG-GUMMY-ZALA-N200', metric: 'unit_per_batch', value: 51 },
-    // Kapasitas pipeline (§4 rev. 2): "sampai 5 batch gummy/hari" — batch 2 mulai cooking
-    // saat batch 1 masih dicetak, tim cetak tidak menunggu.
-    { item: 'FG-GUMMY-ZALA-N200', metric: 'batches_per_day', value: 5 },
+    // rev.4: batch gummy 10kg (bukan 9kg) -> yield 8.500g -> 3.400 pcs -> 56,6667 botol/batch.
+    { item: 'FG-GUMMY-ZALA-N200', metric: 'unit_per_batch', value: 56.6667 },
+    // Kapasitas pipeline (§4 rev.4, dikoreksi dari rev.2 "sampai 5 batch/hari"): standar
+    // PERENCANAAN 4 batch gummy/hari (maksimal BISA 5, tapi 4 dipakai sebagai standar).
+    { item: 'FG-GUMMY-ZALA-N200', metric: 'batches_per_day', value: 4 },
     { item: 'PMBX001ITM', metric: 'yield_percentage', value: 95 },
     { item: 'PMBX001ITM', metric: 'unit_per_batch', value: 226.19 }
   ];

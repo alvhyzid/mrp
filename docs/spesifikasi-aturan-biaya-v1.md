@@ -1,4 +1,4 @@
-# Spesifikasi Aturan Biaya v1 — AMS-MVP.01 (rev. 3 — FINAL, data lengkap)
+# Spesifikasi Aturan Biaya v1 — AMS-MVP.01 (rev. 4 — FINAL; batch gummy 10kg)
 
 **Status:** seluruh angka pasti terisi; siap jadi acceptance test implementasi
 **Basis:** Keputusan Aturan Biaya v1 (Claude Fable) + jawaban celah data G1–G6 + koreksi pemilik produk 18 Agu 2026 + `DATA_PRODUKSI_PT_ITM.pdf`
@@ -9,7 +9,7 @@
 
 ## 1. Aturan Final (ringkasan keputusan K1–K8)
 
-1. **SDM langsung = labor log batch** (jam tercatat per orang × tarif per jam orang itu). Tidak ada daftar jabatan yang di-hardcode; siapa pun yang tercatat di penugasan batch, terhitung. Direktur/GM/PPIC/Finance/HRD/Purchasing tidak pernah tercatat di batch → otomatis overhead.
+1. **SDM langsung = labor log batch** (jam tercatat per orang × tarif per jam orang itu). Tidak ada daftar jabatan yang di-hardcode; siapa pun yang tercatat di penugasan batch, terhitung. Direktur/GM/PPIC/Finance/HRD/Purchasing tidak pernah tercatat di batch → otomatis overhead. **Klarifikasi pemilik produk (18 Agu):** angka orang per tahap (mis. cetak 8 org) adalah POOL BERGILIR — total tim produksi ±15 orang yang berpindah-pindah tahap sepanjang hari (orang yang sama boleh tercatat di banyak tahap/batch di hari yang sama; demolding batch kemarin berjalan paralel dengan cooking batch hari ini). Angka per tahap = estimasi USAHA (orang-jam per batch) untuk cold-start, BUKAN kebutuhan kepala terpisah. Sistem TIDAK BOLEH punya constraint yang melarang 1 orang tercatat di >1 tahap/batch per hari.
 2. **Margin dua tingkat:** Tingkat 1 = Margin Kontribusi per order/batch (harga jual − bahan − kemasan − SDM langsung). Tingkat 2 = Laba Operasional per bulan (Σ margin kontribusi − total overhead bulan). TIDAK ada alokasi overhead ke batch di v1. Kedua angka selalu tampil berdampingan.
 3. **Overhead mesin/listrik ditunda** dari v1 (rumus v1.1 disiapkan: tarif = total overhead bulanan ÷ jam kerja langsung normal/bulan; konfigurasi per tenant).
 4. **Tarif per jam gaji bulanan** = gaji ÷ jam kerja standar bulan (dari kalender kerja tenant). **Pekerja harian** = tarif harian ÷ jam terjadwal HARI ITU.
@@ -64,7 +64,7 @@ Laba operasional bln = Σ margin kontribusi bulan itu − total overhead bulan i
 
 ## 4. Data Master yang Dikunci dari G1–G6 + Koreksi Rev. 2
 
-- **G1:** batch gummy 9 kg = berat **adonan MASUK** (total masuk mixer, TERMASUK premix gelatin beserta airnya). Titik susut: Mixing (nempel panci) → Cetak (nempel cetakan) → Demolding (gelembung/reject) → Curing (kotor).
+- **G1 (dikoreksi 18 Agu sore):** batch gummy **10 kg** = berat **adonan MASUK** (total masuk mixer, TERMASUK premix gelatin beserta airnya). Titik susut: Mixing (nempel panci) → Cetak (nempel cetakan) → Demolding (gelembung/reject) → Curing (kotor).
 - **Premix gelatin (koreksi rev. 2):** air premix (100ml per 60g gelatin) adalah **air premix sendiri** — TIDAK mengurangi jatah "air 100ml" di formula gummy (air formula ditambahkan penuh secara terpisah). Baris "gelatin bloom 28g" di formula dipenuhi lewat lot premix (28g gelatin kering ≈ 75,13g premix).
 - **G2:** gummy Zala = **2,5 g/pcs** → botol isi 60 = 150 g isi bersih.
 - **G3:** batch serbuk mixer utama **minimal 60 kg**; premix serbuk batch kecil **500 g – 5 kg**. **Serbuk JUGA punya susut** (filling tumpah, kemasan bocor) — bukan 100%.
@@ -74,7 +74,7 @@ Laba operasional bln = Σ margin kontribusi bulan itu − total overhead bulan i
 - **PO = REAL CASE berjalan (revisi 18 Agu):** kedua PO ini adalah pesanan NYATA yang sedang berlangsung di pabrik sekarang, bukan simulasi. **SAS001 (Gummy Zala, 20.000 botol):** tanggal PO **10 Agustus 2026**, target kirim **10 September 2026**. **SAS005 (Drinkme, 10.000 box):** tanggal PO **12 Agustus 2026**, target kirim **12 September 2026**. (Tanggal-tanggal September di PDF tidak berlaku lagi.) "Derasi Orange" = nama flavor vendor, produk tetap Drinkme Lemon (bukan typo).
 - **Botol (revisi 18 Agu):** stok gudang **0**; **30.500 botol datang 22 Agustus 2026** dari China — cukup untuk kebutuhan 20.000, TAPI tahap Filling mustahil dimulai sebelum 22 Agu.
 - **Stok bahan baku (revisi 18 Agu):** saat kedua PO di-inject ke sistem, **SELURUH stok bahan baku = 0 (kosong)** — data stok riil sedang diminta ke pabrik dan akan diinput menyusul. Konsekuensi yang diharapkan: sistem otomatis menampilkan alert kekurangan bahan untuk semua item begitu WO direncanakan — ini perilaku BENAR, bukan bug.
-- **Kapasitas nyata (info rev. 2):** pola kerja **pipeline** — sampai **5 batch gummy/hari** (batch 2 mulai cooking saat batch 1 sedang dicetak; tim cetak tidak menunggu). Ini memvalidasi desain Gantt kita (durasi aktif membebani kapasitas, waktu tunggu hanya menggeser posisi).
+- **Kapasitas nyata (info rev. 2):** pola kerja **pipeline** — standar perencanaan **4 batch gummy/hari** (maksimal bisa 5) (batch 2 mulai cooking saat batch 1 sedang dicetak; tim cetak tidak menunggu). Ini memvalidasi desain Gantt kita (durasi aktif membebani kapasitas, waktu tunggu hanya menggeser posisi). **Setting (dikoreksi 18 Agu sore): realitas lapangan SEMALAMAN (±16 jam / 960 menit) supaya gummy lebih stabil — bukan 1 jam seperti tertulis di SOP PDF.**
 
 ---
 
@@ -82,50 +82,50 @@ Laba operasional bln = Σ margin kontribusi bulan itu − total overhead bulan i
 
 > Tanda **[EST]** = `ESTIMASI_MANUAL` cold-start (pemilik produk mengonfirmasi belum bisa memberi angka pasti — akan digantikan nilai DIPELAJARI dari labor log & yield nyata). Angka lain = data pasti. Implementasi HARUS mereproduksi angka-angka ini persis (sebelum pembulatan tampilan).
 
-### Contoh 1 — Batch Gummy Zala 9 kg (premix gelatin 2 level, air premix terpisah)
+### Contoh 1 — Batch Gummy Zala 10 kg (premix gelatin 2 level, air premix terpisah)
 
-**Skala batch:** basis adonan riil = (280,85 − 28) + 75,1333 premix = **327,9833 g** → skala 9.000 ÷ 327,9833 = **27,440419**.
+**Skala batch:** basis adonan riil = (280,85 − 28) + 75,1333 premix = **327,9833 g** → skala 10.000 ÷ 327,9833 = **30,489354**.
 
-**Langkah A — batch Premix Gelatin (H-1):** gelatin kering 28 × 27,440419 = **768,33 g** → skala resep premix 12,8055×.
+**Langkah A — batch Premix Gelatin (H-1):** gelatin kering 28 × 30,489354 = **853,70 g** → skala resep premix 14,2283×.
 
 | Komponen premix | Qty | Harga | Biaya |
 |---|---|---|---|
-| Gelatin Nitta Bloom250 | 768,33 g | Rp210/g | Rp161.349,66 |
-| Citric acid | 12,81 g | Rp25/g | Rp320,14 |
-| Air (milik premix sendiri) | 1.280,55 ml | Rp0,50/ml | Rp640,28 |
+| Gelatin Nitta Bloom250 | 853,70 g | Rp210/g | Rp179.277,40 |
+| Citric acid | 14,23 g | Rp25/g | Rp355,71 |
+| Air (milik premix sendiri) | 1.422,84 ml | Rp0,50/ml | Rp711,42 |
 | SDM: kontrak 20 menit **[EST]** | 0,3333 jam | Rp11.538,46/jam | Rp3.846,15 |
-| **Total batch premix** | | | **Rp166.156,23** |
+| **Total batch premix** | | | **Rp184.190,68** |
 
-Output premix (teoretis **[EST]**) = 2.061,69 g → **Rp80,5922/g**.
+Output premix (teoretis **[EST]**) = 2.290,77 g → **Rp80,4057/g**.
 
-**Langkah B — batch Gummy** (semua bahan × 27,440419; air formula 2.744,04 ml ditambahkan PENUH):
+**Langkah B — batch Gummy** (semua bahan × 30,489354; air formula 3.048,94 ml ditambahkan PENUH):
 
 | Bahan | Biaya |
 |---|---|
-| Maltitol 1.097,62 g × 315 | 345.749,28 |
-| Polysorb 1.372,02 ml × 268 | 367.701,61 |
-| Sorbitol liquid 686,01 ml × 18 | 12.348,19 |
-| Perfecta Gel 928 — 329,29 g × 95 | 31.282,08 |
-| Perfecta MB 109,76 g × 60 | 6.585,70 |
-| Gellan 6,86 g × 400 | 2.744,04 |
-| Glyserin 27,44 ml × 30 | 823,21 |
-| Polydextrose 411,61 g × 60 | 24.696,38 |
-| Malic 32,93 g × 44 | 1.448,85 |
-| Citric 5,49 g × 25 | 137,20 |
-| Kolagen 109,76 g × 210 | 23.049,95 |
-| Glutathione 5,49 g × 2.500 | 13.720,21 |
-| Air formula (penuh) 2.744,04 ml × 0,50 | 1.372,02 |
-| Premix Gelatin 2.061,69 g × 80,5922 (lot Langkah A) | 166.156,23 |
-| **Total bahan batch** | **Rp997.814,95** |
+| Maltitol 1.219,57 g × 315 | 384.165,86 |
+| Polysorb 1.524,47 ml × 268 | 408.557,35 |
+| Sorbitol liquid 762,23 ml × 18 | 13.720,21 |
+| Perfecta Gel 928 — 365,87 g × 95 | 34.757,86 |
+| Perfecta MB 121,96 g × 60 | 7.317,44 |
+| Gellan 7,62 g × 400 | 3.048,94 |
+| Glyserin 30,49 ml × 30 | 914,68 |
+| Polydextrose 457,34 g × 60 | 27.440,42 |
+| Malic 36,59 g × 44 | 1.609,84 |
+| Citric 6,10 g × 25 | 152,45 |
+| Kolagen 121,96 g × 210 | 25.611,06 |
+| Glutathione 6,10 g × 2.500 | 15.244,68 |
+| Air formula (penuh) 3.048,94 ml × 0,50 | 1.524,47 |
+| Premix Gelatin 2.290,77 g × 80,4057 (lot Langkah A) | 184.190,68 |
+| **Total bahan batch** | **Rp1.108.255,93** |
 
 SDM batch **[EST]**: SPV 1 jam + 2 kontrak × 4 jam + 2 PHL × 4 jam (hari biasa) = **Rp169.642,86**.
 
-Yield total **[EST 85%]** → 7.650 g → 3.060 pcs → **51 botol/batch**.
+Yield total **[EST 85%]** → 8.500 g → 3.400 pcs → **56,6667 botol/batch**.
 
-- Biaya produksi per botol = (997.814,95 + 169.642,86) ÷ 51 = **Rp22.891,33**
+- Biaya produksi per botol = (1.108.255,93 + 169.642,86) ÷ 56,6667 = **Rp22.551,16**
 - Kemasan per botol = 8.700 + karton 3.500÷27 (129,63) = **Rp8.829,63**
-- **Margin kontribusi per botol = 108.000 − 22.891,33 − 8.829,63 = Rp76.279,04 (70,6%)**
-- Kebutuhan PO **20.000 botol** ≈ **392 batch** ÷ 5 batch/hari (pipeline) ≈ **78 hari kerja dibutuhkan** — vs hari kerja tersedia: **28** (10 Agu→10 Sep), tersisa **21** per hari ini (18 Agu), dan Filling baru bisa jalan **17 hari kerja terakhir** (botol datang 22 Agu, stok sekarang 0) → **mustahil selesai 100% tepat waktu; kirim parsial adalah satu-satunya jalur realistis** — sistem HARUS mendeteksi & menyajikan ini, bukan diam-diam menjadwalkan yang tidak mungkin
+- **Margin kontribusi per botol = 108.000 − 22.551,16 − 8.829,63 = Rp76.619,22 (70,9%)**
+- Kebutuhan PO **20.000 botol** ≈ **353 batch** ÷ 4 batch/hari (standar perencanaan) ≈ **88 hari kerja dibutuhkan** — vs hari kerja tersedia: **28** (10 Agu→10 Sep), tersisa **21** per hari ini (18 Agu), dan Filling baru bisa jalan **17 hari kerja terakhir** (botol datang 22 Agu, stok sekarang 0) → **mustahil selesai 100% tepat waktu; kirim parsial adalah satu-satunya jalur realistis** — sistem HARUS mendeteksi & menyajikan ini, bukan diam-diam menjadwalkan yang tidak mungkin
 
 ### Contoh 2 — Batch Serbuk Drinkme 60 kg (premix berjenjang, yield 95% [EST])
 
@@ -155,13 +155,13 @@ Output dengan susut **[EST 95%]**: 57.000 g ÷ 18 = 3.166,67 sachet ÷ 14 = **22
 | | SAS001 (**20.000 botol** — revisi pemilik produk 18 Agu) | SAS005 (10.000 box) |
 |---|---|---|
 | Revenue | Rp2.160.000.000 | Rp330.000.000 |
-| Margin kontribusi | **Rp1.525.580.815,25** | **Rp55.702.922,66** |
+| Margin kontribusi | **Rp1.532.384.305,79** | **Rp55.702.922,66** |
 
-- Σ margin kontribusi = **Rp1.581.283.737,91**
+- Σ margin kontribusi = **Rp1.588.087.228,45**
 - Overhead bulanan (gaji non-langsung) = **Rp60.500.000**
-- **Laba operasional (ilustrasi jika semua dalam 1 bulan) = Rp1.520.783.737,91**
+- **Laba operasional (ilustrasi jika semua dalam 1 bulan) = Rp1.527.587.228,45**
 
-> Catatan: produksi 392 batch gummy ≈ 78 hari kerja — melewati 2,5+ bulan kalender. Di sistem nyata, margin diakui per pengiriman dan laba bulanan mengikuti bulan berjalan. Baris ini menguji RUMUS, bukan jadwal.
+> Catatan: produksi 353 batch gummy ≈ 88 hari kerja — melewati 3+ bulan kalender. Di sistem nyata, margin diakui per pengiriman dan laba bulanan mengikuti bulan berjalan. Baris ini menguji RUMUS, bukan jadwal.
 
 ---
 
@@ -172,4 +172,4 @@ Seluruh angka pasti sudah terisi — tidak ada lagi yang kosong. Satu-satunya ni
 ## 7. Setelah Validasi (urutan Fable I4–I5)
 
 1. **I4** — seed data dari PDF + revisi real case sebagai script berulang (item+harga, BOM ratio + premix 2 level, routing + estimasi K8, karyawan+tarif [tunduk privasi gaji], customer + 2 PO REAL: SAS001 = 10 Agu kirim 10 Sep 20.000 botol, SAS005 = 12 Agu kirim 12 Sep 10.000 box, kemasan sesuai §4, botol: stok 0 + PO supplier China 30.500 pcs ETA 22 Agu) + script pembersihan data demo lama, diuji di staging dulu. CATATAN: karena ini pesanan NYATA yang sedang berjalan, hasil seed ini = awal data produksi sungguhan sistem, bukan sekadar dataset uji.
-2. **I5** — implementasi margin; acceptance = ketiga contoh §5 lulus persis + sistem mendeteksi DUA konflik nyata yang sedang terjadi sekarang: (a) material-vs-jadwal — Filling tidak mungkin sebelum 22 Agu (stok botol 0, GR 30.500 baru masuk 22 Agu), (b) kapasitas-vs-deadline — 392 batch butuh ±78 hari kerja vs 28 tersedia (21 tersisa per 18 Agu) → sistem menyajikan opsi kirim parsial yang bisa dihitung, bukan menjadwalkan yang mustahil.
+2. **I5** — implementasi margin; acceptance = ketiga contoh §5 lulus persis + sistem mendeteksi DUA konflik nyata yang sedang terjadi sekarang: (a) material-vs-jadwal — Filling tidak mungkin sebelum 22 Agu (stok botol 0, GR 30.500 baru masuk 22 Agu), (b) kapasitas-vs-deadline — 353 batch butuh ±88 hari kerja (4 batch/hari) vs 28 tersedia (21 tersisa per 18 Agu) → sistem menyajikan opsi kirim parsial yang bisa dihitung, bukan menjadwalkan yang mustahil.

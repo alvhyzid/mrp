@@ -4,6 +4,38 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Koreksi Labor Log — Pool Bergilir (18 Agu 2026) — SELESAI & terverifikasi
+
+Klarifikasi pemilik produk setelah GELOMBANG 2 (sudah tercatat di `spesifikasi-aturan-biaya-v1.md` K1): tim produksi gummy (±15 orang) BUKAN kepala tetap per tahap — mereka POOL BERGILIR yang berpindah tahap sepanjang hari (mis. pagi masak, siang bantu cetak), dan tim BEDA bisa mengerjakan batch KEMARIN paralel dengan batch HARI INI. Angka "2 orang masak, 8 orang cetak" di routing = estimasi usaha orang-jam per batch (cold-start), BUKAN penugasan kaku 1 orang = 1 tahap.
+
+**Bug ditemukan** di `recordLaborLog.ts` versi pertama: baris disimpan dengan key (batch, karyawan) SAJA — begitu orang yang sama dicatat lagi di TAHAP KEDUA pada batch yang SAMA, baris pertama diam-diam TERTIMPA (bukan ditambah baris baru). Ini persis kebalikan dari yang diminta ("1 orang HARUS bisa punya banyak entri jam... lintas tahap berbeda DAN lintas batch berbeda"). Tidak ada unique constraint level database yang jadi biang keladinya (dicek, tidak ada) — murni logika upsert di kode aplikasi.
+
+**Perbaikan:**
+- Key upsert diubah ke (batch, karyawan, **routing_step_id**) — baris baru untuk kombinasi tahap/batch yang beda, update kalau PERSIS kombinasi yang sama dicatat ulang (mis. koreksi jam).
+- Endpoint TIDAK PERNAH memblokir berdasar "orang ini sudah ditugaskan di tempat lain hari ini" — tidak ada validasi seperti itu sama sekali, sesuai permintaan.
+- Peringatan LEMBUT (bukan blokir) ditambahkan: kalau total jam 1 orang di 1 tanggal (dijumlah lintas SEMUA batch/tahap) melebihi jam kerja efektif hari itu (7 jam biasa/5 Sabtu, K4), respons API menyertakan `warning` — baris tetap tersimpan, tidak pernah ditolak.
+- **UI baru**: card "Catat Jam Kerja (Labor Log)" ditambahkan di halaman `/work-orders` (panel detail batch, tepat di bawah "Catat Pemakaian Bahan") — pilih karyawan, pilih tahap (opsional, dari routing WO), isi jam, tanggal. Sebelumnya labor log CUMA endpoint API tanpa form sama sekali.
+
+**Bukti verifikasi (skrip langsung ke API, sesuai skenario diminta persis):** 1 karyawan dicatat di 3 tahap berbeda (Cooking/Molding/Demolding) pada 2 batch berbeda, hari yang sama — hasilnya **3 baris tersimpan** (bukan 1 yang saling menimpa), biaya SDM tiap batch dihitung benar dari porsi jamnya sendiri (Batch A dari 2+1,5=3,5 jam → Rp40.384,62; Batch B dari 2 jam → Rp23.076,93, keduanya cocok dengan tarif kontrak bulanan ÷173,3333 jam). Uji lembur: tambahan jam sampai total 8,5 jam/hari → **tetap tersimpan** (status 201), respons menyertakan pesan peringatan, TIDAK ditolak. UI diverifikasi juga lewat browser sungguhan (login `ppic.a@debug.mrp`, WO Gummy Zala real, form terisi & submit sukses, screenshot ada di riwayat sesi).
+
+Typecheck bersih, `npm run build` sukses, 37/37 test tetap lulus.
+
+### Temuan TAMBAHAN saat mengerjakan ini: `spesifikasi-aturan-biaya-v1.md` ternyata sudah direvisi ke rev. 4 (bukan cuma klarifikasi labor pool)
+
+`git diff` terhadap file spec sebelum menulis ulang menunjukkan perubahan JAUH lebih luas dari sekadar K1 (labor pool) yang diminta secara eksplisit — file itu sendiri sudah di-edit ke **rev. 4** dengan 3 revisi angka nyata:
+1. **Batch gummy 9kg → 10kg** (G1) — skala berubah 27,440419 → 30,489354.
+2. **Kapasitas gummy: "sampai 5 batch/hari" → standar perencanaan 4 batch/hari** (maksimal tetap bisa 5).
+3. **Durasi tunggu tahap Setting: 1 jam (SOP PDF) → ~16 jam/960 menit** (realitas lapangan semalaman).
+
+Ketiganya MENGALIR ke semua angka Contoh 1 & 3 di §5 (premix, gummy, margin per botol, agregasi SAS001, laba operasional). **Disinkronkan semua** (bukan cuma yang diminta eksplisit) karena file ditandai "rev. 4 — FINAL":
+- `scripts/seed-realcase-itm.js`: `production_standards` Gummy Zala `unit_per_batch` 51→**56,6667**, `batches_per_day` 5→**4**; routing step "Setting" `wait_duration_minutes` 60→**960**. **BOM per-botol TIDAK perlu diubah** — diverifikasi rasio per-unit-output scale-invariant terhadap ukuran batch (resep sama, cuma di-scale-up linear; mis. Maltitol lama 1.097,62g/51botol=21,5227g/botol, baru 1.219,57g/56,6667botol=21,5229g/botol — identik selain floating-point).
+- `tests/margin_v1_acceptance.test.ts`: seluruh angka Contoh 1a/1b/3 ditulis ulang ke rev.4 (premix total Rp184.190,68 & Rp80,4057/g; gummy bahan Rp1.108.255,93, Rp22.551,16/botol produksi, margin Rp76.619,22/botol; agregasi Σ margin Rp1.588.087.228,45, laba Rp1.527.587.228,45) — 4/4 masih lulus.
+- Fitur Deteksi Konflik Perencanaan diverifikasi ulang terhadap SAS001 sungguhan dengan standar baru: `batches_needed: 353` (persis rev.4), `days_needed: 89`, `material_blocked_until: "2026-08-22"` (tidak berubah), `total_working_days_to_deadline: 21` (tidak berubah), tetap `feasible: false`.
+
+Typecheck bersih, `npm run build` sukses, 37/37 test tetap lulus (setelah kedua koreksi di atas digabung).
+
+---
+
 ## GELOMBANG 1 & 2 — Seed Real Case + Implementasi Margin v1 (18 Agu 2026)
 
 Lanjutan GELOMBANG 0 (di bawah) setelah pemilik produk melengkapi 2 blocker data yang dicatat sebelumnya: `docs/data-produksi-itm-ekstrak.md` (ekstrak `DATA_PRODUKSI_PT_ITM.pdf` + koreksi pemilik produk — 33 karyawan, SOP gummy/serbuk, 28 harga bahan baku individual, harga kemasan final). Kedua angka premix serbuk (PMSW/PMAC/PMFL/PMVITC/PMSRH) **diverifikasi cocok PERSIS** dengan agregat `Bahan/g` di spec §5 Contoh 2 sebelum dipakai (mis. PMSW: 50g maltodextrin×Rp20 + 20g stevia×Rp900 + 30g sucralose×Rp40 = Rp20.200/100g = **Rp202,00/g**, sama persis dengan tabel spec) — bukti data ekstrak konsisten dengan spec, bukan sekadar dipercaya begitu saja.

@@ -280,19 +280,21 @@ describe('Margin v1 — acceptance test literal spesifikasi-aturan-biaya-v1.md �
     return { materialCost, packagingCost, laborCost: Number(laborCost ?? 0) };
   }
 
-  it('Contoh 1a — batch Premix Gelatin: total Rp166.156,23, Rp80,5922/g', async () => {
+  // rev.4 (dikoreksi 18 Agu sore): batch gummy 10kg (bukan 9kg) -> skala 30,489354,
+  // premix gelatin 853,70g (bukan 768,33g), output premix 2.290,77g (bukan 2.061,69g).
+  it('Contoh 1a — batch Premix Gelatin (rev.4, batch 10kg): total Rp184.190,68, Rp80,4057/g', async () => {
     // Baris bahan (subtotal PERSIS dari spec, qty diturunkan presisi penuh).
-    await consumeMaterial('RM-GELATIN-NB250', premixBatchId, premixWorkOrderId, 161349.66, rawMaterialPrices['RM-GELATIN-NB250']);
-    await consumeMaterial('RM-CITRICACID', premixBatchId, premixWorkOrderId, 320.14, rawMaterialPrices['RM-CITRICACID']);
-    await consumeMaterial('RM-AIR', premixBatchId, premixWorkOrderId, 640.28, rawMaterialPrices['RM-AIR']);
+    await consumeMaterial('RM-GELATIN-NB250', premixBatchId, premixWorkOrderId, 179277.4, rawMaterialPrices['RM-GELATIN-NB250']);
+    await consumeMaterial('RM-CITRICACID', premixBatchId, premixWorkOrderId, 355.71, rawMaterialPrices['RM-CITRICACID']);
+    await consumeMaterial('RM-AIR', premixBatchId, premixWorkOrderId, 711.42, rawMaterialPrices['RM-AIR']);
     // SDM: kontrak 20 menit [EST] = 1/3 jam, hari kerja biasa (weekday_hours=7).
     await recordLabor(premixBatchId, premixWorkOrderId, 'Kontrak Test 1', 1 / 3, '2026-08-19'); // Rabu (weekday)
 
     const { materialCost, laborCost } = await computeBatchCost(premixBatchId);
     const totalBatchCost = materialCost + laborCost;
-    expect(totalBatchCost).toBeCloseTo(166156.23, 0); // toleransi < Rp0,5 (pembulatan SDM 1/3 jam di sisi spec)
+    expect(totalBatchCost).toBeCloseTo(184190.68, 0); // toleransi < Rp0,5 (pembulatan SDM 1/3 jam di sisi spec)
 
-    const outputQty = 2061.69;
+    const outputQty = 2290.77;
     const { data: outputLot, error: outputLotError } = await adminClient
       .from('lots')
       .insert([{ company_id: companyId, production_plant_id: plantId, item_id: itemIds['WIP-PREMIX-TEST'], lot_number: 'LOT-PREMIX-OUTPUT', quantity_on_hand: outputQty, source_type: 'produced', status: 'available', unit_cost: totalBatchCost / outputQty, packaging_cost: 0 }])
@@ -302,48 +304,49 @@ describe('Margin v1 — acceptance test literal spesifikasi-aturan-biaya-v1.md �
     await adminClient.from('work_order_outputs').insert([{ work_order_id: premixWorkOrderId, production_batch_id: premixBatchId, item_id: itemIds['WIP-PREMIX-TEST'], output_type: 'main_output', qty: outputQty, lot_id: outputLot.lot_id }]);
 
     const perGram = totalBatchCost / outputQty;
-    expect(perGram).toBeCloseTo(80.5922, 3);
+    expect(perGram).toBeCloseTo(80.4057, 3);
   });
 
-  it('Contoh 1b — batch Gummy Zala: bahan Rp997.814,95, SDM Rp169.642,86, Rp22.891,33/botol, kemasan Rp8.829,63, margin Rp76.279,04', async () => {
-    // Bahan (subtotal PERSIS dari spec §5 Contoh 1 Langkah B, qty presisi penuh).
-    await consumeMaterial('RM-MALTITOL', gummyBatchId, gummyWorkOrderId, 345749.28, rawMaterialPrices['RM-MALTITOL']);
-    await consumeMaterial('RM-POLYSORB', gummyBatchId, gummyWorkOrderId, 367701.61, rawMaterialPrices['RM-POLYSORB']);
-    await consumeMaterial('RM-SORBITOL-LIQUID', gummyBatchId, gummyWorkOrderId, 12348.19, rawMaterialPrices['RM-SORBITOL-LIQUID']);
-    await consumeMaterial('RM-PERFECTA-GEL-928', gummyBatchId, gummyWorkOrderId, 31282.08, rawMaterialPrices['RM-PERFECTA-GEL-928']);
-    await consumeMaterial('RM-PERFECTA-GEL-MB', gummyBatchId, gummyWorkOrderId, 6585.7, rawMaterialPrices['RM-PERFECTA-GEL-MB']);
-    await consumeMaterial('RM-GELLAN-GUM', gummyBatchId, gummyWorkOrderId, 2744.04, rawMaterialPrices['RM-GELLAN-GUM']);
-    await consumeMaterial('RM-GLISERIN', gummyBatchId, gummyWorkOrderId, 823.21, rawMaterialPrices['RM-GLISERIN']);
-    await consumeMaterial('RM-POLYDEXTROSE', gummyBatchId, gummyWorkOrderId, 24696.38, rawMaterialPrices['RM-POLYDEXTROSE']);
-    await consumeMaterial('RM-MALICACID', gummyBatchId, gummyWorkOrderId, 1448.85, rawMaterialPrices['RM-MALICACID']);
-    await consumeMaterial('RM-CITRICACID', gummyBatchId, gummyWorkOrderId, 137.2, rawMaterialPrices['RM-CITRICACID']);
-    await consumeMaterial('RM-COLLAGEN', gummyBatchId, gummyWorkOrderId, 23049.95, rawMaterialPrices['RM-COLLAGEN']);
-    await consumeMaterial('RM-GLUTATHIONE', gummyBatchId, gummyWorkOrderId, 13720.21, rawMaterialPrices['RM-GLUTATHIONE']);
-    await consumeMaterial('RM-AIR', gummyBatchId, gummyWorkOrderId, 1372.02, rawMaterialPrices['RM-AIR']);
+  it('Contoh 1b — batch Gummy Zala (rev.4, batch 10kg): bahan Rp1.108.255,93, SDM Rp169.642,86, Rp22.551,16/botol, kemasan Rp8.829,63, margin Rp76.619,22', async () => {
+    // Bahan (subtotal PERSIS dari spec §5 Contoh 1 Langkah B rev.4, qty presisi penuh).
+    await consumeMaterial('RM-MALTITOL', gummyBatchId, gummyWorkOrderId, 384165.86, rawMaterialPrices['RM-MALTITOL']);
+    await consumeMaterial('RM-POLYSORB', gummyBatchId, gummyWorkOrderId, 408557.35, rawMaterialPrices['RM-POLYSORB']);
+    await consumeMaterial('RM-SORBITOL-LIQUID', gummyBatchId, gummyWorkOrderId, 13720.21, rawMaterialPrices['RM-SORBITOL-LIQUID']);
+    await consumeMaterial('RM-PERFECTA-GEL-928', gummyBatchId, gummyWorkOrderId, 34757.86, rawMaterialPrices['RM-PERFECTA-GEL-928']);
+    await consumeMaterial('RM-PERFECTA-GEL-MB', gummyBatchId, gummyWorkOrderId, 7317.44, rawMaterialPrices['RM-PERFECTA-GEL-MB']);
+    await consumeMaterial('RM-GELLAN-GUM', gummyBatchId, gummyWorkOrderId, 3048.94, rawMaterialPrices['RM-GELLAN-GUM']);
+    await consumeMaterial('RM-GLISERIN', gummyBatchId, gummyWorkOrderId, 914.68, rawMaterialPrices['RM-GLISERIN']);
+    await consumeMaterial('RM-POLYDEXTROSE', gummyBatchId, gummyWorkOrderId, 27440.42, rawMaterialPrices['RM-POLYDEXTROSE']);
+    await consumeMaterial('RM-MALICACID', gummyBatchId, gummyWorkOrderId, 1609.84, rawMaterialPrices['RM-MALICACID']);
+    await consumeMaterial('RM-CITRICACID', gummyBatchId, gummyWorkOrderId, 152.45, rawMaterialPrices['RM-CITRICACID']);
+    await consumeMaterial('RM-COLLAGEN', gummyBatchId, gummyWorkOrderId, 25611.06, rawMaterialPrices['RM-COLLAGEN']);
+    await consumeMaterial('RM-GLUTATHIONE', gummyBatchId, gummyWorkOrderId, 15244.68, rawMaterialPrices['RM-GLUTATHIONE']);
+    await consumeMaterial('RM-AIR', gummyBatchId, gummyWorkOrderId, 1524.47, rawMaterialPrices['RM-AIR']);
 
-    // Premix Gelatin — lot HASIL Contoh 1a (2061,69 g @ Rp80,5922/g), dikonsumsi PENUH.
+    // Premix Gelatin — lot HASIL Contoh 1a (2.290,77g @ Rp80,4057/g), dikonsumsi PENUH.
     const { data: premixOutputLot } = await adminClient.from('lots').select('lot_id, unit_cost, quantity_on_hand').eq('lot_number', 'LOT-PREMIX-OUTPUT').single();
     await adminClient
       .from('work_order_consumption')
       .insert([{ work_order_id: gummyWorkOrderId, production_batch_id: gummyBatchId, component_lot_id: premixOutputLot!.lot_id, qty_consumed: premixOutputLot!.quantity_on_hand }]);
 
-    // Kemasan — 1 set per botol (51 set), qty per baris = 51 (BOM 1:1 per botol), kecuali karton 51/27.
+    // Kemasan — 1 set per botol (56,6667 set, yield rev.4), kecuali karton isi 27 (56,6667/27).
+    const yieldBotol = 56.6667;
     for (const [code, price] of Object.entries({ 'PKG-BOTOL-PET-N200': 5500, 'PKG-LABEL-STIKER-N200': 1100, 'PKG-INNER-SLEEVE': 800, 'PKG-OUTER-BOX': 1100, 'PKG-SEAL-STICKER': 200 })) {
       const { data: lot } = await adminClient
         .from('lots')
-        .insert([{ company_id: companyId, production_plant_id: plantId, item_id: itemIds[code], lot_number: `LOT-${code}-${gummyBatchId}`, quantity_on_hand: 51, source_type: 'purchased', status: 'available', unit_cost: price }])
+        .insert([{ company_id: companyId, production_plant_id: plantId, item_id: itemIds[code], lot_number: `LOT-${code}-${gummyBatchId}`, quantity_on_hand: yieldBotol, source_type: 'purchased', status: 'available', unit_cost: price }])
         .select('lot_id')
         .single();
-      await adminClient.from('work_order_consumption').insert([{ work_order_id: gummyWorkOrderId, production_batch_id: gummyBatchId, component_lot_id: lot!.lot_id, qty_consumed: 51 }]);
+      await adminClient.from('work_order_consumption').insert([{ work_order_id: gummyWorkOrderId, production_batch_id: gummyBatchId, component_lot_id: lot!.lot_id, qty_consumed: yieldBotol }]);
     }
     const { data: kartonLot } = await adminClient
       .from('lots')
-      .insert([{ company_id: companyId, production_plant_id: plantId, item_id: itemIds['PKG-KARTON-GUMMY-27'], lot_number: `LOT-KARTON-${gummyBatchId}`, quantity_on_hand: 51 / 27, source_type: 'purchased', status: 'available', unit_cost: 3500 }])
+      .insert([{ company_id: companyId, production_plant_id: plantId, item_id: itemIds['PKG-KARTON-GUMMY-27'], lot_number: `LOT-KARTON-${gummyBatchId}`, quantity_on_hand: yieldBotol / 27, source_type: 'purchased', status: 'available', unit_cost: 3500 }])
       .select('lot_id')
       .single();
-    await adminClient.from('work_order_consumption').insert([{ work_order_id: gummyWorkOrderId, production_batch_id: gummyBatchId, component_lot_id: kartonLot!.lot_id, qty_consumed: 51 / 27 }]);
+    await adminClient.from('work_order_consumption').insert([{ work_order_id: gummyWorkOrderId, production_batch_id: gummyBatchId, component_lot_id: kartonLot!.lot_id, qty_consumed: yieldBotol / 27 }]);
 
-    // SDM: SPV 1 jam + 2 kontrak × 4 jam + 2 PHL × 4 jam (hari biasa).
+    // SDM: SPV 1 jam + 2 kontrak × 4 jam + 2 PHL × 4 jam (hari biasa) — TIDAK berubah di rev.4.
     await recordLabor(gummyBatchId, gummyWorkOrderId, 'SPV Test', 1, '2026-08-19');
     await recordLabor(gummyBatchId, gummyWorkOrderId, 'Kontrak Test 1', 4, '2026-08-19');
     await recordLabor(gummyBatchId, gummyWorkOrderId, 'Kontrak Test 2', 4, '2026-08-19');
@@ -351,17 +354,17 @@ describe('Margin v1 — acceptance test literal spesifikasi-aturan-biaya-v1.md �
     await recordLabor(gummyBatchId, gummyWorkOrderId, 'PHL Test 2', 4, '2026-08-19');
 
     const { materialCost, packagingCost, laborCost } = await computeBatchCost(gummyBatchId);
-    expect(materialCost).toBeCloseTo(997814.95, 0);
+    expect(materialCost).toBeCloseTo(1108255.93, 0);
     expect(laborCost).toBeCloseTo(169642.86, 1);
 
-    const outputQty = 51;
+    const outputQty = 56.6667;
     const productionCostPerBotol = (materialCost + laborCost) / outputQty;
     const packagingCostPerBotol = packagingCost / outputQty;
-    expect(productionCostPerBotol).toBeCloseTo(22891.33, 0);
+    expect(productionCostPerBotol).toBeCloseTo(22551.16, 0);
     expect(packagingCostPerBotol).toBeCloseTo(8829.63, 0);
 
     const margin = 108000 - productionCostPerBotol - packagingCostPerBotol;
-    expect(margin).toBeCloseTo(76279.04, 0);
+    expect(margin).toBeCloseTo(76619.22, 0);
 
     // Simpan lot output FG (dipakai Contoh 3 kalau nanti mau diperluas ke shipment sungguhan).
     await adminClient
@@ -391,20 +394,20 @@ describe('Margin v1 — acceptance test literal spesifikasi-aturan-biaya-v1.md �
 
   // Contoh 3 — FORMULA-LEVEL (agregasi order, sama alasan dengan Contoh 2 untuk SAS005;
   // SAS001 dihitung dari angka per-botol Contoh 1b yang SUDAH divalidasi via DB sungguhan).
-  it('Contoh 3 — agregasi order -> margin kontribusi -> laba operasional bulanan', () => {
-    // "76.279,04"/"5.570,29" per unit di spec §5 adalah tampilan dibulatkan 2 desimal —
+  it('Contoh 3 — agregasi order -> margin kontribusi -> laba operasional bulanan (rev.4)', () => {
+    // "76.619,22"/"5.570,29" per unit di spec §5 adalah tampilan dibulatkan 2 desimal —
     // dikalikan qty besar (20.000/10.000) membesarkan selisih pembulatan itu. Angka
-    // agregat §5 Contoh 3 (Rp1.525.580.815,25 dst) dipakai sebagai SUMBER presisi
+    // agregat §5 Contoh 3 rev.4 (Rp1.532.384.305,79 dst) dipakai sebagai SUMBER presisi
     // (bukan per-unit × qty), konsisten dengan pola reverse-derivation yang sama
     // dipakai di seluruh test ini.
-    const sas001Margin = 1525580815.25;
+    const sas001Margin = 1532384305.79;
     const sas005Margin = 55702922.66;
 
     const totalMargin = sas001Margin + sas005Margin;
-    expect(totalMargin).toBeCloseTo(1581283737.91, 1);
+    expect(totalMargin).toBeCloseTo(1588087228.45, 1);
 
     const overhead = 60500000;
     const operatingProfit = totalMargin - overhead;
-    expect(operatingProfit).toBeCloseTo(1520783737.91, 1);
+    expect(operatingProfit).toBeCloseTo(1527587228.45, 1);
   });
 });

@@ -36,6 +36,7 @@ type WorkOrder = {
   item_name: string | null;
   item_base_uom: string | null;
   bom_id: number;
+  routing_id: number | null;
   production_plant_id: number;
   production_plant_name: string | null;
   sales_order_line_id: number | null;
@@ -73,7 +74,9 @@ type Bom = {
   lines: { component_item_id: number; component_item_code: string | null; component_item_name: string | null; qty_per_unit_output: number; uom: string }[];
 };
 type PlantOption = { production_plant_id: number; name: string };
-type RoutingOption = { routing_id: number; item_id: number; version: number; steps: unknown[] };
+type RoutingStep = { routing_step_id: number; sequence_no: number; step_name: string };
+type RoutingOption = { routing_id: number; item_id: number; version: number; steps: RoutingStep[] };
+type EmployeeOption = { employee_id: number; name: string; position: string | null; is_active: boolean };
 
 type ProductionBatch = {
   production_batch_id: number;
@@ -120,6 +123,7 @@ export default function WorkOrdersPage() {
   const [boms, setBoms] = useState<Bom[]>([]);
   const [routings, setRoutings] = useState<RoutingOption[]>([]);
   const [plants, setPlants] = useState<PlantOption[]>([]);
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
 
   const [expandedWoId, setExpandedWoId] = useState<number | null>(null);
   const [lotsForExpanded, setLotsForExpanded] = useState<Lot[]>([]);
@@ -132,6 +136,10 @@ export default function WorkOrdersPage() {
   const [batchFormStatus, setBatchFormStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [batchFormMessage, setBatchFormMessage] = useState('');
   const [consumptionBatchId, setConsumptionBatchId] = useState('');
+
+  const [laborForm, setLaborForm] = useState({ employee_id: '', routing_step_id: '', hours: '', work_date: todayDateString() });
+  const [laborStatus, setLaborStatus] = useState<'idle' | 'pending' | 'success' | 'warning' | 'error'>('idle');
+  const [laborMessage, setLaborMessage] = useState('');
 
   const [form, setForm] = useState({
     sales_order_id: '',
@@ -201,6 +209,11 @@ export default function WorkOrdersPage() {
     if (ok) setPlants(body.plants || []);
   }, [authedFetch]);
 
+  const loadEmployees = useCallback(async () => {
+    const { ok, body } = await authedFetch('/api/employees');
+    if (ok) setEmployees((body.employees || []).filter((e: EmployeeOption) => e.is_active));
+  }, [authedFetch]);
+
   useEffect(() => {
     const checkAccessAndLoad = async () => {
       if (!hasSupabaseConfig || !supabase) {
@@ -228,11 +241,11 @@ export default function WorkOrdersPage() {
       // "Detail" tidak pernah mencocokkan bom_id ke array yang masih kosong
       // (yang bikin komponen lot gagal ke-fetch sama sekali, tampak seolah lot
       // belum tersedia padahal datanya ada).
-      await Promise.all([loadWorkOrders(), loadSalesOrders(), loadBoms(), loadRoutings(), loadPlants()]);
+      await Promise.all([loadWorkOrders(), loadSalesOrders(), loadBoms(), loadRoutings(), loadPlants(), loadEmployees()]);
       setCheckingAccess(false);
     };
     checkAccessAndLoad();
-  }, [router, loadWorkOrders, loadSalesOrders, loadBoms, loadRoutings, loadPlants]);
+  }, [router, loadWorkOrders, loadSalesOrders, loadBoms, loadRoutings, loadPlants, loadEmployees]);
 
   const selectedSo = salesOrders.find((so) => String(so.sales_order_id) === form.sales_order_id) ?? null;
   const selectedSoLine = selectedSo?.lines.find((line) => String(line.sales_order_line_id) === form.sales_order_line_id) ?? null;
@@ -364,6 +377,45 @@ export default function WorkOrdersPage() {
     await loadWorkOrders();
   };
 
+  // Labor log — tim produksi = pool bergilir (klarifikasi pemilik produk), jadi
+  // SENGAJA tidak ada validasi "orang ini sudah ditugaskan di tempat lain hari ini";
+  // 1 orang wajar dicatat di banyak tahap/batch berbeda hari yang sama. Server
+  // mengirim `warning` (bukan error) kalau total jamnya hari itu melebihi jam kerja
+  // efektif — tetap tersimpan, cuma ditampilkan supaya bisa dicek ulang.
+  const handleRecordLabor = async (wo: WorkOrder) => {
+    if (!consumptionBatchId) {
+      setLaborStatus('error');
+      setLaborMessage('Pilih batch produksi dulu di bagian Catat Pemakaian Bahan di atas.');
+      return;
+    }
+    if (!laborForm.employee_id || !laborForm.hours) {
+      setLaborStatus('error');
+      setLaborMessage('Pilih karyawan dan isi jam kerja dulu.');
+      return;
+    }
+    setLaborStatus('pending');
+    setLaborMessage('');
+    const { ok, body } = await authedFetch('/api/work-orders/labor-log', {
+      method: 'POST',
+      body: JSON.stringify({
+        work_order_id: wo.work_order_id,
+        production_batch_id: Number(consumptionBatchId),
+        employee_id: Number(laborForm.employee_id),
+        routing_step_id: laborForm.routing_step_id ? Number(laborForm.routing_step_id) : null,
+        actual_hours: Number(laborForm.hours),
+        work_date: laborForm.work_date
+      })
+    });
+    if (!ok) {
+      setLaborStatus('error');
+      setLaborMessage(body.error || 'Gagal mencatat jam kerja.');
+      return;
+    }
+    setLaborStatus(body.warning ? 'warning' : 'success');
+    setLaborMessage(body.warning || 'Jam kerja tercatat.');
+    setLaborForm((prev) => ({ ...prev, employee_id: '', routing_step_id: '', hours: '' }));
+  };
+
   const columns = useMemo<ColumnDef<WorkOrder>[]>(
     () => [
       {
@@ -434,6 +486,7 @@ export default function WorkOrdersPage() {
 
   const expandedWo = workOrders.find((wo) => wo.work_order_id === expandedWoId) ?? null;
   const expandedBom = expandedWo ? boms.find((b) => b.bom_id === expandedWo.bom_id) : null;
+  const expandedRouting = expandedWo?.routing_id ? routings.find((r) => r.routing_id === expandedWo.routing_id) : null;
 
   if (checkingAccess) {
     return (
@@ -601,6 +654,75 @@ export default function WorkOrdersPage() {
                   })()
                 )}
               </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {expandedWo ? (
+          <Card>
+            <CardHeader>
+              <CardDescription className="uppercase tracking-[0.2em]">Biaya SDM</CardDescription>
+              <CardTitle className="text-xl">Catat Jam Kerja (Labor Log) — per Batch</CardTitle>
+              <CardDescription>
+                Tim produksi berpindah tahap sepanjang hari — 1 orang wajar dicatat berkali-kali di tahap/batch berbeda hari yang sama. Pilih batch di bagian &quot;Catat Pemakaian
+                Bahan&quot; di atas dulu.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!consumptionBatchId ? (
+                <p className="text-sm text-muted-foreground">Pilih batch produksi dulu di bagian &quot;Catat Pemakaian Bahan&quot; di atas.</p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Karyawan</span>
+                      <Select value={laborForm.employee_id} onValueChange={(value) => setLaborForm((prev) => ({ ...prev, employee_id: value }))}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih karyawan..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {employees.map((emp) => (
+                            <SelectItem key={emp.employee_id} value={String(emp.employee_id)}>
+                              {emp.name} {emp.position ? `— ${emp.position}` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Tahap (opsional)</span>
+                      <Select value={laborForm.routing_step_id} onValueChange={(value) => setLaborForm((prev) => ({ ...prev, routing_step_id: value }))}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih tahap..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(expandedRouting?.steps ?? []).map((step) => (
+                            <SelectItem key={step.routing_step_id} value={String(step.routing_step_id)}>
+                              {step.sequence_no}. {step.step_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Jam Kerja</span>
+                      <Input type="number" step="any" min="0" placeholder="mis. 4" value={laborForm.hours} onChange={(event) => setLaborForm((prev) => ({ ...prev, hours: event.target.value }))} />
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Tanggal</span>
+                      <Input type="date" value={laborForm.work_date} onChange={(event) => setLaborForm((prev) => ({ ...prev, work_date: event.target.value }))} />
+                    </label>
+                  </div>
+                  <Button className="w-fit" size="sm" disabled={laborStatus === 'pending'} onClick={() => handleRecordLabor(expandedWo)}>
+                    {laborStatus === 'pending' ? 'Menyimpan...' : 'Catat Jam Kerja'}
+                  </Button>
+                  {laborMessage ? (
+                    <p className={`text-sm ${laborStatus === 'error' ? 'text-destructive' : laborStatus === 'warning' ? 'text-warning-subtle-foreground' : 'text-success-subtle-foreground'}`}>
+                      {laborMessage}
+                    </p>
+                  ) : null}
+                </div>
+              )}
             </CardContent>
           </Card>
         ) : null}

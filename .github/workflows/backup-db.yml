@@ -5,10 +5,16 @@ name: Backup Database (manual)
 # (tidak ada Docker sama sekali di sana, dan `supabase db dump` SELALU shell-out ke
 # pg_dump lewat container terlepas dari target lokal/remote — lihat HANDOFF.md). GitHub
 # Actions runner PUNYA Docker (dibuktikan job "Rebuild Schema from Migrations" di
-# ci.yml, jalan tiap push), jadi backup SUNGGUHAN (schema + DATA, bukan cuma schema)
-# dijalankan di sini — trigger MANUAL saja (workflow_dispatch), bukan tiap push, karena
-# ini query terhadap project REMOTE (dev), bukan container lokal sekali pakai seperti
-# job rebuild-migrations.
+# ci.yml, jalan tiap push), jadi backup SUNGGUHAN (schema + DATA) dijalankan di sini —
+# trigger MANUAL saja (workflow_dispatch), bukan tiap push, karena ini query terhadap
+# project REMOTE (dev), bukan container lokal sekali pakai seperti job rebuild-migrations.
+#
+# KOREKSI (run #1-#2 gagal, run #2 dibuktikan lewat log sungguhan): `supabase db dump`
+# TIDAK PUNYA mode gabungan schema+data dalam 1 command — `--help` cuma punya toggle
+# `--data-only` (data SAJA); tanpa flag itu, hasilnya SCHEMA SAJA (dibuktikan: dump
+# tanpa --data-only cuma berisi CREATE TABLE/ALTER TABLE/CREATE SEQUENCE utk companies,
+# NOL baris COPY/INSERT data). Jadi backup PENUH butuh 2 pemanggilan terpisah, digabung
+# jadi 1 file (schema dulu, baru data — urutan pg_dump standar).
 on:
   workflow_dispatch: {}
 
@@ -23,39 +29,53 @@ jobs:
         with:
           version: latest
 
-      # supabase db dump --linked SELALU shell-out ke pg_dump lewat Docker (terbukti di
-      # environment kerja lokal — --linked --data-only pun tetap gagal tanpa Docker),
-      # tapi runner GitHub Actions punya Docker bawaan, jadi ini jalan di sini.
-      - name: supabase db dump --linked (schema + data, PENUH — bukan --data-only)
-        run: |
-          supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
-          supabase db dump --linked -f backup-full-$(date +%Y%m%d-%H%M%S).sql
+      - name: supabase link
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
 
+      - name: supabase db dump --linked (schema)
+        run: supabase db dump --linked -f backup-schema.sql
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      - name: supabase db dump --linked --data-only (data)
+        run: supabase db dump --linked --data-only -f backup-data.sql
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      - name: Gabungkan jadi 1 file backup penuh (schema dulu, baru data)
+        run: |
+          STAMP=$(date +%Y%m%d-%H%M%S)
+          cat backup-schema.sql backup-data.sql > "backup-full-${STAMP}.sql"
+
       - name: Verifikasi dump tidak kosong & berisi data (bukan cuma schema kosong)
         run: |
           FILE=$(ls backup-full-*.sql)
           SIZE=$(stat -c%s "$FILE" 2>/dev/null || stat -f%z "$FILE")
-          echo "Ukuran dump: ${SIZE} bytes"
+          echo "Ukuran dump gabungan: ${SIZE} bytes"
           if [ "$SIZE" -lt 10000 ]; then
-            echo "GAGAL: dump terlalu kecil (<10KB) — kemungkinan cuma schema kosong tanpa data." >&2
+            echo "GAGAL: dump terlalu kecil (<10KB) — kemungkinan schema/data kosong." >&2
             exit 1
           fi
-          # PENTING (pelajaran dari ci.yml job rebuild-migrations): `supabase db dump`
-          # SELALU pakai --quote-all-identifier, jadi nama tabel di dump SELALU
-          # "public"."companies" (dikutip), BUKAN public.companies polos. Versi
-          # pertama grep ini pakai pola tanpa kutip dan run pertama gagal PERSIS
-          # karena ini — sudah dibuktikan lewat run gagal, bukan tebakan.
+          COPY_COUNT=$(grep -cE "^COPY " "$FILE" || true)
+          INSERT_COUNT=$(grep -cE "^INSERT INTO " "$FILE" || true)
+          echo "Jumlah baris COPY: ${COPY_COUNT}, baris INSERT INTO: ${INSERT_COUNT}"
+          if [ "$COPY_COUNT" -eq 0 ] && [ "$INSERT_COUNT" -eq 0 ]; then
+            echo "GAGAL: tidak ada satu baris COPY/INSERT pun — dump TIDAK berisi data sama sekali." >&2
+            exit 1
+          fi
+          # PENTING (pelajaran dari ci.yml job rebuild-migrations): nama tabel di dump
+          # SELALU dikutip "public"."companies" (--quote-all-identifier), bukan polos.
           if ! grep -qE "COPY \"?public\"?\.\"?companies\"?[[:space:]\(]" "$FILE" && ! grep -qE "INSERT INTO \"?public\"?\.\"?companies\"?[[:space:]\(]" "$FILE"; then
-            echo "GAGAL: dump tidak berisi data tabel companies — bukan backup DATA yang valid." >&2
-            echo "--- 5 baris pertama yang mengandung kata 'companies' (debug) ---" >&2
-            grep -i "companies" "$FILE" | head -5 >&2
+            echo "GAGAL: dump tidak berisi data spesifik tabel companies." >&2
             exit 1
           fi
-          echo "OK: dump berisi data sungguhan (bukan cuma schema)."
+          echo "OK: dump gabungan berisi schema DAN data sungguhan (${COPY_COUNT} COPY block, ${INSERT_COUNT} INSERT statement)."
 
       - name: Upload backup sebagai artifact (retensi 7 hari)
         if: always()

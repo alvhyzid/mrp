@@ -4,6 +4,68 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## GELOMBANG 0 — Prasyarat Margin v1 (18 Agu 2026) — SELESAI. GELOMBANG 1/2 — BLOCKED, lihat catatan di bawah
+
+Instruksi: kerjakan GELOMBANG 0 → 1 → 2 otonom, boleh lewati bagian yang butuh keputusan bisnis (catat di sini, jangan improvisasi/tunggu). GELOMBANG 0 selesai penuh & terverifikasi. GELOMBANG 1 & 2 **BELUM dimulai** — bukan lupa, tapi 2 blocker data konkret ditemukan di awal (lihat bagian "BLOCKER" di bawah) yang membuat sebagian besar isi Gelombang 1/2 tidak bisa dikerjakan jujur tanpa mengarang data bisnis.
+
+### 0A — Konsumsi Kemasan: TIDAK ADA kode yang diubah (dikonfirmasi tidak perlu)
+
+Audit sebelumnya (2 audit terpisah, hasil sama) sudah membuktikan alur `work_order_consumption → stock_movements → lot` untuk item `packaging` **sudah berfungsi penuh tanpa perubahan kode**:
+- `recordWorkOrderConsumption.ts` tidak pernah memfilter `item.type`.
+- Form "Catat Pemakaian Bahan" (`WorkOrdersPage.tsx`) menampilkan SEMUA baris BOM item yang diproduksi, termasuk packaging, sama seperti raw material.
+- BOM line picker & validasi server (`BomsPage.tsx`, `bomValidation.ts`) tidak melarang tipe item apa pun jadi komponen.
+- Data nyata: 3 BOM aktif sungguhan sudah punya komponen packaging (Botol PET N200 di BOM Gummy Zala, Sachet Film & Box Karton di BOM serbuk), dipakai Work Order in_progress/planned nyata.
+
+Kesimpulannya: gap yang ada murni operasional (staf belum terbiasa isi baris packaging saat mencatat konsumsi; 1 item belum pernah di-goods-receipt), BUKAN batasan sistem. Tidak ada perubahan kode di 0A — sesuai instruksi "kalau audit A menyatakan sudah bisa semua, tulis konfirmasi itu di HANDOFF dan lanjut".
+
+### 0B — Saldo Awal Stok (Opening Balance) — fitur baru, SELESAI & terverifikasi
+
+**Masalah:** sebelum ini, tidak ada cara UI membuat LOT BARU tanpa lewat goods receipt (PO supplier) — jadi tidak ada cara resmi menginput stok pabrik yang sudah ada sebelum sistem dipakai.
+
+**Yang dibangun** (pola sama persis dengan `record_manual_stock_adjustment` yang sudah ada):
+- Migration `supabase/migrations/20260818000000_stock_opening_balance.sql` — (a) tambah `'opening_balance'` ke `lots_source_type_check` (source_type baru, sengaja BUKAN reuse `'purchased'`, supaya lot hasil entri saldo awal tetap bisa dibedakan dari goods receipt sungguhan — traceability tetap jujur); (b) fungsi atomik `create_opening_balance_lot()` — insert `lots` baru (`status='available'`) + insert `stock_movements` (`movement_type='adjustment'`, `reference_doc='Saldo awal stok opname'`, `reason_code='stock_opname_variance'`) dalam 1 transaksi.
+- Server: `src/features/mrp/server/recordOpeningBalance.ts` (validasi item/plant milik company, qty > 0, auto-generate `lot_number` kalau field nomor lot supplier dikosongkan: `SALDO-AWAL-{item_code}-{timestamp}`) + route `app/api/stock-adjustments/opening-balance/route.ts`.
+- Akses: `canAdjustStock` — role yang SAMA PERSIS dengan Penyesuaian Stok Manual biasa (`warehouse_manager` + `company_admin`/`general_manager`), tidak perlu fungsi role baru.
+- UI: `WarehouseDashboardPage.tsx`, card "Penyesuaian Stok Manual" sekarang punya toggle 2 mode — "Sesuaikan Lot yang Ada" (form lama, tidak berubah) vs **"Saldo Awal (Lot Baru)"** (form baru: Item, Plant/Gudang, Jumlah, Tanggal Kadaluarsa opsional, Nomor Lot Supplier opsional, Catatan opsional, tombol "Catat Saldo Awal").
+
+**Cara pakai (untuk saat pemilik produk input data stok pabrik dari PDF):**
+1. Buka `/warehouse`, scroll ke card "Penyesuaian Stok Manual".
+2. Klik tab "Saldo Awal (Lot Baru)".
+3. Pilih Item, pilih Plant/Gudang tujuan, isi Jumlah. Nomor Lot Supplier & Tanggal Kadaluarsa opsional (isi kalau datanya ada). Catatan opsional (mis. "Stok opname 18 Agustus 2026").
+4. Klik "Catat Saldo Awal" — sistem langsung buat 1 lot baru dengan stok itu, langsung bisa dipakai (muncul di ringkasan stok, bisa dipilih di dropdown lot untuk konsumsi batch/pengiriman, dst.) persis seperti lot dari goods receipt biasa.
+5. Ulangi 1×1 per item yang datanya ada di PDF stok opname.
+
+**Bukti verifikasi (browser sungguhan, login `warehouse.a@debug.mrp`):**
+- Toggle mode berfungsi, form baru tampil dengan field lengkap.
+- Submit sungguhan → `POST /api/stock-adjustments/opening-balance` → `200 {"success":true,"lot_id":591,"lot_number":"SALDO-AWAL-...-1787034812931","stock_movement_id":370}`.
+- Pesan sukses di UI: `Saldo awal tercatat — lot baru "SALDO-AWAL-..." dengan stok 123.5.`
+- DB dicek langsung: `lots` baris baru dengan `source_type:"opening_balance"`, `status:"available"`, qty benar; `stock_movements` baris baru dengan `movement_type:"adjustment"`, `reference_doc:"Saldo awal stok opname"`, `reason_code:"stock_opname_variance"`, `notes` tersimpan sesuai input.
+- `status:"available"` membuktikan lot ini langsung bisa dipakai jalur konsumsi batch yang sama seperti lot lain (query `listLots.ts` yang dipakai dropdown konsumsi hanya mensyaratkan `status='available' AND quantity_on_hand>0`).
+
+Typecheck bersih, `npm run build` sukses (route `/api/stock-adjustments/opening-balance` terdaftar), 33/33 test tetap lulus.
+
+### BLOCKER untuk GELOMBANG 1 & 2 — dicatat di sini sesuai instruksi ("jangan improvisasi, jangan tunggu, catat & lewati")
+
+Sebelum menulis kode Gelombang 1, saya cek dulu ketersediaan 2 sumber acuan yang instruksi minta: `docs/spesifikasi-aturan-biaya-v1.md` (SUDAH ADA di repo, rev. 3 final, 175 baris — dibaca penuh) dan `DATA_PRODUKSI_PT_ITM.pdf` (referensi utama untuk data karyawan & SOP routing). Hasil pengecekan:
+
+1. **`DATA_PRODUKSI_PT_ITM.pdf` TIDAK ditemukan di mana pun** — dicari di seluruh direktori proyek, `Downloads`, `Desktop`, dan pencarian filesystem penuh (`find /`). File ini TIDAK pernah diberikan ke sesi Claude Code manapun (spec v1 menyebutnya sebagai basis kerja "Claude Fable" — kemungkinan PDF ini hanya pernah dibaca sesi/tool LAIN, bukan di sini). Ini memblokir:
+   - **Data 30 karyawan sungguhan** (nama, posisi, department, tier gaji per orang) — spec v1 §2 cuma punya 3 TIER tarif (SPV Produksi Rp3,5jt, Pegawai kontrak Rp2jt, PHL Rp50rb/hari), TIDAK ada daftar 30 nama+posisi+department+tier assignment per orang.
+   - **Tahapan SOP routing gummy & serbuk** (nama tahap, urutan, `active_duration_minutes` per tahap) — spec v1 cuma punya wait_duration untuk 3 titik (premix 12 jam, setting 1 jam, curing 3 hari), BUKAN struktur routing lengkap (nama tahap apa saja, urutan, durasi aktif tiap tahap).
+
+2. **Harga per-bahan untuk 5 premix serbuk (PMSW/PMAC/PMFL/PMVITC/PMSRH) UNDERDETERMINED** — spec v1 §5 Contoh 2 cuma memberi rasio komposisi (mis. "PMSW: malto 50 + stevia 20 + sucralose 30" per 100g) dan biaya AGREGAT per gram (`Rp203,1538/g` utk PMSW dst.), TIDAK memberi harga per-bahan individual (malto/stevia/sucralose/derasi orange/ascorbic/sereh). Sistem menghitung biaya BOTTOM-UP dari `item.standard_cost`/`lot.unit_cost` × qty BOM — untuk mereproduksi angka agregat itu PERSIS, saya butuh harga tiap bahan individual, dan dari 1 persamaan (total agregat) dengan ≥2 bahan tak diketahui per premix, ini underdetermined (tidak bisa diselesaikan tanpa mengarang salah satu harga). Mengarang angka ini melanggar instruksi "jangan improvisasi keputusan bisnis" — harga bahan adalah fakta bisnis, bukan sesuatu yang boleh saya tebak.
+
+**Yang TIDAK terblokir dan seharusnya bisa dikerjakan di sesi berikutnya begitu 2 hal di atas tersedia** (karena datanya SUDAH lengkap di spec v1, dikutip literal): item + harga kemasan gummy & serbuk, BOM Premix Gelatin (2 level, semua bahan+harga ada di §5 Contoh 1), BOM Gummy Zala (14 bahan + harga lengkap ada di §5 Contoh 1), customer + 2 PO REAL (SAS001/SAS005, tanggal+qty+harga semua ada di §4), stok bahan baku=0 + PO supplier botol China 30.500pcs ETA 22 Agu (ada di §4), konfigurasi biaya per tenant (§2, semua nilai ada). Bagian ini SENGAJA belum saya kerjakan sekarang — bukan karena terblokir data, tapi karena Gelombang 1 instruksinya adalah SATU seed script koheren (idempotent, real case), dan mengerjakan sebagian besar tapi sengaja melubangi bagian karyawan/routing/premix-serbuk akan menghasilkan data yang TIDAK konsisten (mis. Work Order tanpa routing valid, BOM serbuk tidak lengkap) — lebih aman selesaikan sekaligus setelah data lengkap daripada seed setengah jadi yang berisiko dianggap "selesai" padahal keropos.
+
+3. **Poin 8 Gelombang 1 (pembersihan data demo lama) SENGAJA belum dijalankan** — ini operasi destruktif skala besar (hapus data transaksional+master demo di SELURUH database dev, termasuk banyak fixture yang terkumpul lintas puluhan sesi sebelumnya) yang instruksinya sendiri minta kehati-hatian ekstra (backup, staging dulu). Karena scope "apa yang termasuk demo vs yang harus dipertahankan (struktur dipakai test)" perlu penilaian yang salahnya mahal & sulit dibalik, dan Gelombang 1 belum bisa dieksekusi utuh (lihat poin 1-2), langkah ini ditunda sampai seed real-case siap dijalankan — supaya pembersihan & seed baru terjadi berdekatan (tidak ada jendela waktu database "kosong" tanpa data kerja).
+
+**Yang dibutuhkan dari pemilik produk sebelum Gelombang 1/2 bisa lanjut:**
+- File `DATA_PRODUKSI_PT_ITM.pdf` (atau ekstraksi tertulis dari isinya): daftar 30 karyawan (nama, posisi, department, masuk tier gaji yang mana), dan tahapan SOP routing gummy & serbuk (nama tahap + urutan + estimasi durasi aktif tiap tahap).
+- Harga per-bahan individual untuk 5 premix serbuk (malto, stevia, sucralose, derasi orange, ascorbic acid, sereh, dan bahan PMAC/PMVITC/PMSRH lainnya) — bukan cuma agregat per premix yang sudah ada di spec.
+
+Begitu 2 hal ini tersedia, Gelombang 1 (seed real-case + pembersihan demo) dan Gelombang 2 (implementasi margin + acceptance test §5 + deteksi konflik perencanaan) siap dikerjakan berurutan sesuai instruksi asli — tidak perlu instruksi ulang, cukup lampirkan data yang kurang.
+
+---
+
 ## Pengerasan validasi upload file publik & internal (18 Agu 2026) — SELESAI
 
 Pemilik produk minta verifikasi konkret: bisakah endpoint upload foto POD (`/pod/[token]`, publik tanpa login) menerima file BUKAN gambar (di-rename ekstensinya) atau file berukuran raksasa?

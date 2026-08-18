@@ -84,6 +84,9 @@ type LotOption = {
   quantity_on_hand: number;
 };
 
+type ItemOption = { item_id: number; item_code: string; name: string; base_uom: string; is_active: boolean };
+type PlantOption = { production_plant_id: number; name: string };
+
 export default function WarehouseDashboardPage() {
   const router = useRouter();
   const [checkingAccess, setCheckingAccess] = useState(true);
@@ -111,6 +114,13 @@ export default function WarehouseDashboardPage() {
   const [adjustmentForm, setAdjustmentForm] = useState({ lot_id: '', qty_delta: '', reason_code: '', notes: '' });
   const [adjustmentStatus, setAdjustmentStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [adjustmentMessage, setAdjustmentMessage] = useState('');
+
+  const [adjustmentMode, setAdjustmentMode] = useState<'adjust_existing' | 'opening_balance'>('adjust_existing');
+  const [items, setItems] = useState<ItemOption[]>([]);
+  const [plants, setPlants] = useState<PlantOption[]>([]);
+  const [openingBalanceForm, setOpeningBalanceForm] = useState({ item_id: '', production_plant_id: '', qty: '', lot_number: '', expiry_date: '', notes: '' });
+  const [openingBalanceStatus, setOpeningBalanceStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [openingBalanceMessage, setOpeningBalanceMessage] = useState('');
 
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
@@ -181,6 +191,12 @@ export default function WarehouseDashboardPage() {
     if (ok) setLots(body.lots || []);
   }, [authedFetch]);
 
+  const loadItemsAndPlants = useCallback(async () => {
+    const [itemsRes, plantsRes] = await Promise.all([authedFetch('/api/items'), authedFetch('/api/production-plants')]);
+    if (itemsRes.ok) setItems((itemsRes.body.items || []).filter((i: ItemOption) => i.is_active));
+    if (plantsRes.ok) setPlants(plantsRes.body.plants || []);
+  }, [authedFetch]);
+
   const handleSubmitAdjustment = async () => {
     const qtyDelta = Number(adjustmentForm.qty_delta);
     if (!adjustmentForm.lot_id) {
@@ -223,6 +239,48 @@ export default function WarehouseDashboardPage() {
     setAdjustmentStatus('success');
     setAdjustmentMessage(`Penyesuaian tercatat — stok lot ini sekarang ${body.quantity_on_hand}.`);
     setAdjustmentForm({ lot_id: '', qty_delta: '', reason_code: '', notes: '' });
+    await Promise.all([loadStock(), loadLots()]);
+  };
+
+  const handleSubmitOpeningBalance = async () => {
+    const qty = Number(openingBalanceForm.qty);
+    if (!openingBalanceForm.item_id) {
+      setOpeningBalanceStatus('error');
+      setOpeningBalanceMessage('Pilih item dulu.');
+      return;
+    }
+    if (!openingBalanceForm.production_plant_id) {
+      setOpeningBalanceStatus('error');
+      setOpeningBalanceMessage('Pilih plant/gudang dulu.');
+      return;
+    }
+    if (!Number.isFinite(qty) || qty <= 0) {
+      setOpeningBalanceStatus('error');
+      setOpeningBalanceMessage('Isi jumlah saldo awal, harus lebih besar dari 0.');
+      return;
+    }
+
+    setOpeningBalanceStatus('saving');
+    setOpeningBalanceMessage('');
+    const { ok, body } = await authedFetch('/api/stock-adjustments/opening-balance', {
+      method: 'POST',
+      body: JSON.stringify({
+        item_id: Number(openingBalanceForm.item_id),
+        production_plant_id: Number(openingBalanceForm.production_plant_id),
+        qty,
+        lot_number: openingBalanceForm.lot_number.trim() || null,
+        expiry_date: openingBalanceForm.expiry_date || null,
+        notes: openingBalanceForm.notes.trim() || null
+      })
+    });
+    if (!ok) {
+      setOpeningBalanceStatus('error');
+      setOpeningBalanceMessage(body.error || 'Gagal membuat saldo awal stok.');
+      return;
+    }
+    setOpeningBalanceStatus('success');
+    setOpeningBalanceMessage(`Saldo awal tercatat — lot baru "${body.lot_number}" dengan stok ${qty}.`);
+    setOpeningBalanceForm({ item_id: '', production_plant_id: '', qty: '', lot_number: '', expiry_date: '', notes: '' });
     await Promise.all([loadStock(), loadLots()]);
   };
 
@@ -282,10 +340,10 @@ export default function WarehouseDashboardPage() {
       }
       setRole(meData?.user?.role ?? null);
       setCheckingAccess(false);
-      await Promise.all([loadStock(), loadAlerts(), loadPendingPos(), loadLots()]);
+      await Promise.all([loadStock(), loadAlerts(), loadPendingPos(), loadLots(), loadItemsAndPlants()]);
     };
     checkAccessAndLoad();
-  }, [router, loadStock, loadAlerts, loadPendingPos, loadLots]);
+  }, [router, loadStock, loadAlerts, loadPendingPos, loadLots, loadItemsAndPlants]);
 
   const stockColumns = useMemo<ColumnDef<StockRow>[]>(
     () => [
@@ -495,69 +553,177 @@ export default function WarehouseDashboardPage() {
             <CardHeader>
               <CardDescription className="uppercase tracking-[0.2em]">Koreksi Stok</CardDescription>
               <CardTitle className="text-xl">Penyesuaian Stok Manual</CardTitle>
-              <CardDescription>Khusus stok opname/kerusakan — bukan pengganti alur penerimaan/produksi/pengiriman normal. Setiap penyesuaian tercatat di riwayat pergerakan stok beserta alasannya.</CardDescription>
+              <CardDescription>Khusus stok opname/kerusakan/saldo awal — bukan pengganti alur penerimaan/produksi/pengiriman normal. Setiap penyesuaian tercatat di riwayat pergerakan stok beserta alasannya.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-col gap-3">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">Lot</span>
-                    <Select value={adjustmentForm.lot_id} onValueChange={(value) => setAdjustmentForm((prev) => ({ ...prev, lot_id: value }))}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pilih lot..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {lots.map((lot) => (
-                          <SelectItem key={lot.lot_id} value={String(lot.lot_id)}>
-                            {lot.item_code} — {lot.item_name} — {lot.lot_number} (stok: {lot.quantity_on_hand} {lot.item_base_uom})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">Jumlah Penyesuaian (+/-)</span>
-                    <Input
-                      type="number"
-                      step="any"
-                      placeholder="mis. -5 (berkurang) atau 5 (bertambah)"
-                      value={adjustmentForm.qty_delta}
-                      onChange={(event) => setAdjustmentForm((prev) => ({ ...prev, qty_delta: event.target.value }))}
-                    />
-                  </label>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">Alasan</span>
-                    <Select value={adjustmentForm.reason_code} onValueChange={(value) => setAdjustmentForm((prev) => ({ ...prev, reason_code: value }))}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pilih alasan..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(adjustmentReasonLabels).map(([code, label]) => (
-                          <SelectItem key={code} value={code}>
-                            {label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">Catatan {adjustmentForm.reason_code === 'other' ? '(wajib)' : '(opsional)'}</span>
-                    <Input
-                      value={adjustmentForm.notes}
-                      onChange={(event) => setAdjustmentForm((prev) => ({ ...prev, notes: event.target.value }))}
-                      placeholder="mis. hasil stok opname 15 Agustus, selisih -5 kg"
-                    />
-                  </label>
-                </div>
-
-                <Button className="w-fit" disabled={adjustmentStatus === 'saving'} onClick={handleSubmitAdjustment}>
-                  {adjustmentStatus === 'saving' ? 'Menyimpan...' : 'Catat Penyesuaian'}
-                </Button>
-                {adjustmentMessage ? <p className={`text-sm ${adjustmentStatus === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>{adjustmentMessage}</p> : null}
+              <div className="mb-4 inline-flex rounded-md border p-1">
+                <button
+                  type="button"
+                  onClick={() => setAdjustmentMode('adjust_existing')}
+                  className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${adjustmentMode === 'adjust_existing' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  Sesuaikan Lot yang Ada
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdjustmentMode('opening_balance')}
+                  className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${adjustmentMode === 'opening_balance' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  Saldo Awal (Lot Baru)
+                </button>
               </div>
+
+              {adjustmentMode === 'adjust_existing' ? (
+                <div className="flex flex-col gap-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Lot</span>
+                      <Select value={adjustmentForm.lot_id} onValueChange={(value) => setAdjustmentForm((prev) => ({ ...prev, lot_id: value }))}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih lot..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {lots.map((lot) => (
+                            <SelectItem key={lot.lot_id} value={String(lot.lot_id)}>
+                              {lot.item_code} — {lot.item_name} — {lot.lot_number} (stok: {lot.quantity_on_hand} {lot.item_base_uom})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Jumlah Penyesuaian (+/-)</span>
+                      <Input
+                        type="number"
+                        step="any"
+                        placeholder="mis. -5 (berkurang) atau 5 (bertambah)"
+                        value={adjustmentForm.qty_delta}
+                        onChange={(event) => setAdjustmentForm((prev) => ({ ...prev, qty_delta: event.target.value }))}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Alasan</span>
+                      <Select value={adjustmentForm.reason_code} onValueChange={(value) => setAdjustmentForm((prev) => ({ ...prev, reason_code: value }))}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih alasan..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(adjustmentReasonLabels).map(([code, label]) => (
+                            <SelectItem key={code} value={code}>
+                              {label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Catatan {adjustmentForm.reason_code === 'other' ? '(wajib)' : '(opsional)'}</span>
+                      <Input
+                        value={adjustmentForm.notes}
+                        onChange={(event) => setAdjustmentForm((prev) => ({ ...prev, notes: event.target.value }))}
+                        placeholder="mis. hasil stok opname 15 Agustus, selisih -5 kg"
+                      />
+                    </label>
+                  </div>
+
+                  <Button className="w-fit" disabled={adjustmentStatus === 'saving'} onClick={handleSubmitAdjustment}>
+                    {adjustmentStatus === 'saving' ? 'Menyimpan...' : 'Catat Penyesuaian'}
+                  </Button>
+                  {adjustmentMessage ? <p className={`text-sm ${adjustmentStatus === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>{adjustmentMessage}</p> : null}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  <p className="text-sm text-muted-foreground">
+                    Membuat LOT BARU (bukan menyesuaikan lot yang sudah ada) — dipakai untuk menginput stok yang sudah ada di gudang sebelum sistem ini dipakai (data stok opname awal), tanpa perlu ada PO/goods receipt.
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Item</span>
+                      <Select value={openingBalanceForm.item_id} onValueChange={(value) => setOpeningBalanceForm((prev) => ({ ...prev, item_id: value }))}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih item..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {items.map((item) => (
+                            <SelectItem key={item.item_id} value={String(item.item_id)}>
+                              {item.item_code} — {item.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Plant/Gudang</span>
+                      <Select
+                        value={openingBalanceForm.production_plant_id}
+                        onValueChange={(value) => setOpeningBalanceForm((prev) => ({ ...prev, production_plant_id: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih plant..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {plants.map((plant) => (
+                            <SelectItem key={plant.production_plant_id} value={String(plant.production_plant_id)}>
+                              {plant.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </label>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Jumlah</span>
+                      <Input
+                        type="number"
+                        step="any"
+                        min="0"
+                        placeholder="mis. 850"
+                        value={openingBalanceForm.qty}
+                        onChange={(event) => setOpeningBalanceForm((prev) => ({ ...prev, qty: event.target.value }))}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Tanggal Kadaluarsa (opsional)</span>
+                      <Input
+                        type="date"
+                        value={openingBalanceForm.expiry_date}
+                        onChange={(event) => setOpeningBalanceForm((prev) => ({ ...prev, expiry_date: event.target.value }))}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Nomor Lot Supplier (opsional)</span>
+                      <Input
+                        value={openingBalanceForm.lot_number}
+                        onChange={(event) => setOpeningBalanceForm((prev) => ({ ...prev, lot_number: event.target.value }))}
+                        placeholder="Kosongkan untuk dibuatkan otomatis"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Catatan (opsional)</span>
+                      <Input
+                        value={openingBalanceForm.notes}
+                        onChange={(event) => setOpeningBalanceForm((prev) => ({ ...prev, notes: event.target.value }))}
+                        placeholder="mis. hasil stok opname pabrik 18 Agustus"
+                      />
+                    </label>
+                  </div>
+
+                  <Button className="w-fit" disabled={openingBalanceStatus === 'saving'} onClick={handleSubmitOpeningBalance}>
+                    {openingBalanceStatus === 'saving' ? 'Menyimpan...' : 'Catat Saldo Awal'}
+                  </Button>
+                  {openingBalanceMessage ? (
+                    <p className={`text-sm ${openingBalanceStatus === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>{openingBalanceMessage}</p>
+                  ) : null}
+                </div>
+              )}
             </CardContent>
           </Card>
         ) : null}

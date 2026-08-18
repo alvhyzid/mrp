@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { canAccessProductionDashboard, canManageProductionDisruptions } from '@/lib/roles';
+import { canAccessProductionDashboard, canManageProductionDisruptions, canRecordStepProgress } from '@/lib/roles';
 
 const statusLabels: Record<string, string> = { planned: 'Direncanakan', in_progress: 'Berjalan', paused: 'Dijeda', completed: 'Selesai', cancelled: 'Batal' };
 const statusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical' | 'secondary'> = {
@@ -93,6 +93,8 @@ export default function ProductionDashboardPage() {
   const [stepMessage, setStepMessage] = useState<Record<number, string>>({});
   const [batchesForExpanded, setBatchesForExpanded] = useState<ProductionBatch[]>([]);
   const [selectedBatchId, setSelectedBatchId] = useState('');
+  const [batchTransitionBusyId, setBatchTransitionBusyId] = useState<number | null>(null);
+  const [batchTransitionMessage, setBatchTransitionMessage] = useState('');
 
   const emptyOutputLine = { qty: '', output_type: 'main_output', lot_number: '', expiry_date: '' };
   const [outputLines, setOutputLines] = useState([{ ...emptyOutputLine }]);
@@ -228,6 +230,51 @@ export default function ProductionDashboardPage() {
     ]);
     setRoutingSteps(stepsRes.ok ? stepsRes.body.routingSteps || [] : []);
     setBatchesForExpanded(batchesRes.ok ? batchesRes.body.batches || [] : []);
+  };
+
+  const reloadBatchesForExpanded = useCallback(async () => {
+    if (!expandedWoId) return;
+    const batchesRes = await authedFetch(`/api/production-batches?work_order_id=${expandedWoId}`);
+    setBatchesForExpanded(batchesRes.ok ? batchesRes.body.batches || [] : []);
+  }, [authedFetch, expandedWoId]);
+
+  // "Mulai Batch"/"Selesaikan Batch" (Fase Produksi Nyata P1) — state machine
+  // yang SUDAH ADA (status_transition_rules + trigger enforce_status_transition),
+  // bukan langkah baru yang dibuat di sini. Menyelesaikan batch otomatis
+  // mengajukannya sebagai sampel K8 (server yang urus, lihat completeProductionBatch.ts) —
+  // hasilnya (diajukan / dikecualikan karena log belum lengkap) ditampilkan supaya
+  // operator/SPV tahu, bukan cuma "berhasil" generik.
+  const handleStartBatch = async (batchId: number) => {
+    setBatchTransitionBusyId(batchId);
+    setBatchTransitionMessage('');
+    const { ok, body } = await authedFetch('/api/production-batches/start', { method: 'POST', body: JSON.stringify({ production_batch_id: batchId }) });
+    setBatchTransitionBusyId(null);
+    if (!ok) {
+      setBatchTransitionMessage(body.error || 'Gagal memulai batch.');
+      return;
+    }
+    setBatchTransitionMessage('Batch ditandai Berjalan.');
+    await Promise.all([reloadBatchesForExpanded(), loadWorkOrders()]);
+  };
+
+  const handleCompleteBatch = async (batchId: number) => {
+    setBatchTransitionBusyId(batchId);
+    setBatchTransitionMessage('');
+    const { ok, body } = await authedFetch('/api/production-batches/complete', { method: 'POST', body: JSON.stringify({ production_batch_id: batchId }) });
+    setBatchTransitionBusyId(null);
+    if (!ok) {
+      setBatchTransitionMessage(body.error || 'Gagal menyelesaikan batch.');
+      return;
+    }
+    const k8Sample = body.k8_sample as { excluded?: boolean; samples_submitted?: unknown[] } | undefined;
+    if (k8Sample?.excluded) {
+      setBatchTransitionMessage('Batch ditandai Selesai. TAPI log tahapnya belum lengkap — TIDAK dijadikan sampel standar K8 (tercatat sebagai pengecualian).');
+    } else if (k8Sample?.samples_submitted?.length) {
+      setBatchTransitionMessage(`Batch ditandai Selesai. ${k8Sample.samples_submitted.length} sampel standar produksi (K8) berhasil diajukan.`);
+    } else {
+      setBatchTransitionMessage('Batch ditandai Selesai.');
+    }
+    await Promise.all([reloadBatchesForExpanded(), loadWorkOrders()]);
   };
 
   const handleSelectBatch = async (batchId: string) => {
@@ -552,6 +599,30 @@ export default function ProductionDashboardPage() {
                   </SelectContent>
                 </Select>
               </label>
+
+              {selectedBatchId && canRecordStepProgress(role)
+                ? (() => {
+                    const selectedBatch = batchesForExpanded.find((b) => String(b.production_batch_id) === selectedBatchId);
+                    if (!selectedBatch) return null;
+                    const batchId = selectedBatch.production_batch_id;
+                    return (
+                      <div className="mb-3 flex items-center gap-2 rounded-md border p-2">
+                        <span className="text-xs text-muted-foreground">Status batch:</span>
+                        <Badge variant={batchStatusBadgeVariant[selectedBatch.status] ?? 'secondary'}>{batchStatusLabels[selectedBatch.status] ?? selectedBatch.status}</Badge>
+                        {selectedBatch.status === 'planned' ? (
+                          <Button size="sm" disabled={batchTransitionBusyId === batchId} onClick={() => handleStartBatch(batchId)}>
+                            {batchTransitionBusyId === batchId ? 'Memproses...' : 'Mulai Batch'}
+                          </Button>
+                        ) : selectedBatch.status === 'in_progress' ? (
+                          <Button size="sm" disabled={batchTransitionBusyId === batchId} onClick={() => handleCompleteBatch(batchId)}>
+                            {batchTransitionBusyId === batchId ? 'Memproses...' : 'Selesaikan Batch'}
+                          </Button>
+                        ) : null}
+                      </div>
+                    );
+                  })()
+                : null}
+              {batchTransitionMessage ? <p className="mb-3 text-sm text-muted-foreground">{batchTransitionMessage}</p> : null}
 
               {batchesForExpanded.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Belum ada batch untuk Work Order ini — buat batch dulu di halaman Work Order sebelum mencatat progres tahap.</p>

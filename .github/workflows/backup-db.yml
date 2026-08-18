@@ -1,0 +1,59 @@
+name: Backup Database (manual)
+
+# GELOMBANG 1 poin 8 / instruksi A2 (18 Agu 2026) — syarat WAJIB "pg_dump backup dulu"
+# sebelum pembersihan data demo lama tidak bisa dipenuhi dari environment kerja lokal
+# (tidak ada Docker sama sekali di sana, dan `supabase db dump` SELALU shell-out ke
+# pg_dump lewat container terlepas dari target lokal/remote — lihat HANDOFF.md). GitHub
+# Actions runner PUNYA Docker (dibuktikan job "Rebuild Schema from Migrations" di
+# ci.yml, jalan tiap push), jadi backup SUNGGUHAN (schema + DATA, bukan cuma schema)
+# dijalankan di sini — trigger MANUAL saja (workflow_dispatch), bukan tiap push, karena
+# ini query terhadap project REMOTE (dev), bukan container lokal sekali pakai seperti
+# job rebuild-migrations.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    name: pg_dump penuh (schema + data) dari project remote
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # supabase db dump --linked SELALU shell-out ke pg_dump lewat Docker (terbukti di
+      # environment kerja lokal — --linked --data-only pun tetap gagal tanpa Docker),
+      # tapi runner GitHub Actions punya Docker bawaan, jadi ini jalan di sini.
+      - name: supabase db dump --linked (schema + data, PENUH — bukan --data-only)
+        run: |
+          supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+          supabase db dump --linked -f backup-full-$(date +%Y%m%d-%H%M%S).sql
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      - name: Verifikasi dump tidak kosong & berisi data (bukan cuma schema kosong)
+        run: |
+          FILE=$(ls backup-full-*.sql)
+          SIZE=$(stat -c%s "$FILE" 2>/dev/null || stat -f%z "$FILE")
+          echo "Ukuran dump: ${SIZE} bytes"
+          if [ "$SIZE" -lt 10000 ]; then
+            echo "GAGAL: dump terlalu kecil (<10KB) — kemungkinan cuma schema kosong tanpa data." >&2
+            exit 1
+          fi
+          if ! grep -q "COPY public.companies" "$FILE" && ! grep -q "INSERT INTO public.companies" "$FILE"; then
+            echo "GAGAL: dump tidak berisi data tabel companies — bukan backup DATA yang valid." >&2
+            exit 1
+          fi
+          echo "OK: dump berisi data sungguhan (bukan cuma schema)."
+
+      - name: Upload backup sebagai artifact (retensi 7 hari)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-full
+          path: backup-full-*.sql
+          retention-days: 7

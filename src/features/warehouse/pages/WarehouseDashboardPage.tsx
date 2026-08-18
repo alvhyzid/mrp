@@ -118,7 +118,7 @@ export default function WarehouseDashboardPage() {
   const [adjustmentMode, setAdjustmentMode] = useState<'adjust_existing' | 'opening_balance'>('adjust_existing');
   const [items, setItems] = useState<ItemOption[]>([]);
   const [plants, setPlants] = useState<PlantOption[]>([]);
-  const [openingBalanceForm, setOpeningBalanceForm] = useState({ item_id: '', production_plant_id: '', qty: '', lot_number: '', expiry_date: '', notes: '' });
+  const [openingBalanceForm, setOpeningBalanceForm] = useState({ item_id: '', production_plant_id: '', qty: '', unit_cost: '', lot_number: '', expiry_date: '', notes: '' });
   const [openingBalanceStatus, setOpeningBalanceStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [openingBalanceMessage, setOpeningBalanceMessage] = useState('');
 
@@ -268,6 +268,7 @@ export default function WarehouseDashboardPage() {
         item_id: Number(openingBalanceForm.item_id),
         production_plant_id: Number(openingBalanceForm.production_plant_id),
         qty,
+        unit_cost: openingBalanceForm.unit_cost.trim() ? Number(openingBalanceForm.unit_cost) : null,
         lot_number: openingBalanceForm.lot_number.trim() || null,
         expiry_date: openingBalanceForm.expiry_date || null,
         notes: openingBalanceForm.notes.trim() || null
@@ -280,7 +281,7 @@ export default function WarehouseDashboardPage() {
     }
     setOpeningBalanceStatus('success');
     setOpeningBalanceMessage(`Saldo awal tercatat — lot baru "${body.lot_number}" dengan stok ${qty}.`);
-    setOpeningBalanceForm({ item_id: '', production_plant_id: '', qty: '', lot_number: '', expiry_date: '', notes: '' });
+    setOpeningBalanceForm({ item_id: '', production_plant_id: '', qty: '', unit_cost: '', lot_number: '', expiry_date: '', notes: '' });
     await Promise.all([loadStock(), loadLots()]);
   };
 
@@ -698,6 +699,17 @@ export default function WarehouseDashboardPage() {
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Harga per Unit (opsional)</span>
+                      <Input
+                        type="number"
+                        step="any"
+                        min="0"
+                        placeholder="Kosongkan kalau belum tahu harganya"
+                        value={openingBalanceForm.unit_cost}
+                        onChange={(event) => setOpeningBalanceForm((prev) => ({ ...prev, unit_cost: event.target.value }))}
+                      />
+                    </label>
                     <label className="flex flex-col gap-1.5">
                       <span className="text-sm font-medium text-foreground">Nomor Lot Supplier (opsional)</span>
                       <Input

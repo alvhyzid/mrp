@@ -4,6 +4,65 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Perintah Gabungan A (tutup GELOMBANG 1) + B (Saldo Awal Karanglo) — 19 Agu 2026
+
+### A1 — BOM Drinkme Lemon — SELESAI & terverifikasi
+
+Resep top-level lengkap (basis 19,655g) dibangun jadi BOM aktif `PMBX001ITM` (Box Minuman Serbuk Isi 14 Sachet), **versi SUNGGUHAN** (bukan timpa) — BOM lama fiktif (dari `scripts/seed-debug-powder-drink.js`, "data uji bukan resep asli") diarsipkan (`status='archived'`, v1), resep asli jadi v2 aktif, 19 baris (15 bahan/premix + 4 kemasan sachet/box/plastic wrap/karton, mengikuti K6 sama seperti Gummy Zala).
+
+**Temuan penting saat verifikasi:** biaya total tidak cocok di percobaan pertama (selisih ~Rp3,66/basis-unit) — ternyata harus pakai **biaya LOT premix (bahan+SDM, kolom "Biaya/g lot")**, BUKAN "Bahan/g" saja, sesuai K5 ("Premix dibiayai dari batch asalnya... biaya per gram LOT yang dipakai"). Setelah dikoreksi:
+- **Biaya bahan per 60kg batch = Rp4.965.905,68** (target spec Rp4.965.906,16 — selisih Rp0,48, rounding tampilan spec sendiri di kolom harga 4 desimal).
+- **Kemasan per box = Rp3.989,15** (target Rp3.989,14 — selisih 1 sen).
+
+Typecheck bersih, `scripts/seed-realcase-itm.js` tetap idempotent (dicek: run ulang skip, tidak bikin versi BOM baru lagi).
+
+### A2 — Backup via GitHub Actions — WORKFLOW DITULIS, EKSEKUSI BLOCKED (butuh Anda)
+
+`.github/workflows/backup-db.yml` dibuat: trigger `workflow_dispatch` (manual saja), `supabase db dump --linked` (schema+DATA penuh, BUKAN `--data-only` — sesuai instruksi), verifikasi dump berisi data sungguhan (bukan cuma schema kosong), upload artifact retensi 7 hari.
+
+**BLOCKER nyata:** environment kerja Claude Code ini **tidak punya akses tulis ke GitHub API sama sekali** — tidak ada `gh` CLI terpasang, tidak ada `GITHUB_TOKEN`/PAT tersimpan di mana pun yang bisa saya pakai. Ini berarti saya **tidak bisa**:
+1. Menambahkan secret `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD` yang dibutuhkan workflow ini ke pengaturan repo GitHub.
+2. Memicu (`workflow_dispatch`) workflow ini sendiri.
+3. Memverifikasi artifact hasil run benar-benar berisi data.
+
+**Yang perlu Anda lakukan:** (a) buka Settings → Secrets and variables → Actions di repo GitHub, tambahkan 3 secret di atas (`SUPABASE_ACCESS_TOKEN` dari https://app.supabase.com/account/tokens, `SUPABASE_PROJECT_REF` = `kfvtrwuuqcjfkkuqizxt`, `SUPABASE_DB_PASSWORD` = password database project ini); (b) buka tab Actions → "Backup Database (manual)" → Run workflow; (c) unduh artifact `db-backup-full`, pastikan isinya bukan cuma `CREATE TABLE` kosong (ada baris `COPY`/`INSERT` data sungguhan).
+
+### A3 — Pembersihan Data Demo — DITUNDA (bergantung A2), bagian AMAN sudah dikerjakan
+
+Karena syarat WAJIB "A2 terverifikasi dulu" belum terpenuhi (blocker di atas), **pembersihan data demo (hapus) BELUM dijalankan** — konsisten dengan protokol "jangan improvisasi, catat & lewati" untuk operasi destruktif tanpa backup terverifikasi.
+
+**Bagian ADITIF (aman, tidak menghapus apa pun) sudah dikerjakan:** 2 plant NYATA dibuat — **Karanglo** (`production_plant_id=471`, produksi Minuman Serbuk) dan **Ruko Dieng** (`production_plant_id=472`, produksi Gummy) — sengaja plant BARU, bukan me-rename plant demo lama (`Pabrik Cabang Kedua PT ITM`, id=137, "lokasi uji isolasi plant demo") supaya tidak berisiko merusak apa pun yang masih bergantung pada plant demo itu. Plant demo lama tetap ada, akan dihapus bersamaan data demo lain begitu A2 terverifikasi.
+
+**Konsekuensi yang perlu Anda tahu:** karena data demo (termasuk stok WIP premix fiktif sisa `seed-debug-powder-drink.js` — PMSW/PMAC/PMFLV 5000g/3000g/5000g) masih ada, **perhitungan Laba Operasional bulanan MASIH TERCEMAR** oleh order/data demo lama sampai pembersihan ini jalan — persis risiko yang disebutkan di instruksi. Juga mempengaruhi hasil verifikasi B4(c) di bawah.
+
+### B — Saldo Awal Stok Gudang KL BIZ / Plant Karanglo — SELESAI & terverifikasi
+
+**Perluasan mekanisme dulu (prasyarat):** fitur Saldo Awal GELOMBANG 0B awalnya TIDAK bisa terima `unit_cost` sama sekali (didesain untuk kasus "belum tahu harganya"). Data stok opname riil PUNYA harga presisi penuh per lot, jadi `create_opening_balance_lot()` diperluas terima `p_unit_cost` opsional (migration `20260819100000`, default NULL — perilaku lama utuh), `recordOpeningBalance.ts` & UI Saldo Awal (`/warehouse`) dapat field baru "Harga per Unit (opsional)".
+
+**`scripts/load-saldo-awal-karanglo.js`** (idempotent, lewat API resmi `/api/stock-adjustments/opening-balance` — BUKAN insert SQL langsung):
+- **18 item baru** dibuat (7 BARU-BAHAN + 2 BARU-WIP + 9 BARU-KEMASAN). "Derasi Strawberry" TIDAK dibuat baru — item itu SUDAH ADA dari demo lama (`RM-DERASI-STRAWBERRY`), dipakai ulang + `standard_cost` dikoreksi ke 1.501,23/g (data opname riil, bukan nilai demo lama).
+- **35 lot saldo awal** dimuat ke plant Karanglo — 16 MAP + 8 BARU-BAHAN (termasuk Derasi Strawberry reuse) + 2 BARU-WIP + 9 BARU-KEMASAN. Sorbitol Powder (alias "PREMIX POWDER") dimuat 2.291.440g @ Rp58,0000/g, dan nama item diberi catatan `"... (alias gudang: Premix Powder)"` supaya stok opname berikutnya otomatis cocok.
+- **SKIP (3, TIDAK dimuat) sesuai keputusan final:** Bromalin, Papain, Derasi Peach — stok sebenarnya habis.
+- **ALAT (4, EXCLUDE):** Cartridge JS12 Black, Corong 3 Side 80mm, Pita LC1 Coding, Plastik Roll Shrink — tidak dibuat item maupun lot.
+
+**B4 — Verifikasi:**
+- **(a) Total nilai termuat = Rp233.686.487,02** (dihitung presisi penuh dari DB, bukan akumulasi float JS biasa). Target instruksi: Rp233.686.488,12 — **selisih Rp1,10** (0,0000005% relatif). Diperiksa: penyebabnya kolom `unit_cost` di file sumber sendiri sudah dibulatkan 4 desimal secara independen dari kolom "Total Nilai"-nya (mis. STEVIA POWDER: Total Nilai÷Qty presisi penuh = 871,06879.../g, tapi kolom unit_cost yang tertulis 871,0694/g) — pola yang SAMA PERSIS dengan temuan rounding di `spesifikasi-aturan-biaya-v1.md` rev.3/4 sebelumnya. Bukan kesalahan data, murni rounding sumber.
+- **(b) Stok tampil di dashboard Warehouse plant Karanglo** — dicek lewat `/api/stock-summary`: 35 baris, semua `production_plant_name: "Karanglo"`, qty & item benar.
+- **(c) Alert kekurangan bahan SAS005 — TEMUAN PENTING, BEDA dari ekspektasi instruksi.** `system_alerts` tidak otomatis muncul untuk Drinkme (belum ada Work Order Drinkme yang direncanakan — alert baru tergenerate saat WO dibuat, bukan otomatis dari SO). Dihitung LANGSUNG dari BOM asli × kebutuhan 10.000 box vs stok company-wide: **shortage list yang SEBENARNYA jauh lebih panjang** dari 5 item yang diharapkan (Garcinia+Bromalin+Papain+sachet+box) — MELIPUTI JUGA Maltodextrin, Polydextrose, Inulin, Psylium Husk, Zoefree, Garam (raw material, kurang karena kebutuhan total mencakup produksi ULANG premix, bukan cuma sisa), dan **SEMUA 5 item premix WIP sendiri (PMSW/PMAC/PMFL/PMVITC/PMSRH) muncul kurang** — akar penyebabnya: stok WIP premix yang ada di DB **BUKAN 0, tapi sisa data DEMO FIKTIF** (5000g/3000g/5000g/0/0 dari `seed-debug-powder-drink.js`, GELOMBANG 1 real-case sengaja tidak mengisi stok premix karena real case dimulai dari 0) — jauh di bawah kebutuhan 10.000 box, dan **inilah tepatnya mengapa A3 (pembersihan demo) penting** — sesuai peringatan di A3 di atas. Sorbitol Powder MEMANG sudah tidak kurang (2.291kg tersedia vs ~945kg dibutuhkan) — bagian ini SESUAI ekspektasi. Detail lengkap tabel kebutuhan-vs-stok ada di riwayat sesi kalau diperlukan.
+- **(d) Setiap lot punya baris `stock_movements`** — dicek: 35 lot = 35 movement, semua `movement_type='adjustment'`, `reason_code='stock_opname_variance'`, `notes` berisi label sumber PDF per baris.
+- **(e) Uji konsumsi 1 lot saldo awal → biaya mengalir ke batch** — diuji nyata: konsumsi 5g dari lot Garam (unit_cost Rp13,00) ke 1 batch uji → biaya bahan batch dihitung `5 × 13 = Rp65,00`, cocok persis. Fixture uji dibersihkan setelahnya.
+
+**Kapasitas serbuk & feasibility SAS005 — SELESAI & terverifikasi, cocok persis ekspektasi:** `production_standards` PMBX001ITM `batches_per_day=3` (ESTIMASI_MANUAL). Endpoint `/api/sales-order-lines/[id]/planning-feasibility` diuji ke SAS005 sungguhan: `batches_needed: 45`, `days_needed: 15`, `total_working_days_to_deadline: 23`, **`feasible: true`** — PERSIS seperti diharapkan ("FEASIBLE-KETAT", 15 hari kebutuhan vs 23 hari tersedia).
+
+Typecheck bersih, `npm run build` sukses, 37/37 test tetap lulus.
+
+### Ringkasan hal yang MENUNGGU Anda (jangan ditebak)
+1. **A2/A3**: 3 GitHub secret (`SUPABASE_ACCESS_TOKEN`/`SUPABASE_PROJECT_REF`/`SUPABASE_DB_PASSWORD`) + jalankan workflow "Backup Database (manual)" sekali + konfirmasi artifact berisi data → baru pembersihan demo saya lanjutkan.
+2. **B4(c)**: shortage list SAS005 yang sebenarnya (raw material + SEMUA premix WIP, bukan cuma 5 item) — TERKAIT LANGSUNG dengan poin 1 (stok premix WIP saat ini tercemar data demo). Setelah demo dibersihkan, hitung ulang shortage list — kemungkinan besar baru akan cocok dengan 5-item yang Anda harapkan (karena stok WIP premix demo yang mengganggu perhitungan akan hilang).
+3. Kapasitas lini gummy/serbuk & nilai 3 item SKIP — SUDAH final per keputusan 18 Agu, tidak ada lagi yang menunggu di sini.
+
+---
+
 ## Koreksi Labor Log — Pool Bergilir (18 Agu 2026) — SELESAI & terverifikasi
 
 Klarifikasi pemilik produk setelah GELOMBANG 2 (sudah tercatat di `spesifikasi-aturan-biaya-v1.md` K1): tim produksi gummy (±15 orang) BUKAN kepala tetap per tahap — mereka POOL BERGILIR yang berpindah tahap sepanjang hari (mis. pagi masak, siang bantu cetak), dan tim BEDA bisa mengerjakan batch KEMARIN paralel dengan batch HARI INI. Angka "2 orang masak, 8 orang cetak" di routing = estimasi usaha orang-jam per batch (cold-start), BUKAN penugasan kaku 1 orang = 1 tahap.

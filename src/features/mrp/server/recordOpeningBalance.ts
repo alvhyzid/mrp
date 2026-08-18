@@ -29,6 +29,7 @@ export async function recordOpeningBalance(request: NextRequest): Promise<ApiRes
     const supplierLotNumber = body.lot_number ? String(body.lot_number).trim() : '';
     const expiryDate = body.expiry_date ? String(body.expiry_date).trim() : null;
     const notes = body.notes ? String(body.notes).trim() : null;
+    const unitCost = body.unit_cost !== undefined && body.unit_cost !== null && body.unit_cost !== '' ? Number(body.unit_cost) : null;
 
     if (!itemId) {
       return { status: 400, body: { error: 'Item wajib dipilih.' } };
@@ -38,6 +39,9 @@ export async function recordOpeningBalance(request: NextRequest): Promise<ApiRes
     }
     if (!Number.isFinite(qty) || qty <= 0) {
       return { status: 400, body: { error: 'Jumlah saldo awal wajib diisi dan lebih besar dari 0.' } };
+    }
+    if (unitCost !== null && (!Number.isFinite(unitCost) || unitCost < 0)) {
+      return { status: 400, body: { error: 'Harga per unit tidak boleh negatif.' } };
     }
 
     const adminClient = getAdminClient();
@@ -76,7 +80,8 @@ export async function recordOpeningBalance(request: NextRequest): Promise<ApiRes
         p_lot_number: lotNumber,
         p_expiry_date: expiryDate,
         p_notes: notes,
-        p_created_by: appUser.user_id
+        p_created_by: appUser.user_id,
+        p_unit_cost: unitCost
       })
       .single();
 

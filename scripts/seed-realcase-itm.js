@@ -152,6 +152,43 @@ const premixSerbukBoms = [
   { parent: 'PM-SRH-001ITM', lines: [{ c: 'RM-MALTODEXTRIN', qty: 80 }, { c: 'RM-SEREH-POWDER', qty: 20 }] }
 ];
 
+// Drinkme Lemon (A1) — resep top-level LENGKAP, diberikan pemilik produk 18 Agu (basis
+// 19,655g, sesuai basis yang sudah dipakai spec §5 Contoh 2 utk batch 60kg/3052,6558x).
+// Semua komponen SUDAH ADA di item master (raw material dari GELOMBANG 1 + 5 premix
+// serbuk) — tidak perlu item baru. TERVERIFIKASI: total biaya basis 19,655g × skala
+// 3052,6558 = Rp4.965.906,1x, cocok persis spec (pakai biaya LOT premix, bahan+SDM,
+// BUKAN cuma "Bahan/g" — lihat catatan verifikasi di HANDOFF.md).
+const DRINKME_BASIS_G = 19.655;
+const DRINKME_BATCH_G = 60000;
+const DRINKME_BOX_YIELD_PER_BATCH = 226.19; // production_standards PMBX001ITM.unit_per_batch
+const drinkmeLines = [
+  { c: 'RM-MALTODEXTRIN', qty: 5 },
+  { c: 'RM-SORBITOL-POWDER', qty: 7 },
+  { c: 'RM-POLYDEXTROSE', qty: 1 },
+  { c: 'RM-INULIN', qty: 2 },
+  { c: 'RM-PSYLIUM-HUSK', qty: 1 },
+  { c: 'RM-PAPAIN', qty: 0.2 },
+  { c: 'RM-BROMALIN', qty: 0.1 },
+  { c: 'RM-ZOEFREE', qty: 0.075 },
+  { c: 'RM-GARAM', qty: 0.01 },
+  { c: 'RM-GARCINIA-CAMBOGIA', qty: 0.1 },
+  { c: 'PMSW001ITM', qty: 0.04 },
+  { c: 'PMAC001ITM', qty: 0.08 },
+  { c: 'PMFLV001ITM', qty: 2.4 },
+  { c: 'PM-VITC-001ITM', qty: 0.6 },
+  { c: 'PM-SRH-001ITM', qty: 0.05 }
+];
+// Kemasan per box (K6 — dikonsumsi lewat mekanisme sama seperti bahan baku, sama pola
+// dengan Gummy Zala) — sesuai formula kemasan yang SUDAH diberikan spec §5 Contoh 2:
+// "14×138 + 1.500 + 200 + 15.000/42 = Rp3.989,14/box". Qty di sini FIXED per 1 box
+// (bukan hasil skala basis 19,655g seperti bahan baku di atas).
+const drinkmePackagingLinesPerBox = [
+  { c: 'PMPKF001ITM', qtyPerBox: 14, uom: 'pcs' }, // Sachet
+  { c: 'PMPKB001ITM', qtyPerBox: 1, uom: 'pcs' }, // Box isi 14 Sachet
+  { c: 'PKG-PLASTIC-WRAP-BOX', qtyPerBox: 1, uom: 'pcs' },
+  { c: 'PKG-KARTON-SERBUK-42', qtyPerBox: 1 / 42, uom: 'pcs' }
+];
+
 // ============================================================================
 // 3. ROUTING — docs/data-produksi-itm-ekstrak.md §2 (Gummy, 10 proses -> 9 di routing
 //    Gummy Zala + 1 di routing Premix Gelatin) & §3 (Serbuk, 12 proses -> belum
@@ -250,6 +287,55 @@ async function upsertBom(companyId, itemIdByCode, parentItemCode, yieldQty, yiel
   return bomId;
 }
 
+// Versioning SUNGGUHAN (arsipkan, jangan timpa) — dipakai KHUSUS Drinkme Lemon karena
+// BOM lama (dari scripts/seed-debug-powder-drink.js) FIKTIF ("data uji, bukan resep
+// asli") dan riwayatnya perlu tetap tersimpan (bukan dihapus), beda dari upsertBom()
+// di atas yang update-in-place cocok untuk item yang memang belum pernah punya BOM asli.
+async function archiveAndCreateBomVersion(companyId, itemIdByCode, parentItemCode, yieldQty, yieldUom, lines) {
+  const parentItemId = itemIdByCode.get(parentItemCode);
+  if (!parentItemId) throw new Error(`${parentItemCode} not found after upsert.`);
+
+  const { data: existingVersions } = await admin.from('boms').select('bom_id, version, status').eq('company_id', companyId).eq('parent_item_id', parentItemId).order('version', { ascending: false });
+
+  const activeOld = (existingVersions ?? []).filter((b) => b.status === 'active');
+  // Idempotency: kalau versi aktif SEKARANG sudah punya komponen persis sama (set kode
+  // item) dengan yang mau ditulis, anggap sudah tersinkron — jangan bikin versi baru
+  // tiap kali script diulang (baru arsipkan+versi baru kalau BENAR-BENAR beda, mis.
+  // transisi 1x dari BOM fiktif lama ke resep asli).
+  if (activeOld.length === 1) {
+    const { data: currentLines } = await admin.from('bom_lines').select('component_item_id').eq('bom_id', activeOld[0].bom_id);
+    const currentItemIds = new Set((currentLines ?? []).map((l) => l.component_item_id));
+    const expectedItemIds = new Set(lines.map((l) => itemIdByCode.get(l.component_item_code)));
+    const sameSet = currentItemIds.size === expectedItemIds.size && [...currentItemIds].every((id) => expectedItemIds.has(id));
+    if (sameSet) {
+      console.log(`BOM ${parentItemCode} v${activeOld[0].version} sudah sinkron dengan resep asli, skip (idempotent).`);
+      return activeOld[0].bom_id;
+    }
+  }
+  for (const old of activeOld) {
+    await admin.from('boms').update({ status: 'archived' }).eq('bom_id', old.bom_id);
+    console.log(`Arsipkan BOM lama ${parentItemCode} v${old.version} (fiktif, "data uji" — riwayat tetap tersimpan, cuma diubah status).`);
+  }
+
+  const nextVersion = ((existingVersions ?? [])[0]?.version ?? 0) + 1;
+  const { data: inserted, error } = await admin
+    .from('boms')
+    .insert([{ company_id: companyId, parent_item_id: parentItemId, version: nextVersion, standard_yield_qty: yieldQty, standard_yield_uom: yieldUom, status: 'active' }])
+    .select('bom_id')
+    .single();
+  if (error) throw new Error(`Failed to insert BOM version for ${parentItemCode}: ${error.message}`);
+
+  const lineRows = lines.map((line) => {
+    const componentItemId = itemIdByCode.get(line.component_item_code);
+    if (!componentItemId) throw new Error(`Component ${line.component_item_code} not found for BOM ${parentItemCode}.`);
+    return { bom_id: inserted.bom_id, component_item_id: componentItemId, qty_per_unit_output: line.qtyPerBatch / yieldQty, uom: line.uom };
+  });
+  const { error: linesError } = await admin.from('bom_lines').insert(lineRows);
+  if (linesError) throw new Error(`Failed to insert bom_lines for ${parentItemCode} v${nextVersion}: ${linesError.message}`);
+  console.log(`Ensured BOM ${parentItemCode} v${nextVersion} ACTIVE (${lineRows.length} komponen, resep asli).`);
+  return inserted.bom_id;
+}
+
 async function upsertRouting(companyId, itemIdByCode, itemCode, steps) {
   const itemId = itemIdByCode.get(itemCode);
   if (!itemId) throw new Error(`${itemCode} not found for routing.`);
@@ -346,6 +432,16 @@ async function main() {
     await upsertBom(companyId, itemIdByCode, premix.parent, 100, 'g', lines);
   }
 
+  // Drinkme Lemon (A1) — versioning SUNGGUHAN (arsipkan BOM fiktif lama, bukan timpa).
+  // BOM per 1 box (base_uom PMBX001ITM = 'pcs'): basis 19,655g -> skala ke 1 batch
+  // (60000/19,655) -> skala ke 1 box (dibagi box/batch 226,19).
+  const drinkmeBoxScale = (DRINKME_BATCH_G / DRINKME_BASIS_G) / DRINKME_BOX_YIELD_PER_BATCH;
+  const drinkmeLinesPerBox = [
+    ...drinkmeLines.map((l) => ({ component_item_code: l.c, qtyPerBatch: l.qty * drinkmeBoxScale, uom: 'g' })),
+    ...drinkmePackagingLinesPerBox.map((l) => ({ component_item_code: l.c, qtyPerBatch: l.qtyPerBox, uom: l.uom }))
+  ];
+  await archiveAndCreateBomVersion(companyId, itemIdByCode, 'PMBX001ITM', 1, 'pcs', drinkmeLinesPerBox);
+
   console.log('\n=== 3. Routing ===');
   await upsertRouting(companyId, itemIdByCode, 'WIP-PREMIX-GELATIN-ZALA', premixGelatinRoutingSteps);
   await upsertRouting(companyId, itemIdByCode, 'FG-GUMMY-ZALA-N200', gummyZalaRoutingSteps);
@@ -362,7 +458,11 @@ async function main() {
     // PERENCANAAN 4 batch gummy/hari (maksimal BISA 5, tapi 4 dipakai sebagai standar).
     { item: 'FG-GUMMY-ZALA-N200', metric: 'batches_per_day', value: 4 },
     { item: 'PMBX001ITM', metric: 'yield_percentage', value: 95 },
-    { item: 'PMBX001ITM', metric: 'unit_per_batch', value: 226.19 }
+    { item: 'PMBX001ITM', metric: 'unit_per_batch', value: 226.19 },
+    // Kapasitas serbuk (klarifikasi pemilik produk 18 Agu: "3-4 batch 60kg/hari") —
+    // 3/hari dipakai sebagai standar ESTIMASI_MANUAL (konservatif, pola sama dengan
+    // gummy: standar perencanaan = angka bawah rentang, bukan maksimal teoretis).
+    { item: 'PMBX001ITM', metric: 'batches_per_day', value: 3 }
   ];
   for (const s of standardsSeed) {
     const itemId = itemIdByCode.get(s.item);

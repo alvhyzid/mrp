@@ -4,6 +4,22 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Pengerasan validasi upload file publik & internal (18 Agu 2026) — SELESAI
+
+Pemilik produk minta verifikasi konkret: bisakah endpoint upload foto POD (`/pod/[token]`, publik tanpa login) menerima file BUKAN gambar (di-rename ekstensinya) atau file berukuran raksasa?
+
+**Ditemukan gap nyata** (dibuktikan lewat percobaan langsung, bukan cuma baca kode): `confirmDelivery.ts` (endpoint konfirmasi POD) cuma memvalidasi `Content-Type` yang DIKLAIM client — header itu sepenuhnya bisa dipalsukan. Percobaan nyata: file teks biasa di-rename `.png` + header dipalsukan `image/png` → **LOLOS**, benar-benar diproses sebagai foto bukti penerimaan sungguhan, mengubah 1 shipment asli (SJ-007/8-ITM/2026, shipment_id 181) jadi `delivered` dengan "foto" berupa file teks.
+
+**Perbaikan:** `src/lib/imageUpload.ts` (baru, infrastruktur bersama) — sniffing magic bytes asli (signature PNG/JPEG/WEBP) menggantikan kepercayaan pada `Content-Type` klaim client, plus cek `Content-Length` SEBELUM body dibaca penuh ke memori (mencegah body raksasa dibuffer percuma sebelum ditolak). Diterapkan ke **5 endpoint upload** yang ada di sistem: `confirmDelivery.ts` (POD, publik), `uploadAvatar.ts`, `uploadSignature.ts`, `uploadCompanyLogo.ts`, `processShipmentDispatch.ts` — SEMUA endpoint upload di seluruh aplikasi, tidak ada yang tersisa dengan pola lama.
+
+**Verifikasi ulang setelah fix** (request mentah + login sungguhan tiap endpoint): file disamarkan → `400 "Format file tidak didukung"` di kelimanya; file 20MB → `413` cepat (0,4 detik, sebelum selesai dibuffer); foto asli → tetap `200` sukses (regresi dicek, tidak ada endpoint yang jadi menolak upload sah).
+
+**Pembersihan data yang sempat rusak akibat uji coba (SJ-007):** migration `supabase/migrations/20260817220000_fix_sj007_pod_upload_test_pollution.sql` — hapus baris `delivery_confirmations` palsu, kembalikan `shipments.status` ke `shipped`, **terbitkan `pod_token` BARU** (bukan reuse token lama yang sudah "terbakar" karena sempat terpakai — sesuai desain sistem sendiri). Trigger `enforce_status_transition` (menolak `delivered→shipped` secara sengaja, demi traceability BPOM/halal) dinonaktifkan SEMENTARA cuma untuk 1 statement koreksi ini, khusus `shipment_id=181`, lalu diaktifkan lagi di migrasi yang sama. Diverifikasi: token baru resolve normal, token lama tetap `{"valid":false}` selamanya.
+
+Typecheck bersih, 33/33 test tetap lulus.
+
+---
+
 ## Sesi — Carbon "DataTable with Toolbar": Toolbar + Modal untuk Semua Form "Tambah Baru" (17 Agu 2026) — SELESAI
 
 Lanjutan dari sesi Carbon Data Table sebelumnya. Permintaan: pindahkan SEMUA form "tambah baru" dari Card/section inline di bawah tabel ke modal yang dipicu tombol di toolbar `DataTable` (bukan cuma spacing/style), naikkan spacing baris tabel, JANGAN ubah logika bisnis/validasi form yang sudah ada — murni pindah LOKASI & WADAH.

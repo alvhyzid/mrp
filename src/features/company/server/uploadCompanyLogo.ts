@@ -1,16 +1,12 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
+import { ALLOWED_IMAGE_MIME_TO_EXT, EXT_TO_IMAGE_MIME, detectImageExtFromBytes, isContentLengthTooLarge } from '@/lib/imageUpload';
 
 interface ApiResult {
   status: number;
   body: Record<string, unknown>;
 }
 
-const ALLOWED_MIME_TO_EXT: Record<string, string> = {
-  'image/png': 'png',
-  'image/jpeg': 'jpg',
-  'image/webp': 'webp'
-};
 const MAX_SIZE_BYTES = 2 * 1024 * 1024;
 
 // Nama file di storage SENGAJA tetap ("logo.<ext>", upsert), bukan timestamped —
@@ -30,6 +26,10 @@ export async function uploadCompanyLogo(request: NextRequest): Promise<ApiResult
       return { status: 400, body: { error: 'User belum terkait dengan perusahaan yang valid.' } };
     }
 
+    if (isContentLengthTooLarge(request, MAX_SIZE_BYTES)) {
+      return { status: 413, body: { error: 'Ukuran file maksimal 2MB.' } };
+    }
+
     const formData = await request.formData();
     const file = formData.get('logo');
 
@@ -37,22 +37,28 @@ export async function uploadCompanyLogo(request: NextRequest): Promise<ApiResult
       return { status: 400, body: { error: 'File logo wajib diunggah.' } };
     }
 
-    const ext = ALLOWED_MIME_TO_EXT[file.type];
-    if (!ext) {
-      return { status: 400, body: { error: 'Format file tidak didukung. Gunakan PNG, JPG, atau WEBP.' } };
-    }
-
     if (file.size > MAX_SIZE_BYTES) {
       return { status: 400, body: { error: 'Ukuran file maksimal 2MB.' } };
     }
+    if (!(file.type in ALLOWED_IMAGE_MIME_TO_EXT)) {
+      return { status: 400, body: { error: 'Format file tidak didukung. Gunakan PNG, JPG, atau WEBP.' } };
+    }
+
+    const arrayBuffer = await file.arrayBuffer();
+    const fileBuffer = Buffer.from(arrayBuffer);
+    // Content-Type yang diklaim client bisa dipalsukan — cek isi file sebenarnya
+    // (magic bytes) sebelum disimpan, bukan cuma percaya header.
+    const sniffedExt = detectImageExtFromBytes(fileBuffer);
+    if (!sniffedExt) {
+      return { status: 400, body: { error: 'Format file tidak didukung. Gunakan PNG, JPG, atau WEBP.' } };
+    }
 
     const adminClient = getAdminClient();
-    const path = `${appUser.company_id}/logo.${ext}`;
-    const arrayBuffer = await file.arrayBuffer();
+    const path = `${appUser.company_id}/logo.${sniffedExt}`;
 
     const { error: uploadError } = await adminClient.storage
       .from('company-logos')
-      .upload(path, Buffer.from(arrayBuffer), { contentType: file.type, upsert: true });
+      .upload(path, fileBuffer, { contentType: EXT_TO_IMAGE_MIME[sniffedExt], upsert: true });
 
     if (uploadError) {
       return { status: 500, body: { error: uploadError.message } };

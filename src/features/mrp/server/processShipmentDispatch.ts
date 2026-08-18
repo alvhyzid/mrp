@@ -1,17 +1,13 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
 import { canManageShipments } from '@/lib/roles';
+import { ALLOWED_IMAGE_MIME_TO_EXT, EXT_TO_IMAGE_MIME, detectImageExtFromBytes, isContentLengthTooLarge } from '@/lib/imageUpload';
 
 interface ApiResult {
   status: number;
   body: Record<string, unknown>;
 }
 
-const ALLOWED_MIME_TO_EXT: Record<string, string> = {
-  'image/png': 'png',
-  'image/jpeg': 'jpg',
-  'image/webp': 'webp'
-};
 const MAX_SIZE_BYTES = 5 * 1024 * 1024;
 
 // Transisi draft->shipped SEKARANG WAJIB lewat sini, BUKAN updateShipmentStatus.ts lagi
@@ -32,6 +28,10 @@ export async function processShipmentDispatch(request: NextRequest): Promise<Api
       return { status: 400, body: { error: 'User belum terkait dengan perusahaan yang valid.' } };
     }
 
+    if (isContentLengthTooLarge(request, MAX_SIZE_BYTES)) {
+      return { status: 413, body: { error: 'Ukuran file maksimal 5MB.' } };
+    }
+
     const formData = await request.formData();
     const shipmentId = Number(formData.get('shipment_id'));
     const file = formData.get('photo');
@@ -42,12 +42,20 @@ export async function processShipmentDispatch(request: NextRequest): Promise<Api
     if (!(file instanceof File)) {
       return { status: 400, body: { error: 'Foto bukti pengiriman wajib diunggah.' } };
     }
-    const ext = ALLOWED_MIME_TO_EXT[file.type];
-    if (!ext) {
-      return { status: 400, body: { error: 'Format file tidak didukung. Gunakan PNG, JPG, atau WEBP.' } };
-    }
     if (file.size > MAX_SIZE_BYTES) {
       return { status: 400, body: { error: 'Ukuran file maksimal 5MB.' } };
+    }
+    if (!(file.type in ALLOWED_IMAGE_MIME_TO_EXT)) {
+      return { status: 400, body: { error: 'Format file tidak didukung. Gunakan PNG, JPG, atau WEBP.' } };
+    }
+
+    const arrayBuffer = await file.arrayBuffer();
+    const fileBuffer = Buffer.from(arrayBuffer);
+    // Content-Type yang diklaim client bisa dipalsukan — cek isi file sebenarnya
+    // (magic bytes) sebelum disimpan, bukan cuma percaya header.
+    const sniffedExt = detectImageExtFromBytes(fileBuffer);
+    if (!sniffedExt) {
+      return { status: 400, body: { error: 'Format file tidak didukung. Gunakan PNG, JPG, atau WEBP.' } };
     }
 
     const adminClient = getAdminClient();
@@ -65,11 +73,10 @@ export async function processShipmentDispatch(request: NextRequest): Promise<Api
       return { status: 400, body: { error: `Pengiriman berstatus "${shipment.status}" — hanya pengiriman draft yang bisa diproses.` } };
     }
 
-    const path = `${appUser.company_id}/${shipmentId}/dispatch-${Date.now()}.${ext}`;
-    const arrayBuffer = await file.arrayBuffer();
+    const path = `${appUser.company_id}/${shipmentId}/dispatch-${Date.now()}.${sniffedExt}`;
     const { error: uploadError } = await adminClient.storage
       .from('shipment-dispatch-photos')
-      .upload(path, Buffer.from(arrayBuffer), { contentType: file.type, upsert: false });
+      .upload(path, fileBuffer, { contentType: EXT_TO_IMAGE_MIME[sniffedExt], upsert: false });
     if (uploadError) {
       return { status: 500, body: { error: uploadError.message } };
     }

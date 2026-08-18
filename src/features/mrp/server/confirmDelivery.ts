@@ -1,16 +1,12 @@
 import type { NextRequest } from 'next/server';
 import { getAdminClient } from '@/lib/supabaseServer';
+import { ALLOWED_IMAGE_MIME_TO_EXT, EXT_TO_IMAGE_MIME, detectImageExtFromBytes, isContentLengthTooLarge } from '@/lib/imageUpload';
 
 interface ApiResult {
   status: number;
   body: Record<string, unknown>;
 }
 
-const ALLOWED_MIME_TO_EXT: Record<string, string> = {
-  'image/png': 'png',
-  'image/jpeg': 'jpg',
-  'image/webp': 'webp'
-};
 const MAX_SIZE_BYTES = 5 * 1024 * 1024;
 
 const GENERIC_INVALID_MESSAGE = 'Link tidak valid atau pengiriman sudah dikonfirmasi sebelumnya.';
@@ -40,6 +36,13 @@ export async function confirmDelivery(request: NextRequest, token: string): Prom
       return { status: 404, body: { error: GENERIC_INVALID_MESSAGE } };
     }
 
+    // Ditolak SEBELUM body dibaca penuh ke memori — mencegah endpoint publik ini
+    // dipakai untuk membanjiri memori server dengan body raksasa yang toh akan
+    // ditolak juga (percuma buffer-kan dulu baru cek ukurannya).
+    if (isContentLengthTooLarge(request, MAX_SIZE_BYTES)) {
+      return { status: 413, body: { error: 'Ukuran file maksimal 5MB.' } };
+    }
+
     const formData = await request.formData();
     const file = formData.get('photo');
     const receivedByNameRaw = formData.get('received_by_name');
@@ -47,12 +50,19 @@ export async function confirmDelivery(request: NextRequest, token: string): Prom
     if (!(file instanceof File)) {
       return { status: 400, body: { error: 'Foto bukti penerimaan wajib diunggah.' } };
     }
-    const ext = ALLOWED_MIME_TO_EXT[file.type];
-    if (!ext) {
-      return { status: 400, body: { error: 'Format file tidak didukung. Gunakan PNG, JPG, atau WEBP.' } };
-    }
     if (file.size > MAX_SIZE_BYTES) {
       return { status: 400, body: { error: 'Ukuran file maksimal 5MB.' } };
+    }
+    if (!(file.type in ALLOWED_IMAGE_MIME_TO_EXT)) {
+      return { status: 400, body: { error: 'Format file tidak didukung. Gunakan PNG, JPG, atau WEBP.' } };
+    }
+    const arrayBuffer = await file.arrayBuffer();
+    const fileBuffer = Buffer.from(arrayBuffer);
+    // Cek isi file yang SEBENARNYA (magic bytes), bukan cuma percaya Content-Type
+    // yang diklaim client — Content-Type bisa dipalsukan bebas via curl/fetch manual.
+    const sniffedExt = detectImageExtFromBytes(fileBuffer);
+    if (!sniffedExt) {
+      return { status: 400, body: { error: 'Format file tidak didukung. Gunakan PNG, JPG, atau WEBP.' } };
     }
 
     const receivedByName = typeof receivedByNameRaw === 'string' && receivedByNameRaw.trim() ? receivedByNameRaw.trim() : null;
@@ -60,11 +70,11 @@ export async function confirmDelivery(request: NextRequest, token: string): Prom
     // Path pakai shipment_id + timestamp + random UUID (BUKAN cuma timestamp seperti
     // bucket internal lain) — bucket ini public-read tanpa autentikasi sama sekali
     // di sisi pembaca, jadi nama file sengaja dibuat tidak mudah ditebak/diurutkan.
-    const path = `${shipment.shipment_id}/pod-${Date.now()}-${crypto.randomUUID()}.${ext}`;
-    const arrayBuffer = await file.arrayBuffer();
+    // Ekstensi diambil dari hasil sniff (isi asli file), bukan dari Content-Type klaim client.
+    const path = `${shipment.shipment_id}/pod-${Date.now()}-${crypto.randomUUID()}.${sniffedExt}`;
     const { error: uploadError } = await adminClient.storage
       .from('delivery-confirmation-photos')
-      .upload(path, Buffer.from(arrayBuffer), { contentType: file.type, upsert: false });
+      .upload(path, fileBuffer, { contentType: EXT_TO_IMAGE_MIME[sniffedExt], upsert: false });
 
     if (uploadError) {
       return { status: 500, body: { error: 'Gagal mengunggah foto. Silakan coba lagi.' } };

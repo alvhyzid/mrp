@@ -64,6 +64,7 @@ export * from './getPlanningFeasibility';
 export * from './learnFromBatch';
 export * from './startProductionBatch';
 export * from './completeProductionBatch';
+export * from './listTodaysProductionBatches';
 export * from './listProductionStandardProposals';
 export * from './decideProductionStandardProposal';
 export * from './createShipmentWithSignature';

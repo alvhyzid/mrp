@@ -38,6 +38,21 @@ const batchStatusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | '
 
 const disruptionTypeLabels: Record<string, string> = { equipment_breakdown: 'Mesin Rusak', utility_outage: 'Listrik/Utilitas Padam', external_factor: 'Faktor Eksternal', reprioritized: 'Dialihkan ke Pekerjaan Lain', other: 'Lainnya' };
 type ProductionPlant = { production_plant_id: number; name: string };
+type TodayBatch = {
+  production_batch_id: number;
+  batch_number: string;
+  planned_qty: number;
+  uom: string;
+  status: string;
+  planned_date: string | null;
+  work_order_id: number;
+  routing_id: number | null;
+  item_code: string | null;
+  item_name: string | null;
+  item_base_uom: string | null;
+  production_plant_id: number | null;
+  production_plant_name: string | null;
+};
 type WorkCenterOption = { work_center_id: number; name: string; code: string | null; production_plant_id: number };
 type Disruption = {
   production_disruption_id: number;
@@ -96,6 +111,11 @@ export default function ProductionDashboardPage() {
   const [batchTransitionBusyId, setBatchTransitionBusyId] = useState<number | null>(null);
   const [batchTransitionMessage, setBatchTransitionMessage] = useState('');
 
+  const [todaysBatches, setTodaysBatches] = useState<TodayBatch[]>([]);
+  const [todaysBatchesLoading, setTodaysBatchesLoading] = useState(true);
+  const [todaysBatchesError, setTodaysBatchesError] = useState('');
+  const [myPlantId, setMyPlantId] = useState<number | null>(null);
+
   const emptyOutputLine = { qty: '', output_type: 'main_output', lot_number: '', expiry_date: '' };
   const [outputLines, setOutputLines] = useState([{ ...emptyOutputLine }]);
   const [outputStatus, setOutputStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
@@ -143,6 +163,23 @@ export default function ProductionDashboardPage() {
     setDisruptionsLoading(false);
   }, [authedFetch]);
 
+  // "Jadwal Hari Ini" (Fase Produksi Nyata P3) — daftar batch dijadwalkan hari
+  // ini ATAU sudah berjalan, di-filter ke plant milik user (kalau ter-link ke
+  // employee) supaya operator Karanglo tidak melihat batch Ruko Dieng.
+  const loadTodaysBatches = useCallback(async () => {
+    setTodaysBatchesLoading(true);
+    const { ok, body } = await authedFetch('/api/production-batches/today');
+    if (!ok) {
+      setTodaysBatchesError(body.error || 'Gagal memuat jadwal hari ini.');
+      setTodaysBatchesLoading(false);
+      return;
+    }
+    setTodaysBatches(body.batches || []);
+    setMyPlantId(body.my_plant_id ?? null);
+    setTodaysBatchesError('');
+    setTodaysBatchesLoading(false);
+  }, [authedFetch]);
+
   const loadPlantsAndWorkCenters = useCallback(async () => {
     const [plantsRes, wcRes] = await Promise.all([authedFetch('/api/production-plants'), authedFetch('/api/work-centers')]);
     if (plantsRes.ok) setPlants(plantsRes.body.plants || []);
@@ -171,10 +208,10 @@ export default function ProductionDashboardPage() {
       }
       setRole(meData?.user?.role ?? null);
       setCheckingAccess(false);
-      await Promise.all([loadWorkOrders(), loadDisruptions(), loadPlantsAndWorkCenters()]);
+      await Promise.all([loadWorkOrders(), loadDisruptions(), loadPlantsAndWorkCenters(), loadTodaysBatches()]);
     };
     checkAccessAndLoad();
-  }, [router, loadWorkOrders, loadDisruptions, loadPlantsAndWorkCenters]);
+  }, [router, loadWorkOrders, loadDisruptions, loadPlantsAndWorkCenters, loadTodaysBatches]);
 
   const handleCreateDisruption = async () => {
     if (!disruptionForm.production_plant_id) {
@@ -254,7 +291,7 @@ export default function ProductionDashboardPage() {
       return;
     }
     setBatchTransitionMessage('Batch ditandai Berjalan.');
-    await Promise.all([reloadBatchesForExpanded(), loadWorkOrders()]);
+    await Promise.all([reloadBatchesForExpanded(), loadWorkOrders(), loadTodaysBatches()]);
   };
 
   const handleCompleteBatch = async (batchId: number) => {
@@ -274,7 +311,22 @@ export default function ProductionDashboardPage() {
     } else {
       setBatchTransitionMessage('Batch ditandai Selesai.');
     }
-    await Promise.all([reloadBatchesForExpanded(), loadWorkOrders()]);
+    await Promise.all([reloadBatchesForExpanded(), loadWorkOrders(), loadTodaysBatches()]);
+  };
+
+  // Buka batch langsung dari kartu "Jadwal Hari Ini" -- expand WO yang sama +
+  // pilih batch-nya, supaya operator tidak perlu cari sendiri di tabel Work Order.
+  const handleOpenFromToday = async (batch: TodayBatch) => {
+    setExpandedWoId(batch.work_order_id);
+    setSelectedBatchId('');
+    setStepProgress([]);
+    const [stepsRes, batchesRes] = await Promise.all([
+      batch.routing_id ? authedFetch(`/api/routing-steps?routing_id=${batch.routing_id}`) : Promise.resolve({ ok: true, body: { routingSteps: [] } }),
+      authedFetch(`/api/production-batches?work_order_id=${batch.work_order_id}`)
+    ]);
+    setRoutingSteps(stepsRes.ok ? stepsRes.body.routingSteps || [] : []);
+    setBatchesForExpanded(batchesRes.ok ? batchesRes.body.batches || [] : []);
+    await handleSelectBatch(String(batch.production_batch_id));
   };
 
   const handleSelectBatch = async (batchId: string) => {
@@ -468,6 +520,72 @@ export default function ProductionDashboardPage() {
           <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Dashboard Department</p>
           <h1 className="text-2xl font-semibold text-foreground">Production</h1>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardDescription className="uppercase tracking-[0.2em]">Produksi</CardDescription>
+            <CardTitle className="text-xl">Jadwal Hari Ini{myPlantId === null ? '' : ' — Plant Saya'}</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <p className="text-sm text-muted-foreground">Batch yang dijadwalkan hari ini atau sudah berjalan — bukan Gantt penuh, cukup daftar yang bisa langsung ditindaklanjuti.</p>
+            {todaysBatchesError ? <p className="text-sm text-destructive">{todaysBatchesError}</p> : null}
+            {todaysBatchesLoading ? (
+              <p className="text-sm text-muted-foreground">Memuat...</p>
+            ) : todaysBatches.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Tidak ada batch dijadwalkan hari ini{myPlantId !== null ? ' di plant Anda' : ''}.</p>
+            ) : (
+              <div className="overflow-hidden rounded-md border">
+                <table className="w-full text-data">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Batch</th>
+                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Item</th>
+                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Qty</th>
+                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Plant</th>
+                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Status</th>
+                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {todaysBatches.map((b) => (
+                      <tr key={b.production_batch_id} className="border-b last:border-0">
+                        <td className="px-3 py-1.5 font-medium text-foreground">{b.batch_number}</td>
+                        <td className="px-3 py-1.5">
+                          {b.item_code} — {b.item_name}
+                        </td>
+                        <td className="px-3 py-1.5">
+                          {b.planned_qty} {b.uom}
+                        </td>
+                        <td className="px-3 py-1.5">{b.production_plant_name ?? '-'}</td>
+                        <td className="px-3 py-1.5">
+                          <Badge variant={batchStatusBadgeVariant[b.status] ?? 'secondary'}>{batchStatusLabels[b.status] ?? b.status}</Badge>
+                        </td>
+                        <td className="px-3 py-1.5">
+                          <div className="flex gap-2">
+                            {canRecordStepProgress(role) && b.status === 'planned' ? (
+                              <Button size="sm" disabled={batchTransitionBusyId === b.production_batch_id} onClick={() => handleStartBatch(b.production_batch_id)}>
+                                {batchTransitionBusyId === b.production_batch_id ? '...' : 'Mulai'}
+                              </Button>
+                            ) : null}
+                            {canRecordStepProgress(role) && b.status === 'in_progress' ? (
+                              <Button size="sm" disabled={batchTransitionBusyId === b.production_batch_id} onClick={() => handleCompleteBatch(b.production_batch_id)}>
+                                {batchTransitionBusyId === b.production_batch_id ? '...' : 'Selesaikan'}
+                              </Button>
+                            ) : null}
+                            <Button size="sm" variant="outline" onClick={() => handleOpenFromToday(b)}>
+                              Catat Tahap
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {batchTransitionMessage ? <p className="text-sm text-muted-foreground">{batchTransitionMessage}</p> : null}
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>

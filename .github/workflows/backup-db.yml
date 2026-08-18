@@ -44,8 +44,15 @@ jobs:
             echo "GAGAL: dump terlalu kecil (<10KB) — kemungkinan cuma schema kosong tanpa data." >&2
             exit 1
           fi
-          if ! grep -q "COPY public.companies" "$FILE" && ! grep -q "INSERT INTO public.companies" "$FILE"; then
+          # PENTING (pelajaran dari ci.yml job rebuild-migrations): `supabase db dump`
+          # SELALU pakai --quote-all-identifier, jadi nama tabel di dump SELALU
+          # "public"."companies" (dikutip), BUKAN public.companies polos. Versi
+          # pertama grep ini pakai pola tanpa kutip dan run pertama gagal PERSIS
+          # karena ini — sudah dibuktikan lewat run gagal, bukan tebakan.
+          if ! grep -qE "COPY \"?public\"?\.\"?companies\"?[[:space:]\(]" "$FILE" && ! grep -qE "INSERT INTO \"?public\"?\.\"?companies\"?[[:space:]\(]" "$FILE"; then
             echo "GAGAL: dump tidak berisi data tabel companies — bukan backup DATA yang valid." >&2
+            echo "--- 5 baris pertama yang mengandung kata 'companies' (debug) ---" >&2
+            grep -i "companies" "$FILE" | head -5 >&2
             exit 1
           fi
           echo "OK: dump berisi data sungguhan (bukan cuma schema)."

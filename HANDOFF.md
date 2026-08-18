@@ -25,6 +25,33 @@ grant execute on function public.nama_fungsi(tipe, tipe, ...) to service_role; -
 
 ---
 
+## Data Kemasan SAS005 dari Pabrik + Temuan #4/#5 — 19 Agu 2026
+
+### TEMUAN PALING PENTING — SAS005 sekarang TIDAK FEASIBLE untuk qty penuh
+
+Setelah PO box Drinkme (CV Gasper, ETA konservatif 3 Sep) dicatat sungguhan, deteksi kelayakan SAS005 BERUBAH dari "feasible-ketat" jadi **TIDAK FEASIBLE**: produksi baru bisa mulai isi box 3 Sep (nunggu box datang), menyisakan cuma 9 hari kerja sampai deadline 12 Sep — padahal butuh 15 hari kerja (45 batch ÷ 3/hari). **Realistis cuma ±6.107 dari 10.000 pcs yang bisa terkirim tepat waktu.** Ini persis risiko yang disebut Track A2 `docs/rencana-kerja-fase-produksi-nyata.md` ("jalur kritis nyata deadline 12 Sep") — sekarang terbukti dengan angka nyata, bukan perkiraan. **Perlu tindakan bisnis Anda**: negosiasi pengiriman parsial dengan client (Track A1) atau percepat kedatangan box kalau memungkinkan.
+
+### 1. Saldo Awal dimuat (Plant Karanglo, lewat jalur resmi/RPC, bukan insert langsung)
+- **Sachet Drinkme**: dicatat **260.000 pcs** (130 roll × 2.000 sachet/roll) — bukan 130 roll. Item `PMPKF001ITM` ber-`base_uom` pcs dan BOM Drinkme memakainya "14 pcs per box", jadi pcs adalah satuan yang konsisten dengan cara BOM menghitung, bukan roll. Harga Rp138/pcs (sudah ada di master item, cocok dengan daftar harga Anda). Lot: `SALDO-AWAL-KARANGLO-SACHET-DRINKME-190826`.
+- **Plastic Wrap Box**: dicatat **6.000 pcs** (2 roll × 3.000/roll), alasan satuan sama seperti di atas. Harga Rp200/pcs (sudah ada di master item). Lot: `SALDO-AWAL-KARANGLO-PLASTIC-WRAP-190826`.
+- **Terbukti**: setelah dimuat, Sachet HILANG dari daftar kekurangan bahan SAS005 (sebelumnya kurang 140.000); Plastic Wrap Box MUNCUL kurang **4.000** (butuh 10.000, stok 6.000) — persis seperti prediksi Anda.
+
+### 2. PO Supplier dicatat (lewat jalur resmi, belum diterima)
+- **Supplier baru dibuat**: CV Gasper (percetakan), lead time 14 hari.
+- **PO Box Drinkme (PMPKB001ITM)**: qty **10.000 pcs** (sesuai instruksi — ini kebutuhan minimum, **BUKAN angka pasti dari pemilik produk**). ETA 3 September 2026. **⚠️ PERLU DIKONFIRMASI ULANG: qty pesanan sungguhan ke CV Gasper begitu Anda dapat angkanya dari pemilik produk** — kalau beda dari 10.000, PO ini perlu diedit.
+- **Karton isi 42 (PKG-KARTON-SERBUK-42, kebutuhan 239 karton) — BELUM dicatat sebagai PO.** Instruksi eksplisit: tidak mencatat PO tanpa nama supplier (bukan menebak/pakai supplier fiktif). **⚠️ PERLU: nama supplier percetakan karton ini dari pemilik produk**, baru bisa dicatat sebagai PO resmi. Sampai itu didapat, item ini tetap muncul di daftar kekurangan bahan SAS005 sebagai kebutuhan beli murni (kurang 238 karton), belum ada ETA yang bisa dipakai sistem.
+
+### 3. Opname — akses diperluas ke warehouse_staff
+Lihat bagian "Extend stock adjustment/opening-balance access" — commit terpisah, sudah diuji & di-push. `STOCK_ADJUSTMENT_ROLES` sekarang termasuk `warehouse_staff`, digerbang juga di level database (bukan cuma UI), role di luar gudang tetap ditolak.
+
+### 4. Kategori downtime yang ADA SEKARANG (dicek query, bukan dari ingatan) — BELUM diubah, menunggu penilaian Anda
+5 kategori tersedia di sistem (`production_disruptions.disruption_type`): **Mesin Rusak** (`equipment_breakdown`), **Listrik/Utilitas Padam** (`utility_outage`), **Faktor Eksternal** (`external_factor`), **Dialihkan ke Pekerjaan Lain** (`reprioritized`), **Lainnya** (`other`). Data nyata yang sudah tercatat di dev sejauh ini: 5 kejadian, SEMUANYA `utility_outage`. Silakan nilai dari jalan kaki: apakah 5 kategori ini sudah cukup mewakili kondisi lapangan.
+
+### Daftar kekurangan bahan SAS005 TERBARU (setelah 1 & 2 di atas)
+Maltodextrin, Inulin, Psylium Husk, Polydextrose, Derasi Orange, Papain, Bromalin, Garcinia Cambogia, **Box Drinkme (10.000, menunggu PO)**, **Plastic Wrap Box (4.000, BARU muncul)**, Zoefree, Garam, Sereh Powder, Karton Serbuk (238, belum ada PO). Sachet TIDAK lagi muncul.
+
+---
+
 ## Fase Produksi Nyata — P1/P2/P3 (3 blocker pra-jalan ditambal) — 19 Agu 2026
 
 Menindaklanjuti 3 dari 5 temuan `docs/checklist-audit-jalan-kaki.md` yang sudah jelas blocker tanpa perlu menunggu hasil jalan kaki pemilik produk (temuan #4 opname & #5 kategori downtime tetap menunggu, keduanya butuh penilaian lapangan bukan keputusan teknis).

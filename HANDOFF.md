@@ -4,6 +4,34 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Ringkasan Status Proyek untuk Review Konsultan — 19 Agu 2026
+
+Ditulis atas permintaan eksplisit pemilik produk sebagai bahan laporan kondisi proyek. Detail teknis & bukti lengkap dari tiap poin ada di bagian "Perintah Gabungan A + B" tepat di bawah ringkasan ini.
+
+### (a) Yang sudah jalan penuh dengan data real case (bukan lagi data demo/uji)
+- **Fondasi SaaS**: signup, login, invite anggota tim, accept invitation, RLS multi-tenant — semua lewat form/UI sungguhan, terverifikasi di staging dan dev.
+- **Master data produksi PT ITM**: 67 item real case (raw material, kemasan, WIP premix, finished goods), BOM Gummy Zala (N200) dan BOM Drinkme Lemon v2 (dibangun ulang dari resep asli sesi ini, biaya batch terverifikasi cocok ke Rp0,48 dari target spec), routing, 33 karyawan real case, 3 plant real (Pabrik Utama, **Karanglo** — minuman serbuk, **Ruko Dieng** — gummy).
+- **Stok opname riil Gudang Karanglo**: 35 lot saldo awal dimuat lewat mekanisme resmi (bukan insert SQL langsung), total nilai Rp233.686.488,12, tiap lot tercatat sebagai `stock_movements` dengan alasan "Saldo awal stok opname 18 Agu 2026" — bisa dilacak dan sudah terbukti alur biayanya benar-benar masuk ke perhitungan produksi.
+- **2 pesanan pelanggan real case aktif**: SAS001 (Gummy Zala, 20.000 pcs) dan SAS005 (Drinkme, 10.000 pcs) — keduanya berstatus "confirmed", belum ada produksi/pengiriman sungguhan.
+- **Deteksi kelayakan jadwal & kekurangan bahan** (endpoint `/api/sales-order-lines/[id]/planning-feasibility`) — sudah dites ulang terhadap data real case pasca-pembersihan: SAS001 butuh 353 batch, TIDAK layak dengan kapasitas sekarang; SAS005 butuh 45 batch, LAYAK (ketat, 15 dari 23 hari kerja tersedia).
+- **Backup database**: workflow GitHub Actions manual (`workflow_dispatch`) menghasilkan pg_dump schema+data sungguhan dari project dev, sudah dijalankan & isinya diverifikasi langsung (bukan cuma percaya status hijau) — cocok baris-per-baris dengan isi database untuk 8 tabel yang dicek.
+- **Data demo/uji sudah bersih dari database dev** — 4 perusahaan test-fixture orphan, seluruh SO/WO/batch/shipment/lot demo, plant demo lama dihapus lewat `scripts/cleanup-demo-data.js` (diuji dulu di staging, idempotent, seluruh test suite [6 file/37 test] lulus baik di staging maupun dev). Laba operasional bulanan sekarang bersih dari kontaminasi margin demo (Agustus 2026: margin Rp0, overhead Rp60.500.000, operating profit -Rp60.500.000 — negatif karena memang belum ada penjualan real case yang selesai/terkirim, bukan bug).
+
+### (b) Menunggu keputusan/data dari pemilik produk
+- **Stok Plant Ruko Dieng (gummy) — KOSONG SAMA SEKALI (0 lot).** Karanglo sudah punya saldo awal lengkap; Ruko Dieng belum pernah diisi data stok opname apa pun. Perlu dokumen stok opname Ruko Dieng (format sama seperti `docs/saldo-awal-gudang-karanglo-180826.md`) sebelum SAS001 (Gummy Zala) bisa dihitung kekurangan bahannya dengan akurat.
+- **2 item kemasan Drinkme belum pernah ada stoknya sama sekali**: `PKG-PLASTIC-WRAP-BOX` (Plastic Wrap Box) dan `PKG-KARTON-SERBUK-42` (Karton Serbuk isi 42 box) — 0 stok, tidak tercakup di stok opname Karanglo yang sudah dimuat. Ditemukan saat menghitung ulang kekurangan bahan SAS005 sesi ini.
+- **Kekurangan bahan mentah SAS005 (Drinkme, 10.000 unit) ternyata lebih luas dari perkiraan awal** — bukan cuma Garcinia/Bromalin/Papain/sachet/box, tapi juga Maltodextrin, Polydextrose, Inulin, Psylium Husk, Zoefree, Garam, Derasi Orange, Sereh Powder (stok ADA tapi tidak cukup untuk 45 batch — premix ikut memakai sebagian bahan yang sama sebagai carrier, jadi total kebutuhan lebih besar dari perkiraan per-item sederhana). Ini keputusan pembelian yang perlu ditindaklanjuti pemilik produk, bukan masalah teknis.
+- **Kapasitas real produksi belum pernah dikonfirmasi ulang** di luar 2 angka yang sudah dipakai (Gummy 4 batch/hari, Serbuk 3 batch/hari — keduanya masih berstatus `ESTIMASI_MANUAL`, belum `DIPELAJARI` dari data produksi sungguhan karena belum ada produksi real case yang jalan).
+
+### (c) Utang teknis yang sengaja ditunda (beserta alasannya)
+- **2 item orphan lama, `PMSC001ITM` (WIP "Sachet Minuman Serbuk" 2-level) & `PMPW0001ITM` (duplikat lama "Sorbitol Powder")** — sengaja DIKECUALIKAN dari `scripts/cleanup-demo-data.js`, bukan dihapus, bukan dirapikan. `PMSC001ITM` sudah orphan sejak BOM Drinkme dibangun ulang langsung dari raw material, tapi BOM aktifnya sendiri masih mereferensikan `PMPW0001ITM` (FK constraint nyata, ditemukan lewat percobaan pembersihan dev sesi ini) — menghapus keduanya butuh keputusan eksplisit dulu (hapus BOM lama itu juga, atau biarkan sebagai arsip), bukan sekadar tambal cepat.
+- **2 company orphan tersisa di dev**: `Company B` (SENGAJA dibiarkan — akun debug `company.b@debug.mrp` dipakai test suite CI, bukan sampah) dan `E2E RealSMTP Co 1786463644300` (kemungkinan besar sampah tes lama, tapi belum diuji eksplisit di staging bahwa aman dihapus total — sengaja tidak ikut skrip pembersihan sesi ini supaya tidak menyimpang dari yang sudah divalidasi).
+- **Sorting kolom di halaman daftar (tabel list)** — belum diimplementasikan di beberapa halaman, ditunda karena bukan blocker untuk alur kerja inti MVP.
+- **Pola "Detail expand-baris" belum dipakai konsisten di semua halaman daftar** — sudah ada di sebagian halaman tapi belum dimigrasikan ke halaman-halaman lain yang sebenarnya cocok pakai pola sama, demi konsistensi UI.
+- **Fitur create Karyawan lewat UI belum pernah dibangun** — dikonfirmasi sesi ini (dicek langsung, tidak ada route/handler `POST /api/employees` maupun form tambah karyawan). Seluruh 33 karyawan real case saat ini masuk lewat `scripts/seed-realcase-itm.js`, bukan lewat form yang bisa dipakai user non-teknis — perlu dibangun sebelum modul kepegawaian bisa dipakai mandiri.
+
+---
+
 ## Perintah Gabungan A (tutup GELOMBANG 1) + B (Saldo Awal Karanglo) — 19 Agu 2026
 
 ### A1 — BOM Drinkme Lemon — SELESAI & terverifikasi
@@ -16,7 +44,7 @@ Resep top-level lengkap (basis 19,655g) dibangun jadi BOM aktif `PMBX001ITM` (Bo
 
 Typecheck bersih, `scripts/seed-realcase-itm.js` tetap idempotent (dicek: run ulang skip, tidak bikin versi BOM baru lagi).
 
-### A2 — Backup via GitHub Actions — WORKFLOW DITULIS, EKSEKUSI BLOCKED (butuh Anda)
+### A2 — Backup via GitHub Actions — SELESAI & TERVERIFIKASI (lihat update di bawah blocker lama)
 
 `.github/workflows/backup-db.yml` dibuat: trigger `workflow_dispatch` (manual saja), `supabase db dump --linked` (schema+DATA penuh, BUKAN `--data-only` — sesuai instruksi), verifikasi dump berisi data sungguhan (bukan cuma schema kosong), upload artifact retensi 7 hari.
 
@@ -27,13 +55,15 @@ Typecheck bersih, `scripts/seed-realcase-itm.js` tetap idempotent (dicek: run ul
 
 **Yang perlu Anda lakukan:** (a) buka Settings → Secrets and variables → Actions di repo GitHub, tambahkan 3 secret di atas (`SUPABASE_ACCESS_TOKEN` dari https://app.supabase.com/account/tokens, `SUPABASE_PROJECT_REF` = `kfvtrwuuqcjfkkuqizxt`, `SUPABASE_DB_PASSWORD` = password database project ini); (b) buka tab Actions → "Backup Database (manual)" → Run workflow; (c) unduh artifact `db-backup-full`, pastikan isinya bukan cuma `CREATE TABLE` kosong (ada baris `COPY`/`INSERT` data sungguhan).
 
-### A3 — Pembersihan Data Demo — DITUNDA (bergantung A2), bagian AMAN sudah dikerjakan
+**UPDATE (sesi lanjutan, hari sama):** pemilik produk menambahkan ketiga secret & menjalankan workflow. 2 percobaan pertama gagal (regex verifikasi tidak toleran terhadap identifier quoted milik `pg_dump`; lalu ditemukan `supabase db dump` TIDAK punya mode gabungan schema+data dalam 1 command — workflow diperbaiki jadi 2 dump terpisah digabung). Run ke-3 (commit `848d1d8`) **SUKSES**. Pemilik produk sempat memeriksa manual artifact-nya dan menyimpulkan "invalid, isinya schema-only" — ternyata KELIRU: `supabase db dump` tanpa `--use-copy` menulis data pakai format `INSERT INTO` bukan `COPY`, jadi pencarian manual untuk string `COPY public.` memang nol hasil padahal datanya ADA. Diverifikasi ulang dengan baca file langsung: 48 tabel (termasuk `auth`/`storage`) berisi data, dan untuk 8 tabel yang dicek, jumlah barisnya **cocok persis** dengan isi database dev saat itu (companies 7, items 124, employees 44, work_orders 14, lots 64, CPO 11, sales_orders 5, bom_lines 78). Workflow diperbarui (`ee2a2e7`) supaya langkah verifikasinya sekarang mencetak format (INSERT vs COPY) + jumlah tabel berisi data, supaya pemeriksaan manual berikutnya tidak salah baca lagi.
 
-Karena syarat WAJIB "A2 terverifikasi dulu" belum terpenuhi (blocker di atas), **pembersihan data demo (hapus) BELUM dijalankan** — konsisten dengan protokol "jangan improvisasi, catat & lewati" untuk operasi destruktif tanpa backup terverifikasi.
+### A3 — Pembersihan Data Demo — SELESAI (dev sudah bersih, lihat detail di bawah)
 
-**Bagian ADITIF (aman, tidak menghapus apa pun) sudah dikerjakan:** 2 plant NYATA dibuat — **Karanglo** (`production_plant_id=471`, produksi Minuman Serbuk) dan **Ruko Dieng** (`production_plant_id=472`, produksi Gummy) — sengaja plant BARU, bukan me-rename plant demo lama (`Pabrik Cabang Kedua PT ITM`, id=137, "lokasi uji isolasi plant demo") supaya tidak berisiko merusak apa pun yang masih bergantung pada plant demo itu. Plant demo lama tetap ada, akan dihapus bersamaan data demo lain begitu A2 terverifikasi.
+**UPDATE (sesi lanjutan):** setelah A2 terverifikasi valid, `scripts/cleanup-demo-data.js` ditulis dengan strategi ALLOWLIST (bukan tebak apa yang harus dihapus) dan diuji dulu di staging (`mrp-rebuild-test-2A`, diisi data representatif yang meniru campuran demo+real+trigger-FK-edge-case dev) sebelum disentuhkan ke dev, sesuai syarat ketat yang diminta pemilik produk. 2 kondisi FK baru ditemukan & diperbaiki lewat percobaan sungguhan (bukan tebakan): `employee_attendance` harus dihapus dulu sebelum karyawan demo-nya; item lama `PMPW0001ITM` masih direferensikan BOM aktif `PMSC001ITM` yang sengaja dibiarkan (lihat bagian (c) di ringkasan atas). Skrip final: butuh `--target=staging|dev` eksplisit, baca kredensial dari file `.env.*.local` (tidak lagi inline di command line — insiden kunci bocor sebelumnya jadi alasan), dan target dev wajib konfirmasi ketik ulang.
 
-**Konsekuensi yang perlu Anda tahu:** karena data demo (termasuk stok WIP premix fiktif sisa `seed-debug-powder-drink.js` — PMSW/PMAC/PMFLV 5000g/3000g/5000g) masih ada, **perhitungan Laba Operasional bulanan MASIH TERCEMAR** oleh order/data demo lama sampai pembersihan ini jalan — persis risiko yang disebutkan di instruksi. Juga mempengaruhi hasil verifikasi B4(c) di bawah.
+Dijalankan 2× di staging (idempoten, data wajib-tetap-ada utuh, 6 file/37 test lulus) baru dijalankan ke dev. Di dev: 2 perusahaan orphan (`MarginTestCorp` ×2 — `DebugPremixCorp`/`LaborPoolTestCorp` sudah bersih dari percobaan sebelumnya), 155 system_alerts, 11 work_orders + turunannya, 8 CPO demo + turunannya, 28 lot demo, 24 bom/bom_lines lama, 6 karyawan demo, 10 item demo, 1 plant demo (`Pabrik Cabang Kedua PT ITM`) — semua terhapus. Diverifikasi 2× lagi idempoten (0 baris di run kedua) dan query langsung ke database mengonfirmasi 3 plant real, 35 lot saldo awal Karanglo, 67 item real case, BOM Drinkme v2 aktif, 33 karyawan, CPO SAS001+SAS005 semua utuh. `Company B` dan `E2E RealSMTP Co ...` sengaja tidak disentuh (lihat bagian (c) di ringkasan atas).
+
+**Laba Operasional bulanan sekarang BERSIH** dari kontaminasi demo (lihat ringkasan (a) di atas untuk angkanya) — risiko yang disebutkan di instruksi awal sudah tidak berlaku lagi.
 
 ### B — Saldo Awal Stok Gudang KL BIZ / Plant Karanglo — SELESAI & terverifikasi
 
@@ -56,9 +86,9 @@ Karena syarat WAJIB "A2 terverifikasi dulu" belum terpenuhi (blocker di atas), *
 
 Typecheck bersih, `npm run build` sukses, 37/37 test tetap lulus.
 
-### Ringkasan hal yang MENUNGGU Anda (jangan ditebak)
-1. **A2/A3**: 3 GitHub secret (`SUPABASE_ACCESS_TOKEN`/`SUPABASE_PROJECT_REF`/`SUPABASE_DB_PASSWORD`) + jalankan workflow "Backup Database (manual)" sekali + konfirmasi artifact berisi data → baru pembersihan demo saya lanjutkan.
-2. **B4(c)**: shortage list SAS005 yang sebenarnya (raw material + SEMUA premix WIP, bukan cuma 5 item) — TERKAIT LANGSUNG dengan poin 1 (stok premix WIP saat ini tercemar data demo). Setelah demo dibersihkan, hitung ulang shortage list — kemungkinan besar baru akan cocok dengan 5-item yang Anda harapkan (karena stok WIP premix demo yang mengganggu perhitungan akan hilang).
+### Ringkasan hal yang MENUNGGU Anda (jangan ditebak) — SEMUA POIN DI BAWAH SUDAH SELESAI, lihat update
+~~1. A2/A3~~ — selesai, lihat update A2/A3 di atas.
+~~2. B4(c)~~ — **UPDATE (sesi lanjutan): dihitung ulang setelah A3 selesai, dan hasilnya TIDAK cocok dengan perkiraan 5-item di atas** — prediksi "kemungkinan besar akan cocok dengan 5-item" di baris ini TERNYATA SALAH, dikonfirmasi eksplisit oleh pemilik produk sendiri ("perkiraan saya sebelumnya yang salah — saya cuma mengecek item mana yang ada/tidak ada di stok, bukan apakah kuantitasnya cukup untuk 45 batch"). Shortage list SAS005 yang benar (dihitung dari eksplosi BOM berjenjang penuh, bukan cuma 1 level): Garcinia+Bromalin+Papain+sachet+box (sesuai dugaan) **DITAMBAH** Maltodextrin, Polydextrose, Inulin, Psylium Husk, Zoefree, Garam, Derasi Orange, Sereh Powder (stok ADA tapi kurang untuk 45 batch — kelima premix WIP memakai sebagian bahan yang sama sebagai carrier, sehingga total kebutuhan lebih besar dari perkiraan per-item sederhana) — lihat bagian (b) di ringkasan konsultan paling atas dokumen ini. Kelima premix WIP sendiri (PMSW/PMAC/PMFL/PMVITC/PMSRH) sudah BENAR muncul sebagai kebutuhan PRODUKSI (bahan penyusunnya cukup), bukan kekurangan beli.
 3. Kapasitas lini gummy/serbuk & nilai 3 item SKIP — SUDAH final per keputusan 18 Agu, tidak ada lagi yang menunggu di sini.
 
 ---

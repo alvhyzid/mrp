@@ -33,7 +33,9 @@ HRD sekarang bisa kelola 33+ karyawan lewat UI (`/hr`, tombol "Tambah Karyawan" 
 
 **Batasan yang perlu diketahui sesi depan:** tidak ada UI "Selesaikan Batch" di aplikasi ini — `production_batches.status` tidak pernah ditransisikan oleh kode aplikasi manapun (dicek, bukan asumsi). "Batch selesai" untuk keperluan pembelajaran K8 didefinisikan secara pragmatis sebagai "semua tahap routingnya sudah `completed` di `work_order_step_progress`" (data yang memang sudah diisi operator lewat alur yang ada), bukan dari status batch itu sendiri. Tombol "Ajukan sebagai Sampel Standar" ditaruh di dialog "Ringkasan Yield Batch" (`/ppic`) sebagai titik pemicu manual — belum otomatis terpicu saat tahap terakhir selesai.
 
-Build + typecheck + `npm run build` sukses. Test suite: 7 file / 48 test lulus (termasuk 11 test baru).
+Build + typecheck + `npm run build` sukses. Test suite: 7 file / 49 test lulus (termasuk 12 test baru).
+
+**LUBANG KEAMANAN NYATA ditemukan & ditambal SEBELUM dilaporkan selesai** (migration `20260819130000`): `grant execute ... to service_role` di migration `20260819110000` HANYA MENAMBAH grant, TIDAK MENCABUT grant PUBLIC yang Postgres beri otomatis ke fungsi baru. Dibuktikan lewat percobaan sungguhan: anon key (tanpa login sama sekali) BISA memanggil `decide_production_standard_proposal()` langsung, melewati gerbang role app layer total, dan bisa memalsukan `decided_by` jadi user manapun. Ditambal dengan `revoke execute ... from public/anon/authenticated` eksplisit di kedua fungsi baru (`propose_production_standard`, `decide_production_standard_proposal`), diverifikasi ulang pakai anon key SUNGGUHAN dan akun `ppic_manager` SUNGGUHAN (keduanya sekarang ditolak bersih `42501 permission denied`), dan dikunci pakai test regresi permanen. **Pelajaran untuk migration berikutnya yang menulis fungsi `security definer` sensitif: `grant ... to service_role` SAJA TIDAK CUKUP — selalu sertakan `revoke ... from public` (dan anon/authenticated) di migration yang sama, jangan berasumsi grant tambahan otomatis mencabut grant default.**
 
 ---
 

@@ -541,6 +541,32 @@ describe('Fase Produksi Nyata — Employee CRUD (B-1) & K8 standard proposal wor
     expect(standard!.last_approved_at).not.toBeNull();
   });
 
+  it('REGRESI KEAMANAN: propose_production_standard() & decide_production_standard_proposal() TIDAK BISA dipanggil langsung lewat RPC oleh anon key ATAU authenticated biasa (harus lewat app layer/service_role saja)', async () => {
+    // Ditemukan sungguhan sesi ini: migration 20260819110000 menulis "grant execute
+    // ... to service_role" tapi TIDAK "revoke ... from public" -- Postgres diam-diam
+    // tetap membiarkan PUBLIC (termasuk anon) menjalankan fungsi itu, yang berarti
+    // siapa pun bisa mengesahkan/menolak usulan standar produksi TANPA login sama
+    // sekali, dan memalsukan p_user_id (kolom decided_by) jadi siapa saja. Ditambal
+    // di migration 20260819130000 (revoke eksplisit dari public/anon/authenticated).
+    // Test ini mengunci perbaikannya supaya tidak diam-diam regresi lagi.
+    const anonClient: SupabaseClient = createClient(supabaseUrl!, anonKey!, { auth: { persistSession: false } });
+    const anonResult = await anonClient.rpc('decide_production_standard_proposal', { p_proposal_id: 999999999, p_decision: 'approved', p_user_id: 1 });
+    expect(anonResult.error).not.toBeNull();
+    expect(anonResult.error!.code).toBe('42501'); // permission denied -- BUKAN pesan bisnis ("usulan tidak ditemukan")
+
+    const authedClient: SupabaseClient = createClient(supabaseUrl!, anonKey!, {
+      auth: { persistSession: false },
+      global: { headers: { Authorization: `Bearer ${ppicManagerToken}` } }
+    });
+    const authedResult = await authedClient.rpc('decide_production_standard_proposal', { p_proposal_id: 999999999, p_decision: 'approved', p_user_id: 1 });
+    expect(authedResult.error).not.toBeNull();
+    expect(authedResult.error!.code).toBe('42501'); // ppic_manager SUNGGUHAN pun tetap ditolak lewat jalur RPC langsung
+
+    const anonProposeResult = await anonClient.rpc('propose_production_standard', { p_company_id: companyId, p_item_id: itemId, p_routing_step_id: null, p_metric_key: 'unit_per_batch', p_new_sample: 1 });
+    expect(anonProposeResult.error).not.toBeNull();
+    expect(anonProposeResult.error!.code).toBe('42501');
+  });
+
   it('(c) snapshot standar per rencana: standar berubah SETELAH rencana dihitung -> angka rencana lama TIDAK berubah, muncul standard_drift', async () => {
     const req1 = makeRequest(`http://localhost/api/sales-order-lines/${soLineId}/planning-feasibility`, generalManagerToken, 'GET');
     // getPlanningFeasibility menerima (request, salesOrderLineId) langsung, bukan lewat routing param.

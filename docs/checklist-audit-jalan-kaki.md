@@ -14,15 +14,15 @@ Langkah yang sudah ditandai **[SUDAH DICEK KODE: ...]** di bawah adalah temuan d
 
 ---
 
-## RINGKASAN — 5 hal yang KEMUNGKINAN BESAR jadi blocker (dicek dari kode, bukan diperkirakan)
+## RINGKASAN — status 5 temuan pra-jalan (diperbarui setelah P1-P3 dikerjakan)
 
-Baca ini dulu sebelum jalan kaki, supaya tidak buang waktu cari tombol yang memang belum ada:
+Baca ini dulu sebelum jalan kaki. **3 dari 5 sudah ditambal** (P1-P3, lihat HANDOFF.md bagian "Fase Produksi Nyata — P1/P2/P3") — SILAKAN VERIFIKASI ULANG lewat jalan kaki, jangan asumsikan otomatis benar hanya karena tertulis "sudah ditambal" di sini:
 
-1. **"Selesaikan Batch" — TIDAK ADA tombolnya sama sekali di UI manapun.** Kolom status batch (`production_batches.status`) tidak pernah diubah oleh kode aplikasi manapun — dicek langsung di kode, bukan ditebak. Yang BISA dicatat lewat UI adalah status per-TAHAP (Belum Mulai/Berjalan/Selesai) di halaman Produksi, bukan status batch itu sendiri. Batch akan tampil "Direncanakan" selamanya di badge status, walau semua tahapnya sudah "Selesai".
-2. **"Lihat jadwal HARI INI" untuk SPV/operator Produksi — kemungkinan besar tidak ada tampilan yang benar-benar difilter per tanggal.** Halaman Gantt dengan tampilan Harian/Mingguan/Bulanan HANYA bisa diakses role PPIC (ppic_manager/ppic_staff) — role Produksi (production_manager/production_staff) tidak punya akses ke halaman itu sama sekali. Yang mereka lihat di halaman Produksi cuma daftar Work Order datar, tidak difilter "hari ini".
-3. **"Kekurangan bahan" untuk Purchasing — fitur deteksi kelayakan/kekurangan bahan per Sales Order (yang dipakai sepanjang sesi analisis SAS001/SAS005) TIDAK PERNAH dirender di halaman manapun.** Ini murni endpoint API, belum ada tombol/halaman yang menampilkannya. Satu-satunya jalur "kekurangan bahan" yang benar-benar muncul di UI adalah notifikasi Bell (`material_shortage`) — dan itu HANYA muncul kalau sudah ada Work Order dibuat untuk item itu (bukan proaktif dari sekadar ada Sales Order).
-4. **"Opname harian" — staf gudang BIASA (bukan manager) tidak bisa mencatatnya.** Fitur "Penyesuaian Stok Manual" (satu-satunya jalur opname) dibatasi ke `warehouse_manager` ke atas — `warehouse_staff` bisa LIHAT stok tapi tidak bisa mencatat penyesuaian. Kalau opname harian di pabrik biasanya dilakukan staf biasa, ini jadi blocker akses (bukan blocker teknis).
-5. **"Catat downtime/gangguan" — ADA fiturnya** ("Catat Gangguan" di halaman Produksi, tipe: Mesin Rusak/Listrik Padam/Faktor Eksternal/Dialihkan/Lainnya), tapi dicek dulu apakah kategorinya cocok dengan jenis downtime yang biasa terjadi di pabrik — kalau tidak cocok, itu juga temuan (bukan berarti fiturnya tidak ada, tapi kategorinya kurang lengkap).
+1. ~~"Selesaikan Batch" — TIDAK ADA tombolnya sama sekali.~~ **SUDAH ADA (P1).** Tombol "Mulai Batch"/"Selesaikan Batch" di halaman Produksi, lewat state machine yang sudah ada di database (bukan bikin baru) — batch dengan log tahap belum lengkap TETAP boleh diselesaikan (tercatat sebagai pengecualian K8, tidak menghalangi status). Tolong dicoba langsung: pilih 1 batch, klik Mulai lalu Selesaikan, cek status berubah dan pesan yang muncul.
+2. ~~"Lihat jadwal HARI INI" untuk SPV/operator — kemungkinan tidak ada.~~ **SUDAH ADA (P3).** Card baru "Jadwal Hari Ini" di paling atas halaman Produksi — daftar batch dijadwalkan hari ini/masih berjalan, difilter ke plant operator itu sendiri (operator Karanglo tidak melihat batch Ruko Dieng), dengan tombol aksi langsung (Mulai/Selesaikan/Catat Tahap). Tolong dicek: apakah pemetaan "operator ini di plant mana" sudah benar untuk SEMUA staf produksi sungguhan (bergantung data karyawan `linked_user_id` + `production_plant_id` sudah terisi benar).
+3. ~~"Kekurangan bahan" untuk Purchasing — tidak pernah dirender.~~ **SUDAH ADA (P2).** Tombol "Cek Kelayakan" per baris di halaman Sales Order (bisa diakses PPIC/Purchasing/leadership) — menampilkan kebutuhan batch, kapasitas, feasible/tidak, DAN daftar kekurangan bahan lengkap (termasuk kasus "stok ada tapi tidak cukup" seperti Maltodextrin). Tolong dicek dari sisi Purchasing: apakah informasi ini cukup untuk memutuskan PO tanpa bantuan tambahan.
+4. **"Opname harian" — staf gudang BIASA (bukan manager) tidak bisa mencatatnya.** MASIH BELUM ditambal — menunggu penilaian Anda dari jalan kaki (apakah opname harian di lapangan memang dilakukan staf biasa atau manager). Fitur "Penyesuaian Stok Manual" (satu-satunya jalur opname) dibatasi ke `warehouse_manager` ke atas.
+5. **"Catat downtime/gangguan" — ADA fiturnya**, tapi kategorinya (Mesin Rusak/Listrik Padam/Faktor Eksternal/Dialihkan/Lainnya) perlu dicek cocok atau tidak dengan kondisi lapangan — MASIH BELUM ditambal, menunggu penilaian Anda.
 
 ---
 
@@ -47,11 +47,11 @@ Login sebagai akun SPV Produksi (role production_manager) — halaman: `/product
 
 | # | Langkah | Bisa lewat UI? | Waktu | Bantuan teknis? | Catatan |
 |---|---|---|---|---|---|
-| 1 | Lihat jadwal/pekerjaan HARI INI (bukan semua WO sepanjang waktu) | | | | [SUDAH DICEK KODE: KEMUNGKINAN BESAR TIDAK ADA — halaman Produksi cuma daftar WO datar; Gantt Harian cuma bisa diakses PPIC] |
-| 2 | Tandai 1 batch "Mulai" (transisi ke Berjalan) | | | | [SUDAH DICEK KODE: TIDAK ADA tombol ini — lihat Ringkasan poin 1] |
+| 1 | Lihat jadwal/pekerjaan HARI INI (bukan semua WO sepanjang waktu) | | | | [SUDAH DITAMBAL P3: card "Jadwal Hari Ini" di paling atas halaman Produksi, difilter ke plant operator — cek pemetaan plant-nya benar] |
+| 2 | Tandai 1 batch "Mulai" (transisi ke Berjalan) | | | | [SUDAH DITAMBAL P1: tombol "Mulai Batch" di halaman Produksi (juga muncul di card Jadwal Hari Ini)] |
 | 3 | Assign/lihat operator yang ditugaskan ke batch tersebut | | | | |
 | 4 | Pantau progres tahap operator (tanpa mencatat sendiri) | | | | |
-| 5 | Tandai 1 batch "Selesai" setelah semua tahap selesai | | | | [SUDAH DICEK KODE: TIDAK ADA tombol ini — lihat Ringkasan poin 1] |
+| 5 | Tandai 1 batch "Selesai" setelah semua tahap selesai | | | | [SUDAH DITAMBAL P1: tombol "Selesaikan Batch" — otomatis juga mengajukan batch sebagai sampel standar K8 kalau log tahapnya lengkap] |
 | 6 | Lihat Ringkasan Yield batch yang baru selesai | | | | [SUDAH DICEK KODE: ADA — tombol "Ringkasan Yield Batch" di halaman PPIC (bukan di halaman Produksi) — cek apakah SPV Produksi bisa akses halaman PPIC untuk ini, karena role Produksi TIDAK ADA di daftar akses `/ppic`] |
 | 7 | Catat gangguan produksi (downtime) untuk 1 work center | | | | [SUDAH DICEK KODE: ADA — "Catat Gangguan" di halaman Produksi] |
 | 8 | Tandai gangguan itu selesai/resolved | | | | [SUDAH DICEK KODE: ADA] |
@@ -82,7 +82,7 @@ Login sebagai `ppic.a@debug.mrp` (role ppic_manager) — halaman: `/ppic`.
 | 3 | Temukan 1 Work Order dengan status "Terhambat" (blocked) | | | | [SUDAH DICEK KODE: badge "Terhambat" ADA — tapi cek apakah dari badge itu jelas APA alasannya terhambat tanpa harus buka Bell notifikasi/tanya orang lain] |
 | 4 | Cari tahu ALASAN batch itu terhambat (bahan? mesin? pekerja?) | | | | [SUDAH DICEK KODE: alasan ada di sistem (system_alerts per jenis: material/machine/worker readiness) tapi TIDAK ADA satu tempat yang menggabungkan "kenapa WO ini blocked" secara ringkas — kemungkinan perlu cek Bell notifikasi + buka detail WO terpisah] |
 | 5 | Reschedule 1 batch berstatus "Direncanakan" (geser tanggal via drag) | | | | [SUDAH DICEK KODE: ADA — drag & drop di Gantt Mingguan, hanya untuk batch status "Direncanakan"] |
-| 6 | Cek kelayakan jadwal (feasibility) untuk 1 baris Sales Order — apakah bisa dikirim tepat waktu | | | | [SUDAH DICEK KODE: TIDAK ADA di UI mana pun — lihat Ringkasan poin 3. Fitur ini nyata dan sudah dipakai sepanjang sesi analisis SAS001/SAS005, tapi murni lewat API, belum ada tombolnya] |
+| 6 | Cek kelayakan jadwal (feasibility) untuk 1 baris Sales Order — apakah bisa dikirim tepat waktu | | | | [SUDAH DITAMBAL P2: tombol "Cek Kelayakan" di halaman Sales Order, termasuk daftar kekurangan bahan lengkap] |
 | 7 | Approve/reject 1 PO Client yang menunggu approval PPIC | | | | [SUDAH DICEK KODE: ADA — card approval PO Client] |
 | 8 | Lihat usulan standar produksi (K8) yang menunggu keputusan, sahkan/tolak salah satu | | | | [SUDAH DICEK KODE: ADA — card baru "Usulan Standar Produksi Menunggu Keputusan" (dibangun sesi ini)] |
 
@@ -94,7 +94,7 @@ Login sebagai akun Purchasing (role purchasing_manager/purchasing_staff) — hal
 
 | # | Langkah | Bisa lewat UI? | Waktu | Bantuan teknis? | Catatan |
 |---|---|---|---|---|---|
-| 1 | Temukan bahan apa saja yang kurang untuk order yang akan datang, TANPA diberi tahu dari luar sistem | | | | [SUDAH DICEK KODE: TIDAK ADA tampilan proaktif untuk ini — lihat Ringkasan poin 3. Satu-satunya sinyal adalah Bell notifikasi `material_shortage`, dan itu HANYA muncul kalau sudah ada Work Order dibuat untuk item itu] |
+| 1 | Temukan bahan apa saja yang kurang untuk order yang akan datang, TANPA diberi tahu dari luar sistem | | | | [SUDAH DITAMBAL P2: tombol "Cek Kelayakan" di halaman Sales Order (Purchasing sekarang punya akses) — coba dari sudut pandang Purchasing: cukup jelas untuk memutuskan PO tanpa bantuan tambahan?] |
 | 2 | Buat PO baru ke 1 supplier untuk bahan yang kurang, isi tanggal perkiraan datang (ETA) | | | | [SUDAH DICEK KODE: ADA — tombol "Buat PO Baru", field "Perkiraan Datang"] |
 | 3 | Lihat status PO yang belum datang (tracking kedatangan) | | | | [SUDAH DICEK KODE: ADA — kolom "Perkiraan Datang" + status di daftar PO] |
 | 4 | Terima notifikasi kalau PO terlambat dari ETA | | | | [SUDAH DICEK KODE: ADA jenis alert `po_delayed` di Bell notifikasi — cek benar muncul saat PO lewat ETA] |

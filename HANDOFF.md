@@ -25,6 +25,20 @@ grant execute on function public.nama_fungsi(tipe, tipe, ...) to service_role; -
 
 ---
 
+## Fase Produksi Nyata — P1/P2/P3 (3 blocker pra-jalan ditambal) — 19 Agu 2026
+
+Menindaklanjuti 3 dari 5 temuan `docs/checklist-audit-jalan-kaki.md` yang sudah jelas blocker tanpa perlu menunggu hasil jalan kaki pemilik produk (temuan #4 opname & #5 kategori downtime tetap menunggu, keduanya butuh penilaian lapangan bukan keputusan teknis).
+
+- **P1 — "Mulai Batch"/"Selesaikan Batch"**: state machine-nya SUDAH ADA di database sejak migration `20260817100000` (`production_batches` planned→in_progress→completed terdaftar di `status_transition_rules`), cuma belum ada kode aplikasi yang memicunya. 2 endpoint baru (`start`/`complete`) cuma melakukan UPDATE status biasa — trigger `enforce_status_transition` yang menegakkan, tidak di-bypass. Menyelesaikan batch OTOMATIS mengajukannya sebagai sampel K8 (gerbang kelengkapan yang sudah dibangun sesi sebelumnya) — batch dengan log tahap belum lengkap TETAP boleh diselesaikan, cuma dikecualikan dari pembelajaran (bukan diblokir).
+- **P2 — Panel Kelayakan/Kekurangan Bahan**: fitur yang dipakai sepanjang analisis SAS001/SAS005 sesi-sesi sebelumnya akhirnya dirender nyata (tombol "Cek Kelayakan" di halaman Sales Order). Sekaligus DIPERBAIKI: deteksi kekurangan bahan sebelumnya cuma 1 level (komponen BOM langsung), melewatkan kasus nyata Maltodextrin dipakai langsung DAN sebagai carrier di 5 premix sekaligus. Sekarang eksplosi BOM berjenjang penuh (`explodeBomRequirements.ts`). Akses juga diperluas — sebelumnya cuma `canViewFinancialData` (tidak termasuk PPIC/Purchasing!), sekarang `canViewPlanningFeasibility` (leadership + PPIC + Purchasing).
+- **P3 — "Jadwal Hari Ini"**: role Produksi sebelumnya SAMA SEKALI tidak punya akses ke tampilan berjadwal (Gantt Harian cuma untuk PPIC). Card baru di halaman Produksi, difilter ke plant operator via `employees.linked_user_id` (bukan kolom baru) — user tanpa employee ter-link (leadership/akun uji) melihat semua plant, sesuai peran pengawasan mereka.
+
+Semua 3 diverifikasi: test otomatis (19 test baru total across 4 file test baru) + live browser check terhadap dev (data uji dibuat & dibersihkan lagi setelahnya) + full suite 11 file/61 test hijau di tiap tahap + build sukses + CI hijau tiap commit.
+
+`docs/checklist-audit-jalan-kaki.md` sudah diperbarui — 3 dari 5 baris temuan ditandai "SUDAH DITAMBAL", dengan catatan eksplisit untuk pemilik produk: **verifikasi ulang lewat jalan kaki, jangan asumsikan otomatis benar** cuma karena tertulis "sudah ditambal" di dokumen.
+
+---
+
 ## Audit Keamanan Menyeluruh — Grant/Revoke Fungsi Database — 19 Agu 2026
 
 Dipicu temuan `decide_production_standard_proposal()` (K8) bisa dipanggil anon key tanpa login. Enumerasi menyeluruh (fungsi diagnostik baru `debug_list_function_grants()`, migration `20260819140000`) menemukan pola yang sama di **44 dari 48 fungsi** schema public.

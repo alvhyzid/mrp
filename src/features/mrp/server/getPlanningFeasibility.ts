@@ -65,9 +65,9 @@ export async function getPlanningFeasibility(request: NextRequest, salesOrderLin
       .in('metric_key', ['unit_per_batch', 'batches_per_day']);
     if (standardsError) return { status: 500, body: { error: standardsError.message } };
 
-    const unitPerBatch = standards?.find((s) => s.metric_key === 'unit_per_batch')?.value;
-    const batchesPerDay = standards?.find((s) => s.metric_key === 'batches_per_day')?.value;
-    if (!unitPerBatch || !batchesPerDay) {
+    const liveUnitPerBatch = standards?.find((s) => s.metric_key === 'unit_per_batch')?.value;
+    const liveBatchesPerDay = standards?.find((s) => s.metric_key === 'batches_per_day')?.value;
+    if (!liveUnitPerBatch || !liveBatchesPerDay) {
       return {
         status: 200,
         body: {
@@ -77,6 +77,47 @@ export async function getPlanningFeasibility(request: NextRequest, salesOrderLin
           item_name: item.name
         }
       };
+    }
+
+    // K8 bagian D.4 (Fase Produksi Nyata) — SNAPSHOT standar per rencana. Panggilan
+    // PERTAMA untuk sales_order_line ini mengunci unit_per_batch/batches_per_day
+    // yang dipakai SELAMANYA untuk baris itu (insert sekali, tidak pernah di-UPDATE
+    // dari sini) — supaya kalau standar itu berubah belakangan (job pembelajaran K8
+    // di-approve planner), angka rencana yang SUDAH dihitung/dipakai tidak ikut
+    // berubah diam-diam. Live value tetap dibaca setiap panggilan untuk dibandingkan
+    // dan dilaporkan sebagai `standard_drift` kalau beda dari snapshot.
+    const { data: existingSnapshot, error: snapshotReadError } = await adminClient
+      .from('sales_order_line_feasibility_snapshots')
+      .select('unit_per_batch, batches_per_day, created_at')
+      .eq('sales_order_line_id', salesOrderLineId)
+      .maybeSingle();
+    if (snapshotReadError) return { status: 500, body: { error: snapshotReadError.message } };
+
+    let unitPerBatch = Number(liveUnitPerBatch);
+    let batchesPerDay = Number(liveBatchesPerDay);
+    let snapshotTakenAt: string;
+    let standardDrift: Record<string, unknown> | null = null;
+
+    if (!existingSnapshot) {
+      const { data: inserted, error: snapshotInsertError } = await adminClient
+        .from('sales_order_line_feasibility_snapshots')
+        .insert([{ company_id: appUser.company_id, sales_order_line_id: salesOrderLineId, unit_per_batch: unitPerBatch, batches_per_day: batchesPerDay }])
+        .select('created_at')
+        .single();
+      if (snapshotInsertError) return { status: 500, body: { error: snapshotInsertError.message } };
+      snapshotTakenAt = inserted.created_at;
+    } else {
+      unitPerBatch = Number(existingSnapshot.unit_per_batch);
+      batchesPerDay = Number(existingSnapshot.batches_per_day);
+      snapshotTakenAt = existingSnapshot.created_at;
+
+      if (unitPerBatch !== Number(liveUnitPerBatch) || batchesPerDay !== Number(liveBatchesPerDay)) {
+        standardDrift = {
+          message: 'Standar produksi untuk item ini sudah berubah sejak rencana ini pertama dihitung — angka rencana di bawah TETAP memakai standar lama (tidak diubah diam-diam).',
+          unit_per_batch: { used_in_plan: unitPerBatch, current: Number(liveUnitPerBatch) },
+          batches_per_day: { used_in_plan: batchesPerDay, current: Number(liveBatchesPerDay) }
+        };
+      }
     }
 
     const batchesNeeded = Math.ceil(Number(soLine.qty_ordered) / Number(unitPerBatch));
@@ -159,7 +200,9 @@ export async function getPlanningFeasibility(request: NextRequest, salesOrderLin
         total_working_days_to_deadline: totalWorkingDays,
         effective_working_days_after_material_block: effectiveWorkingDays,
         feasible,
-        realistic_qty_deliverable_on_time: realisticQty
+        realistic_qty_deliverable_on_time: realisticQty,
+        standard_snapshot_taken_at: snapshotTakenAt,
+        standard_drift: standardDrift
       }
     };
   } catch (error) {

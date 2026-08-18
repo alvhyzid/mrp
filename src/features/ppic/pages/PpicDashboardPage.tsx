@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { canAccessPpicDashboard, canManageWorkCenterCapacity, canManageWorkOrder, canRecordStepProgress } from '@/lib/roles';
+import { canAccessPpicDashboard, canManageWorkCenterCapacity, canManageWorkOrder, canRecordStepProgress, canProposeProductionStandard, canDecideProductionStandardProposal } from '@/lib/roles';
 
 const statusLabels: Record<string, string> = { planned: 'Direncanakan', in_progress: 'Berjalan', paused: 'Dijeda', completed: 'Selesai', cancelled: 'Batal' };
 const statusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical' | 'secondary'> = {
@@ -100,6 +100,28 @@ type BlockDetail = {
 };
 type YieldStep = { routing_step_id: number; sequence_no: number; step_name: string; status: string | null; qty_input: number | null; uom_input: string | null; qty_recorded: number | null; uom: string | null; shrinkage_pct: number | null };
 type YieldSummary = { batch_number: string; steps: YieldStep[]; total_yield_pct: number | null };
+
+// K8 (Fase Produksi Nyata, bagian D) — usulan standar produksi menunggu keputusan planner.
+type StandardProposal = {
+  production_standard_proposal_id: number;
+  item_code: string | null;
+  item_name: string | null;
+  routing_step_name: string | null;
+  metric_key: string;
+  old_value: number | null;
+  old_source: string | null;
+  proposed_value: number;
+  calculation_method: string;
+  sample_count: number;
+  change_pct: number | null;
+  will_flip_to_dipelajari: boolean;
+};
+const metricKeyLabels: Record<string, string> = {
+  yield_percentage: 'Yield (%)',
+  unit_per_batch: 'Unit per Batch',
+  active_duration_minutes: 'Durasi Aktif (menit)',
+  batches_per_day: 'Kapasitas (batch/hari)'
+};
 
 const assignmentStatusLabels: Record<string, string> = { planned: 'Direncanakan', confirmed: 'Dikonfirmasi', absent: 'Tidak Hadir', replaced: 'Digantikan', completed: 'Selesai', unplanned_addition: 'Tambahan Dadakan' };
 const progressStatusLabels: Record<string, string> = { pending: 'Belum Mulai', in_progress: 'Berjalan', completed: 'Selesai' };
@@ -294,6 +316,14 @@ export default function PpicDashboardPage() {
   const [yieldSummary, setYieldSummary] = useState<YieldSummary | null>(null);
   const [yieldLoading, setYieldLoading] = useState(false);
   const [yieldError, setYieldError] = useState('');
+  const [learnStatus, setLearnStatus] = useState<'idle' | 'pending' | 'done' | 'error'>('idle');
+  const [learnMessage, setLearnMessage] = useState('');
+
+  const [proposals, setProposals] = useState<StandardProposal[]>([]);
+  const [proposalsError, setProposalsError] = useState('');
+  const [proposalsLoading, setProposalsLoading] = useState(true);
+  const [proposalBusyId, setProposalBusyId] = useState<number | null>(null);
+  const [proposalMessage, setProposalMessage] = useState('');
 
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
@@ -364,6 +394,57 @@ export default function PpicDashboardPage() {
     setBomsError('');
     setBomsLoading(false);
   }, [authedFetch]);
+
+  const loadProposals = useCallback(async () => {
+    setProposalsLoading(true);
+    const { ok, body } = await authedFetch('/api/production-standards/proposals');
+    if (!ok) {
+      setProposalsError(body.error || 'Gagal memuat usulan standar produksi.');
+      setProposalsLoading(false);
+      return;
+    }
+    setProposals(body.proposals || []);
+    setProposalsError('');
+    setProposalsLoading(false);
+  }, [authedFetch]);
+
+  const handleDecideProposal = async (proposalId: number, decision: 'approved' | 'rejected') => {
+    setProposalBusyId(proposalId);
+    setProposalMessage('');
+    const { ok, body } = await authedFetch('/api/production-standards/proposals/decide', {
+      method: 'POST',
+      body: JSON.stringify({ production_standard_proposal_id: proposalId, decision })
+    });
+    setProposalBusyId(null);
+    if (!ok) {
+      setProposalMessage(body.error || 'Gagal memproses usulan.');
+      return;
+    }
+    await loadProposals();
+  };
+
+  const handleLearnFromBatch = async () => {
+    if (!blockDetail) return;
+    setLearnStatus('pending');
+    setLearnMessage('');
+    const { ok, body } = await authedFetch('/api/production-batches/learn-standard-sample', {
+      method: 'POST',
+      body: JSON.stringify({ production_batch_id: blockDetail.batch.production_batch_id })
+    });
+    if (!ok) {
+      setLearnStatus('error');
+      setLearnMessage(body.error || 'Gagal mengajukan sampel standar.');
+      return;
+    }
+    setLearnStatus('done');
+    if (body.excluded) {
+      setLearnMessage(`Batch ini TIDAK dijadikan sampel — log tahap belum lengkap (${(body.missing_routing_step_ids as number[]).length} tahap belum selesai).`);
+    } else {
+      const count = (body.samples_submitted as unknown[]).length;
+      setLearnMessage(count > 0 ? `${count} sampel standar berhasil diajukan dari batch ini.` : 'Tidak ada sampel yang bisa dihitung dari batch ini (belum ada output/durasi tercatat).');
+    }
+    await loadProposals();
+  };
 
   const loadCapacity = useCallback(async () => {
     setCapacityLoading(true);
@@ -490,6 +571,8 @@ export default function PpicDashboardPage() {
     setYieldSummary(null);
     setYieldError('');
     setYieldLoading(true);
+    setLearnStatus('idle');
+    setLearnMessage('');
     const { ok, body } = await authedFetch(`/api/production-batches/yield-summary?production_batch_id=${blockDetail.batch.production_batch_id}`);
     setYieldLoading(false);
     if (!ok) {
@@ -521,11 +604,11 @@ export default function PpicDashboardPage() {
       }
       setRole(meData?.user?.role ?? null);
       setCheckingAccess(false);
-      await Promise.all([loadApprovals(), loadWorkOrders(), loadBoms(), loadCapacity()]);
+      await Promise.all([loadApprovals(), loadWorkOrders(), loadBoms(), loadCapacity(), loadProposals()]);
     };
     checkAccessAndLoad();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router, loadApprovals, loadWorkOrders, loadBoms, loadCapacity]);
+  }, [router, loadApprovals, loadWorkOrders, loadBoms, loadCapacity, loadProposals]);
 
   // Terpisah dari effect di atas supaya navigasi minggu/hari/bulan (ganttView,
   // ganttWeekOffset, dst berubah) cukup reload Gantt-nya saja, tidak mengulang
@@ -775,6 +858,77 @@ export default function PpicDashboardPage() {
                 Buka halaman Work Order lengkap
               </Link>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardDescription className="uppercase tracking-[0.2em]">K8 — Standar Ber-Asal-Usul</CardDescription>
+            <CardTitle className="text-xl">Usulan Standar Produksi Menunggu Keputusan</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            <p className="text-sm text-muted-foreground">
+              Sistem mengusulkan pembaruan standar dari sampel batch nyata — TIDAK PERNAH diterapkan otomatis. Sahkan atau tolak di sini; nilai lama tetap dipakai sampai Anda memutuskan.
+            </p>
+            {proposalsError ? <p className="text-sm text-destructive">{proposalsError}</p> : null}
+            {proposalMessage ? <p className="text-sm text-destructive">{proposalMessage}</p> : null}
+            {proposalsLoading ? (
+              <p className="text-sm text-muted-foreground">Memuat...</p>
+            ) : proposals.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Tidak ada usulan menunggu keputusan saat ini.</p>
+            ) : (
+              <div className="overflow-x-auto rounded-md border">
+                <table className="w-full text-data">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Item</th>
+                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Metrik</th>
+                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Nilai Lama</th>
+                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Nilai Usulan</th>
+                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Dampak</th>
+                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Metode / n</th>
+                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {proposals.map((p) => (
+                      <tr key={p.production_standard_proposal_id} className="border-b last:border-0">
+                        <td className="px-3 py-1.5">
+                          {p.item_code ?? p.item_name}
+                          {p.routing_step_name ? <span className="text-xs text-muted-foreground"> · {p.routing_step_name}</span> : null}
+                        </td>
+                        <td className="px-3 py-1.5">{metricKeyLabels[p.metric_key] ?? p.metric_key}</td>
+                        <td className="px-3 py-1.5">
+                          {p.old_value ?? '-'} <span className="text-xs text-muted-foreground">({p.old_source ?? 'belum ada'})</span>
+                        </td>
+                        <td className="px-3 py-1.5 font-medium text-foreground">
+                          {p.proposed_value}
+                          {p.will_flip_to_dipelajari ? <Badge variant="warning" className="ml-2">akan jadi DIPELAJARI</Badge> : null}
+                        </td>
+                        <td className="px-3 py-1.5">{p.change_pct === null ? '-' : `${p.change_pct > 0 ? '+' : ''}${p.change_pct}%`}</td>
+                        <td className="px-3 py-1.5 text-xs text-muted-foreground">
+                          {p.calculation_method === 'median' ? 'Median' : 'Rata-rata (buang outlier)'} · n={p.sample_count}
+                        </td>
+                        <td className="px-3 py-1.5">
+                          {canDecideProductionStandardProposal(role) ? (
+                            <div className="flex gap-2">
+                              <Button size="sm" disabled={proposalBusyId === p.production_standard_proposal_id} onClick={() => handleDecideProposal(p.production_standard_proposal_id, 'approved')}>
+                                Sahkan
+                              </Button>
+                              <Button size="sm" variant="destructive" disabled={proposalBusyId === p.production_standard_proposal_id} onClick={() => handleDecideProposal(p.production_standard_proposal_id, 'rejected')}>
+                                Tolak
+                              </Button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Hanya planner</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -1316,6 +1470,18 @@ export default function PpicDashboardPage() {
                 <span className="text-lg font-semibold text-foreground">{yieldSummary.total_yield_pct !== null ? `${yieldSummary.total_yield_pct}%` : 'Belum bisa dihitung'}</span>
               </div>
               <p className="text-xs text-muted-foreground">Total Yield = Output tahap terakhir ÷ Input tahap pertama × 100%.</p>
+
+              {canProposeProductionStandard(role) ? (
+                <div className="border-t pt-3">
+                  <p className="mb-2 text-xs text-muted-foreground">
+                    K8 — kalau batch ini SUDAH selesai semua tahapnya, ajukan datanya sebagai sampel belajar standar produksi (yield, unit/batch, durasi tiap tahap). Batch dengan log tahap belum lengkap otomatis DIKECUALIKAN (dilaporkan, bukan dilewati diam-diam).
+                  </p>
+                  <Button size="sm" variant="outline" disabled={learnStatus === 'pending'} onClick={handleLearnFromBatch}>
+                    {learnStatus === 'pending' ? 'Memproses...' : 'Ajukan sebagai Sampel Standar'}
+                  </Button>
+                  {learnMessage ? <p className={`mt-2 text-sm ${learnStatus === 'error' ? 'text-destructive' : 'text-foreground'}`}>{learnMessage}</p> : null}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </DialogContent>

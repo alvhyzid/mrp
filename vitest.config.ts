@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import { loadEnv } from 'vite';
+import path from 'node:path';
 
 // Vitest tidak otomatis memuat .env.local ke process.env seperti Next.js — tanpa ini
 // tests/*.test.ts gagal start karena DEBUG_*_PASSWORD/SUPABASE_* dianggap kosong.
@@ -28,7 +29,18 @@ import { loadEnv } from 'vite';
 // sendiri (lolos normal begitu limitnya dinaikkan, dan lolos konsisten di lokal sejak
 // awal). Dinaikkan sekaligus di sini supaya tidak perlu tambal satu-satu tiap ada test
 // baru yang kena limit default yang sama.
+// tests/employee_crud_and_k8_standards.test.ts (Fase Produksi Nyata) importa
+// server functions dari src/features/**/server/ langsung (untuk uji end-to-end
+// gerbang role + logic bisnis, bukan lewat HTTP) -- file-file itu pakai alias
+// "@/..." (tsconfig paths), yang TIDAK otomatis dikenal Vitest tanpa resolve.alias
+// eksplisit ini. Tidak ada test lain sebelumnya yang butuh alias ini karena semua
+// masih murni uji lapisan database/RLS langsung.
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src')
+    }
+  },
   test: {
     env: loadEnv('', process.cwd(), ''),
     fileParallelism: false,

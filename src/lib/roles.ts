@@ -270,6 +270,27 @@ export function canRecordStepProgress(role: string | undefined | null): boolean 
   return canManageWorkOrder(role);
 }
 
+// K8 (Fase Produksi Nyata, bagian D): siapa boleh MEMICU pengajuan usulan standar
+// dari sebuah batch (learnFromBatch) — disamakan dengan yang boleh mencatat progres
+// tahap produksi (mereka yang tahu kapan sebuah batch benar-benar selesai semua
+// tahapnya), BUKAN berarti mereka yang mengesahkan usulannya (lihat fungsi di
+// bawah — sengaja lebih sempit, planner-only).
+export function canProposeProductionStandard(role: string | undefined | null): boolean {
+  return canRecordStepProgress(role);
+}
+
+// Siapa boleh MENGESAHKAN (approve/reject) usulan standar — harus sinkron dengan
+// docs/rencana-kerja-fase-produksi-nyata.md bagian D.1 ("disahkan planner
+// (ppic_manager/company_admin)"). SENGAJA lebih sempit dari
+// production_standards_write_ppic (RLS) yang juga mengizinkan ppic_staff/
+// production_manager menulis production_standards secara umum — pengesahan
+// FLIP sumber data standar adalah keputusan planner, bukan staf pencatat.
+export const PRODUCTION_STANDARD_DECIDE_ROLES = [...LEADERSHIP_ROLES, 'ppic_manager'];
+
+export function canDecideProductionStandardProposal(role: string | undefined | null): boolean {
+  return !!role && PRODUCTION_STANDARD_DECIDE_ROLES.includes(role);
+}
+
 // Role yang boleh mencatat/menyelesaikan production_disruptions — harus sinkron
 // dengan policy production_disruptions_write_production di
 // supabase/migrations/20260812154000_system_alerts_and_wo_readiness.sql. Sengaja

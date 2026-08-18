@@ -8,7 +8,29 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { DataTable } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { canAccessHrDashboard } from '@/lib/roles';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { canAccessHrDashboard, canManageHr } from '@/lib/roles';
+
+const wageTypeLabels: Record<string, string> = {
+  hourly: 'Per Jam',
+  daily: 'Harian',
+  monthly: 'Bulanan',
+  piece_rate: 'Per Unit (Piece Rate)'
+};
+
+type Plant = { production_plant_id: number; name: string };
+
+const emptyEmployeeForm = {
+  name: '',
+  position: '',
+  department: '',
+  production_plant_id: '',
+  wage_type: 'monthly',
+  wage_rate: '',
+  is_active: true
+};
 
 const departmentLabels: Record<string, string> = {
   production: 'Produksi',
@@ -37,6 +59,7 @@ const attendanceStatusBadgeVariant: Record<string, 'success' | 'warning' | 'crit
 
 type Employee = {
   employee_id: number;
+  production_plant_id: number | null;
   production_plant_name: string | null;
   department: string | null;
   name: string;
@@ -62,10 +85,18 @@ export default function HrDashboardPage() {
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
   const [canSeeWages, setCanSeeWages] = useState(false);
+  const [canManage, setCanManage] = useState(false);
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [employeesError, setEmployeesError] = useState('');
   const [employeesLoading, setEmployeesLoading] = useState(true);
+
+  const [plants, setPlants] = useState<Plant[]>([]);
+  const [editingEmployeeId, setEditingEmployeeId] = useState<number | null>(null);
+  const [employeeForm, setEmployeeForm] = useState(emptyEmployeeForm);
+  const [employeeFormStatus, setEmployeeFormStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
+  const [employeeFormMessage, setEmployeeFormMessage] = useState('');
+  const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
 
   const [attendance, setAttendance] = useState<AttendanceRow[]>([]);
   const [attendanceError, setAttendanceError] = useState('');
@@ -94,6 +125,80 @@ export default function HrDashboardPage() {
     setEmployeesError('');
     setEmployeesLoading(false);
   }, [getAccessToken]);
+
+  const loadPlants = useCallback(async () => {
+    const accessToken = await getAccessToken();
+    if (!accessToken) return;
+    const response = await fetch('/api/production-plants', { headers: { Authorization: `Bearer ${accessToken}` } });
+    const data = await response.json();
+    if (response.ok) setPlants(data.plants || []);
+  }, [getAccessToken]);
+
+  const resetEmployeeForm = () => {
+    setEditingEmployeeId(null);
+    setEmployeeForm(emptyEmployeeForm);
+    setEmployeeFormStatus('idle');
+    setEmployeeFormMessage('');
+  };
+
+  const startEditEmployee = (employee: Employee) => {
+    setIsEmployeeModalOpen(true);
+    setEditingEmployeeId(employee.employee_id);
+    setEmployeeForm({
+      name: employee.name,
+      position: employee.position ?? '',
+      department: employee.department ?? '',
+      production_plant_id: employee.production_plant_id ? String(employee.production_plant_id) : '',
+      wage_type: employee.wage_type ?? 'monthly',
+      wage_rate: employee.wage_rate === null ? '' : String(employee.wage_rate),
+      is_active: employee.is_active
+    });
+    setEmployeeFormStatus('idle');
+    setEmployeeFormMessage('');
+  };
+
+  const handleEmployeeSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setEmployeeFormStatus('pending');
+    setEmployeeFormMessage('');
+
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      setEmployeeFormStatus('error');
+      setEmployeeFormMessage('Sesi Anda sudah tidak valid, silakan login ulang.');
+      return;
+    }
+
+    const payload = {
+      ...(editingEmployeeId ? { employee_id: editingEmployeeId } : {}),
+      name: employeeForm.name,
+      position: employeeForm.position,
+      department: employeeForm.department,
+      production_plant_id: employeeForm.production_plant_id,
+      wage_type: employeeForm.wage_type,
+      wage_rate: employeeForm.wage_rate,
+      is_active: employeeForm.is_active
+    };
+
+    const response = await fetch('/api/employees', {
+      method: editingEmployeeId ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      setEmployeeFormStatus('error');
+      setEmployeeFormMessage(data.error || 'Gagal menyimpan data karyawan.');
+      return;
+    }
+
+    setEmployeeFormStatus('success');
+    setEmployeeFormMessage(editingEmployeeId ? 'Data karyawan berhasil diperbarui.' : 'Karyawan baru berhasil ditambahkan.');
+    resetEmployeeForm();
+    setIsEmployeeModalOpen(false);
+    await loadEmployees();
+  };
 
   const loadAttendance = useCallback(async () => {
     const accessToken = await getAccessToken();
@@ -132,11 +237,12 @@ export default function HrDashboardPage() {
         setCheckingAccess(false);
         return;
       }
+      setCanManage(canManageHr(meData?.user?.role));
       setCheckingAccess(false);
-      await Promise.all([loadEmployees(), loadAttendance()]);
+      await Promise.all([loadEmployees(), loadAttendance(), loadPlants()]);
     };
     checkAccessAndLoad();
-  }, [router, loadEmployees, loadAttendance]);
+  }, [router, loadEmployees, loadAttendance, loadPlants]);
 
   const activeCount = employees.filter((e) => e.is_active).length;
   const inactiveCount = employees.length - activeCount;
@@ -175,8 +281,20 @@ export default function HrDashboardPage() {
       cell: ({ row }) => <Badge variant={row.original.is_active ? 'success' : 'critical'}>{row.original.is_active ? 'Aktif' : 'Nonaktif'}</Badge>
     });
 
+    if (canManage) {
+      columns.push({
+        id: 'actions',
+        header: 'Aksi',
+        cell: ({ row }) => (
+          <Button size="sm" variant="outline" onClick={() => startEditEmployee(row.original)}>
+            Edit
+          </Button>
+        )
+      });
+    }
+
     return columns;
-  }, [canSeeWages]);
+  }, [canSeeWages, canManage]);
 
   const attendanceColumns = useMemo<ColumnDef<AttendanceRow>[]>(
     () => [
@@ -280,10 +398,146 @@ export default function HrDashboardPage() {
             {employeesLoading ? (
               <p className="text-sm text-muted-foreground">Memuat karyawan...</p>
             ) : (
-              <DataTable columns={employeeColumns} data={employees} emptyMessage="Belum ada data karyawan." />
+              <DataTable
+                columns={employeeColumns}
+                data={employees}
+                emptyMessage="Belum ada data karyawan."
+                searchPlaceholder="Cari nama atau posisi..."
+                getSearchText={(e) => `${e.name} ${e.position ?? ''}`}
+                paginated
+                pageSize={15}
+                primaryAction={canManage ? { label: 'Tambah Karyawan', onClick: () => { resetEmployeeForm(); setIsEmployeeModalOpen(true); } } : undefined}
+              />
             )}
           </CardContent>
         </Card>
+
+        {canManage ? (
+          <Dialog
+            open={isEmployeeModalOpen}
+            onOpenChange={(open) => {
+              if (!open) {
+                resetEmployeeForm();
+                setIsEmployeeModalOpen(false);
+              }
+            }}
+          >
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>{editingEmployeeId ? `Edit: ${employeeForm.name}` : 'Tambah karyawan baru'}</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleEmployeeSubmit} className="grid gap-3 sm:grid-cols-2">
+                <label className="flex flex-col gap-1.5 sm:col-span-2">
+                  <span className="text-sm font-medium text-foreground">Nama</span>
+                  <Input value={employeeForm.name} onChange={(event) => setEmployeeForm((prev) => ({ ...prev, name: event.target.value }))} required />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Posisi</span>
+                  <Input
+                    placeholder="mis. Operator Produksi"
+                    value={employeeForm.position}
+                    onChange={(event) => setEmployeeForm((prev) => ({ ...prev, position: event.target.value }))}
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Department</span>
+                  <Select value={employeeForm.department || undefined} onValueChange={(value) => setEmployeeForm((prev) => ({ ...prev, department: value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(departmentLabels).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Plant</span>
+                  <Select
+                    value={employeeForm.production_plant_id || undefined}
+                    onValueChange={(value) => setEmployeeForm((prev) => ({ ...prev, production_plant_id: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih plant" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {plants.map((plant) => (
+                        <SelectItem key={plant.production_plant_id} value={String(plant.production_plant_id)}>
+                          {plant.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Skema Gaji</span>
+                  <Select value={employeeForm.wage_type} onValueChange={(value) => setEmployeeForm((prev) => ({ ...prev, wage_type: value }))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(wageTypeLabels).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Nilai Gaji (Rp)</span>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={employeeForm.wage_rate}
+                    onChange={(event) => setEmployeeForm((prev) => ({ ...prev, wage_rate: event.target.value }))}
+                    required
+                  />
+                </label>
+
+                <label className="flex items-center gap-2 sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={employeeForm.is_active}
+                    onChange={(event) => setEmployeeForm((prev) => ({ ...prev, is_active: event.target.checked }))}
+                  />
+                  <span className="text-sm font-medium text-foreground">Aktif (nonaktifkan di sini, bukan hapus — riwayat labor log/absensi tetap utuh)</span>
+                </label>
+
+                <div className="flex items-center gap-3 sm:col-span-2">
+                  <Button type="submit" disabled={employeeFormStatus === 'pending'}>
+                    {employeeFormStatus === 'pending' ? 'Menyimpan...' : editingEmployeeId ? 'Simpan Perubahan' : 'Tambah Karyawan'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      resetEmployeeForm();
+                      setIsEmployeeModalOpen(false);
+                    }}
+                  >
+                    Batal
+                  </Button>
+                </div>
+
+                {employeeFormMessage ? (
+                  <p className={`sm:col-span-2 text-sm ${employeeFormStatus === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>
+                    {employeeFormMessage}
+                  </p>
+                ) : null}
+              </form>
+            </DialogContent>
+          </Dialog>
+        ) : null}
       </div>
     </main>
   );

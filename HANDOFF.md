@@ -4,6 +4,49 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## ATURAN BAKU MIGRASI — WAJIB DIBACA SEBELUM MENULIS `CREATE FUNCTION` BARU
+
+Ditulis setelah audit keamanan menyeluruh 19 Agu 2026 menemukan 12+2 fungsi database bisa dipanggil anon key TANPA login sama sekali (lihat bagian "Audit Keamanan Menyeluruh" di bawah untuk kronologi lengkap).
+
+**Setiap `CREATE FUNCTION` baru yang tidak dimaksudkan untuk diakses publik WAJIB diikuti baris ini SEBELUM `grant execute` ke role yang dituju:**
+
+```sql
+revoke execute on function public.nama_fungsi(tipe, tipe, ...) from public, anon, authenticated;
+grant execute on function public.nama_fungsi(tipe, tipe, ...) to service_role; -- atau role spesifik lain
+```
+
+**`revoke ... from public` SAJA TIDAK CUKUP di Supabase.** Postgres memang memberi PUBLIC execute otomatis ke fungsi baru — tapi Supabase JUGA memberi grant TERPISAH ke `anon` dan `authenticated` lewat default privileges platform-nya sendiri, yang TIDAK ikut tercabut oleh revoke dari PUBLIC. Ini dibuktikan dua kali di sesi yang sama: pertama pada fungsi K8 (`decide_production_standard_proposal`, yang bahkan tidak punya revoke sama sekali), lalu pada `debug_list_policies` yang SUDAH punya "revoke all from public" sejak 2 Agustus lalu tapi TERBUKTI tetap bisa dipanggil anon key — dan lucunya, saat menambal itu, `debug_list_function_grants` yang BARU dibuat untuk mengaudit masalah ini juga kena bug yang sama (revoke-nya cuma "from public", ketahuan otomatis oleh test regresi yang baru ditulis pada sesi yang sama). **Selalu tulis ketiganya secara eksplisit: `from public, anon, authenticated`.**
+
+**Test regresi permanen** (`tests/function_grant_security_audit.test.ts`) mengenumerasi SELURUH fungsi di schema public dan GAGAL kalau ada fungsi yang punya EXECUTE untuk PUBLIC/anon/authenticated tanpa masuk allowlist eksplisit di file itu. Kalau fungsi baru Anda genuinely perlu akses luas (jarang — kebanyakan fungsi harusnya HANYA `service_role`), tambahkan ke `ALLOWED_BROAD_GRANT` di test itu DENGAN ALASAN TERTULIS, jangan lewatkan test-nya dengan cara lain.
+
+**Kalau fungsi dipanggil bersarang dari fungsi trigger lain (bukan dari app layer):** tidak perlu grant ke `service_role` sama sekali — fungsi trigger berjalan sebagai OWNER (karena `SECURITY DEFINER`) yang selalu punya hak implisit, jadi panggilan bersarang itu tidak terpengaruh oleh revoke dari public/anon/authenticated.
+
+**Kalau fungsi dipanggil dari dalam ekspresi RLS policy** (`jwt_company_id()`, `is_super_admin_user()`, dst) — role yang mengeksekusi query (`authenticated`/`anon`) WAJIB tetap punya EXECUTE, karena RLS dievaluasi di bawah role pemanggil query itu sendiri. Mencabut grant di sini akan mematikan RLS untuk SEMUA user sungguhan, bukan menutup lubang keamanan. Untuk fungsi kelas ini, keamanan yang benar adalah memastikan fungsinya sendiri tidak menerima parameter yang bisa dipalsukan (lihat catatan `is_super_admin_user`/`user_has_no_company` di bawah) — bukan mencabut grant-nya.
+
+---
+
+## Audit Keamanan Menyeluruh — Grant/Revoke Fungsi Database — 19 Agu 2026
+
+Dipicu temuan `decide_production_standard_proposal()` (K8) bisa dipanggil anon key tanpa login. Enumerasi menyeluruh (fungsi diagnostik baru `debug_list_function_grants()`, migration `20260819140000`) menemukan pola yang sama di **44 dari 48 fungsi** schema public.
+
+**Klasifikasi akhir** (dicek lewat kode + bukti anon-key sungguhan, bukan ditebak):
+- **12 KRITIS ditambal** (migration `20260819150000`): `record_manual_stock_adjustment`, `create_opening_balance_lot`, `create_shipment_with_signature`, `compute_production_batch_labor_cost`, `resolve_department_alerts`, `upsert_department_alert`, `recompute_stock_projection_for_item`, `recompute_work_order_machine_readiness`, `recompute_work_order_material_readiness`, `recompute_work_order_worker_readiness`, `debug_list_policies`, `debug_schema_snapshot`. Semua sekarang **hanya** `postgres`/`service_role` — diverifikasi anon key ditolak bersih `42501` untuk 6 di antaranya (sebelumnya berhasil mencapai logika bisnis nyata atau tereksekusi tanpa error sama sekali).
+- **4 dari 12 itu JUGA diperbaiki logikanya** (bukan cuma grant), karena percaya parameter mentah tanpa verifikasi:
+  - `create_shipment_with_signature` — SEBELUM percaya `p_company_id` buta; SEKARANG wajib cocok dengan company asli pemilik `p_sales_order_id`.
+  - `compute_production_batch_labor_cost` — SEBELUM tidak ada pemeriksaan akses sama sekali (siapa pun bisa baca upah batch manapun); SEKARANG sinkron dengan pemeriksaan yang sudah ada di `get_production_batch_labor_cost_total` (company match + `jwt_can_view_wages()`/`jwt_can_view_financial_data()`) — TAPI hanya berlaku kalau ada klaim JWT (supaya jalur service-role aplikasi sendiri, yang memang tidak membawa klaim company_id, tidak ikut mati).
+  - `resolve_department_alerts` — SEBELUM tidak punya parameter company_id SAMA SEKALI (bisa "menyembunyikan" alert perusahaan lain kalau tebak work_order_id/item_id-nya); SEKARANG company diturunkan dari data asli yang direferensikan dan ikut jadi filter WHERE.
+  - `upsert_department_alert` — SEBELUM `p_company_id` dipercaya mentah; SEKARANG wajib cocok dengan company asli `p_related_work_order_id`/`p_related_item_id` kalau diisi.
+  - Terbukti tidak regresi: `margin_v1_acceptance.test.ts` (test permanen yang sudah ada) memanggil 2 dari 4 fungsi ini langsung dan tetap lulus; ditelusuri juga kode pemanggilnya (`createShipmentWithSignature.ts`) — sudah memverifikasi kecocokan company SEBELUM memanggil RPC, jadi pemeriksaan baru ini tidak mungkin salah tolak jalur asli.
+- **`debug_schema_snapshot()` DIHAPUS TOTAL** (bukan cuma dicabut) — tidak dipakai test/skrip permanen apa pun, dan permukaan kebocorannya (dump seluruh skema+definisi fungsi) jauh lebih besar daripada `debug_list_policies` (yang DIPERTAHANKAN karena dipakai 2 test permanen, tapi sekarang benar-benar hanya `service_role`).
+- **2 SEDANG, GRANT-NYA SENGAJA TIDAK DISENTUH** (menunggu persetujuan Anda): `is_super_admin_user(current_auth_uid text)` dan `user_has_no_company(current_auth_uid text)` menerima UID sembarang sebagai parameter (bisa dipakai untuk menebak status super-admin/company user LAIN), TAPI dikonfirmasi lewat `pg_policies` sungguhan bahwa keduanya dipakai di RLS policy nyata (`is_super_admin_user` di 3 policy `subscription_plans_*`, `user_has_no_company` di `companies_insert_admin`) yang berjalan di bawah role `authenticated` — mencabut grant di sini akan MEMATIKAN pendaftaran company baru & pengelolaan subscription plan untuk SEMUA user. **Rencana perbaikan (BELUM dieksekusi, tunggu persetujuan eksplisit):** ubah signature jadi tanpa parameter (baca `auth.uid()` langsung di dalam fungsi, bukan menerima UID dari luar), lalu update SETIAP RLS policy yang memanggilnya dengan signature baru dalam migrasi yang sama, lalu re-test SELURUH suite (terutama alur registrasi & subscription plan) sebelum dianggap aman — salah langkah di sini berisiko mematikan RLS untuk semua user, bukan risiko kecil.
+- **Sisanya (RENDAH/aman)**: 6 helper `jwt_*` + 2 helper RLS lain — dipakai di dalam ekspresi RLS, grant luas WAJIB dipertahankan (lihat aturan baku migrasi di atas); `suggest_fefo_lots`/`work_order_is_blocked`/`bom_component_creates_cycle` — bukan `SECURITY DEFINER`, RLS tabel dasar tetap berlaku; `confirm_delivery` — SENGAJA publik (jalur POD tanpa login, guard-nya token+status bukan role — keamanan sesungguhnya bergantung pada `pod_token` bersifat acak & sekali-pakai, itu **Track C-3 di `docs/rencana-kerja-fase-produksi-nyata.md`, MASIH BELUM diaudit terpisah**); 6 fungsi `get_*`/`process_customer_purchase_order` — `SECURITY DEFINER` tapi terverifikasi punya pemeriksaan `jwt_company_id()`/role internal yang benar; 13 fungsi `RETURNS trigger`/`RETURNS event_trigger` — dibuktikan langsung (anon key DAN service_role, keduanya) TIDAK BISA dipanggil lewat RPC PostgREST sama sekali, jadi grant luasnya tidak relevan.
+
+**Test regresi permanen ditambahkan**: `tests/function_grant_security_audit.test.ts` — enumerasi otomatis + allowlist eksplisit (lihat aturan baku migrasi di atas). Sudah menangkap 2 kesalahan nyata SAAT DITULIS (bukan hipotetis): `bom_component_creates_cycle` belum di-allowlist (ditambahkan, aman by design) dan `debug_list_function_grants()` — fungsi diagnostik BARU yang dibuat untuk audit ini sendiri — ternyata kena bug yang SAMA (revoke cuma "from public", ditambal migration `20260819160000`).
+
+**Verifikasi**: migrasi diuji di staging dulu (smoke test anon-key + full suite), baru ke dev. Full suite: 8 file / 52 test lulus di kedua environment.
+
+---
+
 ## Fase Produksi Nyata — PEKERJAAN 1 (Employee CRUD) & PEKERJAAN 2 (K8 Hardening) — 19 Agu 2026
 
 Rencana lengkap: `docs/rencana-kerja-fase-produksi-nyata.md` (dari konsultan). Siklus domain-per-domain DIJEDA — prioritas satu-satunya fase ini: sistem dipakai sungguhan oleh staf pabrik selama SAS001 & SAS005 berjalan.

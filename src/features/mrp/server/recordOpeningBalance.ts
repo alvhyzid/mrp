@@ -10,7 +10,7 @@ interface ApiResult {
 // Saldo Awal Stok — mode BARU dari "Penyesuaian Stok Manual" (GELOMBANG 0B) untuk
 // membuat LOT BARU tanpa goods receipt/PO, dipakai saat pemilik produk menginput
 // data stok pabrik yang sudah ada sebelum sistem ini dipakai. Akses sama persis
-// dengan penyesuaian stok biasa (canAdjustStock: warehouse_manager + leadership).
+// dengan penyesuaian stok biasa (canAdjustStock: warehouse_manager/staff + leadership).
 export async function recordOpeningBalance(request: NextRequest): Promise<ApiResult> {
   try {
     const { appUser } = await getCurrentUser(request);

@@ -241,6 +241,16 @@ export function getApprovalDepartmentForRole(role: string | undefined | null): s
   return null;
 }
 
+// K8/Deteksi Konflik Perencanaan (Fase Produksi Nyata, P2) — SEBELUM ini digerbang
+// canViewFinancialData (cuma company_admin/general_manager/finance_manager), yang
+// SALAH begitu fitur ini benar-benar dirender di UI: PPIC dan Purchasing (yang
+// justru paling butuh lihat kelayakan jadwal & kekurangan bahan) tidak termasuk.
+export const PLANNING_FEASIBILITY_VIEW_ROLES = [...LEADERSHIP_ROLES, 'ppic_manager', 'ppic_staff', 'purchasing_manager', 'purchasing_staff'];
+
+export function canViewPlanningFeasibility(role: string | undefined | null): boolean {
+  return !!role && PLANNING_FEASIBILITY_VIEW_ROLES.includes(role);
+}
+
 export const PPIC_DASHBOARD_ROLES = [...LEADERSHIP_ROLES, 'ppic_manager', 'ppic_staff'];
 
 export function canAccessPpicDashboard(role: string | undefined | null): boolean {

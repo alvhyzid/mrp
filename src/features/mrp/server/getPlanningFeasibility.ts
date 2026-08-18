@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
-import { canViewFinancialData } from '@/lib/roles';
+import { canViewPlanningFeasibility } from '@/lib/roles';
+import { explodeBomRequirements } from './explodeBomRequirements';
 
 interface ApiResult {
   status: number;
@@ -17,7 +18,7 @@ interface ApiResult {
 export async function getPlanningFeasibility(request: NextRequest, salesOrderLineId: number): Promise<ApiResult> {
   try {
     const { appUser } = await getCurrentUser(request);
-    if (!canViewFinancialData(appUser.role)) {
+    if (!canViewPlanningFeasibility(appUser.role)) {
       return { status: 403, body: { error: 'Role Anda tidak punya akses ke laporan perencanaan ini.' } };
     }
     if (!appUser.company_id) {
@@ -184,6 +185,11 @@ export async function getPlanningFeasibility(request: NextRequest, salesOrderLin
     const feasible = daysNeeded <= effectiveWorkingDays;
     const realisticQty = feasible ? Number(soLine.qty_ordered) : Math.floor(effectiveWorkingDays * Number(batchesPerDay) * Number(unitPerBatch));
 
+    // P2 — daftar kekurangan bahan LENGKAP (eksplosi BOM berjenjang, bukan cuma
+    // 1 level seperti materialBlockedUntil di atas) + daftar komponen WIP yang
+    // perlu DIPRODUKSI (bukan dibeli) karena bahan penyusunnya sendiri sudah cukup.
+    const { shortages: materialShortages, toProduce: componentsToProduce } = await explodeBomRequirements(adminClient, appUser.company_id, item.item_id, Number(soLine.qty_ordered));
+
     return {
       status: 200,
       body: {
@@ -201,6 +207,8 @@ export async function getPlanningFeasibility(request: NextRequest, salesOrderLin
         effective_working_days_after_material_block: effectiveWorkingDays,
         feasible,
         realistic_qty_deliverable_on_time: realisticQty,
+        material_shortages: materialShortages,
+        components_to_produce: componentsToProduce,
         standard_snapshot_taken_at: snapshotTakenAt,
         standard_drift: standardDrift
       }

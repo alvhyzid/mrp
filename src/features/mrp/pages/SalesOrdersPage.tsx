@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { DataTable } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { canViewPlanningFeasibility } from '@/lib/roles';
 
 const statusLabels: Record<string, string> = { confirmed: 'Dikonfirmasi', in_production: 'Sedang Produksi', completed: 'Selesai', cancelled: 'Batal' };
 const statusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical'> = {
@@ -54,6 +55,29 @@ type SalesOrder = {
   shipments: SoShipmentSummary[];
 };
 
+type MaterialShortage = { item_id: number; item_code: string; name: string; needed: number; available: number; short: number };
+type ComponentToProduce = { item_id: number; item_code: string; name: string; qty_needed: number };
+type FeasibilityResult = {
+  item_code: string;
+  item_name: string;
+  qty_ordered: number;
+  unit_per_batch?: number;
+  batches_per_day?: number;
+  batches_needed?: number;
+  days_needed?: number;
+  requested_ship_date?: string;
+  today?: string;
+  material_blocked_until: string | null;
+  total_working_days_to_deadline?: number;
+  effective_working_days_after_material_block?: number;
+  feasible: boolean | null;
+  realistic_qty_deliverable_on_time?: number;
+  material_shortages?: MaterialShortage[];
+  components_to_produce?: ComponentToProduce[];
+  standard_drift?: { message: string; unit_per_batch: { used_in_plan: number; current: number }; batches_per_day: { used_in_plan: number; current: number } } | null;
+  reason?: string;
+};
+
 const shipmentStatusLabels: Record<string, string> = { draft: 'Draft', shipped: 'Terkirim', delivered: 'Diterima', cancelled: 'Batal' };
 const shipmentStatusBadgeVariant: Record<string, 'secondary' | 'warning' | 'success' | 'critical'> = {
   draft: 'secondary',
@@ -71,6 +95,12 @@ export default function SalesOrdersPage() {
   const [soError, setSoError] = useState('');
   const [soLoading, setSoLoading] = useState(true);
   const [expandedSoId, setExpandedSoId] = useState<number | null>(null);
+  const [role, setRole] = useState<string | null>(null);
+
+  const [feasibilityLineId, setFeasibilityLineId] = useState<number | null>(null);
+  const [feasibilityLoading, setFeasibilityLoading] = useState(false);
+  const [feasibilityError, setFeasibilityError] = useState('');
+  const [feasibilityResult, setFeasibilityResult] = useState<FeasibilityResult | null>(null);
 
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
@@ -108,11 +138,13 @@ export default function SalesOrdersPage() {
       }
       const accessToken = sessionData.session.access_token;
       const meResponse = await fetch('/api/me', { headers: { Authorization: `Bearer ${accessToken}` } });
+      const meData = await meResponse.json();
       if (!meResponse.ok) {
         setAccessDenied(true);
         setCheckingAccess(false);
         return;
       }
+      setRole(meData?.user?.role ?? null);
       setCheckingAccess(false);
       await loadSalesOrders();
     };
@@ -121,6 +153,33 @@ export default function SalesOrdersPage() {
 
   const toggleExpand = (so: SalesOrder) => {
     setExpandedSoId((current) => (current === so.sales_order_id ? null : so.sales_order_id));
+    setFeasibilityLineId(null);
+    setFeasibilityResult(null);
+    setFeasibilityError('');
+  };
+
+  // P2 (Fase Produksi Nyata) — sebelum ini, kelayakan jadwal/kekurangan bahan per
+  // baris SO cuma bisa dicek lewat API mentah (dipakai sepanjang analisis
+  // SAS001/SAS005 sesi-sesi sebelumnya), belum pernah dirender di halaman manapun.
+  const handleCheckFeasibility = async (lineId: number) => {
+    setFeasibilityLineId(lineId);
+    setFeasibilityLoading(true);
+    setFeasibilityError('');
+    setFeasibilityResult(null);
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      setFeasibilityLoading(false);
+      setFeasibilityError('Sesi Anda sudah tidak valid, silakan login ulang.');
+      return;
+    }
+    const response = await fetch(`/api/sales-order-lines/${lineId}/planning-feasibility`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const data = await response.json();
+    setFeasibilityLoading(false);
+    if (!response.ok) {
+      setFeasibilityError(data.error || 'Gagal memuat kelayakan jadwal.');
+      return;
+    }
+    setFeasibilityResult(data as FeasibilityResult);
   };
 
   const showPriceColumn = useMemo(() => salesOrders.some((so) => so.lines.some((line) => line.unit_price !== null)), [salesOrders]);
@@ -254,6 +313,7 @@ export default function SalesOrdersPage() {
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Sudah Dikirim</th>
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Sisa Belum Dikirim</th>
                       {showPriceColumn ? <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Harga Satuan</th> : null}
+                      {canViewPlanningFeasibility(role) ? <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Kelayakan</th> : null}
                     </tr>
                   </thead>
                   <tbody>
@@ -275,11 +335,108 @@ export default function SalesOrdersPage() {
                           {line.qty_remaining_to_ship > 0 ? <span className="font-medium text-foreground">{line.qty_remaining_to_ship}</span> : <span className="text-muted-foreground">0</span>} {line.item_base_uom}
                         </td>
                         {showPriceColumn ? <td className="px-3 py-1.5">{line.unit_price === null ? <span className="text-muted-foreground">-</span> : line.unit_price}</td> : null}
+                        {canViewPlanningFeasibility(role) ? (
+                          <td className="px-3 py-1.5">
+                            <Button size="sm" variant="outline" disabled={feasibilityLoading && feasibilityLineId === line.sales_order_line_id} onClick={() => handleCheckFeasibility(line.sales_order_line_id)}>
+                              {feasibilityLoading && feasibilityLineId === line.sales_order_line_id ? 'Memuat...' : 'Cek Kelayakan'}
+                            </Button>
+                          </td>
+                        ) : null}
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+
+              {feasibilityLineId && expandedSo.lines.some((l) => l.sales_order_line_id === feasibilityLineId) ? (
+                <div className="rounded-md border p-4">
+                  <p className="mb-3 text-sm font-medium uppercase tracking-wide text-muted-foreground">Kelayakan Jadwal & Kekurangan Bahan</p>
+                  {feasibilityError ? <p className="text-sm text-destructive">{feasibilityError}</p> : null}
+                  {feasibilityLoading ? <p className="text-sm text-muted-foreground">Memuat...</p> : null}
+                  {feasibilityResult && !feasibilityLoading ? (
+                    feasibilityResult.feasible === null ? (
+                      <p className="text-sm text-muted-foreground">{feasibilityResult.reason}</p>
+                    ) : (
+                      <div className="flex flex-col gap-3 text-sm">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <Badge variant={feasibilityResult.feasible ? 'success' : 'critical'}>{feasibilityResult.feasible ? 'FEASIBLE' : 'TIDAK FEASIBLE'}</Badge>
+                          <span>
+                            Butuh <span className="font-medium text-foreground">{feasibilityResult.batches_needed}</span> batch ({feasibilityResult.days_needed} hari produksi) — kapasitas{' '}
+                            {feasibilityResult.batches_per_day} batch/hari
+                          </span>
+                        </div>
+                        <div className="grid gap-1 sm:grid-cols-2">
+                          <span className="text-muted-foreground">
+                            Hari kerja tersedia s/d {feasibilityResult.requested_ship_date}: <span className="text-foreground">{feasibilityResult.total_working_days_to_deadline} hari</span>
+                          </span>
+                          <span className="text-muted-foreground">
+                            Efektif (setelah bahan tersedia): <span className="text-foreground">{feasibilityResult.effective_working_days_after_material_block} hari</span>
+                          </span>
+                          {feasibilityResult.material_blocked_until ? (
+                            <span className="text-muted-foreground sm:col-span-2">
+                              Produksi baru bisa mulai <span className="text-foreground">{feasibilityResult.material_blocked_until}</span> (menunggu PO bahan datang)
+                            </span>
+                          ) : null}
+                          {!feasibilityResult.feasible ? (
+                            <span className="text-muted-foreground sm:col-span-2">
+                              Realistis terkirim tepat waktu: <span className="text-foreground">{feasibilityResult.realistic_qty_deliverable_on_time}</span> dari {feasibilityResult.qty_ordered} yang dipesan
+                            </span>
+                          ) : null}
+                        </div>
+
+                        {feasibilityResult.standard_drift ? (
+                          <p className="rounded-md border border-warning/40 bg-warning-subtle p-2 text-xs text-warning-subtle-foreground">{feasibilityResult.standard_drift.message}</p>
+                        ) : null}
+
+                        {feasibilityResult.components_to_produce && feasibilityResult.components_to_produce.length > 0 ? (
+                          <div>
+                            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Perlu Diproduksi (bukan kekurangan beli — bahan penyusunnya cukup)</p>
+                            <ul className="flex flex-col gap-0.5 text-xs">
+                              {feasibilityResult.components_to_produce.map((c) => (
+                                <li key={c.item_id}>
+                                  {c.item_code} — {c.name}: <span className="text-data font-medium text-foreground">{Math.round(c.qty_needed * 100) / 100}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+
+                        {feasibilityResult.material_shortages && feasibilityResult.material_shortages.length > 0 ? (
+                          <div>
+                            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-destructive">Kekurangan Bahan ({feasibilityResult.material_shortages.length} item)</p>
+                            <div className="overflow-hidden rounded-md border">
+                              <table className="w-full text-data">
+                                <thead>
+                                  <tr className="border-b">
+                                    <th className="h-7 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Item</th>
+                                    <th className="h-7 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Butuh</th>
+                                    <th className="h-7 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Stok</th>
+                                    <th className="h-7 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Kurang</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {feasibilityResult.material_shortages.map((s) => (
+                                    <tr key={s.item_id} className="border-b last:border-0">
+                                      <td className="px-2 py-1">
+                                        {s.item_code} — {s.name}
+                                      </td>
+                                      <td className="px-2 py-1">{Math.round(s.needed * 100) / 100}</td>
+                                      <td className="px-2 py-1">{Math.round(s.available * 100) / 100}</td>
+                                      <td className="px-2 py-1 font-medium text-destructive">{Math.round(s.short * 100) / 100}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-success">Tidak ada kekurangan bahan terdeteksi.</p>
+                        )}
+                      </div>
+                    )
+                  ) : null}
+                </div>
+              ) : null}
 
               <div>
                 <p className="mb-2 text-sm font-medium text-foreground">Riwayat Pengiriman</p>

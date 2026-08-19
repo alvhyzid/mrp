@@ -96,7 +96,15 @@ Komponen generik `ProvenanceInfoButton` (`src/components/ui/provenance-info-butt
 
 **Test**: TIDAK ADA test baru khusus Bagian D — permukaan barunya murni presentasional (tipe + komponen UI tanpa server logic baru), diverifikasi lewat typecheck+build+test suite penuh tetap hijau (150 test dari Bagian A-C tidak terganggu), bukan lewat test unit baru. `labor_cost_notes`/`standard_margin_total` yang jadi isi envelope SUDAH diuji di tempat asalnya (`tests/margin_watch.test.ts` dkk).
 
-**E. Process Mining (Fase 0.4)** — BELUM DIMULAI. Query atas `status_transition_log`. WAJIB tampilkan jumlah data pendasar eksplisit ("berdasarkan N transisi sejak tanggal X") — data masih sedikit (produksi nyata belum jalan), tampilkan "data belum cukup" kalau memang belum cukup, JANGAN angka menyesatkan. Task `f0-process-mining` di Dashboard Proyek AI (Bagian C) sudah menunggu, progres 0%.
+**E. Process Mining (Fase 0.4) — SELESAI.** Dashboard `/process-mining` (leadership-only, sama pola akses Bagian C) — murni query & agregasi atas `status_transition_log` yang SUDAH ADA, TIDAK ADA tabel baru, TANPA LLM.
+
+**Data nyata company_id=1 saat ini: 43 transisi, sejak 16 Agu 2026 (rentang 2 hari)** — jujur ditandai "data belum cukup untuk analisis tren" (ambang eksplisit 14 hari, konsisten dgn ambang KPI baseline Bagian C). Temuan yang SUDAH bisa dijawab dari data ada: rata-rata `shipments` di status "shipped" (menunggu jadi "delivered") 4 jam (7 sampel nyata) — SATU-SATUNYA status dgn cukup sampel (≥3) utk dihitung; status lain baru punya 1 transisi per record (belum ada pasangan transisi berurutan buat dihitung durasinya).
+
+**Prinsip anti-menyesatkan diterapkan 2 lapis**: (1) ambang 14 hari utk keseluruhan analisis tren (label eksplisit kalau di bawah), (2) ambang MINIMAL 3 sampel PER STATUS utk durasi status itu ditampilkan sebagai angka (`avg_duration_hours=null` + `"data belum cukup"` kalau <3 — bukan langsung dirata-rata dari 1-2 titik yang bisa kebetulan).
+
+**6 pertanyaan bisnis** (docs meminta ditentukan 👤+🧠, BUKAN diputuskan sepihak Claude Code) — sesi ini BARU membangun MESIN generiknya (durasi per status, transisi paling sering, transisi mundur/dibatalkan) yang bisa menjawab BANYAK pertanyaan turunan, TIDAK mem-pra-tentukan 6 pertanyaan spesifik sebagai keputusan final — itu perlu diskusi dgn pemilik produk (task `f0-process-mining` di Dashboard Proyek AI progres 66% [2 dari 3 checklist: query+dashboard ada, "6 pertanyaan ditentukan" masih tertunda]).
+
+**Test baru**: `tests/process_mining.test.ts` (5 test, termasuk 2 skenario negatif — tanpa data sama sekali tidak menghasilkan angka menyesatkan, sampel <3 menghasilkan `null` bukan rata-rata dari titik terlalu sedikit — plus 1 test membuktikan durasi dihitung PERSIS dari selisih waktu nyata, bukan diperkirakan).
 
 **F. Kesiapan AI Tenant** — BELUM DIMULAI. Dokumen `docs/spesifikasi-kesiapan-ai-tenant.md` SUDAH ADA di repo (disalin dari Downloads 21 Agu) — baca BAGIAN 2. Ambang §1.4 dipakai apa adanya sebagai seed. `metric_key` yang tidak bisa dihitung dari data nyata → BERHENTI & laporkan (STOP CONDITION), jangan bikin angka pengganti. Satu guard tunggal, TANPA LLM.
 

@@ -21,7 +21,8 @@ import {
   DeliveryTruck,
   Money,
   Star,
-  Book
+  Book,
+  Analytics
 } from '@carbon/icons-react';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import {
@@ -159,6 +160,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Apa yang Baru', href: '/whats-new', visible: () => true, icon: Star },
       { label: 'Dashboard Proyek AI', href: '/ai-project', visible: (role) => role === 'company_admin' || role === 'general_manager', icon: ChartLine },
+      { label: 'Process Mining', href: '/process-mining', visible: (role) => role === 'company_admin' || role === 'general_manager', icon: Analytics },
       { label: 'Data Perusahaan', href: '/company', visible: (role) => role === 'company_admin', icon: SettingsIcon },
       { label: 'Tim & Undangan', href: '/team', visible: (role) => role === 'company_admin', icon: UserMultiple },
       { label: 'Profil Saya', href: '/profile', visible: () => true, icon: UserAvatar }

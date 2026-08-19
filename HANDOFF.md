@@ -4,6 +4,53 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Perintah Gabungan A→F, Bagian A (bug data BOM 227) + Bagian B (SDM standar dari kru nyata) — 20 Agu 2026
+
+Pemilik produk sendiri melakukan rekonsiliasi manual angka spesifikasi vs sistem dan membuktikan hipotesis awal saya ("SDM belum termasuk" saja) TIDAK CUKUP menjelaskan selisih SAS001 — kemasan-nya juga jauh salah. Diminta bongkar sampai ketemu akar masalah, bukan menduga.
+
+### Bagian A — Bug data nyata di `bom_lines` (bom_id 227, Gummy Zala/item 371), DIPERBAIKI lewat `PATCH /api/boms`
+
+6 baris kemasan (botol/label/inner sleeve/outer box/seal/karton) tersimpan dengan `qty_per_unit_output` yang KELIRU dibagi ekstra dengan `standard_yield_qty` (51) — mis. botol harusnya `1.0`/unit tapi tersimpan `0.019608` (=1/51). Dibuktikan lewat kecocokan angka persis: `173.1306 × 51 = 8829.66` vs target spesifikasi Rp8.829,63 (selisih Rp0,03, murni pembulatan).
+
+- **Diperbaiki**: botol/label/inner/outer/seal → `qty_per_unit_output = 1.0`; karton → `1/27 = 0.037037...`; `standard_yield_qty` 51 → 56,6667 (basis batch 10kg/rev.4, bukan lagi 9kg/rev.3). Semua lewat form edit BOM resmi, bukan UPDATE langsung ke DB.
+- **BAHAN (raw material) TIDAK terdampak bug yang sama** — dicek langsung: total bahan mentah 41,35g/botol cocok dengan komposisi resep nyata, jadi baris bahan TIDAK disentuh (sesuai instruksi "jangan ubah tanpa lapor").
+- **Cakupan dampak bug ini** (semua baca `bom_lines.qty_per_unit_output` yang sama): `explodeBomRequirements.ts` (shortage/kelayakan), fungsi SQL `recompute_work_order_material_readiness` (alert `material_shortage`), tampilan `BomsPage.tsx`, dan Margin Watch — SEMUA otomatis ikut benar setelah data BOM diperbaiki, tidak ada kode terpisah yang perlu ditambal.
+- **Scan seluruh BOM aktif perusahaan** membuktikan TIDAK ADA BOM lain dengan pola bug yang sama (bom_id 227 kasus terisolasi).
+- **Verifikasi setelah perbaikan**: kemasan SAS001 sekarang Rp8.829,63/botol (persis cocok spesifikasi); daftar kekurangan bahan SAS001 berubah dari "kurang 392" (sisa bug lama) ke skala puluhan-ribu wajar; kesimpulan TIDAK FEASIBLE SAS001 tetap sama SETELAH perbaikan (sebab kapasitas produksi, bukan lagi soal kemasan) — dikonfirmasi lewat pengecekan ulang endpoint kelayakan.
+
+### Bagian B — Biaya SDM standar per batch dihitung dari kru NYATA (tabel baru `routing_step_standard_crew`)
+
+Awalnya sempat tanya ke pemilik produk cara memetakan kru ke 10 tahap serbuk (data per-tahap vs angka agregat spesifikasi pakai basis jam-orang yang beda). **Jawaban pemilik produk mengoreksi hal yang lebih mendasar**: angka agregat asli di spesifikasi (Rp169.642,86/batch gummy, Rp336.126,37/batch serbuk, basis 36 jam-orang) adalah ASUMSI KELIRU pemilik produk sendiri — spesifikasi itu menghitung ganda (upah orang yang sama dibebankan penuh ke tiap batch, padahal 1 kru mengerjakan beberapa batch sehari).
+
+**Basis BARU yang benar** (dipakai sekarang): `biaya SDM standar per batch = total biaya harian kru lini produksi ÷ jumlah batch standar per hari (dari production_standards)`. Diimplementasikan di `computeStandardLaborCostPerUnit.ts`, dipanggil dari `getMarginWatch.ts` Lapis 1. Untuk item dengan BOM 2-tingkat (WIP bersarang, mis. Box Drinkme ← WIP Sachet), SETIAP level yang punya routing+kru sendiri dihitung terpisah lalu dijumlah dikali rasio kebutuhannya ke unit teratas — level yang belum punya kru/standar DILEWATI dengan catatan eksplisit (`labor_cost_notes`), TIDAK diam-diam dianggap 0.
+
+- **Tabel baru `routing_step_standard_crew`** (migration `20260820200000`): SATU baris agregat per ROUTING (bukan per tahap — keputusan pemilik produk final), `routing_step_id` nullable untuk presisi per-tahap di masa depan. Diisi dari data lapangan nyata untuk gummy (routing_id 6) dan serbuk (routing_id 61 Sachet, 62 Box finishing) via script admin langsung (belum ada endpoint CRUD, sesuai preseden K8/production_standards).
+- **Gap ditemukan & ditambal saat verifikasi**: `production_standards` untuk item 73 (Sachet WIP) TIDAK PERNAH diisi sejak restrukturisasi BOM 2-tingkat sesi sebelumnya — artinya SELURUH biaya SDM Routing A (gudang, mixing, filling, QC — porsi terbesar tenaga kerja nyata) diam-diam TIDAK terhitung sampai ditambal. Nilai diturunkan (bukan ditebak) dari data yang sudah terverifikasi: `unit_per_batch = 226,19 × 14 = 3.166,66` (14 sachet/box), `batches_per_day = 3` (kapasitas mixing fisik tidak berubah). Ditandai `ESTIMASI_MANUAL`.
+- **2 bug kode ditemukan sendiri lewat verifikasi angka sebelum lapor** (bukan dari user): (1) rasio unit teratas sempat dobel jadi 2,0 karena pre-set nilai sebelum fungsi rekursif jalan — dihapus, sekarang `explode()` satu-satunya sumber; (2) kalau ADA level yang belum lengkap datanya, kode lama menyembunyikan SELURUH jumlah parsial jadi `null` — sekarang konsisten dengan pola biaya bahan: tetap tampilkan jumlah parsial + flag `labor_cost_complete=false` terpisah.
+
+**Hasil verifikasi nyata (setelah kedua bug & gap di atas ditambal), dibandingkan target spesifikasi rekonsiliasi manual pemilik produk**:
+
+| | Bahan | Kemasan | SDM standar | Margin/unit | Margin total |
+|---|---|---|---|---|---|
+| SAS001 target spek | Rp19.557,45 | Rp8.829,63 | Rp2.993,70 | Rp76.619,23 | Rp1.532.384.305,79 |
+| SAS001 sistem (sekarang) | Rp19.489,69 | Rp8.829,63 ✓ persis | Rp3.529,41 (PARSIAL) | Rp76.151,27 | Rp1.523.025.338 |
+| SAS005 target spek | Rp21.954,58 | Rp3.989,14 | Rp1.486,04 | Rp5.570,25 | — |
+| SAS005 sistem (sekarang) | (drift harga live, sudah terverifikasi wajar sesi sebelumnya) | | Rp736,84 (PARSIAL) | | Rp63.687.906 |
+
+Kemasan SAS001 sekarang cocok PERSIS. Bahan sedikit beda (drift harga live nyata, bukan bug). SDM standar SAS001/SAS005 **masih PARSIAL** — 5 WIP premix serbuk + 1 WIP premix gummy BELUM punya baris `routing_step_standard_crew` (kru untuk tahap premix belum diberikan datanya), jadi `labor_cost_complete` masih `false` untuk kedua order. Biaya SDM sistem sekarang justru SEDIKIT LEBIH TINGGI dari target Rp2.993,70/Rp1.486,04 meski masih parsial — jadi setelah premix ditambahkan nanti kemungkinan akan lebih tinggi lagi, BUKAN mengikuti perkiraan awal "margin akan naik dari basis lama". **Catatan penting**: perkiraan "margin naik dibanding spec karena spec menghitung ganda" itu merujuk ke angka AGREGAT LAMA (Rp169.642,86/batch dkk, basis 36 jam-orang) yang sudah dibuang — BUKAN ke target rekonsiliasi Rp2.993,70/Rp1.486,04 di atas, yang independen dan justru sudah cukup dekat dengan hasil sistem sekarang.
+
+**Belum selesai / gap yang tersisa (jangan dianggap kelar)**:
+1. Kru premix (5 tahap serbuk + 1 gummy) belum diisi — banner "SDM belum termasuk" di UI Margin Watch BELUM bisa dihapus, karena memang belum truly complete.
+2. Biaya kru harian sekarang masih pakai `wage_rate` polos (rata-rata karyawan aktif per wage_type) — BELUM memakai model biaya-pemberi-kerja penuh (BPJS, JKK, JKM, JHT) dari Bagian D (belum dikerjakan) — begitu Bagian D selesai, biaya SDM standar ini perlu dihitung ULANG dengan basis yang lebih tinggi.
+3. **Konsistensi basis aktual vs standar BELUM diperiksa** — `compute_production_batch_labor_cost` (biaya SDM AKTUAL dari labor log nyata) masih pakai metodologi lama (per jam/per shift), BELUM direkonsiliasi ke basis baru (kru harian ÷ batch/hari). Pemilik produk eksplisit memperingatkan ini penting: kalau basis standar vs aktual beda, Lapis 2 (kategori "SDM") akan selalu menunjukkan selisih PALSU. Perlu dikerjakan sebelum Bagian B benar-benar bisa disebut selesai.
+4. Representative `wage_rate` diambil dari rata-rata SEMUA karyawan aktif company-wide dengan `wage_type` sama (tidak difilter per plant/departemen) — imprecision yang sudah diketahui, belum diperbaiki.
+
+**Test baru**: `tests/standard_labor_cost.test.ts` (3 test: perhitungan 2-tingkat + rasio benar, 2 skenario negatif — item tanpa BOM sama sekali, level dengan routing tapi tanpa kru). `tests/margin_watch.test.ts` diperbarui (SDM sekarang SELALU angka, bukan `null`, dengan flag `labor_cost_complete` terpisah).
+
+**Bagian C (payroll nyata 20 karyawan), D (model biaya pemberi kerja), E (periode payroll 26-25), F (formatter Rupiah terpusat) — BELUM DIMULAI.**
+
+---
+
 ## Margin Watch Lapis 1-2 — 20 Agu 2026 (commit `b3938d4`, CI hijau)
 
 Fitur BARU: pengawasan margin BERJALAN per order (bukan cuma margin realized setelah kirim seperti `get_sales_order_margin` yang sudah ada). Detail lengkap desain & kategori ada di komentar `getMarginWatch.ts` dan `docs/rancangan-skema-database-mrp.md` (bagian `sales_order_line_margin_snapshots`). Ringkasan:

@@ -178,10 +178,16 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 
 **Database Baseline Margin (Margin Watch)** (`sales_order_line_margin_snapshots`)
 - ID Baris SO (sales_order_line_id, unik) · Harga Jual (unit_price) · Biaya Bahan Standar per Unit (standard_material_cost_per_unit) · Biaya Kemasan Standar per Unit (standard_packaging_cost_per_unit)
-- Biaya SDM Standar per Unit — SELALU kosong untuk saat ini, belum bisa dihitung dari data yang ada (standard_labor_cost_per_unit)
+- Biaya SDM Standar per Unit (standard_labor_cost_per_unit) — 20 Agu 2026: SEKARANG SUDAH dihitung dari data kru nyata (lihat tabel Kru Standar Lini Produksi di bawah), sebelumnya selalu kosong
+- SDM Sudah Lengkap? (labor_cost_complete) · Catatan Bagian Mana Belum Terhitung (labor_cost_notes) — kalau ada tahap produksi yang kru-nya belum diisi datanya, angka yang tampil tetap dihitung dari bagian yang SUDAH ada datanya (bukan disembunyikan jadi kosong), tapi ditandai belum 100% lengkap
 - Data Biaya Lengkap? (cost_data_complete) · Kode Item yang Belum Punya Harga Master (missing_cost_item_codes)
 - Ambang Margin Minimum — satu-satunya yang boleh diubah kapan saja, kirim peringatan kalau proyeksi margin turun di bawahnya (margin_floor_threshold)
 - Dikunci sekali saat pertama kali panel Margin Watch dibuka untuk baris SO itu — tidak berubah lagi meski harga master berubah belakangan (sama seperti standar K8/kelayakan jadwal)
+
+**Database Kru Standar Lini Produksi** (`routing_step_standard_crew`, 20 Agu 2026)
+- Berapa orang, tipe upah (harian/bulanan/per jam), dan jam kerja standar untuk 1 lini produksi (per routing, bukan per tahap) — dipakai untuk menghitung Biaya SDM Standar per Unit di atas
+- Diisi dari data lapangan nyata (jumlah orang tiap tahap produksi gummy & serbuk yang diberikan pemilik pabrik), bukan tebakan
+- Rumus: (total gaji harian semua kru lini itu) ÷ (jumlah batch standar yang bisa diproduksi lini itu dalam 1 hari) — supaya 1 kru yang sama tidak dihitung berkali-kali untuk tiap batch yang mereka kerjakan dalam sehari
 
 **Database Header Pengiriman** (`shipments`)
 - ID Pengiriman (shipment_id) · ID Perusahaan (company_id) · ID SO (sales_order_id) · Tanggal Kirim (shipment_date) · Status (status: draft/shipped/delivered/cancelled)

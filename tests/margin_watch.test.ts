@@ -213,7 +213,13 @@ describe('Margin Watch — baseline (Lapis 1) + selisih 5 kategori (Lapis 2)', (
     // dijumlah ke mana pun (bukan diam-diam dianggap 0).
     expect(body.standard_packaging_cost_per_unit).toBeCloseTo(1500, 2);
     expect(body.standard_material_cost_per_unit).toBeCloseTo(0, 2);
-    expect(body.standard_labor_cost_per_unit).toBeNull();
+    // Fixture tidak punya routing/kru standar utk item ini -> SDM standar
+    // tetap dihitung (sebagai 0, bukan null) TAPI ditandai labor_cost_complete
+    // false dengan catatan eksplisit kenapa (pola sama dgn cost_data_complete).
+    expect(body.standard_labor_cost_per_unit).toBeCloseTo(0, 2);
+    expect(body.labor_cost_complete).toBe(false);
+    expect(Array.isArray(body.labor_cost_notes)).toBe(true);
+    expect(body.labor_cost_notes.length).toBeGreaterThan(0);
   });
 
   it('(INTI/ACCEPTANCE TEST) Selisih HARGA terdeteksi dari PO belum diterima (Rp1.500 master vs Rp2.925 PO x 10.000 = Rp14,25 juta), TANPA menunggu barang diterima', async () => {

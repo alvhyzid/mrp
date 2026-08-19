@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
 import { canViewFinancialData } from '@/lib/roles';
 import { computeStandardCostPerUnit } from './computeStandardCostPerUnit';
+import { computeStandardLaborCostPerUnit } from './computeStandardLaborCostPerUnit';
 
 interface ApiResult {
   status: number;
@@ -69,6 +70,7 @@ export async function getMarginWatch(request: NextRequest, salesOrderLineId: num
     let snapshot = existingSnapshot;
     if (!snapshot) {
       const cost = await computeStandardCostPerUnit(adminClient, appUser.company_id, item.item_id);
+      const labor = await computeStandardLaborCostPerUnit(adminClient, appUser.company_id, item.item_id);
       const { data: inserted, error: insertError } = await adminClient
         .from('sales_order_line_margin_snapshots')
         .insert([
@@ -78,9 +80,11 @@ export async function getMarginWatch(request: NextRequest, salesOrderLineId: num
             unit_price: soLine.unit_price,
             standard_material_cost_per_unit: cost.materialCostPerUnit,
             standard_packaging_cost_per_unit: cost.packagingCostPerUnit,
-            standard_labor_cost_per_unit: null, // lihat catatan migration -- belum bisa dihitung dari data yang ada
+            standard_labor_cost_per_unit: labor.costPerUnit,
             cost_data_complete: cost.complete,
-            missing_cost_item_codes: cost.missingCostItemCodes
+            missing_cost_item_codes: cost.missingCostItemCodes,
+            labor_cost_complete: labor.complete,
+            labor_cost_notes: labor.notes
           }
         ])
         .select('*')
@@ -92,7 +96,8 @@ export async function getMarginWatch(request: NextRequest, salesOrderLineId: num
     const qtyOrdered = Number(soLine.qty_ordered);
     const standardMaterialCost = Number(snapshot.standard_material_cost_per_unit ?? 0);
     const standardPackagingCost = Number(snapshot.standard_packaging_cost_per_unit ?? 0);
-    const standardCostPerUnitKnown = standardMaterialCost + standardPackagingCost;
+    const standardLaborCost = Number(snapshot.standard_labor_cost_per_unit ?? 0);
+    const standardCostPerUnitKnown = standardMaterialCost + standardPackagingCost + standardLaborCost;
     const standardMarginPerUnit = Number(snapshot.unit_price) - standardCostPerUnitKnown;
     const standardMarginTotal = standardMarginPerUnit * qtyOrdered;
 
@@ -171,8 +176,9 @@ export async function getMarginWatch(request: NextRequest, salesOrderLineId: num
         unit_price: Number(snapshot.unit_price),
         standard_material_cost_per_unit: standardMaterialCost,
         standard_packaging_cost_per_unit: standardPackagingCost,
-        standard_labor_cost_per_unit: null,
-        standard_labor_cost_note: 'Belum bisa dihitung — routing belum menyimpan data jumlah orang per tahap, cuma durasi.',
+        standard_labor_cost_per_unit: Number(snapshot.standard_labor_cost_per_unit ?? 0),
+        labor_cost_complete: snapshot.labor_cost_complete,
+        labor_cost_notes: snapshot.labor_cost_notes ?? [],
         cost_data_complete: snapshot.cost_data_complete,
         missing_cost_item_codes: snapshot.missing_cost_item_codes ?? [],
         standard_margin_per_unit: standardMarginPerUnit,
@@ -181,7 +187,7 @@ export async function getMarginWatch(request: NextRequest, salesOrderLineId: num
         categories,
         total_variance_impact: totalVarianceImpact,
         projected_margin_total: projectedMarginTotal,
-        projection_complete: projectionComplete,
+        projection_complete: projectionComplete && snapshot.labor_cost_complete,
         snapshot_taken_at: snapshot.created_at
       }
     };

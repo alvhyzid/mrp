@@ -117,11 +117,13 @@ Mencatat gangguan operasional yang menyebabkan produksi terhambat/terhenti — m
 Data pekerja pabrik untuk keperluan biaya SDM — terpisah dari `users`. **Akses ke kolom gaji dibatasi ketat, lihat "Kontrol Akses Data Finansial" di atas.**
 - `employee_id`, `company_id`, `production_plant_id` (nullable — pekerja lapangan biasanya terikat 1 lokasi, staf non-produksi mungkin tidak)
 - `name`, `position` (mis. "Operator Produksi", "QC")
-- `department` (production / ppic / finance / purchasing / warehouse / hr / management — dipakai untuk filter dashboard per-department & scoping absensi)
+- `department` (production / ppic / finance / purchasing / warehouse / hr / management / fat / rnd — dipakai untuk filter dashboard per-department & scoping absensi; `fat`/`rnd` ditambahkan 21 Agu 2026 dari data payroll nyata)
 - `wage_type` (hourly / daily / monthly / piece_rate)
 - `wage_rate` (nilai sensitif — lihat kontrol akses)
 - `linked_user_id` (nullable, merujuk ke `user_id`)
 - `is_active`
+- **Kolom payroll nyata (21 Agu 2026, Bagian C, semua NULLABLE — diisi bertahap sesuai data yang benar-benar diketahui, TIDAK dipaksa lengkap)**: `factory_employee_code` (kode karyawan pabrik, mis. "2508001"; null untuk freelance tanpa kode resmi), `employment_status` (kontrak/phl/freelance — BEDA dari `wage_type`, ini soal status kepegawaian bukan skema pembayaran), `ptkp_status` (mis. "K/2", "TK/0"), `ter_category` (mis. "TER A"/"TER B"), `ter_rate_percent`, `daily_meal_allowance` & `daily_transport_allowance` (Rupiah per hari HADIR, disimpan PER KARYAWAN — bukan tabel tarif-per-jabatan terpisah, supaya tidak perlu hardcode logic per jabatan di kode), `bpjs_kesehatan_enrolled` (boolean, **NULL berarti belum dikonfirmasi, BUKAN berarti tidak ikut** — jangan pernah baca NULL sebagai `false`)
+- **Field finansial baru di atas (PTKP/TER/tunjangan/BPJS) ikut aturan privasi yang SAMA PERSIS dengan `wage_rate`** (lihat "Kontrol Akses Data Finansial") — bukan gerbang baru yang lebih longgar.
 
 ### `employee_attendance`
 Absensi harian umum (jam masuk-pulang) — berlaku untuk SEMUA karyawan termasuk staf kantoran (Finance, HRD sendiri, dst) yang tidak pernah masuk ke Work Order sama sekali. Terpisah dari `work_order_assignments` yang tujuannya beda (biaya produksi, bukan kehadiran). Fondasi awal untuk modul HRD yang akan meluas ke payroll/legal nanti — tidak dibangun sekaligus sekarang.

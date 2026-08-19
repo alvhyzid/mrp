@@ -22,7 +22,9 @@ export async function listEmployees(request: NextRequest): Promise<ApiResult> {
     const adminClient = getAdminClient();
     const { data: employees, error } = await adminClient
       .from('employees')
-      .select('employee_id, production_plant_id, department, name, position, wage_type, wage_rate, linked_user_id, is_active, created_at')
+      .select(
+        'employee_id, production_plant_id, department, name, position, wage_type, wage_rate, linked_user_id, is_active, created_at, factory_employee_code, employment_status, ptkp_status, ter_category, ter_rate_percent, daily_meal_allowance, daily_transport_allowance, bpjs_kesehatan_enrolled'
+      )
       .eq('company_id', appUser.company_id)
       .order('name', { ascending: true });
 
@@ -52,7 +54,18 @@ export async function listEmployees(request: NextRequest): Promise<ApiResult> {
         wage_rate: showWage ? employee.wage_rate : null,
         linked_user_id: employee.linked_user_id,
         is_active: employee.is_active,
-        created_at: employee.created_at
+        created_at: employee.created_at,
+        factory_employee_code: employee.factory_employee_code,
+        employment_status: employee.employment_status,
+        // PTKP/TER/tunjangan/BPJS -- data finansial personal, sama sensitifnya
+        // dengan wage_rate -- pakai gerbang privasi yang SAMA (showWage), bukan
+        // gerbang baru terpisah.
+        ptkp_status: showWage ? employee.ptkp_status : null,
+        ter_category: showWage ? employee.ter_category : null,
+        ter_rate_percent: showWage ? employee.ter_rate_percent : null,
+        daily_meal_allowance: showWage ? employee.daily_meal_allowance : null,
+        daily_transport_allowance: showWage ? employee.daily_transport_allowance : null,
+        bpjs_kesehatan_enrolled: showWage ? employee.bpjs_kesehatan_enrolled : null
       };
     });
 

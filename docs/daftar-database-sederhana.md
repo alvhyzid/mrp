@@ -54,8 +54,12 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 
 **Database Pekerja** (`employees`) — *akses gaji dibatasi, lihat kontrol akses di atas*
 - ID Pekerja (employee_id) · ID Perusahaan (company_id) · ID Lokasi Pabrik — nullable (production_plant_id) · Nama (name) · Posisi (position)
-- Department: production/ppic/finance/purchasing/warehouse/hr/management (department)
+- Department: production/ppic/finance/purchasing/warehouse/hr/management/fat/rnd (department)
 - Jenis Upah (wage_type) · Tarif Upah — SENSITIF (wage_rate) · ID User Terkait (linked_user_id) · Status Aktif (is_active)
+- Kode Karyawan Pabrik (factory_employee_code, mis. "2508001") · Status Kepegawaian: kontrak/phl/freelance (employment_status)
+- Status PTKP (ptkp_status) · Golongan TER (ter_category) · Tarif TER % (ter_rate_percent) — SEMUA SENSITIF, akses sama dengan Tarif Upah
+- Tunjangan Makan/Hari (daily_meal_allowance) · Tunjangan Transport/Hari (daily_transport_allowance) — SENSITIF, per karyawan (bukan tabel tarif per jabatan)
+- Ikut BPJS Kesehatan? (bpjs_kesehatan_enrolled) — SENSITIF, kosong berarti belum dikonfirmasi (bukan berarti tidak ikut)
 
 **Database Absensi Harian** (`employee_attendance`)
 - ID Absensi (employee_attendance_id) · ID Perusahaan (company_id) · ID Pekerja (employee_id)

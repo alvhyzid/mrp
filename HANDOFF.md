@@ -47,7 +47,34 @@ Kemasan SAS001 sekarang cocok PERSIS. Bahan sedikit beda (drift harga live nyata
 
 **Test baru**: `tests/standard_labor_cost.test.ts` (3 test: perhitungan 2-tingkat + rasio benar, 2 skenario negatif — item tanpa BOM sama sekali, level dengan routing tapi tanpa kru). `tests/margin_watch.test.ts` diperbarui (SDM sekarang SELALU angka, bukan `null`, dengan flag `labor_cost_complete` terpisah).
 
-**Bagian C (payroll nyata 20 karyawan), D (model biaya pemberi kerja), E (periode payroll 26-25), F (formatter Rupiah terpusat) — BELUM DIMULAI.**
+### Bagian C — Data 20 karyawan payroll NYATA menggantikan simulasi (SELESAI, 19 dari 20 — Darmini menunggu)
+
+Struktur `employees` diperluas (migration `20260821090000` + `20260821091500`): `factory_employee_code`, `employment_status` (kontrak/phl/freelance), `ptkp_status`, `ter_category`, `ter_rate_percent`, `daily_meal_allowance`, `daily_transport_allowance`, `bpjs_kesehatan_enrolled` — semua NULLABLE, diisi bertahap sesuai data yang benar-benar diketahui (bukan dipaksa lengkap). Department diperluas dengan `fat` dan `rnd` (ditemukan dari data nyata Asni Damayati/Adhiskaprillia, tidak cocok ke 7 kategori lama). Field finansial baru (PTKP/TER/tunjangan/BPJS) **ikut aturan privasi wage_rate yang SAMA** — role tanpa akses HR tidak melihatnya sama sekali, dibuktikan test.
+
+**Dikerjakan lewat endpoint resmi `/api/employees` (POST/PATCH), BUKAN insert langsung** — konsisten dengan CRUD karyawan yang sudah ada.
+
+- **15 karyawan simulasi wage_type=monthly (tier "kontrak") DINONAKTIFKAN** (`is_active=false`, riwayat tetap utuh — tidak dihapus): Alvan, Bayu, Dimas, Dika, Mega, Asni, Ayu, Dina, Angga, Miasih, Sutik, Mini, Momo, Joni, Alif (employee_id 642-656).
+- **18 PHL simulasi (wage_type=daily, employee_id 657-674) SENGAJA TIDAK disentuh** — masih menunggu data HRD pabrik nyata, tetap berstatus simulasi.
+- **19 dari 20 karyawan nyata ditambahkan** sebagai baris BARU (bukan menimpa baris lama) dengan kode karyawan pabrik asli (2508001 dst). Plant "Dieng" dipetakan ke plant yang sudah ada "Ruko Dieng" (nama cocok, satu-satunya "Dieng" di sistem); plant "KL Bizhub" BARU dibuat (belum pernah ada sebelumnya — ada 2 karyawan produksi nyata berbasis di sana: Sandra Wedi Pradika, Angga Ade Mahendra).
+- **Darmini (Freelance Helper, Rp1.500.000) SENGAJA BELUM ditambahkan** — cara pembayarannya (per hari? per bulan? per pekerjaan?) eksplisit masih menunggu konfirmasi HRD, dan `wage_type` adalah kolom wajib yang bermakna skema pembayaran — mengisi salah satu nilai sekarang berarti mengarang skema yang belum dikonfirmasi. Tetap di daftar "menunggu" di bawah.
+- **Pencocokan nama→orang mengikuti PERSIS peringatan yang diberikan** — 3 jebakan eksplisit (Ayu SPV HRD ≠ Ruud Ayu Dewanti HR Generalist; Angga SPV Produksi Powder ≠ Angga Ade Mahendra Team Leader; Dika Staff PPIC TIDAK ADA padanan nyata) diperlakukan sebagai PENGGANTIAN KATEGORI (seluruh tier simulasi dinonaktifkan, 19 nyata ditambah baru), BUKAN dipetakan 1:1 sebagai "orang yang sama" — jadi tidak ada risiko riwayat kerja orang A tertaut ke orang B yang cuma namanya mirip.
+- **Gap nyata yang terekspos, BUKAN ditutup-tutupi**: peran "Staff PPIC" (dulu diisi Dika, simulasi) sekarang TIDAK ADA satu pun karyawan nyata yang mengisi peran itu di data yang diberikan — perlu dikonfirmasi ke pemilik produk apakah peran ini memang sudah tidak ada, atau datanya belum lengkap.
+- PTKP/TER cuma diisi untuk 5 dari 19 karyawan (Alvan, Dimas, Bayu, Ruud Ayu Dewanti, Asni) — sisanya `null`, BUKAN ditebak dari pola yang ada.
+- Tunjangan makan/transport & kepesertaan BPJS Kesehatan **BELUM diisi untuk siapa pun** — datanya (siapa ikut BPJS, kategori tunjangan per orang untuk jabatan seperti "Team Leader"/"Jr. Spv" yang tidak persis cocok ke 3 tingkatan tunjangan yang diberikan) memerlukan Bagian D + konfirmasi tambahan, sengaja tidak ditebak sekarang.
+- UI Dashboard HRD (`HrDashboardPage.tsx`) diperbarui: kolom Kode Karyawan + Status Kepegawaian di tabel; form tambah/edit sekarang punya field kode karyawan, status kepegawaian, PTKP, golongan TER, tarif TER, tunjangan makan/transport, kepesertaan BPJS (field finansial otomatis tersembunyi untuk role tanpa akses HR, sama seperti field gaji).
+
+**Test baru**: `tests/employee_real_payroll_fields.test.ts` (5 test: create dgn field lengkap, 2 skenario negatif — employment_status tidak valid ditolak, tunjangan negatif ditolak — privasi field finansial baru, update mempertahankan data).
+
+**Bagian D (model biaya pemberi kerja), E (periode payroll 26-25), F (formatter Rupiah terpusat) — BELUM DIMULAI.**
+
+### Catatan menunggu (Bagian A-F) — JANGAN DITEBAK, tunggu konfirmasi/data
+1. **Cara pembayaran Darmini** (Freelance Helper, Rp1.500.000) — per hari/bulan/pekerjaan belum dikonfirmasi, belum ditambahkan ke `employees` karena `wage_type` wajib diisi.
+2. **Konfirmasi basis iuran BPJS Rp3.737.000 = UMK yang berlaku** — dipakai Bagian D nanti untuk basis JKK/JKM, belum dikerjakan.
+3. **Data PHL dari HRD pabrik** — 18 PHL masih simulasi, menunggu data nyata.
+4. **Harga stok Plant Ruko Dieng (CSV)** — jalur & klasifikasi sudah siap, pemuatan tertunda sampai data harga datang.
+5. **Peran "Staff PPIC"** — tidak ada karyawan nyata yang mengisi peran ini di data yang diberikan (lihat Bagian C); perlu konfirmasi apakah peran ini masih ada.
+6. **Kategori tunjangan makan/transport untuk jabatan yang tidak persis cocok ke 3 tingkatan yang diberikan** (mis. "Team Leader", "Jr. Spv", "HR Generalist", "RnD Staff") — perlu konfirmasi sebelum Bagian D mengisi nilainya.
+7. **Siapa saja yang TIDAK ikut BPJS Kesehatan** — disebutkan "terlihat di data [PDF]" tapi tidak ada di teks yang diberikan ke sesi ini; kolom `bpjs_kesehatan_enrolled` sengaja dibiarkan `null` untuk semua, bukan ditebak.
 
 ---
 

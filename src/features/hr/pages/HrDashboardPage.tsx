@@ -29,7 +29,15 @@ const emptyEmployeeForm = {
   production_plant_id: '',
   wage_type: 'monthly',
   wage_rate: '',
-  is_active: true
+  is_active: true,
+  factory_employee_code: '',
+  employment_status: '',
+  ptkp_status: '',
+  ter_category: '',
+  ter_rate_percent: '',
+  daily_meal_allowance: '',
+  daily_transport_allowance: '',
+  bpjs_kesehatan_enrolled: ''
 };
 
 const departmentLabels: Record<string, string> = {
@@ -39,7 +47,15 @@ const departmentLabels: Record<string, string> = {
   purchasing: 'Purchasing',
   warehouse: 'Warehouse',
   hr: 'HRD',
-  management: 'Manajemen'
+  management: 'Manajemen',
+  fat: 'FAT (Finance/Accounting/Tax)',
+  rnd: 'RnD'
+};
+
+const employmentStatusLabels: Record<string, string> = {
+  kontrak: 'Kontrak',
+  phl: 'PHL',
+  freelance: 'Freelance'
 };
 
 const attendanceStatusLabels: Record<string, string> = {
@@ -67,6 +83,14 @@ type Employee = {
   wage_type: string | null;
   wage_rate: number | null;
   is_active: boolean;
+  factory_employee_code: string | null;
+  employment_status: string | null;
+  ptkp_status: string | null;
+  ter_category: string | null;
+  ter_rate_percent: number | null;
+  daily_meal_allowance: number | null;
+  daily_transport_allowance: number | null;
+  bpjs_kesehatan_enrolled: boolean | null;
 };
 
 type AttendanceRow = {
@@ -151,7 +175,15 @@ export default function HrDashboardPage() {
       production_plant_id: employee.production_plant_id ? String(employee.production_plant_id) : '',
       wage_type: employee.wage_type ?? 'monthly',
       wage_rate: employee.wage_rate === null ? '' : String(employee.wage_rate),
-      is_active: employee.is_active
+      is_active: employee.is_active,
+      factory_employee_code: employee.factory_employee_code ?? '',
+      employment_status: employee.employment_status ?? '',
+      ptkp_status: employee.ptkp_status ?? '',
+      ter_category: employee.ter_category ?? '',
+      ter_rate_percent: employee.ter_rate_percent === null ? '' : String(employee.ter_rate_percent),
+      daily_meal_allowance: employee.daily_meal_allowance === null ? '' : String(employee.daily_meal_allowance),
+      daily_transport_allowance: employee.daily_transport_allowance === null ? '' : String(employee.daily_transport_allowance),
+      bpjs_kesehatan_enrolled: employee.bpjs_kesehatan_enrolled === null ? '' : String(employee.bpjs_kesehatan_enrolled)
     });
     setEmployeeFormStatus('idle');
     setEmployeeFormMessage('');
@@ -177,7 +209,15 @@ export default function HrDashboardPage() {
       production_plant_id: employeeForm.production_plant_id,
       wage_type: employeeForm.wage_type,
       wage_rate: employeeForm.wage_rate,
-      is_active: employeeForm.is_active
+      is_active: employeeForm.is_active,
+      factory_employee_code: employeeForm.factory_employee_code,
+      employment_status: employeeForm.employment_status,
+      ptkp_status: employeeForm.ptkp_status,
+      ter_category: employeeForm.ter_category,
+      ter_rate_percent: employeeForm.ter_rate_percent,
+      daily_meal_allowance: employeeForm.daily_meal_allowance,
+      daily_transport_allowance: employeeForm.daily_transport_allowance,
+      bpjs_kesehatan_enrolled: employeeForm.bpjs_kesehatan_enrolled === '' ? null : employeeForm.bpjs_kesehatan_enrolled === 'true'
     };
 
     const response = await fetch('/api/employees', {
@@ -251,13 +291,24 @@ export default function HrDashboardPage() {
   const employeeColumns = useMemo<ColumnDef<Employee>[]>(() => {
     const columns: ColumnDef<Employee>[] = [
       { accessorKey: 'name', header: 'Nama', cell: ({ row }) => <span className="font-medium text-foreground">{row.original.name}</span> },
+      { id: 'code', header: 'Kode Karyawan', cell: ({ row }) => row.original.factory_employee_code ?? <span className="text-muted-foreground">-</span> },
       { accessorKey: 'position', header: 'Posisi' },
       {
         accessorKey: 'department',
         header: 'Department',
         cell: ({ row }) => (row.original.department ? <Badge variant="secondary">{departmentLabels[row.original.department] ?? row.original.department}</Badge> : <span className="text-muted-foreground">-</span>)
       },
-      { id: 'plant', header: 'Lokasi', cell: ({ row }) => row.original.production_plant_name ?? <span className="text-muted-foreground">-</span> }
+      { id: 'plant', header: 'Lokasi', cell: ({ row }) => row.original.production_plant_name ?? <span className="text-muted-foreground">-</span> },
+      {
+        id: 'employment_status',
+        header: 'Status Kepegawaian',
+        cell: ({ row }) =>
+          row.original.employment_status ? (
+            <Badge variant="outline">{employmentStatusLabels[row.original.employment_status] ?? row.original.employment_status}</Badge>
+          ) : (
+            <span className="text-muted-foreground">-</span>
+          )
+      }
     ];
 
     if (canSeeWages) {
@@ -433,6 +484,31 @@ export default function HrDashboardPage() {
                 </label>
 
                 <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Kode Karyawan Pabrik</span>
+                  <Input
+                    placeholder="mis. 2508001 (kosongkan utk Freelance)"
+                    value={employeeForm.factory_employee_code}
+                    onChange={(event) => setEmployeeForm((prev) => ({ ...prev, factory_employee_code: event.target.value }))}
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Status Kepegawaian</span>
+                  <Select value={employeeForm.employment_status || undefined} onValueChange={(value) => setEmployeeForm((prev) => ({ ...prev, employment_status: value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(employmentStatusLabels).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+
+                <label className="flex flex-col gap-1.5">
                   <span className="text-sm font-medium text-foreground">Posisi</span>
                   <Input
                     placeholder="mis. Operator Produksi"
@@ -502,6 +578,73 @@ export default function HrDashboardPage() {
                     onChange={(event) => setEmployeeForm((prev) => ({ ...prev, wage_rate: event.target.value }))}
                     required
                   />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Status PTKP</span>
+                  <Input
+                    placeholder="mis. K/2, TK/0 (kosongkan kalau belum tahu)"
+                    value={employeeForm.ptkp_status}
+                    onChange={(event) => setEmployeeForm((prev) => ({ ...prev, ptkp_status: event.target.value }))}
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Golongan TER</span>
+                  <Input
+                    placeholder="mis. TER A, TER B"
+                    value={employeeForm.ter_category}
+                    onChange={(event) => setEmployeeForm((prev) => ({ ...prev, ter_category: event.target.value }))}
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Tarif TER (%)</span>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={employeeForm.ter_rate_percent}
+                    onChange={(event) => setEmployeeForm((prev) => ({ ...prev, ter_rate_percent: event.target.value }))}
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Tunjangan Makan / Hari Hadir (Rp)</span>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={employeeForm.daily_meal_allowance}
+                    onChange={(event) => setEmployeeForm((prev) => ({ ...prev, daily_meal_allowance: event.target.value }))}
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Tunjangan Transport / Hari Hadir (Rp)</span>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={employeeForm.daily_transport_allowance}
+                    onChange={(event) => setEmployeeForm((prev) => ({ ...prev, daily_transport_allowance: event.target.value }))}
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Kepesertaan BPJS Kesehatan</span>
+                  <Select
+                    value={employeeForm.bpjs_kesehatan_enrolled || undefined}
+                    onValueChange={(value) => setEmployeeForm((prev) => ({ ...prev, bpjs_kesehatan_enrolled: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Belum dikonfirmasi" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="true">Ikut BPJS Kesehatan</SelectItem>
+                      <SelectItem value="false">Tidak Ikut BPJS Kesehatan</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </label>
 
                 <label className="flex items-center gap-2 sm:col-span-2">

@@ -58,7 +58,26 @@ Pemilik produk memberi instruksi besar berjenjang A→G, eksplisit ditandai **mu
 
 **Test baru**: `tests/kamus_module.test.ts` (11 test, termasuk 4 skenario negatif — konfirmasi oleh non-leadership ditolak, jawaban terkonfirmasi tidak bisa ditimpa, ekspor ditolak non-leadership, isolasi antar company).
 
-**C. Dashboard Proyek AI (K1b)** — BELUM DIMULAI. Perlu baca `docs/instruksi-dashboard-proyek-ai.md`. Bobot §3.4 dipakai apa adanya sebagai seed. AUTO_QUERY yang belum bisa dihitung dari data nyata → CHECKLIST sementara (STOP CONDITION dokumen), JANGAN memalsukan angka. TANPA progres manual, TANPA gamifikasi, TANPA LLM.
+**C. Dashboard Proyek AI (K1b) — SELESAI.** Dokumen sumber disalin dari Downloads ke `docs/instruksi-dashboard-proyek-ai.md`. Referensi `docs/ai/fase-0-fondasi-ai-detail.md` yang diminta dibaca TIDAK ADA di mana pun (Downloads maupun repo) — BUKAN penghalang total, karena `docs/langkah-membangun-fitur-ai.md` (yang ADA) sudah cukup detail utk seed struktur Fase 1-4.
+
+**STOP CONDITION §7 DICEK, TIDAK TERPICU**: 29 tugas ter-seed (5 fase × rata-rata ~6 tugas), jauh di bawah ambang 40.
+
+**Penyimpangan jujur dari §3.3**: 4 dari 7 `progress_key` AUTO_QUERY **TIDAK BISA dihitung dari data nyata saat ini**, direklasifikasi jadi CHECKLIST (persis instruksi STOP CONDITION "usulkan menjadikannya CHECKLIST sementara — jangan memalsukan angka"): `provenance.komponen` (belum ada pemindaian kode otomatis), `baseline.hari` (tabel KPI baseline belum dibangun), `processmining.pertanyaan` (Bagian E antrean ini belum dikerjakan), `panel.uji` (panel generik belum dibangun, baru 1 prototipe di BOM). **HANYA `kamus.p12`/`kamus.p3`/`kamus.metrik` tetap AUTO_QUERY sungguhan** — dihitung LIVE dari `kamus_terms` (Bagian B), dibuktikan lewat test: jawab+konfirmasi 1 pertanyaan kamus → progres naik PERSIS sesuai hitungan, bukan cuma "berubah".
+
+**Skema**: `ai_project_phases`, `ai_project_tasks`, `ai_project_checklist_items`, `ai_project_progress_snapshots` (migration `20260821220000`) — RLS default-deny utk `authenticated` (pola sama Kamus), SEMUA akses lewat server function dgn gerbang `isCompanyLeadership()` di TypeScript. **Akses dibatasi HANYA leadership** (company_admin/general_manager) — ditafsirkan SEMPIT dari "tim inti" karena ini alat roadmap internal proyek AI, bukan pekerjaan operasional harian relevan semua departemen (beda dari Kamus yang terbuka semua role).
+
+**UI `/ai-project`** — progres total + bar per fase, kartu tugas dgn kontribusi ke total, panel "Bisa Dikerjakan Sekarang" diurutkan dampak-per-menit (proksi: bobot × persentase belum selesai, TIDAK ADA estimasi waktu nyata jadi bukan literal "per menit"), checklist interaktif per tugas, tombol seed (idempoten) & snapshot manual.
+
+**Simplifikasi yang disadari**: progres dihitung LIVE tiap panggilan tanpa cache (spesifikasi izinkan cache ≤5 menit — dilewati demi kesederhanaan, masih cukup cepat utk 29 tugas). Snapshot HARIAN masih manual (tombol), belum ada cron otomatis (di luar cakupan sesi ini, butuh scheduler yang belum ada di proyek).
+
+### BUKTI YANG DIMINTA (§6 dokumen)
+1. **Query nyata progres 1 fase vs UI**: Fase 0 dihitung manual dari data test (checklist provenance 2/4=50%×bobot15 + panel 1/3=33,33%×bobot15 = 12,5) **PERSIS SAMA** dgn angka API — dibuktikan test.
+2. **Sebelum/sesudah jawab 3 pertanyaan kamus**: diuji dgn 1 pertanyaan (representatif) — progres `kamus.p12` naik dari 0% ke 25% (1 dari 4 baris prioritas 1-2 dikonfirmasi) — PERSIS sesuai hitungan, bukan cuma "berubah".
+3. **Skenario negatif 1** (diminta eksplisit): set `manual_percent` lewat API utk tugas `progress_source=AUTO_QUERY` → **400 ditolak**, kolom tetap `null`.
+4. **Skenario negatif 2** (diminta eksplisit): role `production_staff` membuka `/api/ai-project` → **403 ditolak total**.
+5. **Snapshot 2×**: dibuktikan test — 2 baris tersimpan di `ai_project_progress_snapshots`, `overall_percent` & `per_phase` (jsonb per fase) terisi nyata.
+
+**Test baru**: `tests/ai_project_dashboard.test.ts` (7 test, termasuk 2 skenario negatif eksplisit di atas).
 
 **D. Fondasi Provenance & Panel Asal-Usul (Fase 0.2 & 0.3)** — BELUM DIMULAI sebagai sistem generik, TAPI **1 prototipe konkret sudah dibangun sesi ini** (BOM `standard_yield_basis_note`/`standard_yield_source`, lihat bagian "Perbaikan tampilan BOM" di bawah) — pola ini (catatan asal + sumber ESTIMASI_MANUAL/DIPELAJARI) bisa jadi acuan kalau `ProvenanceEnvelope` generik dibangun nanti. Perlu baca `docs/langkah-membangun-fitur-ai.md` sebelum membangun versi generiknya — TANPA LLM.
 

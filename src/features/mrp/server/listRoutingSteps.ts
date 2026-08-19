@@ -33,7 +33,7 @@ export async function listRoutingSteps(request: NextRequest): Promise<ApiResult>
 
     const { data: steps, error } = await adminClient
       .from('routing_steps')
-      .select('routing_step_id, sequence_no, step_name, active_duration_minutes, wait_duration_minutes, work_center_id')
+      .select('routing_step_id, sequence_no, step_name, active_duration_minutes, duration_per_unit_minutes, wait_duration_minutes, work_center_id')
       .eq('routing_id', routingId)
       .order('sequence_no', { ascending: true });
 

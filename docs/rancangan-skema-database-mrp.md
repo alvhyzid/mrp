@@ -163,6 +163,8 @@ Daftar komponen per BOM, dalam `base_uom`.
 ### `work_centers`
 Master data mesin/stasiun kerja — fisiknya ada di SATU lokasi pabrik.
 - `work_center_id`, `company_id`, `production_plant_id`, `name`, `code`, `is_active`
+- `capacity_hours_per_day` (nullable) — kapasitas PER UNIT mesin, dasar Dashboard Kapasitas.
+- `unit_count` (integer, default 1, harus > 0) — jumlah unit mesin IDENTIK di Work Center ini (mis. 2 mesin Filling Sachet berjalan paralel). Kapasitas efektif total = `capacity_hours_per_day × unit_count`. Default 1 = perilaku lama persis untuk Work Center yang sudah ada.
 
 ### `routings`
 Header urutan tahapan produksi per item — sengaja TETAP generik (tidak diikat 1 plant), dianggap sama di semua lokasi yang memproduksi item itu. Master data yang dipakai ULANG lintas banyak Work Order (persis BOM) — bukan didefinisikan ulang tiap WO.
@@ -174,6 +176,7 @@ Header urutan tahapan produksi per item — sengaja TETAP generik (tidak diikat 
 - `routing_step_id`, `routing_id`, `sequence_no`, `step_name`
 - `active_duration_minutes`, `wait_duration_minutes`
 - `work_center_id` (opsional, referensi ke `work_centers`)
+- `duration_per_unit_minutes` (numeric, nullable) — durasi BERBASIS LAJU untuk tahap yang kecepatannya ditentukan mesin (mis. Filling Sachet: 2 mesin × 15-20 pcs/menit). Kalau terisi, durasi aktif SEBENARNYA tahap ini = qty batch × nilai ini, BUKAN `active_duration_minutes` yang tetap — satu logika ini (`src/features/mrp/server/stepDuration.ts`) WAJIB dipakai konsisten di Gantt, Dashboard Kapasitas, dan detail blok Gantt. NULL = tahap biasa, tetap pakai `active_duration_minutes` (perilaku lama, tidak ada regresi).
 
 ### `formula_templates`
 Menyimpan "Base Formula" sebagai referensi murni untuk R&D — TIDAK terhubung fungsional ke produksi.
@@ -287,7 +290,7 @@ Bukti Penerimaan (Proof of Delivery) dari CLIENT — diisi lewat halaman PUBLIK 
 
 ### `production_batches`
 Level eksekusi NYATA di lantai produksi — 1 Work Order biasanya dikerjakan lewat beberapa batch fisik terpisah (3-5 per shift, umum di operasional Anda), masing-masing dengan bahan, hasil, dan jejak lot sendiri-sendiri (penting untuk isolasi traceability BPOM/halal kalau ada masalah kualitas di 1 batch spesifik). PPIC (atau siapa pun yang berwenang) bebas menentukan `planned_qty` tiap batch — TIDAK terpaku ke ukuran standar BOM (mis. BOM ditulis basis 10kg, tapi batch produksi riil bisa sampai 50kg — sistem otomatis scale kebutuhan bahan sesuai `planned_qty` batch ini, ditambah `boms.buffer_percentage`).
-- `production_batch_id`, `company_id`, `work_order_id`, `batch_number` (mis. "WO-0012-B003")
+- `production_batch_id`, `company_id`, `work_order_id`, `batch_number` (mis. "WO-0012-B003" — rekomendasi otomatis default, TAPI staf boleh menimpanya dengan format sendiri, mis. format pabrik "3TM13082601"; kalau ditimpa, dipakai apa adanya. Unik PER PERUSAHAAN — `unique(company_id, batch_number)`, bukan lagi per Work Order — supaya tidak ada 2 batch dengan nomor sama di 1 perusahaan meski nomornya diisi manual)
 - `shift_id`, `planned_qty`, `uom`
 - `planned_date` (date, nullable — kapan batch ini SEHARUSNYA dikerjakan, diisi PPIC saat bikin batch. Beda dari `started_at` yang baru terisi setelah benar-benar mulai — ini yang jadi acuan Dashboard Kapasitas Work Center, bukan `started_at`/`created_at`, supaya perencanaan ke depan/minggu depan terhitung benar)
 - `status` (planned / in_progress / completed / cancelled)
@@ -317,6 +320,8 @@ Bahan/lot yang benar-benar dipakai per BATCH — identitas ke batch baru tercata
 Penugasan pekerja per BATCH — sumber data biaya SDM (nilai sensitif, lihat "Kontrol Akses Data Finansial"). Perlu tahu persis siapa terlibat di batch mana (bukan cuma level WO+shift).
 - `work_order_assignment_id`, `work_order_id`, `production_batch_id`, `employee_id`, `routing_step_id` (nullable), `shift_id`
 - `status` (planned / confirmed / absent / replaced / completed / unplanned_addition)
+- `is_overtime` (boolean, default false) — penanda LEMBUR (kasus jarang: orang yang seharusnya pulang lanjut bekerja). TIDAK mengubah tarif yang dipakai (tarif lembur belum ditentukan pemilik produk) — murni penanda supaya baris ini bisa dikoreksi begitu tarif lembur diputuskan.
+- `work_date` (date) — dipakai oleh `compute_production_batch_labor_cost()` untuk PHL (`wage_type='daily'`): tarif per jam = `wage_rate ÷ jam shift yang diikuti` (dari `shifts.start_time`/`end_time` lewat `shift_id` baris ini), BUKAN dibagi rata dengan jam kerja hari itu — shift 2 (evening, jam lebih pendek) dengan demikian dihitung sebagai HARI KERJA TERPISAH bernilai penuh `wage_rate`, bukan dipecah proporsional. Baris tanpa `shift_id` tetap pakai `work_calendar_weekday_hours`/`work_calendar_saturday_hours` global (perilaku lama, tidak ada regresi).
 - `replacement_for_assignment_id` (nullable, → `work_order_assignment_id`)
 - `scheduled_hours`, `actual_hours`, `qty_produced` (nullable, khusus `wage_type` = piece_rate)
 

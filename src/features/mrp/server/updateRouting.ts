@@ -52,6 +52,19 @@ export async function updateRouting(request: NextRequest): Promise<ApiResult> {
       }
     }
 
+    // bom_lines.routing_step_id yang menunjuk tahap routing ini HARUS dilepas
+    // dulu SEBELUM tahapnya dihapus -- kalau tidak, delete di bawah akan gagal
+    // kena FK constraint (ditemukan lewat pengalaman nyata sesi ini, saat
+    // membangun ulang routing SAS005 yang bom_lines-nya sudah ditandai). Ini
+    // BUKAN kehilangan data BOM, cuma melepas tanda tahapnya -- otomatis
+    // kembali ke perilaku "dianggap tahap pertama" sampai ditandai ulang.
+    const { data: staleSteps } = await adminClient.from('routing_steps').select('routing_step_id').eq('routing_id', routingId);
+    const staleStepIds = (staleSteps ?? []).map((s) => s.routing_step_id);
+    if (staleStepIds.length > 0) {
+      const { error: untagError } = await adminClient.from('bom_lines').update({ routing_step_id: null }).in('routing_step_id', staleStepIds);
+      if (untagError) return { status: 500, body: { error: untagError.message } };
+    }
+
     const { error: deleteStepsError } = await adminClient.from('routing_steps').delete().eq('routing_id', routingId);
     if (deleteStepsError) return { status: 500, body: { error: deleteStepsError.message } };
 
@@ -62,7 +75,8 @@ export async function updateRouting(request: NextRequest): Promise<ApiResult> {
         step_name: step.step_name,
         active_duration_minutes: step.active_duration_minutes,
         wait_duration_minutes: step.wait_duration_minutes,
-        work_center_id: step.work_center_id
+        work_center_id: step.work_center_id,
+        duration_per_unit_minutes: step.duration_per_unit_minutes
       }))
     );
 

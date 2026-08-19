@@ -40,6 +40,10 @@ export async function recordLaborLog(request: NextRequest): Promise<ApiResult> {
     const actualHours = body.actual_hours !== undefined && body.actual_hours !== null ? Number(body.actual_hours) : null;
     const qtyProduced = body.qty_produced !== undefined && body.qty_produced !== null ? Number(body.qty_produced) : null;
     const workDate = body.work_date ? String(body.work_date).trim() : new Date().toISOString().slice(0, 10);
+    // Penanda LEMBUR (keputusan pemilik produk, shift 2 20 Agu 2026) — kasus
+    // jarang "orang yang seharusnya pulang tapi lanjut bekerja". TIDAK mengubah
+    // tarif (belum ditentukan) -- cuma penanda supaya bisa dikoreksi nanti.
+    const isOvertime = body.is_overtime === true;
 
     if (!workOrderId || !productionBatchId || !employeeId) {
       return { status: 400, body: { error: 'Work Order, batch produksi, dan karyawan wajib dipilih.' } };
@@ -98,7 +102,7 @@ export async function recordLaborLog(request: NextRequest): Promise<ApiResult> {
     if (existing) {
       const { error: updateError } = await adminClient
         .from('work_order_assignments')
-        .update({ actual_hours: actualHours, qty_produced: qtyProduced, work_date: workDate, status: 'completed', shift_id: batch.shift_id })
+        .update({ actual_hours: actualHours, qty_produced: qtyProduced, work_date: workDate, status: 'completed', shift_id: batch.shift_id, is_overtime: isOvertime })
         .eq('work_order_assignment_id', existing.work_order_assignment_id);
       if (updateError) return { status: 500, body: { error: updateError.message } };
       assignmentId = existing.work_order_assignment_id;
@@ -116,7 +120,8 @@ export async function recordLaborLog(request: NextRequest): Promise<ApiResult> {
             status: 'completed',
             actual_hours: actualHours,
             qty_produced: qtyProduced,
-            work_date: workDate
+            work_date: workDate,
+            is_overtime: isOvertime
           }
         ])
         .select('work_order_assignment_id')

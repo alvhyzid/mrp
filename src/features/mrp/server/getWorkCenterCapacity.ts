@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
 import { getWeekRange } from './weekRange';
+import { getEffectiveStepDurationMinutes } from './stepDuration';
 
 interface ApiResult {
   status: number;
@@ -43,7 +44,7 @@ export async function getWorkCenterCapacity(request: NextRequest): Promise<ApiRe
 
     const { data: workCenters, error: wcError } = await adminClient
       .from('work_centers')
-      .select('work_center_id, production_plant_id, name, code, capacity_hours_per_day, is_active')
+      .select('work_center_id, production_plant_id, name, code, capacity_hours_per_day, unit_count, is_active')
       .eq('company_id', appUser.company_id)
       .eq('is_active', true)
       .order('name', { ascending: true });
@@ -63,7 +64,7 @@ export async function getWorkCenterCapacity(request: NextRequest): Promise<ApiRe
       adminClient.from('production_plants').select('production_plant_id, name').in('production_plant_id', plantIds),
       adminClient
         .from('production_batches')
-        .select('production_batch_id, work_order_id, status, planned_date, started_at, created_at')
+        .select('production_batch_id, work_order_id, planned_qty, status, planned_date, started_at, created_at')
         .eq('company_id', appUser.company_id)
         .in('status', ['planned', 'in_progress'])
     ]);
@@ -91,8 +92,8 @@ export async function getWorkCenterCapacity(request: NextRequest): Promise<ApiRe
     const routingIds = Array.from(new Set((workOrders ?? []).map((wo) => wo.routing_id).filter((id): id is number => !!id)));
 
     const { data: routingSteps, error: rsError } = routingIds.length
-      ? await adminClient.from('routing_steps').select('routing_id, work_center_id, active_duration_minutes').in('routing_id', routingIds)
-      : { data: [] as { routing_id: number; work_center_id: number | null; active_duration_minutes: number | null }[], error: null };
+      ? await adminClient.from('routing_steps').select('routing_id, work_center_id, active_duration_minutes, duration_per_unit_minutes').in('routing_id', routingIds)
+      : { data: [] as { routing_id: number; work_center_id: number | null; active_duration_minutes: number | null; duration_per_unit_minutes: number | null }[], error: null };
     if (rsError) return { status: 500, body: { error: rsError.message } };
 
     const stepsByRoutingId = new Map<number, typeof routingSteps>();
@@ -110,14 +111,19 @@ export async function getWorkCenterCapacity(request: NextRequest): Promise<ApiRe
       for (const step of steps) {
         if (!step.work_center_id) continue;
         const current = scheduledMinutesByWorkCenter.get(step.work_center_id) ?? 0;
-        scheduledMinutesByWorkCenter.set(step.work_center_id, current + (step.active_duration_minutes ?? 0));
+        scheduledMinutesByWorkCenter.set(step.work_center_id, current + getEffectiveStepDurationMinutes(step, Number(batch.planned_qty)));
       }
     }
 
     const result = workCenters.map((wc) => {
       const scheduledHours = round1((scheduledMinutesByWorkCenter.get(wc.work_center_id) ?? 0) / 60);
+      // capacity_hours_per_day TETAP kapasitas PER UNIT mesin (dipakai form edit
+      // di UI) -- unit_count dikalikan TERPISAH ke total_capacity_hours, supaya
+      // menyimpan kapasitas tidak diam-diam menimpa angka per-unit dengan angka
+      // yang sudah dikali unit_count.
       const capacityPerDay = wc.capacity_hours_per_day !== null ? Number(wc.capacity_hours_per_day) : null;
-      const totalCapacityHours = capacityPerDay !== null ? round1(capacityPerDay * workingDaysPerWeek) : null;
+      const unitCount = Number(wc.unit_count ?? 1);
+      const totalCapacityHours = capacityPerDay !== null ? round1(capacityPerDay * unitCount * workingDaysPerWeek) : null;
       const utilizationPct = totalCapacityHours !== null && totalCapacityHours > 0 ? round1((scheduledHours / totalCapacityHours) * 100) : null;
       return {
         work_center_id: wc.work_center_id,
@@ -126,6 +132,7 @@ export async function getWorkCenterCapacity(request: NextRequest): Promise<ApiRe
         production_plant_id: wc.production_plant_id,
         production_plant_name: plantsById.get(wc.production_plant_id)?.name ?? null,
         capacity_hours_per_day: capacityPerDay,
+        unit_count: unitCount,
         scheduled_hours: scheduledHours,
         total_capacity_hours: totalCapacityHours,
         utilization_pct: utilizationPct

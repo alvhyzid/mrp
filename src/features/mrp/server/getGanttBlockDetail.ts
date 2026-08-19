@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
 import { canAccessPpicDashboard } from '@/lib/roles';
+import { getEffectiveStepDurationMinutes } from './stepDuration';
 
 interface ApiResult {
   status: number;
@@ -41,7 +42,7 @@ export async function getGanttBlockDetail(request: NextRequest): Promise<ApiResu
 
     const { data: step, error: stepError } = await adminClient
       .from('routing_steps')
-      .select('routing_step_id, routing_id, sequence_no, step_name, work_center_id, active_duration_minutes, wait_duration_minutes')
+      .select('routing_step_id, routing_id, sequence_no, step_name, work_center_id, active_duration_minutes, duration_per_unit_minutes, wait_duration_minutes')
       .eq('routing_step_id', routingStepId)
       .maybeSingle();
     if (stepError) return { status: 500, body: { error: stepError.message } };
@@ -109,7 +110,7 @@ export async function getGanttBlockDetail(request: NextRequest): Promise<ApiResu
           routing_step_id: step.routing_step_id,
           step_name: step.step_name,
           sequence_no: step.sequence_no,
-          active_duration_minutes: step.active_duration_minutes ?? 0,
+          active_duration_minutes: getEffectiveStepDurationMinutes(step, Number(batch.planned_qty)),
           wait_duration_minutes: step.wait_duration_minutes ?? 0
         },
         workCenter: workCenterRes.data ? { name: workCenterRes.data.name, code: workCenterRes.data.code } : null,

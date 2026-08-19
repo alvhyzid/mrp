@@ -87,7 +87,8 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 
 **Database Mesin/Stasiun Kerja** (`work_centers`)
 - ID Mesin (work_center_id) · ID Perusahaan (company_id) · ID Lokasi Pabrik (production_plant_id) · Nama Mesin (name) · Kode Mesin (code) · Status Aktif (is_active)
-- Kapasitas Jam per Hari — nullable, dasar Dashboard Kapasitas (capacity_hours_per_day)
+- Kapasitas Jam per Hari — nullable, PER UNIT mesin, dasar Dashboard Kapasitas (capacity_hours_per_day)
+- Jumlah Unit — default 1, jumlah mesin identik yang jalan paralel (mis. 2 mesin Filling Sachet); kapasitas total efektif = Kapasitas Jam per Hari × Jumlah Unit (unit_count)
 
 **Database Header Alur Produksi** (`routings`)
 - ID Routing (routing_id) · ID Perusahaan (company_id) · ID Item (item_id) · Versi (version)
@@ -95,6 +96,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 
 **Database Tahapan Produksi** (`routing_steps`)
 - ID Tahap (routing_step_id) · ID Routing (routing_id) · Nomor Urut (sequence_no) · Nama Tahap (step_name) · Durasi Aktif Menit (active_duration_minutes) · Durasi Tunggu Menit (wait_duration_minutes) · ID Mesin (work_center_id)
+- Durasi per Unit (Laju) — nullable, menit per 1 unit qty batch, untuk tahap berkecepatan mesin (mis. Filling Sachet); kalau terisi, dipakai sebagai durasi sebenarnya (qty × nilai ini) di Gantt/Kapasitas/kelayakan, menggantikan Durasi Aktif Menit tetap (duration_per_unit_minutes)
 
 **Database Referensi Formula** (`formula_templates`)
 - ID Formula (formula_template_id) · ID Perusahaan (company_id) · Nama (name) · Catatan (notes) · Komposisi Referensi (reference_composition)
@@ -207,7 +209,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 > WO dianggap "siap mulai" kalau tidak ada `system_alerts` terbuka yang terkait WO itu (bahan kurang/SDM kurang/mesin rusak) — mekanisme dependency otomatis, bukan link manual antar-WO.
 
 **Database Batch Produksi** (`production_batches`)
-- ID Batch (production_batch_id) · ID Perusahaan (company_id) · ID Work Order (work_order_id) · Nomor Batch (batch_number)
+- ID Batch (production_batch_id) · ID Perusahaan (company_id) · ID Work Order (work_order_id) · Nomor Batch — rekomendasi otomatis, boleh ditimpa staf dengan format sendiri, unik per PERUSAHAAN (batch_number)
 - ID Shift (shift_id) · Jumlah Rencana — bebas diatur PPIC, tidak terpaku ukuran standar BOM (planned_qty) · Satuan (uom)
 - Tanggal Rencana — kapan batch SEHARUSNYA dikerjakan, dasar Dashboard Kapasitas (planned_date)
 - Status: rencana/berjalan/selesai/batal (status) · Waktu Mulai (started_at) · Waktu Selesai (completed_at)
@@ -223,6 +225,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 **Database Penugasan Pekerja** (`work_order_assignments`) — *biaya SDM sensitif, lihat kontrol akses*
 - ID Penugasan (work_order_assignment_id) · ID Work Order (work_order_id) · ID Batch (production_batch_id) · ID Pekerja (employee_id) · ID Tahap (routing_step_id) · ID Shift (shift_id)
 - Status (status) · ID Penugasan Digantikan (replacement_for_assignment_id) · Jam Rencana (scheduled_hours) · Jam Aktual (actual_hours) · Jumlah Dihasilkan (qty_produced)
+- Penanda Lembur — tidak mengubah tarif (tarif lembur belum ditentukan), cuma penanda untuk dikoreksi nanti (is_overtime)
 
 **Database Progres Tahap Produksi** (`work_order_step_progress`)
 - ID Progres (work_order_step_progress_id) · ID Work Order (work_order_id) · ID Batch (production_batch_id) · ID Tahap (routing_step_id) · ID Shift (shift_id)

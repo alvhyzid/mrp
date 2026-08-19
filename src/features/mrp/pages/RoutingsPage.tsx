@@ -17,6 +17,7 @@ type RoutingStep = {
   sequence_no: number;
   step_name: string;
   active_duration_minutes: number;
+  duration_per_unit_minutes: number | null;
   wait_duration_minutes: number;
   work_center_id: number | null;
   work_center_name: string | null;
@@ -40,11 +41,12 @@ type FormStep = {
   sequence_no: string;
   step_name: string;
   active_duration_minutes: string;
+  duration_per_unit_minutes: string;
   wait_duration_minutes: string;
   work_center_id: string;
 };
 
-const emptyFormStep: FormStep = { sequence_no: '', step_name: '', active_duration_minutes: '', wait_duration_minutes: '0', work_center_id: '' };
+const emptyFormStep: FormStep = { sequence_no: '', step_name: '', active_duration_minutes: '', duration_per_unit_minutes: '', wait_duration_minutes: '0', work_center_id: '' };
 
 const emptyForm = {
   item_id: '',
@@ -173,6 +175,7 @@ export default function RoutingsPage() {
         sequence_no: String(step.sequence_no),
         step_name: step.step_name,
         active_duration_minutes: String(step.active_duration_minutes),
+        duration_per_unit_minutes: step.duration_per_unit_minutes !== null ? String(step.duration_per_unit_minutes) : '',
         wait_duration_minutes: String(step.wait_duration_minutes),
         work_center_id: step.work_center_id ? String(step.work_center_id) : ''
       }))
@@ -212,6 +215,7 @@ export default function RoutingsPage() {
       sequence_no: Number(step.sequence_no),
       step_name: step.step_name,
       active_duration_minutes: Number(step.active_duration_minutes),
+      duration_per_unit_minutes: step.duration_per_unit_minutes === '' ? null : Number(step.duration_per_unit_minutes),
       wait_duration_minutes: step.wait_duration_minutes === '' ? 0 : Number(step.wait_duration_minutes),
       work_center_id: step.work_center_id === '' ? null : Number(step.work_center_id)
     }));
@@ -370,7 +374,7 @@ export default function RoutingsPage() {
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Urutan</th>
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Nama Tahap</th>
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Work Center</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Durasi Aktif</th>
+                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Durasi Aktif / Laju</th>
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Durasi Tunggu</th>
                     </tr>
                   </thead>
@@ -389,7 +393,15 @@ export default function RoutingsPage() {
                             <span className="text-muted-foreground">-</span>
                           )}
                         </td>
-                        <td className="px-3 py-1.5">{step.active_duration_minutes} mnt</td>
+                        <td className="px-3 py-1.5">
+                          {step.duration_per_unit_minutes !== null ? (
+                            <span>
+                              {step.duration_per_unit_minutes} mnt/unit <span className="text-xs text-muted-foreground">(laju)</span>
+                            </span>
+                          ) : (
+                            `${step.active_duration_minutes} mnt`
+                          )}
+                        </td>
                         <td className="px-3 py-1.5">{step.wait_duration_minutes} mnt</td>
                       </tr>
                     ))}
@@ -441,7 +453,7 @@ export default function RoutingsPage() {
                   </div>
 
                   {form.steps.map((step, index) => (
-                    <div key={index} className="grid grid-cols-[70px_1.5fr_1fr_110px_110px_auto] items-end gap-2 rounded-md border p-2">
+                    <div key={index} className="grid grid-cols-[70px_1.3fr_1fr_100px_120px_100px_auto] items-end gap-2 rounded-md border p-2">
                       <label className="flex flex-col gap-1">
                         <span className="text-xs font-medium text-muted-foreground">Urutan</span>
                         <Input type="number" min="1" step="1" value={step.sequence_no} onChange={(event) => updateStep(index, { sequence_no: event.target.value })} required />
@@ -475,6 +487,18 @@ export default function RoutingsPage() {
                       </label>
 
                       <label className="flex flex-col gap-1">
+                        <span className="text-xs font-medium text-muted-foreground">Laju (mnt/unit, opsional)</span>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="any"
+                          placeholder="kosongkan kalau tetap"
+                          value={step.duration_per_unit_minutes}
+                          onChange={(event) => updateStep(index, { duration_per_unit_minutes: event.target.value })}
+                        />
+                      </label>
+
+                      <label className="flex flex-col gap-1">
                         <span className="text-xs font-medium text-muted-foreground">Durasi Tunggu (mnt)</span>
                         <Input type="number" min="0" step="1" value={step.wait_duration_minutes} onChange={(event) => updateStep(index, { wait_duration_minutes: event.target.value })} />
                       </label>
@@ -485,7 +509,9 @@ export default function RoutingsPage() {
                     </div>
                   ))}
                   <span className="text-xs text-muted-foreground">
-                    Durasi Aktif = waktu mesin/Work Center benar-benar sibuk. Durasi Tunggu = waktu jeda (mis. curing) — tidak menyibukkan mesin, tapi menunda tahap berikutnya.
+                    Durasi Aktif = waktu mesin/Work Center benar-benar sibuk (dipakai apa adanya kalau Laju kosong). Laju = durasi PER UNIT qty batch (mis. tahap dengan mesin
+                    berkecepatan tetap) — kalau diisi, ini yang dipakai untuk Gantt/Kapasitas/kelayakan, bukan Durasi Aktif. Durasi Tunggu = waktu jeda (mis. curing) — tidak
+                    menyibukkan mesin, tapi menunda tahap berikutnya.
                   </span>
                 </div>
 

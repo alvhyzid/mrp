@@ -34,7 +34,7 @@ export async function listRoutings(request: NextRequest): Promise<ApiResult> {
       adminClient.from('items').select('item_id, item_code, name, base_uom').eq('company_id', appUser.company_id),
       adminClient
         .from('routing_steps')
-        .select('routing_step_id, routing_id, sequence_no, step_name, active_duration_minutes, wait_duration_minutes, work_center_id')
+        .select('routing_step_id, routing_id, sequence_no, step_name, active_duration_minutes, duration_per_unit_minutes, wait_duration_minutes, work_center_id')
         .in(
           'routing_id',
           routings.map((r) => r.routing_id)
@@ -66,6 +66,7 @@ export async function listRoutings(request: NextRequest): Promise<ApiResult> {
           sequence_no: step.sequence_no,
           step_name: step.step_name,
           active_duration_minutes: step.active_duration_minutes,
+          duration_per_unit_minutes: step.duration_per_unit_minutes,
           wait_duration_minutes: step.wait_duration_minutes,
           work_center_id: step.work_center_id,
           work_center_name: wc?.name ?? null,

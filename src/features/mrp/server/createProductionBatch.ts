@@ -45,6 +45,13 @@ export async function createProductionBatch(request: NextRequest): Promise<ApiRe
     }
     const plannedDate = plannedDateRaw || new Date().toISOString().slice(0, 10);
 
+    // Nomor batch -- pola "rekomendasi + bisa diubah" (keputusan pemilik produk,
+    // 20 Agu 2026): kalau staf isi batch_number sendiri (mis. format pabrik
+    // "3TM13082601"), PAKAI ITU APA ADANYA -- jangan ditolak/dipaksa format lain.
+    // Kosong = tetap pakai format otomatis lama. Keunikan dijaga PER PERUSAHAAN
+    // (migration 20260820160000), bukan cuma per Work Order lagi.
+    const overrideBatchNumber = typeof body.batch_number === 'string' ? body.batch_number.trim() : '';
+
     const adminClient = getAdminClient();
 
     const { data: wo, error: woError } = await adminClient
@@ -72,16 +79,31 @@ export async function createProductionBatch(request: NextRequest): Promise<ApiRe
     if (itemError) return { status: 500, body: { error: itemError.message } };
     const uom = item?.base_uom ?? '';
 
-    // batch_number otomatis, format "WO-{work_order_id}-B{urutan}" mengikuti contoh
-    // di docs ("WO-0012-B003") — urutan dihitung dari jumlah batch yang sudah ada
-    // untuk WO ini, bukan diinput manual (supaya tidak bentrok/typo).
-    const { count, error: countError } = await adminClient
-      .from('production_batches')
-      .select('production_batch_id', { count: 'exact', head: true })
-      .eq('work_order_id', workOrderId);
-    if (countError) return { status: 500, body: { error: countError.message } };
-    const sequence = (count ?? 0) + 1;
-    const batchNumber = `WO-${String(workOrderId).padStart(4, '0')}-B${String(sequence).padStart(3, '0')}`;
+    let batchNumber: string;
+    if (overrideBatchNumber) {
+      const { data: existingBatch, error: existingBatchError } = await adminClient
+        .from('production_batches')
+        .select('production_batch_id')
+        .eq('company_id', appUser.company_id)
+        .eq('batch_number', overrideBatchNumber)
+        .maybeSingle();
+      if (existingBatchError) return { status: 500, body: { error: existingBatchError.message } };
+      if (existingBatch) {
+        return { status: 400, body: { error: `Nomor batch "${overrideBatchNumber}" sudah dipakai — nomor batch harus unik di seluruh perusahaan.` } };
+      }
+      batchNumber = overrideBatchNumber;
+    } else {
+      // Format otomatis "WO-{work_order_id}-B{urutan}" (perilaku lama, dipakai
+      // sebagai rekomendasi default kalau staf tidak isi nomor sendiri) — urutan
+      // dihitung dari jumlah batch yang sudah ada untuk WO ini.
+      const { count, error: countError } = await adminClient
+        .from('production_batches')
+        .select('production_batch_id', { count: 'exact', head: true })
+        .eq('work_order_id', workOrderId);
+      if (countError) return { status: 500, body: { error: countError.message } };
+      const sequence = (count ?? 0) + 1;
+      batchNumber = `WO-${String(workOrderId).padStart(4, '0')}-B${String(sequence).padStart(3, '0')}`;
+    }
 
     const { data: inserted, error: insertError } = await adminClient
       .from('production_batches')

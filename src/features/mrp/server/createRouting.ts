@@ -69,7 +69,8 @@ export async function createRouting(request: NextRequest): Promise<ApiResult> {
         step_name: step.step_name,
         active_duration_minutes: step.active_duration_minutes,
         wait_duration_minutes: step.wait_duration_minutes,
-        work_center_id: step.work_center_id
+        work_center_id: step.work_center_id,
+        duration_per_unit_minutes: step.duration_per_unit_minutes
       }))
     );
 

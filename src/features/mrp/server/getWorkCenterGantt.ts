@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
 import { getWeekRange, dateToDateString } from './weekRange';
+import { getEffectiveStepDurationMinutes } from './stepDuration';
 
 interface ApiResult {
   status: number;
@@ -14,6 +15,7 @@ type RoutingStep = {
   step_name: string;
   work_center_id: number | null;
   active_duration_minutes: number | null;
+  duration_per_unit_minutes: number | null;
   wait_duration_minutes: number | null;
 };
 
@@ -137,7 +139,7 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
         ? adminClient.from('items').select('item_id, item_code, name').in('item_id', itemIds)
         : Promise.resolve({ data: [] as { item_id: number; item_code: string | null; name: string }[], error: null }),
       routingIds.length
-        ? adminClient.from('routing_steps').select('routing_step_id, routing_id, sequence_no, step_name, work_center_id, active_duration_minutes, wait_duration_minutes').in('routing_id', routingIds)
+        ? adminClient.from('routing_steps').select('routing_step_id, routing_id, sequence_no, step_name, work_center_id, active_duration_minutes, duration_per_unit_minutes, wait_duration_minutes').in('routing_id', routingIds)
         : Promise.resolve({ data: [] as RoutingStep[], error: null })
     ]);
     if (itemsRes.error) return { status: 500, body: { error: itemsRes.error.message } };
@@ -217,6 +219,8 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
         // start_time + cumulativeMinutes yang SAMA (bukan rumus baru).
         const minuteOfDay = (anchorMinutes + cumulativeMinutes) % MINUTES_PER_DAY;
 
+        const effectiveActiveMinutes = getEffectiveStepDurationMinutes(step, Number(batch.planned_qty));
+
         if (step.work_center_id && stepDateStr >= firstDay && stepDateStr <= lastDay) {
           blocks.push({
             work_center_id: step.work_center_id,
@@ -229,7 +233,7 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
             routing_step_id: step.routing_step_id,
             step_name: step.step_name,
             sequence_no: step.sequence_no,
-            duration_minutes: step.active_duration_minutes ?? 0,
+            duration_minutes: effectiveActiveMinutes,
             day_offset: dayOffset,
             minute_of_day: minuteOfDay
           });
@@ -237,8 +241,8 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
         // Kumulatif (posisi) tetap jalan biar urutan step berikutnya tetap benar,
         // terlepas dari step ini punya work_center atau jatuh di luar rentang yang
         // dilihat — dan SENGAJA ikut wait_duration_minutes (beda dari lebar blok
-        // di atas, yang cuma active_duration_minutes).
-        cumulativeMinutes += (step.active_duration_minutes ?? 0) + (step.wait_duration_minutes ?? 0);
+        // di atas, yang cuma durasi aktif efektif tahap ini sendiri).
+        cumulativeMinutes += effectiveActiveMinutes + (step.wait_duration_minutes ?? 0);
       }
     }
 

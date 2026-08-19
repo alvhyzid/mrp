@@ -4,6 +4,10 @@ export interface RoutingStepInput {
   active_duration_minutes: number;
   wait_duration_minutes: number;
   work_center_id: number | null;
+  // Tahap berbasis laju (mis. Filling Sachet) -- kalau terisi, durasi aktif
+  // SEBENARNYA = qty batch x nilai ini (lihat stepDuration.ts), bukan
+  // active_duration_minutes tetap. NULL = tahap biasa (perilaku lama).
+  duration_per_unit_minutes: number | null;
 }
 
 export interface RoutingInput {
@@ -67,12 +71,22 @@ export function parseRoutingInput(body: Record<string, unknown>): { input?: Rout
       workCenterId = parsedWc.value!;
     }
 
+    let durationPerUnitMinutes: number | null = null;
+    if (step.duration_per_unit_minutes !== undefined && step.duration_per_unit_minutes !== null && step.duration_per_unit_minutes !== '') {
+      const parsedRate = Number(step.duration_per_unit_minutes);
+      if (!Number.isFinite(parsedRate) || parsedRate <= 0) {
+        return { error: 'Durasi per unit (laju) harus angka lebih besar dari 0.' };
+      }
+      durationPerUnitMinutes = parsedRate;
+    }
+
     steps.push({
       sequence_no: sequenceNo.value!,
       step_name: stepName,
       active_duration_minutes: activeDuration.value!,
       wait_duration_minutes: waitDuration.value!,
-      work_center_id: workCenterId
+      work_center_id: workCenterId,
+      duration_per_unit_minutes: durationPerUnitMinutes
     });
   }
 

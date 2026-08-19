@@ -38,6 +38,7 @@ type WorkCenterCapacity = {
   code: string | null;
   production_plant_name: string | null;
   capacity_hours_per_day: number | null;
+  unit_count: number;
   scheduled_hours: number;
   total_capacity_hours: number | null;
   utilization_pct: number | null;
@@ -282,6 +283,7 @@ export default function PpicDashboardPage() {
   const [capacityLoading, setCapacityLoading] = useState(true);
   const [workingDaysPerWeek, setWorkingDaysPerWeek] = useState(6);
   const [capacityEdits, setCapacityEdits] = useState<Record<number, string>>({});
+  const [unitCountEdits, setUnitCountEdits] = useState<Record<number, string>>({});
   const [capacitySavingId, setCapacitySavingId] = useState<number | null>(null);
   const [capacityMessage, setCapacityMessage] = useState('');
 
@@ -626,11 +628,17 @@ export default function PpicDashboardPage() {
       setCapacityMessage('Kapasitas jam/hari harus angka positif.');
       return;
     }
+    const rawUnitCount = unitCountEdits[workCenterId];
+    const unitCountValue = rawUnitCount === undefined || rawUnitCount.trim() === '' ? undefined : Number(rawUnitCount);
+    if (unitCountValue !== undefined && (!Number.isInteger(unitCountValue) || unitCountValue < 1)) {
+      setCapacityMessage('Jumlah unit harus bilangan bulat 1 atau lebih.');
+      return;
+    }
     setCapacitySavingId(workCenterId);
     setCapacityMessage('');
     const { ok, body } = await authedFetch('/api/work-centers/capacity', {
       method: 'PATCH',
-      body: JSON.stringify({ work_center_id: workCenterId, capacity_hours_per_day: capacityValue })
+      body: JSON.stringify({ work_center_id: workCenterId, capacity_hours_per_day: capacityValue, ...(unitCountValue !== undefined ? { unit_count: unitCountValue } : {}) })
     });
     setCapacitySavingId(null);
     if (!ok) {
@@ -975,17 +983,27 @@ export default function PpicDashboardPage() {
                                 type="number"
                                 min={0}
                                 step="0.5"
-                                placeholder="jam"
+                                placeholder="jam/unit"
                                 className="h-8 w-20"
                                 value={capacityEdits[wc.work_center_id] ?? (wc.capacity_hours_per_day !== null ? String(wc.capacity_hours_per_day) : '')}
                                 onChange={(event) => setCapacityEdits((prev) => ({ ...prev, [wc.work_center_id]: event.target.value }))}
+                              />
+                              <span className="text-xs text-muted-foreground">×</span>
+                              <Input
+                                type="number"
+                                min={1}
+                                step="1"
+                                placeholder="unit"
+                                className="h-8 w-16"
+                                value={unitCountEdits[wc.work_center_id] ?? String(wc.unit_count ?? 1)}
+                                onChange={(event) => setUnitCountEdits((prev) => ({ ...prev, [wc.work_center_id]: event.target.value }))}
                               />
                               <Button size="sm" variant="outline" disabled={capacitySavingId === wc.work_center_id} onClick={() => handleSaveCapacity(wc.work_center_id)}>
                                 {capacitySavingId === wc.work_center_id ? '...' : 'Simpan'}
                               </Button>
                             </div>
                           ) : wc.capacity_hours_per_day !== null ? (
-                            `${wc.capacity_hours_per_day} jam`
+                            `${wc.capacity_hours_per_day} jam${wc.unit_count > 1 ? ` × ${wc.unit_count} unit` : ''}`
                           ) : (
                             <span className="text-muted-foreground">-</span>
                           )}

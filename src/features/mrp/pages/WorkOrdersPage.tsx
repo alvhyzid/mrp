@@ -133,11 +133,12 @@ export default function WorkOrdersPage() {
   const [batchesForExpanded, setBatchesForExpanded] = useState<ProductionBatch[]>([]);
   const [batchPlannedQty, setBatchPlannedQty] = useState('');
   const [batchPlannedDate, setBatchPlannedDate] = useState(todayDateString());
+  const [batchNumberOverride, setBatchNumberOverride] = useState('');
   const [batchFormStatus, setBatchFormStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [batchFormMessage, setBatchFormMessage] = useState('');
   const [consumptionBatchId, setConsumptionBatchId] = useState('');
 
-  const [laborForm, setLaborForm] = useState({ employee_id: '', routing_step_id: '', hours: '', work_date: todayDateString() });
+  const [laborForm, setLaborForm] = useState({ employee_id: '', routing_step_id: '', hours: '', work_date: todayDateString(), is_overtime: false });
   const [laborStatus, setLaborStatus] = useState<'idle' | 'pending' | 'success' | 'warning' | 'error'>('idle');
   const [laborMessage, setLaborMessage] = useState('');
 
@@ -338,7 +339,12 @@ export default function WorkOrdersPage() {
     setBatchFormMessage('');
     const { ok, body } = await authedFetch('/api/production-batches', {
       method: 'POST',
-      body: JSON.stringify({ work_order_id: wo.work_order_id, planned_qty: plannedQty, planned_date: batchPlannedDate || undefined })
+      body: JSON.stringify({
+        work_order_id: wo.work_order_id,
+        planned_qty: plannedQty,
+        planned_date: batchPlannedDate || undefined,
+        batch_number: batchNumberOverride.trim() || undefined
+      })
     });
     if (!ok) {
       setBatchFormStatus('error');
@@ -349,6 +355,7 @@ export default function WorkOrdersPage() {
     setBatchFormMessage(`Batch ${body.batch.batch_number} berhasil dibuat (rencana ${body.batch.planned_date}).`);
     setBatchPlannedQty('');
     setBatchPlannedDate(todayDateString());
+    setBatchNumberOverride('');
     await loadBatchesForWo(wo.work_order_id);
   };
 
@@ -403,7 +410,8 @@ export default function WorkOrdersPage() {
         employee_id: Number(laborForm.employee_id),
         routing_step_id: laborForm.routing_step_id ? Number(laborForm.routing_step_id) : null,
         actual_hours: Number(laborForm.hours),
-        work_date: laborForm.work_date
+        work_date: laborForm.work_date,
+        is_overtime: laborForm.is_overtime
       })
     });
     if (!ok) {
@@ -713,6 +721,14 @@ export default function WorkOrdersPage() {
                       <Input type="date" value={laborForm.work_date} onChange={(event) => setLaborForm((prev) => ({ ...prev, work_date: event.target.value }))} />
                     </label>
                   </div>
+                  <label className="flex w-fit items-center gap-2 text-sm text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={laborForm.is_overtime}
+                      onChange={(event) => setLaborForm((prev) => ({ ...prev, is_overtime: event.target.checked }))}
+                    />
+                    Ini jam lembur (orang yang seharusnya sudah pulang, lanjut bekerja) — tarif normal tetap dipakai, cuma ditandai untuk dikoreksi nanti
+                  </label>
                   <Button className="w-fit" size="sm" disabled={laborStatus === 'pending'} onClick={() => handleRecordLabor(expandedWo)}>
                     {laborStatus === 'pending' ? 'Menyimpan...' : 'Catat Jam Kerja'}
                   </Button>
@@ -766,6 +782,15 @@ export default function WorkOrdersPage() {
                     <span className="text-sm font-medium text-foreground">Tanggal Rencana</span>
                     <Input type="date" value={batchPlannedDate} onChange={(event) => setBatchPlannedDate(event.target.value)} />
                     <span className="text-xs text-muted-foreground">Kapan batch ini SEHARUSNYA dikerjakan — default hari ini, jadi acuan Dashboard Kapasitas.</span>
+                  </label>
+                  <label className="flex max-w-xs flex-col gap-1.5">
+                    <span className="text-sm font-medium text-foreground">Nomor Batch (opsional)</span>
+                    <Input
+                      value={batchNumberOverride}
+                      onChange={(event) => setBatchNumberOverride(event.target.value)}
+                      placeholder="kosongkan utk nomor otomatis, atau isi mis. 3TM13082601"
+                    />
+                    <span className="text-xs text-muted-foreground">Kosongkan untuk nomor otomatis (WO-xxxx-Bxxx), atau isi format pabrik sendiri — harus unik se-perusahaan.</span>
                   </label>
                 </div>
 

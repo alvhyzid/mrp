@@ -30,6 +30,18 @@ export async function updateWorkCenterCapacity(request: NextRequest): Promise<Ap
       return { status: 400, body: { error: 'Kapasitas jam/hari harus angka positif (atau dikosongkan).' } };
     }
 
+    // unit_count: jumlah unit mesin identik di Work Center ini (mis. 2 mesin
+    // Filling Sachet) -- opsional di request supaya form kapasitas lama (yang
+    // tidak tahu field ini) tetap jalan tanpa mengubah unit_count yang sudah ada.
+    let unitCount: number | undefined;
+    if (body.unit_count !== undefined) {
+      const parsedUnitCount = Number(body.unit_count);
+      if (!Number.isInteger(parsedUnitCount) || parsedUnitCount < 1) {
+        return { status: 400, body: { error: 'Jumlah unit harus bilangan bulat 1 atau lebih.' } };
+      }
+      unitCount = parsedUnitCount;
+    }
+
     const adminClient = getAdminClient();
     const { data: wc, error: wcError } = await adminClient.from('work_centers').select('work_center_id, company_id').eq('work_center_id', workCenterId).maybeSingle();
     if (wcError) return { status: 500, body: { error: wcError.message } };
@@ -37,7 +49,10 @@ export async function updateWorkCenterCapacity(request: NextRequest): Promise<Ap
       return { status: 404, body: { error: 'Work Center tidak ditemukan.' } };
     }
 
-    const { error: updateError } = await adminClient.from('work_centers').update({ capacity_hours_per_day: capacity }).eq('work_center_id', workCenterId);
+    const updatePayload: Record<string, unknown> = { capacity_hours_per_day: capacity };
+    if (unitCount !== undefined) updatePayload.unit_count = unitCount;
+
+    const { error: updateError } = await adminClient.from('work_centers').update(updatePayload).eq('work_center_id', workCenterId);
     if (updateError) return { status: 500, body: { error: updateError.message } };
 
     return { status: 200, body: { success: true } };

@@ -458,6 +458,9 @@ export default function SalesOrdersPage() {
                   {marginLoading ? <p className="text-sm text-muted-foreground">Memuat...</p> : null}
                   {marginResult && !marginLoading ? (
                     <div className="flex flex-col gap-3 text-sm">
+                      <p className="rounded-md border-2 border-destructive/50 bg-destructive/10 p-3 text-sm font-medium text-destructive">
+                        ⚠ SEMUA angka margin di panel ini BELUM TERMASUK biaya SDM standar — margin rencana & proyeksi di bawah SELALU LEBIH BESAR dari kenyataan. {marginResult.standard_labor_cost_note}
+                      </p>
                       {!marginResult.cost_data_complete ? (
                         <p className="rounded-md border border-warning/40 bg-warning-subtle p-2 text-xs text-warning-subtle-foreground">
                           Baseline BELUM LENGKAP — bahan berikut belum punya harga master (standard_cost), tidak ikut dijumlah: {marginResult.missing_cost_item_codes.join(', ')}.
@@ -468,15 +471,15 @@ export default function SalesOrdersPage() {
                           Harga jual: <span className="text-foreground">Rp{marginResult.unit_price.toLocaleString('id-ID')}</span>/unit
                         </span>
                         <span className="text-muted-foreground">
-                          Biaya standar: <span className="text-foreground">Rp{(marginResult.standard_material_cost_per_unit + marginResult.standard_packaging_cost_per_unit).toLocaleString('id-ID', { maximumFractionDigits: 2 })}</span>/unit
+                          Biaya standar (bahan+kemasan SAJA, SDM belum termasuk): <span className="text-foreground">Rp{(marginResult.standard_material_cost_per_unit + marginResult.standard_packaging_cost_per_unit).toLocaleString('id-ID', { maximumFractionDigits: 2 })}</span>/unit
                           (bahan Rp{marginResult.standard_material_cost_per_unit.toLocaleString('id-ID', { maximumFractionDigits: 2 })} + kemasan Rp
-                          {marginResult.standard_packaging_cost_per_unit.toLocaleString('id-ID', { maximumFractionDigits: 2 })}, SDM standar {marginResult.standard_labor_cost_note})
+                          {marginResult.standard_packaging_cost_per_unit.toLocaleString('id-ID', { maximumFractionDigits: 2 })})
                         </span>
                         <span className="text-muted-foreground">
-                          Margin rencana (baseline): <span className="font-medium text-foreground">Rp{Math.round(marginResult.standard_margin_total).toLocaleString('id-ID')}</span>
+                          Margin rencana (baseline, SEBELUM SDM): <span className="font-medium text-foreground">Rp{Math.round(marginResult.standard_margin_total).toLocaleString('id-ID')}</span>
                         </span>
                         <span className="text-muted-foreground">
-                          Proyeksi margin berjalan:{' '}
+                          Proyeksi margin berjalan (SEBELUM SDM):{' '}
                           <span className={`font-medium ${marginResult.projected_margin_total < marginResult.standard_margin_total ? 'text-destructive' : 'text-success'}`}>
                             Rp{Math.round(marginResult.projected_margin_total).toLocaleString('id-ID')}
                           </span>

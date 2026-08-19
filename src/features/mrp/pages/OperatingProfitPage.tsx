@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { canViewFinancialData } from '@/lib/roles';
 import { formatCurrency } from '@/lib/currency';
+import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 
 const monthLabels = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
@@ -189,7 +190,17 @@ export default function OperatingProfitPage() {
             </Card>
             <Card>
               <CardContent className="flex flex-col gap-1 pt-6">
-                <span className="text-xs uppercase tracking-wide text-muted-foreground">Overhead SDM</span>
+                <span className="flex items-center gap-1 text-xs uppercase tracking-wide text-muted-foreground">
+                  Overhead SDM
+                  <ProvenanceInfoButton
+                    label="Overhead SDM Bulanan"
+                    envelope={{
+                      formula: 'Nilai tetap dari company_settings.monthly_overhead_baseline untuk periode ini — TIDAK dialokasikan ke batch/order tertentu di v1 (overhead_allocation="off").',
+                      inputs: [{ label: 'Periode', value: `${formatDateId(result.period_start)} – ${formatDateId(result.period_end)}` }],
+                      sourceDocument: 'docs/spesifikasi-aturan-biaya-v1.md (K2 Tingkat 2)'
+                    }}
+                  />
+                </span>
                 <span className="text-2xl font-semibold text-foreground">{formatCurrency(result.overhead, { maxDecimals: 0 })}</span>
                 <span className="text-xs text-muted-foreground">Angka standar bulanan (belum alokasi per batch)</span>
               </CardContent>

@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { canAccessPpicDashboard, canManageWorkCenterCapacity, canManageWorkOrder, canRecordStepProgress, canProposeProductionStandard, canDecideProductionStandardProposal } from '@/lib/roles';
+import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 
 const statusLabels: Record<string, string> = { planned: 'Direncanakan', in_progress: 'Berjalan', paused: 'Dijeda', completed: 'Selesai', cancelled: 'Batal' };
 const statusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical' | 'secondary'> = {
@@ -964,7 +965,17 @@ export default function PpicDashboardPage() {
         <Card>
           <CardHeader>
             <CardDescription className="uppercase tracking-[0.2em]">Perencanaan Kapasitas</CardDescription>
-            <CardTitle className="text-xl">Kapasitas per Work Center — Minggu Ini</CardTitle>
+            <CardTitle className="flex items-center gap-1 text-xl">
+              Kapasitas per Work Center — Minggu Ini
+              <ProvenanceInfoButton
+                label="Kapasitas & Utilisasi Work Center"
+                envelope={{
+                  formula:
+                    'Kapasitas harian (work_centers.capacity_hours_per_day × jumlah unit) × hari kerja/minggu = Kapasitas Minggu Ini. Jam Terjadwal = Σ durasi batch produksi aktif minggu ini di work center itu. Utilisasi = Jam Terjadwal ÷ Kapasitas Minggu Ini × 100%.',
+                  inputs: [{ label: 'Hari kerja/minggu', value: String(workingDaysPerWeek) }]
+                }}
+              />
+            </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <p className="text-sm text-muted-foreground">

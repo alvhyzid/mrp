@@ -78,6 +78,8 @@ describe('Kesiapan AI (Tenant-Facing) — gerbang per kemampuan dari data nyata'
   });
 
   afterAll(async () => {
+    await adminClient.from('production_disruptions').delete().in('company_id', [companyAId, companyBId]);
+    await adminClient.from('production_plants').delete().in('company_id', [companyAId, companyBId]);
     await adminClient.from('ai_answer_feedback').delete().in('company_id', [companyAId, companyBId]);
     await adminClient.from('ai_capability_overrides').delete().in('company_id', [companyAId, companyBId]);
     await adminClient.from('ai_capability_status').delete().in('company_id', [companyAId, companyBId]);
@@ -101,6 +103,23 @@ describe('Kesiapan AI (Tenant-Facing) — gerbang per kemampuan dari data nyata'
 
     const processMining = results.find((r) => r.code === 'process_mining');
     expect(processMining!.is_unlocked).toBe(false);
+  });
+
+  it('(KOREKSI) quality.downtime_classified DIHITUNG dari production_disruptions nyata — bukan "tabel tidak ada"', async () => {
+    const { data: plant } = await adminClient.from('production_plants').insert([{ company_id: companyAId, name: 'Plant Uji Downtime' }]).select('production_plant_id').single();
+    const { error: insertError } = await adminClient.from('production_disruptions').insert([
+      { company_id: companyAId, production_plant_id: plant!.production_plant_id, disruption_type: 'equipment_breakdown', started_at: '2026-08-01T00:00:00Z' },
+      { company_id: companyAId, production_plant_id: plant!.production_plant_id, disruption_type: 'utility_outage', started_at: '2026-08-02T00:00:00Z' },
+      { company_id: companyAId, production_plant_id: plant!.production_plant_id, disruption_type: 'external_factor', started_at: '2026-08-03T00:00:00Z' },
+      { company_id: companyAId, production_plant_id: plant!.production_plant_id, disruption_type: 'other', started_at: '2026-08-04T00:00:00Z' }
+    ]);
+    expect(insertError).toBeNull();
+    const results = await recomputeAiReadiness(adminClient, companyAId);
+    const anomaly = results.find((r) => r.code === 'anomaly_detection')!;
+    const downtimeReq = anomaly.requirements.find((r) => r.metric_key === 'quality.downtime_classified')!;
+    expect(downtimeReq).toBeDefined();
+    expect(downtimeReq.actual).toBeCloseTo(75, 1); // 3 dari 4 bukan 'other' = 75%
+    expect(downtimeReq.met).toBe(false); // ambang 80%, 75% belum tercapai
   });
 
   it('(BUKTI idempoten) recomputeAiReadiness dijalankan 2x dgn data sama -> ai_capability_status IDENTIK', async () => {

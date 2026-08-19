@@ -487,7 +487,19 @@ export default function SalesOrdersPage() {
                           <span className="text-foreground">
                             {formatCurrency(marginResult.standard_material_cost_per_unit + marginResult.standard_packaging_cost_per_unit + marginResult.standard_labor_cost_per_unit)}
                           </span>
-                          /unit (bahan {formatCurrency(marginResult.standard_material_cost_per_unit)} + kemasan {formatCurrency(marginResult.standard_packaging_cost_per_unit)} + SDM{' '}
+                          /unit (bahan {formatCurrency(marginResult.standard_material_cost_per_unit)} + kemasan {formatCurrency(marginResult.standard_packaging_cost_per_unit)}
+                          <ProvenanceInfoButton
+                            label="Biaya Bahan & Kemasan Standar per Unit"
+                            envelope={{
+                              formula: 'Dari BOM aktif item ini: Σ (qty_per_unit_output tiap komponen × standard_cost komponen tsb pada items), dipisah bahan-baku vs kemasan menurut Item.type.',
+                              inputs: [
+                                { label: 'Biaya bahan/unit', value: formatCurrency(marginResult.standard_material_cost_per_unit) },
+                                { label: 'Biaya kemasan/unit', value: formatCurrency(marginResult.standard_packaging_cost_per_unit) }
+                              ],
+                              sourceDocument: 'docs/spesifikasi-aturan-biaya-v1.md §3'
+                            }}
+                          />
+                          {' '}+ SDM{' '}
                           {formatCurrency(marginResult.standard_labor_cost_per_unit)}
                           {!marginResult.labor_cost_complete ? ' [sebagian]' : ''}
                           <ProvenanceInfoButton
@@ -592,6 +604,21 @@ export default function SalesOrdersPage() {
                           <span>
                             Butuh <span className="font-medium text-foreground">{feasibilityResult.batches_needed}</span> batch ({feasibilityResult.days_needed} hari produksi) — kapasitas{' '}
                             {feasibilityResult.batches_per_day} batch/hari
+                            <ProvenanceInfoButton
+                              label="Kebutuhan Batch & Kapasitas"
+                              envelope={{
+                                formula:
+                                  'Kebutuhan batch = ROUNDUP(qty dipesan ÷ unit/batch). Hari produksi = ROUNDUP(kebutuhan batch ÷ batch/hari). unit/batch & batch/hari adalah standar K8 (production_standards), DIKUNCI (snapshot) sekali per baris SO saat pertama dihitung — perubahan standar setelahnya TIDAK mengubah rencana yang sudah ada (lihat peringatan "standar berubah" bila muncul).',
+                                inputs: [
+                                  { label: 'Qty dipesan', value: String(feasibilityResult.qty_ordered) },
+                                  { label: 'Unit/batch (K8)', value: String(feasibilityResult.unit_per_batch) },
+                                  { label: 'Batch/hari (K8)', value: String(feasibilityResult.batches_per_day) },
+                                  { label: 'Kebutuhan batch', value: String(feasibilityResult.batches_needed) },
+                                  { label: 'Hari produksi', value: String(feasibilityResult.days_needed) }
+                                ],
+                                standardStatus: feasibilityResult.standard_drift ? 'ESTIMASI_MANUAL' : null
+                              }}
+                            />
                           </span>
                         </div>
                         {feasibilityResult.routing_available === false ? (
@@ -667,7 +694,18 @@ export default function SalesOrdersPage() {
 
                         {feasibilityResult.material_shortages && feasibilityResult.material_shortages.length > 0 ? (
                           <div>
-                            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-destructive">Kekurangan Bahan ({feasibilityResult.material_shortages.length} item)</p>
+                            <p className="mb-1 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-destructive">
+                              Kekurangan Bahan ({feasibilityResult.material_shortages.length} item)
+                              <ProvenanceInfoButton
+                                label="Kekurangan Bahan"
+                                envelope={{
+                                  formula:
+                                    'Per komponen BOM (dieksplosi berjenjang, termasuk WIP bersarang): Butuh = qty_per_unit_output komponen × qty dipesan (dibagi standard_yield_qty tiap level WIP). Kurang = MAX(0, Butuh − Stok tersedia saat ini di lots).',
+                                  inputs: [{ label: 'Item dievaluasi', value: `${feasibilityResult.item_code} — ${feasibilityResult.item_name}` }],
+                                  sourceDocument: 'explodeBomRequirements.ts'
+                                }}
+                              />
+                            </p>
                             <div className="overflow-hidden rounded-md border">
                               <table className="w-full text-data">
                                 <thead>

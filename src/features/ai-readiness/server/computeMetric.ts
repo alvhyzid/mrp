@@ -57,6 +57,21 @@ export const metricComputers: Record<string, MetricComputer> = {
     if (error) throw new Error(error.message);
     const distinctItems = new Set((data ?? []).map((row: { item_id: number }) => row.item_id));
     return distinctItems.size;
+  },
+
+  // §1.5: "% downtime terklasifikasi (bukan 'unclassified')". production_disruptions
+  // TERNYATA sudah ada (koreksi -- laporan sebelumnya keliru menyebut tabel ini
+  // tidak ada). disruption_type NOT NULL dgn check constraint termasuk nilai
+  // 'other' sbg keranjang serba-guna -- itulah padanan "unclassified" di sini
+  // (tidak ada sentinel terpisah, tapi 'other' persis berperan sbg itu: dipakai
+  // saat tidak ada kategori nyata yang cocok).
+  'quality.downtime_classified': async (adminClient, companyId) => {
+    const { data, error } = await adminClient.from('production_disruptions').select('disruption_type').eq('company_id', companyId);
+    if (error) throw new Error(error.message);
+    const total = data?.length ?? 0;
+    if (total === 0) return 0;
+    const classified = data!.filter((row: { disruption_type: string }) => row.disruption_type !== 'other').length;
+    return (classified / total) * 100;
   }
 };
 

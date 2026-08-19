@@ -79,22 +79,31 @@ Pemilik produk memberi instruksi besar berjenjang A→G, eksplisit ditandai **mu
 
 **Test baru**: `tests/ai_project_dashboard.test.ts` (7 test, termasuk 2 skenario negatif eksplisit di atas).
 
-**D. Fondasi Provenance & Panel Asal-Usul (Fase 0.2 & 0.3) — SELESAI (versi generik minimal, bukan sistem besar).**
+**D. Fondasi Provenance & Panel Asal-Usul (Fase 0.2 & 0.3) — SELESAI SEBAGIAN (10 dari 20 angka target, 24 Agu 2026), infrastrukturnya lengkap.**
+
+*(Koreksi 24 Agu 2026: laporan akhir sesi sebelumnya salah menyebut Bagian D "selesai" padahal baru 3/20 angka terpasang — pemilik produk menegur ini dengan tepat. Status yang benar: infrastruktur (tipe + komponen) selesai sejak awal, PEMASANGANNYA baru sebagian, dan sekarang ditambah sampai 10/20.)*
 
 Tipe `ProvenanceEnvelope` (`src/lib/provenance.ts`) — KECIL & KONKRET sesuai prinsip baru proyek ini: `formula`, `inputs` (label+value), `sourceDocument` (opsional), `standardStatus` (ESTIMASI_MANUAL/DIPELAJARI, opsional), `history` (opsional, kebanyakan angka BELUM punya riwayat terlacak — jujur ditandai "belum terlacak" bukan dikosongkan diam-diam).
 
 Komponen generik `ProvenanceInfoButton` (`src/components/ui/provenance-info-button.tsx`) — ikon info kecil, klik → dialog menampilkan rumus/input/sumber/status/riwayat. SATU komponen dipakai lintas modul (BUKAN diimplementasikan ulang tiap tempat) — pakai `Dialog` yang sudah ada (bukan bikin komponen popover baru).
 
-**Dipasang di 2 modul (3 angka) sesi ini** (dari 5 kategori prioritas dokumen — "margin per unit, biaya SDM batch, kebutuhan batch, yield standar, kekurangan bahan"):
-1. BOM — hasil standar per batch (`standard_yield_qty`), retrofit dari prototipe ad-hoc sesi sebelumnya jadi generik.
+**Dipasang di 4 modul, 10 dari 20 angka target** (task `f0-panel-asal-usul`, checklist Bagian C, live company_id=1 disinkronkan manual sama seperti checklist lain — seeder idempoten tidak menimpa baris yang sudah ada):
+1. BOM — hasil standar per batch (`standard_yield_qty`).
 2. Margin Watch — margin rencana (baseline), kutip rumus resmi `docs/spesifikasi-aturan-biaya-v1.md §3`.
-3. Margin Watch — biaya SDM standar per unit, `inputs` diisi dari `labor_cost_notes` yang sudah ada (bukan data baru, cuma disalurkan lewat komponen generik).
+3. Margin Watch — biaya SDM standar per unit, `inputs` dari `labor_cost_notes`.
+4. Margin Watch — biaya bahan standar per unit **(BARU 24 Agu)**.
+5. Margin Watch — biaya kemasan standar per unit **(BARU 24 Agu)**, satu tombol dgn #4 (angka berdampingan di UI, rumus sama: Σ qty_per_unit_output × standard_cost komponen dari BOM aktif).
+6. Kelayakan Jadwal (SalesOrdersPage) — `unit_per_batch` (K8) **(BARU 24 Agu)**.
+7. Kelayakan Jadwal — `batches_per_day` (K8) **(BARU 24 Agu)**, satu tombol dgn #6 + `batches_needed`/`days_needed` turunannya (ROUNDUP qty÷unit_per_batch), termasuk catatan snapshot dikunci per baris SO.
+8. Kelayakan Jadwal — kekurangan bahan per item **(BARU 24 Agu)**, formula eksplosi BOM berjenjang (`explodeBomRequirements.ts`).
+9. Laba Operasional — overhead SDM bulanan **(BARU 24 Agu)**, sumber `company_settings.monthly_overhead_baseline`, TIDAK dialokasi per batch di v1.
+10. PPIC Dashboard — kapasitas & utilisasi Work Center mingguan/harian **(BARU 24 Agu)**, formula kapasitas_harian × unit_count × hari_kerja/minggu, dibandingkan jam terjadwal nyata.
 
-**Checklist "20 angka lintas modul" diisi PENUH** (task `f0-panel-asal-usul`, Bagian C) — 20 target nyata (bukan generik "20 angka" tanpa isi), 3 DICENTANG (yang di atas), 17 SISANYA jujur BELUM (kekurangan bahan, K8 unit_per_batch/batches_per_day, Laba Operasional, dst — infrastrukturnya (`ProvenanceInfoButton`) SUDAH SIAP dipasang, tinggal kerja mekanis memasang di tiap tempat).
+**10 SISANYA masih belum**: selisih Margin Watch Lapis 2 (harga/pemakaian/reject, 3 item), tanggal selesai proyeksi Kelayakan, biaya standar per komponen BOM, `items.standard_cost`, margin kontribusi bulanan Laba Operasional, kebutuhan bahan per batch (buffer_percentage Work Order), yield aktual vs rencana batch produksi, biaya pemberi kerja bulanan Employee (BPJS uplift) — infrastruktur (`ProvenanceInfoButton`) siap, tinggal kerja mekanis memasang.
 
 **Keputusan retrofit komponen LAMA** (2 pertanyaan sisa checklist) — SENGAJA belum diputuskan sesi ini (dokumen: "keputusan 👤+🧠", bukan keputusan sepihak Claude Code).
 
-**Test**: TIDAK ADA test baru khusus Bagian D — permukaan barunya murni presentasional (tipe + komponen UI tanpa server logic baru), diverifikasi lewat typecheck+build+test suite penuh tetap hijau (150 test dari Bagian A-C tidak terganggu), bukan lewat test unit baru. `labor_cost_notes`/`standard_margin_total` yang jadi isi envelope SUDAH diuji di tempat asalnya (`tests/margin_watch.test.ts` dkk).
+**Test**: TIDAK ADA test baru khusus Bagian D — permukaan barunya murni presentasional (tipe + komponen UI tanpa server logic baru), diverifikasi lewat typecheck+build+test suite penuh tetap hijau, bukan lewat test unit baru. Semua angka yang jadi isi envelope (`labor_cost_notes`, `standard_margin_total`, `batches_needed`, `material_shortages`, `overhead`, kapasitas Work Center) SUDAH diuji di tempat asalnya masing-masing.
 
 **E. Process Mining (Fase 0.4) — SELESAI.** Dashboard `/process-mining` (leadership-only, sama pola akses Bagian C) — murni query & agregasi atas `status_transition_log` yang SUDAH ADA, TIDAK ADA tabel baru, TANPA LLM.
 
@@ -108,11 +117,13 @@ Komponen generik `ProvenanceInfoButton` (`src/components/ui/provenance-info-butt
 
 **F. Kesiapan AI Tenant — SELESAI (versi generik minimal, 6 dari 7 kemampuan §1.4).** Halaman `/ai-readiness` TENANT-FACING (semua role login, beda dari Bagian C/E yang leadership-only) — skor kesiapan per kemampuan AI + gerbang beneran (bukan cuma peringatan) + daftar tugas berdampak.
 
-**STOP CONDITION §7 DICEK, TERPICU SEBAGIAN** — 3 dari 10 `metric_key` yang diminta dokumen **TIDAK BISA dihitung dari data nyata saat ini**, dilaporkan (bukan diproksi/dipalsukan):
-- `quality.downtime_classified` & `quality.ncr_root_cause` (§1.5) — **tidak ada tabel downtime maupun NCR di skema sama sekali.** §2.2 dokumen sumber keliru berasumsi tabel itu sudah ada (diverifikasi lewat pencarian penuh `supabase/migrations/*.sql` + `docs/rancangan-skema-database-mrp.md` — nol referensi). Tidak diproksi diam-diam pakai `production_disruptions` (maknanya beda — itu gangguan produksi terjadwal/tak terjadwal, bukan downtime mesin per definisi §1.5).
+**STOP CONDITION §7 DICEK, TERPICU SEBAGIAN** — 2 dari 10 `metric_key` yang diminta dokumen **TIDAK BISA dihitung dari data nyata saat ini**, dilaporkan (bukan diproksi/dipalsukan):
+- `quality.ncr_root_cause` (§1.5) — **tidak ada tabel NCR (Non-Conformance Report) di skema sama sekali** (diverifikasi lewat pencarian penuh `supabase/migrations/*.sql` + `docs/rancangan-skema-database-mrp.md` — nol referensi).
 - `eval.pass_rate` (prasyarat kemampuan "Advisor / saran tindakan") — **tidak ada infrastruktur eval suite** (butuh 30-50 soal+jawaban benar dari pemilik produk sendiri). Ini SAMA PERSIS dgn blocker Fase 1-3 AI roadmap yang sudah tercatat sebelumnya di HANDOFF ini (butuh pemilik produk personal, bukan sesuatu yang bisa diasumsikan Claude Code). **Kemampuan "Advisor / saran tindakan" karena itu TIDAK diseed sama sekali** (bukan diseed lalu dikunci permanen dgn angka palsu — lebih jujur tidak ada daripada ada tapi mustahil dibuka).
 
-**6 kemampuan lain SEMUA diseed & terukur dari data nyata**: Panel Asal-Usul (tanpa prasyarat, selalu 100%), Process Mining, Copilot Data Pabrik, Narasi & Laporan, Penjelasan Margin & Biaya, Anomaly Detection.
+**KOREKSI 24 Agu 2026** (temuan pemilik produk, laporan sesi sebelumnya SALAH): `quality.downtime_classified` sebelumnya juga dilaporkan "tidak ada tabelnya" — KELIRU. Tabel `production_disruptions` SUDAH ADA sejak migration `20260812154000` (fitur catat gangguan produksi pabrik, dipakai nyata: 5 baris company_id=1, semua `utility_outage`). `disruption_type` punya nilai `'other'` sbg keranjang serba-guna — persis padanan "unclassified" yang dimaksud §1.5. Ditambahkan migration `20260824090000_ai_readiness_quality_downtime.sql` sbg prasyarat TIDAK MENGUNCI (`is_blocking=false`, bobot 20) pada kemampuan `anomaly_detection` — quality indicator ikut skor (sesuai §1.5), tapi volume data yang masih sedikit tidak mengunci kemampuan. Data nyata company_id=1: 5/5 baris = 100% terklasifikasi (bukan `'other'`).
+
+**6 kemampuan lain SEMUA diseed & terukur dari data nyata**: Panel Asal-Usul (tanpa prasyarat, selalu 100%), Process Mining, Copilot Data Pabrik, Narasi & Laporan, Penjelasan Margin & Biaya, Anomaly Detection (kini dgn 2 prasyarat: K8 DIPELAJARI + kualitas klasifikasi downtime).
 
 **Penyimpangan jujur lain**: (1) `ai_capabilities`/`ai_capability_requirements` dibuat GLOBAL (bukan per-tenant seperti §1.4 minta) — baru ada 1 tenant nyata, kolom override-per-tenant belum dibangun (prinsip "jangan bangun abstraksi spekulatif utk tenant yang belum ada"; ambang §1.4 dipakai apa adanya sbg default global, TINJAU dulu sebelum tenant kedua — lihat §8 dokumen sumber). (2) Mesin pengukuran dihitung LIVE tiap dashboard dibuka lalu di-cache ke `ai_capability_status` (upsert) — BUKAN dijadwalkan cron harian seperti §3.2 minta (belum ada infrastruktur cron/Vercel Cron di proyek ini; query murah utk skala 1 tenant, sama pola dgn `computeAiProjectProgress.ts` Bagian C).
 
@@ -125,14 +136,14 @@ Komponen generik `ProvenanceInfoButton` (`src/components/ui/provenance-info-butt
 **Perubahan kecil pada modul Kamus** (diizinkan eksplisit §4 "boleh menambah filter yang dibutuhkan"): tambah filter `scope` di `listKamusTerms`/`/api/kamus`, dan `KamusPage` sekarang membaca `status`/`priority`/`scope` dari URL query saat halaman dibuka — dipakai tombol "Yang Bisa Anda Kerjakan" di `/ai-readiness` utk membuka antrean Kamus persis pada baris yang relevan (§3.4). Efek samping: `KamusPage` sekarang pakai `useSearchParams()`, jadi `app/(shell)/kamus/page.tsx` dibungkus `<Suspense>` (murni syarat Next.js, ditemukan lewat build gagal sebelum commit).
 
 ### BUKTI YANG DIMINTA (§6 dokumen)
-1. **Query nyata tiap `metric_key` utk Indo Taste (company_id=1) hari ini**: `process_mining` 11,9% (riwayat 2,02 hari dari ambang 90; 43 transisi dari ambang 200) · `copilot_data_pabrik` 0% (0 dari ambang 70% kamus prioritas 1-2 dikonfirmasi — backlog SUDAH ada 51 baris tapi belum ada yang benar-benar dikonfirmasi manusia) · `narasi_laporan` 2,7% · `penjelasan_margin_biaya` 0% · `anomaly_detection` 0% (0 item DIPELAJARI — K8 belum pernah belajar dari batch nyata) · `panel_asal_usul` 100% (tanpa prasyarat). **SEMUA kemampuan bergerbang MASIH TERKUNCI utk Indo Taste hari ini** — jujur, bukan cacat: kamus baru berupa backlog belum dijawab manusia, K8 belum pernah belajar, riwayat transisi baru 2 hari.
+1. **Query nyata tiap `metric_key` utk Indo Taste (company_id=1) hari ini**: `process_mining` 11,9% (riwayat 2,02 hari dari ambang 90; 43 transisi dari ambang 200) · `copilot_data_pabrik` 0% (0 dari ambang 70% kamus prioritas 1-2 dikonfirmasi — backlog SUDAH ada 51 baris tapi belum ada yang benar-benar dikonfirmasi manusia) · `narasi_laporan` 2,7% · `penjelasan_margin_biaya` 0% · `anomaly_detection` 16,67% (0 dari ambang 5 item K8 DIPELAJARI [bobot 100] + 100% downtime terklasifikasi dari ambang 80% [bobot 20] — quality indicator sudah bagus, K8 yang belum) · `panel_asal_usul` 100% (tanpa prasyarat). **SEMUA kemampuan bergerbang MASIH TERKUNCI utk Indo Taste hari ini** — jujur, bukan cacat: kamus baru berupa backlog belum dijawab manusia, K8 belum pernah belajar, riwayat transisi baru 2 hari.
 2. **Sebelum/sesudah 5 baris kamus dikonfirmasi**: diuji dgn 3→8 dari 10 baris fixture (representatif >5) — skor Copilot naik dari 0% → 42,9% (di bawah ambang) → terbuka penuh di 80% aktual (>70% ambang), dibuktikan test.
 3. **Skenario negatif 1**: gerbang tunggal `isCapabilityUnlocked()` menolak kemampuan yang prasyaratnya belum terpenuhi — dibuktikan test (belum ada endpoint kemampuan hilir sungguhan yang MEMANGGIL guard ini, karena belum ada fitur Copilot/dst yang live; guard-nya sendiri sudah teruji siap dipanggil).
 4. **Skenario negatif 2**: `company_admin` (admin TENANT) mencoba membuat override → **403 ditolak**, 0 baris tersimpan — HANYA `super_admin` platform yang boleh.
 5. **Skenario negatif 3**: user company A membaca `ai_capability_status` company B lewat client `authenticated` biasa → **0 baris** (RLS, bukan cuma filter aplikasi).
 6. **Idempoten**: `recomputeAiReadiness` dijalankan 2× dgn data sama → `ai_capability_status` identik (upsert, bukan insert dobel) — dibuktikan test.
 
-**Test baru**: `tests/ai_readiness.test.ts` (7 test, mencakup ke-6 bukti di atas).
+**Test baru**: `tests/ai_readiness.test.ts` (8 test, mencakup ke-6 bukti di atas + 1 test korektif memverifikasi `quality.downtime_classified` dihitung nyata dari `production_disruptions`).
 
 **G. Absensi Geo-QR — HANYA W1 — SELESAI.** Halaman `/attendance` (semua role login melihat riwayat sendiri; HR/company_admin melihat semua + mencatat manual + menyetujui koreksi/izin). W2 (tablet QR dinamis+offline), W3 (PWA karyawan), W4 (konsol HRD penuh+ekspor payroll), W5 (integrasi kapasitas/labor log/notifikasi) **DITUNDA** — belum dikerjakan, butuh jawaban Q1/Q2/Q6/Q7 (arah scan tablet, foto selfie, format ekspor payroll, jumlah karyawan tanpa smartphone) yang BELUM dijawab pemilik produk.
 

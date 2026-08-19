@@ -4,6 +4,59 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## ANTREAN KERJA OTONOM A→G — 21 Agu 2026 (multi-sesi, BELUM SELESAI — lanjutkan dari sini)
+
+Pemilik produk memberi instruksi besar berjenjang A→G, eksplisit ditandai **multi-sesi** ("bukan 2 jam, berhenti di titik aman kapan pun, lanjutkan dari antrean ini di sesi berikutnya tanpa instruksi ulang"). **PRINSIP BARU yang berlaku mulai sekarang** (menggantikan arahan generik-multi-tenant sebelumnya, lihat memory `build-for-real-tenant-not-speculative-abstraction`): bangun untuk kebutuhan NYATA PT Indo Taste, konfigurasi/kolom baru boleh kalau ongkosnya kecil, JANGAN bikin tabel konfigurasi/plugin/lapisan abstraksi generik untuk tenant yang belum ada. Larangan hardcode nama produk/orang/tahap di LOGIKA tetap berlaku.
+
+### Status tiap bagian
+
+**A. Audit Keterlihatan UI — SEBAGIAN SELESAI (A1 selesai, A2 sebagian, A3/A4 belum sebagai halaman kode)**
+- **A1 (inventaris)** — SELESAI, tabel di bawah.
+- **A2 (buat jalan masuk yang hilang)** — 2 dari 2 temuan nyata DIPERBAIKI: (1) halaman `/team` (kelola tim & undangan, sudah lama ada) TIDAK PERNAH punya link navigasi sama sekali — ditambahkan ke section "Settings". (2) Laba Operasional bulanan (`get_monthly_operating_profit`) SEBELUMNYA cuma API, TIDAK ADA halaman UI sama sekali — dibuat halaman baru `/operating-profit` (`OperatingProfitPage.tsx`, section nav baru "Finance"), pemilih bulan/tahun, tampilkan `period_start`/`period_end` eksplisit (Bagian E) pakai `formatCurrency` (Bagian F).
+- **A3 (halaman "Apa yang Baru")** — BELUM dibuat sebagai halaman kode (butuh keputusan desain: daftar manual vs otomatis dari commit log — di luar cakupan waktu sesi ini). Isi tekstualnya ADA di laporan akhir sesi ini (ringkasan fitur + link + kegunaan).
+- **A4 (bukti daftar URL)** — Tabel di bawah berisi PATH relatif (bukan domain staging lengkap — domain staging tidak diketahui dari sesi ini, pemilik produk perlu menambahkan domainnya sendiri di depan tiap path).
+
+**Tabel A1 — Inventaris fitur 5 sesi terakhir:**
+
+| Fitur | Ada UI? | Route | Bisa dicapai dari menu? | Role yang bisa lihat |
+|---|---|---|---|---|
+| Margin Watch | Ya | `/sales-orders` (panel per baris SO) | Ya (MRP → Sales Order) | canViewFinancialData |
+| Cek Kelayakan & kekurangan bahan | Ya | `/sales-orders` (panel per baris SO) | Ya (MRP → Sales Order) | PLANNING_FEASIBILITY_VIEW_ROLES |
+| Saldo Awal Stok | Ya | `/warehouse` | Ya (Warehouse → Dashboard) | WAREHOUSE_ROLES |
+| Labor Log (Catat Jam Kerja) | Ya | `/work-orders` | Ya (MRP → Work Order) | WORK_ORDER_MANAGE_ROLES |
+| Jadwal Hari Ini Produksi (Gantt) | Ya | `/production`, `/ppic`, `/routing`, `/work-orders` | Ya (masing-masing di menu) | tergantung halaman |
+| Usulan Standar K8 | Ya | `/ppic` | Ya (PPIC → Dashboard) | PPIC_DASHBOARD_ROLES (lihat), PRODUCTION_STANDARD_DECIDE_ROLES (putuskan) |
+| Mulai/Selesaikan Batch | Ya | `/production` | Ya (Production → Dashboard) | PRODUCTION_DASHBOARD_ROLES |
+| POD Publik (Bukti Penerimaan) | Ya | `/pod/[token]` | SENGAJA TIDAK ADA di menu (publik, tanpa login, diakses via link/QR dari surat jalan) | Publik |
+| Surat Jalan | Ya | `/shipments/[shipmentId]/surat-jalan` | Ya (tombol dari `/shipments`) | SHIPMENT_MANAGE_ROLES |
+| CRUD Karyawan | Ya | `/hr` | Ya (HR → Dashboard) | HR_MANAGE_ROLES |
+| Laba Operasional | **BARU dibuat sesi ini** | `/operating-profit` | **BARU** (Finance → Laba Operasional) | canViewFinancialData |
+| Tim & Undangan | Sudah lama ada, TIDAK PERNAH ada link | `/team` | **BARU diperbaiki** (Settings → Tim & Undangan) | company_admin |
+| Format Rupiah terpusat | N/A (bukan halaman, cross-cutting) | — | — | — |
+
+**B. Modul Kamus (K1)** — BELUM DIMULAI. Perlu baca `docs/rencana-modul-kamus-paralel.md` BAGIAN 2 penuh dulu. Batas eksplisit yang HARUS dipatuhi: TANPA panggil LLM, TANPA data gaji, TANPA mode ikon inline (itu K2 terpisah), STOP kalau backlog prioritas 1-2 > 200 baris (laporkan dulu, jangan lanjut). Cek `docs/kamus-sementara.md` utk diimpor kalau ada.
+
+**C. Dashboard Proyek AI (K1b)** — BELUM DIMULAI. Perlu baca `docs/instruksi-dashboard-proyek-ai.md`. Bobot §3.4 dipakai apa adanya sebagai seed. AUTO_QUERY yang belum bisa dihitung dari data nyata → CHECKLIST sementara (STOP CONDITION dokumen), JANGAN memalsukan angka. TANPA progres manual, TANPA gamifikasi, TANPA LLM.
+
+**D. Fondasi Provenance & Panel Asal-Usul (Fase 0.2 & 0.3)** — BELUM DIMULAI sebagai sistem generik, TAPI **1 prototipe konkret sudah dibangun sesi ini** (BOM `standard_yield_basis_note`/`standard_yield_source`, lihat bagian "Perbaikan tampilan BOM" di bawah) — pola ini (catatan asal + sumber ESTIMASI_MANUAL/DIPELAJARI) bisa jadi acuan kalau `ProvenanceEnvelope` generik dibangun nanti. Perlu baca `docs/langkah-membangun-fitur-ai.md` sebelum membangun versi generiknya — TANPA LLM.
+
+**E. Process Mining (Fase 0.4)** — BELUM DIMULAI. Query atas `status_transition_log`. WAJIB tampilkan jumlah data pendasar eksplisit ("berdasarkan N transisi sejak tanggal X") — data masih sedikit (produksi nyata belum jalan), tampilkan "data belum cukup" kalau memang belum cukup, JANGAN angka menyesatkan.
+
+**F. Kesiapan AI Tenant** — BELUM DIMULAI. Perlu baca `docs/spesifikasi-kesiapan-ai-tenant.md` BAGIAN 2. Ambang §1.4 dipakai apa adanya sebagai seed. `metric_key` yang tidak bisa dihitung dari data nyata → BERHENTI & laporkan (STOP CONDITION), jangan bikin angka pengganti. Satu guard tunggal, TANPA LLM.
+
+**G. Absensi Geo-QR — HANYA W1** — BELUM DIMULAI. Perlu baca `docs/rancangan-absensi-geo-qr.md`. W2-W5 DITUNDA (butuh jawaban Q1/Q2/Q4/Q5/Q6/Q7 dari pemilik produk yang belum ada). W1 saja: skema+RLS+state machine harian+geofence per plant+event ledger append-only+rekap harian. Yang sudah final (JANGAN buat master jam kerja kedua — pakai kalender kerja yang sudah ada): istirahat 12.00-13.00 Sen-Jum (efektif 7 jam), Sabtu tanpa istirahat (efektif 5 jam), lokasi HANYA saat clock-in/out (bukan pelacakan terus-menerus), di luar geofence = DI_LUAR_AREA+antrean review (BUKAN ditolak), PHL kehadiran=dasar upah harian (Rp50.000+parkir Rp2.000, Rohmat +bensin Rp10.000 — angka ini SUDAH cocok dgn data payroll nyata yang diisi sesi ini).
+
+### Yang TIDAK BISA dibangun & kenapa (Fase 1-3 dokumen AI, gerbang eksplisit — BUKAN diabaikan, BUTUH pemilik produk)
+1. **Akun & API key penyedia model LLM + ketentuan datanya** — tidak ada di sesi ini, tidak bisa ditebak/dibuat sendiri.
+2. **30-50 soal eval + JAWABAN BENARNYA dari pemilik produk** — kalau AI yang menentukan benar-salah sendiri, evalnya tidak menguji apa pun (sirkular).
+3. **Kebijakan data tenant** (opt-in/default, data apa boleh keluar ke penyedia LLM) — keputusan bisnis/legal, bukan teknis.
+
+Begitu ketiganya tersedia, langsung bisa dikerjakan: `llmClient` (wrapper API), definisi tools/function-calling, orchestrator, harness eval otomatis dari 30-50 soal di atas.
+
+### Perbaikan tampilan BOM (satuan + keterangan asal angka) — bagian dari sesi ini, LIHAT DETAIL LENGKAP di bawah
+
+---
+
 ## Perbaikan tampilan BOM (satuan + keterangan asal angka) — 21 Agu 2026
 
 Pemilik produk bingung membaca "FG-GUMMY-ZALA-N200 — v1 (56.6667 pcs)" — dua masalah nyata, DIPERBAIKI:

@@ -18,10 +18,19 @@ import {
   UserMultiple,
   Settings as SettingsIcon,
   UserAvatar,
-  DeliveryTruck
+  DeliveryTruck,
+  Money
 } from '@carbon/icons-react';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { canAccessWarehouseDashboard, canAccessHrDashboard, canAccessPpicDashboard, canAccessProductionDashboard, canQuickCreateCustomerPo, canManageShipments } from '@/lib/roles';
+import {
+  canAccessWarehouseDashboard,
+  canAccessHrDashboard,
+  canAccessPpicDashboard,
+  canAccessProductionDashboard,
+  canQuickCreateCustomerPo,
+  canManageShipments,
+  canViewFinancialData
+} from '@/lib/roles';
 import { NotificationBell } from '@/features/mrp';
 
 // UI Shell Carbon Design System (Header + SideNav) sebagai layout terpakai
@@ -136,9 +145,14 @@ const NAV_SECTIONS: NavSection[] = [
     items: [{ label: 'Dashboard', href: '/hr', visible: canAccessHrDashboard, icon: UserMultiple }]
   },
   {
+    title: 'Finance',
+    items: [{ label: 'Laba Operasional', href: '/operating-profit', visible: canViewFinancialData, icon: Money }]
+  },
+  {
     title: 'Settings',
     items: [
       { label: 'Data Perusahaan', href: '/company', visible: (role) => role === 'company_admin', icon: SettingsIcon },
+      { label: 'Tim & Undangan', href: '/team', visible: (role) => role === 'company_admin', icon: UserMultiple },
       { label: 'Profil Saya', href: '/profile', visible: () => true, icon: UserAvatar }
     ]
   }

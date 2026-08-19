@@ -4,6 +4,44 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Koreksi Bagian D/E setelah A→F — 21 Agu 2026 (2 koreksi data + keputusan Bagian E)
+
+Pemilik produk mengoreksi 2 hal nyata setelah laporan Bagian A→F pertama, plus menjawab pertanyaan opsi Bagian E.
+
+### Koreksi 1 — Overhead Rp65.666.907 TERBUKTI belum lengkap (dikonfirmasi lewat rekonsiliasi angka per orang, bukan ditebak)
+
+Pemilik produk memberi 9 angka biaya pemberi kerja NYATA per orang (total Rp74.694.305). Dibandingkan PERSIS ke angka sistem (skrip verifikasi, bukan dugaan) — polanya KONSISTEN untuk SEMUA 9 orang: komponen gaji pokok + JKK + JKM + JHT (basis di-clamp floor/ceiling) **COCOK PERSIS** ke model yang sudah dibangun Bagian D (dibuktikan lewat Mega yang gajinya identik dengan contoh acuan Dina — hasilnya sistem sama persis dengan target). Sisa selisih (Rp9.027.398 total) berasal dari 2 hal yang MEMANG belum dihitung sistem, BUKAN bug rumus:
+1. **BPJS Kesehatan** — sistem sengaja tidak mengikutkan karena `bpjs_kesehatan_enrolled` belum dikonfirmasi untuk siapa pun (bukan ditebak ikut).
+2. **Tunjangan makan+transport per hari hadir** — kolomnya ADA di database (Bagian C) tapi NILAINYA belum diisi untuk siapa pun.
+
+**Tidak bisa direkonsiliasi PERSIS ke rupiah** tanpa 3 data tambahan: keikutsertaan BPJS Kesehatan per orang, jumlah hari hadir aktual per orang di periode itu, dan kategori tunjangan yang tepat untuk jabatan yang tidak persis cocok ke 3 tingkatan yang pernah diberikan (mis. "General Manager" beda dari "Direktur"; "Manager PPIC"/"RnD Staff"/"PPIC Jr. Spv" tidak jelas SPV/Manager atau tingkatan lain — dicoba dihitung mundur dari angka yang diberikan, hasilnya TIDAK konsisten satu sama lain, jadi sengaja TIDAK dipaksakan/ditebak). **Angka Rp65.666.907 BELUM diubah** sampai data ini tersedia — supaya tidak menebak dua kali.
+
+### Koreksi 2 — Kru lini GUMMY seharusnya kontrak bulanan, BUKAN PHL (DIPERBAIKI)
+
+Data PHL nyata membuktikan: PHL 100% ada di lini SERBUK (Karanglo), lini GUMMY (Ruko Dieng) 100% kontrak bulanan. `routing_step_standard_crew` untuk routing gummy (routing_id 6) — yang sebelumnya berisi estimasi 16 headcount `wage_type='daily'` (ESTIMASI_MANUAL sesi sebelumnya, ternyata SALAH) — **sudah diganti** dengan 3 baris nyata: 1 SPV (Dina Melinda Cahya Purnama), 1 Team Leader (Sutipa Handayani), 7 Operator (Mi'asih, Diana Ayu Agustin, Muhammad Alif Alhamad, Rumanik, Ezra Ariya Septiano, Aziz Maulana, Maylani Suhesti) — total 9 orang NYATA, semua `wage_type='monthly'`, semua sudah ada di `employees` sejak Bagian C.
+
+**Dampak margin SAS001 (dihitung ulang, terverifikasi lewat API sungguhan)**:
+| | Sebelum koreksi | Setelah koreksi |
+|---|---|---|
+| Biaya SDM standar/unit | Rp3.529,41 | **Rp7.316,57** (naik >2×) |
+| Margin rencana total | Rp1.523.025.338 | **Rp1.447.282.118** (turun ±Rp75,7 juta) |
+
+`labor_cost_complete` MASIH `false` (premix gummy & BPJS Kesehatan masih belum lengkap) — angka di atas masih akan naik lagi (biaya SDM makin tinggi, margin makin turun) begitu premix + BPJS Kesehatan + tunjangan terisi.
+
+### Jawaban Bagian E — Laba Operasional bulanan SEKARANG ikut periode gajian (26-25), SUDAH DITERAPKAN
+
+`get_monthly_operating_profit()` diubah (migration `20260821140000`): mengelompokkan pengiriman berdasar RENTANG TANGGAL periode gaji (`payroll_period_start_day`), bukan lagi `extract(month from shipment_date)`. Fungsi sekarang MENGEMBALIKAN `period_start`/`period_end` eksplisit (mis. "2026-07-26" s/d "2026-08-25") supaya begitu ada halaman UI yang memakainya, label periode tidak tertukar dengan bulan kalender. Company TANPA `payroll_period_start_day` diisi tetap fallback ke bulan kalender persis seperti sebelumnya (zero regresi). **Belum ada halaman UI yang memanggil endpoint ini** — begitu dibuat, WAJIB memakai `formatCurrency`/menampilkan `period_start`-`period_end`, bukan asumsi label bulan kalender.
+
+**Pertanyaan terbuka yang JUJUR belum dijawab**: apakah `monthly_overhead_baseline` sebaiknya dihitung sebagai SISA (total biaya pemberi kerja SEMUA karyawan − biaya SDM yang tercatat di batch periode itu), sesuai instruksi sebelumnya, ATAU tetap angka statis yang di-update manual? **Status sekarang: MASIH STATIS** (angka manual di `company_settings.monthly_overhead_baseline`, terakhir di-update jadi Rp65.666.907 yang TERBUKTI belum lengkap di atas). Formula SISA belum dibangun karena butuh 3 hal yang belum ada: (1) biaya pemberi kerja PHL per-orang nyata (baru ada STRUKTUR tarifnya, belum data per-orang lengkap — lihat di bawah), (2) cara menentukan batch mana masuk periode gaji mana (`production_batches` sudah punya `started_at`/`completed_at`, belum dipakai untuk ini), (3) tunjangan+BPJS Kesehatan yang sama seperti Koreksi 1 di atas. Membangunnya sekarang dengan data yang belum lengkap akan menghasilkan angka "SISA" yang KELIHATANNYA presisi padahal masih menebak — sengaja ditunda, bukan lupa.
+
+### Item yang SUDAH terjawab, dihapus dari daftar menunggu (lihat bagian di bawah utk yang masih tersisa)
+- **Darmini** — sudah ditambahkan sebagai karyawan aktif (janitor, `wage_type=monthly`, Rp1.500.000/bulan, `employment_status=freelance`, tanpa kode karyawan pabrik, plant Ruko Dieng). Tidak pernah masuk labor log batch (sesuai deskripsi perannya).
+- **Basis BPJS Rp3.737.000** — dikonfirmasi = UMK berlaku, berubah tiap tahun. Sudah tersimpan sebagai `company_settings.bpjs_wage_basis_floor` (konfigurasi, bukan hardcode) — TINGGAL diperbarui nilainya tiap tahun via config yang sama, tidak perlu ubah kode.
+- **Peran "Staff PPIC"** — dikonfirmasi memang tidak ada padanan nyata, bukan data yang belum lengkap. Tidak perlu dicari lagi.
+- **Data PHL nyata** — SEBAGIAN terjawab: struktur tarif sudah diketahui (Rp1.100.000/22 hari + parkir Rp44.000/22 hari; 1 orang +bensin Rp220.000/22 hari, berbasis kehadiran mesin absensi). **BELUM bisa menggantikan 10 PHL simulasi** karena nama 10 orang belum diberikan (beda dari Bagian C yang punya nama lengkap 20 orang) — kalau dipaksa cocokkan ke 10 PHL simulasi yang ada sekarang (Ali/Uli/Ardi/Yupi/Bobo/Baki/Moli/Suci/Tono/Tunik) itu akan MENEBAK identitas, persis yang dilarang. Menunggu daftar nama, bukan struktur tarifnya lagi.
+
+---
+
 ## Perintah Gabungan A→F, Bagian A (bug data BOM 227) + Bagian B (SDM standar dari kru nyata) — 20 Agu 2026
 
 Pemilik produk sendiri melakukan rekonsiliasi manual angka spesifikasi vs sistem dan membuktikan hipotesis awal saya ("SDM belum termasuk" saja) TIDAK CUKUP menjelaskan selisih SAS001 — kemasan-nya juga jauh salah. Diminta bongkar sampai ketemu akar masalah, bukan menduga.
@@ -104,16 +142,18 @@ Struktur `employees` diperluas (migration `20260821090000` + `20260821091500`): 
 **Test baru**: `tests/currency_formatter.test.ts` (12 test — format standar cocok contoh acuan "Rp1.108.255,93", angka bulat tidak dipaksa ",00", TIDAK memutasi nilai sumber, dan 5 skenario negatif: null/undefined/NaN/Infinity semua "-" bukan "Rp0" atau "RpNaN", 0 sungguhan tetap "Rp0", mata uang non-IDR belum crash, plus 3 test `format_rupiah_id` SQL termasuk pembulatan desimal & nol).
 
 ### Catatan menunggu (Bagian A-F) — JANGAN DITEBAK, tunggu konfirmasi/data
-1. **Cara pembayaran Darmini** (Freelance Helper, Rp1.500.000) — per hari/bulan/pekerjaan belum dikonfirmasi, belum ditambahkan ke `employees` karena `wage_type` wajib diisi.
-2. **Konfirmasi basis iuran BPJS Rp3.737.000 = UMK yang berlaku** — dipakai Bagian D nanti untuk basis JKK/JKM, belum dikerjakan.
-3. **Data PHL dari HRD pabrik** — 18 PHL masih simulasi, menunggu data nyata.
-4. **Harga stok Plant Ruko Dieng (CSV)** — jalur & klasifikasi sudah siap, pemuatan tertunda sampai data harga datang.
-5. **Peran "Staff PPIC"** — tidak ada karyawan nyata yang mengisi peran ini di data yang diberikan (lihat Bagian C); perlu konfirmasi apakah peran ini masih ada.
-6. **Kategori tunjangan makan/transport untuk jabatan yang tidak persis cocok ke 3 tingkatan yang diberikan** (mis. "Team Leader", "Jr. Spv", "HR Generalist", "RnD Staff") — perlu konfirmasi sebelum Bagian D mengisi nilainya.
-7. **Siapa saja yang TIDAK ikut BPJS Kesehatan** — disebutkan "terlihat di data [PDF]" tapi tidak ada di teks yang diberikan ke sesi ini; kolom `bpjs_kesehatan_enrolled` sengaja dibiarkan `null` untuk semua, bukan ditebak.
-8. **Apakah model biaya pemberi kerja (Bagian D) perlu diperluas ke PHL (wage_type='daily')** — saat ini HANYA diterapkan ke karyawan bulanan (satu-satunya yang dicontohkan); begitu data PHL nyata & aturan BPJS untuk mereka dikonfirmasi, perlu diputuskan apakah model yang sama berlaku.
-9. **Aturan atribusi tunjangan makan/transport ke batch produksi tertentu** — sisi biaya SDM AKTUAL per batch (`compute_production_batch_labor_cost`) sengaja belum menghitung tunjangan (per hari hadir, bukan per batch) karena 1 karyawan bisa kerja di beberapa batch sehari — perlu aturan pembagian dari pemilik produk sebelum ini bisa ditambahkan konsisten.
-10. **Apakah Laba Operasional bulanan mengikuti periode gaji (26-25) atau tetap bulan kalender** — lihat opsi lengkap di bagian "Bagian E" di atas, sengaja dilaporkan sebagai opsi bukan diputuskan sepihak.
+
+**Sudah terjawab 21 Agu 2026** (lihat "Koreksi Bagian D/E setelah A→F" di atas): cara pembayaran Darmini, konfirmasi basis UMK, peran "Staff PPIC" (memang tidak ada), pilihan periode Laba Operasional (ikut periode gaji, SUDAH diterapkan).
+
+**Masih menunggu:**
+1. **Nama lengkap 10 PHL nyata lini serbuk** — struktur tarif sudah diketahui (Rp1.100.000/22 hari + parkir Rp44.000/22 hari, 1 orang +bensin), tapi TANPA nama tidak bisa menggantikan 10 PHL simulasi tanpa menebak identitas.
+2. **Harga stok Plant Ruko Dieng (CSV)** — jalur & klasifikasi sudah siap, pemuatan tertunda sampai data harga datang.
+3. **Kategori tunjangan makan/transport untuk jabatan yang tidak persis cocok ke 3 tingkatan yang diberikan** (mis. "General Manager" vs "Direktur"; "Manager PPIC"/"RnD Staff"/"PPIC Jr. Spv" — dicoba dihitung mundur dari angka rekonsiliasi 21 Agu, hasilnya TIDAK konsisten, sengaja tidak dipaksakan).
+4. **Siapa saja yang TIDAK ikut BPJS Kesehatan per orang** — masih `null` (belum dikonfirmasi) untuk semua 19 karyawan kontrak + Darmini.
+5. **Apakah model biaya pemberi kerja (Bagian D) perlu diperluas ke PHL (wage_type='daily')** — saat ini HANYA diterapkan ke karyawan bulanan.
+6. **Aturan atribusi tunjangan makan/transport ke batch produksi tertentu** — sisi biaya SDM AKTUAL per batch (`compute_production_batch_labor_cost`) sengaja belum menghitung tunjangan (per hari hadir, bukan per batch).
+7. **Apakah overhead SDM (`monthly_overhead_baseline`) sebaiknya dihitung sebagai SISA** (total biaya pemberi kerja semua karyawan − biaya SDM tercatat di batch) — BELUM dibangun, butuh item 1 & 4 di atas dulu (lihat penjelasan lengkap di "Koreksi Bagian D/E setelah A→F").
+8. **Jawaban tim finance** — dokumen pertanyaan sudah dikirim pemilik produk, belum ada jawaban.
 
 ---
 

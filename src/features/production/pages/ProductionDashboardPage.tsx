@@ -104,7 +104,7 @@ export default function ProductionDashboardPage() {
   const [expandedWoId, setExpandedWoId] = useState<number | null>(null);
   const [routingSteps, setRoutingSteps] = useState<RoutingStep[]>([]);
   const [stepProgress, setStepProgress] = useState<StepProgress[]>([]);
-  const [stepForm, setStepForm] = useState<Record<number, { status: string; qty_recorded: string }>>({});
+  const [stepForm, setStepForm] = useState<Record<number, { status: string; qty_recorded: string; record_date: string; qty_reject: string }>>({});
   const [stepMessage, setStepMessage] = useState<Record<number, string>>({});
   const [batchesForExpanded, setBatchesForExpanded] = useState<ProductionBatch[]>([]);
   const [selectedBatchId, setSelectedBatchId] = useState('');
@@ -397,14 +397,16 @@ export default function ProductionDashboardPage() {
         production_batch_id: Number(selectedBatchId),
         routing_step_id: step.routing_step_id,
         status: entry.status,
-        qty_recorded: entry.qty_recorded || null
+        qty_recorded: entry.qty_recorded || null,
+        record_date: entry.record_date || undefined,
+        qty_reject: entry.qty_reject || null
       })
     });
     if (!ok) {
       setStepMessage((prev) => ({ ...prev, [step.routing_step_id]: body.error || 'Gagal menyimpan progres.' }));
       return;
     }
-    setStepMessage((prev) => ({ ...prev, [step.routing_step_id]: 'Tersimpan.' }));
+    setStepMessage((prev) => ({ ...prev, [step.routing_step_id]: body.warning ? `Tersimpan. ${body.warning}` : 'Tersimpan.' }));
     const progressRes = await authedFetch(`/api/work-order-step-progress?work_order_id=${wo.work_order_id}&production_batch_id=${selectedBatchId}`);
     if (progressRes.ok) setStepProgress(progressRes.body.stepProgress || []);
   };
@@ -762,7 +764,12 @@ export default function ProductionDashboardPage() {
                   })()}
                   {routingSteps.map((step) => {
                     const existing = stepProgress.find((p) => p.routing_step_id === step.routing_step_id);
-                    const entry = stepForm[step.routing_step_id] ?? { status: existing?.status ?? 'pending', qty_recorded: existing?.qty_recorded !== null && existing?.qty_recorded !== undefined ? String(existing.qty_recorded) : '' };
+                    const entry = stepForm[step.routing_step_id] ?? {
+                      status: existing?.status ?? 'pending',
+                      qty_recorded: existing?.qty_recorded !== null && existing?.qty_recorded !== undefined ? String(existing.qty_recorded) : '',
+                      record_date: new Date().toISOString().slice(0, 10),
+                      qty_reject: ''
+                    };
                     return (
                       <div key={step.routing_step_id} className="rounded-md border p-3">
                         <div className="flex items-center justify-between">
@@ -774,7 +781,7 @@ export default function ProductionDashboardPage() {
                         <p className="mb-2 text-xs text-muted-foreground">
                           Durasi aktif {step.active_duration_minutes} menit, tunggu {step.wait_duration_minutes} menit
                         </p>
-                        <div className="grid grid-cols-[160px_140px_auto] items-end gap-2">
+                        <div className="grid grid-cols-[160px_140px_140px_140px_auto] items-end gap-2">
                           <label className="flex flex-col gap-1">
                             <span className="text-xs font-medium text-muted-foreground">Status</span>
                             <Select value={entry.status} onValueChange={(value) => setStepForm((prev) => ({ ...prev, [step.routing_step_id]: { ...entry, status: value } }))}>
@@ -798,6 +805,24 @@ export default function ProductionDashboardPage() {
                               step="any"
                               value={entry.qty_recorded}
                               onChange={(event) => setStepForm((prev) => ({ ...prev, [step.routing_step_id]: { ...entry, qty_recorded: event.target.value } }))}
+                            />
+                          </label>
+                          <label className="flex flex-col gap-1">
+                            <span className="text-xs font-medium text-muted-foreground">Tanggal Kejadian</span>
+                            <Input
+                              type="date"
+                              value={entry.record_date}
+                              onChange={(event) => setStepForm((prev) => ({ ...prev, [step.routing_step_id]: { ...entry, record_date: event.target.value } }))}
+                            />
+                          </label>
+                          <label className="flex flex-col gap-1">
+                            <span className="text-xs font-medium text-muted-foreground">Reject (opsional)</span>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={entry.qty_reject}
+                              onChange={(event) => setStepForm((prev) => ({ ...prev, [step.routing_step_id]: { ...entry, qty_reject: event.target.value } }))}
                             />
                           </label>
                           <Button size="sm" onClick={() => handleSaveStep(expandedWo, step)}>

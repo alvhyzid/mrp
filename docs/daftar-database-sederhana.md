@@ -230,7 +230,9 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 **Database Progres Tahap Produksi** (`work_order_step_progress`)
 - ID Progres (work_order_step_progress_id) · ID Work Order (work_order_id) · ID Batch (production_batch_id) · ID Tahap (routing_step_id) · ID Shift (shift_id)
 - Jumlah Masuk ke Tahap Ini (qty_input) · Satuan Masuk — bisa beda dari keluaran (uom_input)
-- Status (status) · Jumlah Keluar/Dihasilkan (qty_recorded) · Satuan Keluar (uom) · Waktu Mulai (started_at) · Waktu Selesai (completed_at) · Catatan (notes)
+- Status (status) · Jumlah Keluar/Dihasilkan BAIK (qty_recorded) · Satuan Keluar (uom) · Waktu Mulai (started_at) · Waktu Selesai (completed_at) · Catatan (notes)
+- Jumlah Reject — cacat/gagal di tahap ini, terpisah dari susut proses biasa (qty_reject) · Alasan Reject, teks bebas (reject_reason)
+- Waktu Mulai/Selesai TIDAK dipaksa "sekarang" — staf bisa pilih tanggal kejadian sebenarnya saat mencatat (boleh mundur beberapa hari, tidak boleh maju atau sebelum batch dibuat)
 
 **Database Notifikasi Sistem** (`system_alerts`)
 - ID Alert (system_alert_id) · ID Perusahaan (company_id)

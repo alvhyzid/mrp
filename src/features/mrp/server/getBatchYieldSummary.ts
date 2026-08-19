@@ -54,7 +54,7 @@ export async function getBatchYieldSummary(request: NextRequest): Promise<ApiRes
 
     const { data: progressRows, error: progressError } = await adminClient
       .from('work_order_step_progress')
-      .select('work_order_step_progress_id, routing_step_id, status, qty_input, uom_input, qty_recorded, uom')
+      .select('work_order_step_progress_id, routing_step_id, status, qty_input, uom_input, qty_recorded, qty_reject, reject_reason, uom')
       .eq('production_batch_id', productionBatchId)
       .order('work_order_step_progress_id', { ascending: false });
     if (progressError) return { status: 500, body: { error: progressError.message } };
@@ -71,6 +71,12 @@ export async function getBatchYieldSummary(request: NextRequest): Promise<ApiRes
       const qtyInput = progress?.qty_input ?? null;
       const qtyRecorded = progress?.qty_recorded ?? null;
       const shrinkagePct = qtyInput !== null && qtyInput > 0 && qtyRecorded !== null ? Math.round(((qtyInput - qtyRecorded) / qtyInput) * 10000) / 100 : null;
+      const qtyReject = progress?.qty_reject ?? null;
+      // % dari total susut (input - output baik) yang merupakan REJECT
+      // spesifik — sisanya susut proses biasa (evaporasi dsb). Cuma bisa
+      // dihitung kalau ada susut sama sekali (pembagi > 0).
+      const rejectShareOfShrinkagePct =
+        qtyReject !== null && qtyInput !== null && qtyRecorded !== null && qtyInput - qtyRecorded > 0 ? Math.round((qtyReject / (qtyInput - qtyRecorded)) * 10000) / 100 : null;
       return {
         routing_step_id: rs.routing_step_id,
         sequence_no: rs.sequence_no,
@@ -79,10 +85,15 @@ export async function getBatchYieldSummary(request: NextRequest): Promise<ApiRes
         qty_input: qtyInput,
         uom_input: progress?.uom_input ?? null,
         qty_recorded: qtyRecorded,
+        qty_reject: qtyReject,
+        reject_reason: progress?.reject_reason ?? null,
         uom: progress?.uom ?? null,
-        shrinkage_pct: shrinkagePct
+        shrinkage_pct: shrinkagePct,
+        reject_share_of_shrinkage_pct: rejectShareOfShrinkagePct
       };
     });
+
+    const totalReject = steps.reduce((sum, s) => sum + (s.qty_reject ?? 0), 0);
 
     const firstStep = steps[0] ?? null;
     const lastStep = steps[steps.length - 1] ?? null;
@@ -96,7 +107,8 @@ export async function getBatchYieldSummary(request: NextRequest): Promise<ApiRes
       body: {
         batch_number: batch.batch_number,
         steps,
-        total_yield_pct: totalYieldPct
+        total_yield_pct: totalYieldPct,
+        total_reject: totalReject
       }
     };
   } catch (error) {

@@ -73,7 +73,7 @@ export async function getGanttBlockDetail(request: NextRequest): Promise<ApiResu
         .eq('routing_step_id', routingStepId),
       adminClient
         .from('work_order_step_progress')
-        .select('work_order_step_progress_id, status, qty_input, uom_input, qty_recorded, uom, started_at, completed_at, notes')
+        .select('work_order_step_progress_id, status, qty_input, uom_input, qty_recorded, qty_reject, reject_reason, uom, started_at, completed_at, notes')
         .eq('production_batch_id', productionBatchId)
         .eq('routing_step_id', routingStepId)
         .order('work_order_step_progress_id', { ascending: false })

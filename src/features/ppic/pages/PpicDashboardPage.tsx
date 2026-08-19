@@ -84,6 +84,8 @@ type BlockDetailProgress = {
   qty_input: number | null;
   uom_input: string | null;
   qty_recorded: number | null;
+  qty_reject: number | null;
+  reject_reason: string | null;
   uom: string | null;
   started_at: string | null;
   completed_at: string | null;
@@ -99,8 +101,21 @@ type BlockDetail = {
   assignments: BlockDetailAssignment[];
   progress: BlockDetailProgress[];
 };
-type YieldStep = { routing_step_id: number; sequence_no: number; step_name: string; status: string | null; qty_input: number | null; uom_input: string | null; qty_recorded: number | null; uom: string | null; shrinkage_pct: number | null };
-type YieldSummary = { batch_number: string; steps: YieldStep[]; total_yield_pct: number | null };
+type YieldStep = {
+  routing_step_id: number;
+  sequence_no: number;
+  step_name: string;
+  status: string | null;
+  qty_input: number | null;
+  uom_input: string | null;
+  qty_recorded: number | null;
+  qty_reject: number | null;
+  reject_reason: string | null;
+  uom: string | null;
+  shrinkage_pct: number | null;
+  reject_share_of_shrinkage_pct: number | null;
+};
+type YieldSummary = { batch_number: string; steps: YieldStep[]; total_yield_pct: number | null; total_reject: number };
 
 // K8 (Fase Produksi Nyata, bagian D) — usulan standar produksi menunggu keputusan planner.
 type StandardProposal = {
@@ -308,7 +323,7 @@ export default function PpicDashboardPage() {
   const [blockDetailLoading, setBlockDetailLoading] = useState(false);
   const [blockDetailError, setBlockDetailError] = useState('');
 
-  const emptyProgressForm = { status: 'in_progress', qty_input: '', uom_input: '', qty_recorded: '', uom: '', notes: '' };
+  const emptyProgressForm = { status: 'in_progress', qty_input: '', uom_input: '', qty_recorded: '', uom: '', notes: '', record_date: new Date().toISOString().slice(0, 10), qty_reject: '', reject_reason: '' };
   const [progressForm, setProgressForm] = useState(emptyProgressForm);
   const [progressSuggestion, setProgressSuggestion] = useState<{ qty: number; uom: string | null; source: 'previous_step' | 'planned_qty' } | null>(null);
   const [progressFormStatus, setProgressFormStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
@@ -519,7 +534,10 @@ export default function PpicDashboardPage() {
           uom_input: latestProgress.uom_input ?? '',
           qty_recorded: latestProgress.qty_recorded !== null ? String(latestProgress.qty_recorded) : '',
           uom: latestProgress.uom ?? '',
-          notes: latestProgress.notes ?? ''
+          notes: latestProgress.notes ?? '',
+          record_date: new Date().toISOString().slice(0, 10),
+          qty_reject: latestProgress.qty_reject !== null ? String(latestProgress.qty_reject) : '',
+          reject_reason: latestProgress.reject_reason ?? ''
         });
       } else if (suggestRes.ok) {
         const suggestion = suggestRes.body as { suggested_qty: number | null; suggested_uom: string | null; source: 'previous_step' | 'planned_qty' };
@@ -550,7 +568,10 @@ export default function PpicDashboardPage() {
         uom_input: progressForm.uom_input || null,
         qty_recorded: progressForm.qty_recorded === '' ? null : Number(progressForm.qty_recorded),
         uom: progressForm.uom || null,
-        notes: progressForm.notes || null
+        notes: progressForm.notes || null,
+        record_date: progressForm.record_date || undefined,
+        qty_reject: progressForm.qty_reject === '' ? null : Number(progressForm.qty_reject),
+        reject_reason: progressForm.reject_reason || null
       })
     });
     if (!ok) {
@@ -559,7 +580,7 @@ export default function PpicDashboardPage() {
       return;
     }
     setProgressFormStatus('success');
-    setProgressFormMessage('Progres tahap berhasil disimpan.');
+    setProgressFormMessage(body.warning ? `Progres tahap berhasil disimpan. ${body.warning}` : 'Progres tahap berhasil disimpan.');
     const { ok: detailOk, body: detailBody } = await authedFetch(
       `/api/production-batches/step-detail?production_batch_id=${blockDetail.batch.production_batch_id}&routing_step_id=${blockDetail.step.routing_step_id}`
     );
@@ -1433,6 +1454,19 @@ export default function PpicDashboardPage() {
                       <label className="mb-1 block text-xs text-muted-foreground">Satuan Keluar</label>
                       <Input value={progressForm.uom} onChange={(e) => setProgressForm((prev) => ({ ...prev, uom: e.target.value }))} placeholder="mis. kg" />
                     </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-muted-foreground">Tanggal Kejadian</label>
+                      <Input type="date" value={progressForm.record_date} onChange={(e) => setProgressForm((prev) => ({ ...prev, record_date: e.target.value }))} />
+                      <span className="text-xs text-muted-foreground">Kapan tahap ini SEBENARNYA terjadi — boleh mundur (mis. mencatat hari ini untuk kejadian kemarin), tidak boleh maju.</span>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-muted-foreground">Jumlah Reject (opsional)</label>
+                      <Input type="number" step="any" min="0" value={progressForm.qty_reject} onChange={(e) => setProgressForm((prev) => ({ ...prev, qty_reject: e.target.value }))} placeholder="mis. 125" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="mb-1 block text-xs text-muted-foreground">Alasan Reject (opsional)</label>
+                      <Input value={progressForm.reject_reason} onChange={(e) => setProgressForm((prev) => ({ ...prev, reject_reason: e.target.value }))} placeholder="mis. sachet bocor" />
+                    </div>
                     <div className="col-span-2">
                       <label className="mb-1 block text-xs text-muted-foreground">Catatan (opsional)</label>
                       <Input value={progressForm.notes} onChange={(e) => setProgressForm((prev) => ({ ...prev, notes: e.target.value }))} />
@@ -1467,6 +1501,7 @@ export default function PpicDashboardPage() {
                       <th className="h-8 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Input</th>
                       <th className="h-8 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Output</th>
                       <th className="h-8 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Susut</th>
+                      <th className="h-8 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Reject</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1478,6 +1513,17 @@ export default function PpicDashboardPage() {
                         <td className="px-2 py-1.5">{s.qty_input !== null ? `${s.qty_input} ${s.uom_input ?? ''}` : '-'}</td>
                         <td className="px-2 py-1.5">{s.qty_recorded !== null ? `${s.qty_recorded} ${s.uom ?? ''}` : '-'}</td>
                         <td className="px-2 py-1.5">{s.shrinkage_pct !== null ? `${s.shrinkage_pct}%` : '-'}</td>
+                        <td className="px-2 py-1.5">
+                          {s.qty_reject !== null ? (
+                            <span className="text-destructive">
+                              {s.qty_reject} {s.uom ?? ''}
+                              {s.reject_share_of_shrinkage_pct !== null ? ` (${s.reject_share_of_shrinkage_pct}% dari susut)` : ''}
+                            </span>
+                          ) : (
+                            '-'
+                          )}
+                          {s.reject_reason ? <div className="text-xs text-muted-foreground">{s.reject_reason}</div> : null}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1487,7 +1533,15 @@ export default function PpicDashboardPage() {
                 <span className="text-sm font-medium text-foreground">Total Yield Batch</span>
                 <span className="text-lg font-semibold text-foreground">{yieldSummary.total_yield_pct !== null ? `${yieldSummary.total_yield_pct}%` : 'Belum bisa dihitung'}</span>
               </div>
-              <p className="text-xs text-muted-foreground">Total Yield = Output tahap terakhir ÷ Input tahap pertama × 100%.</p>
+              {yieldSummary.total_reject > 0 ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-foreground">Total Reject (semua tahap)</span>
+                  <span className="text-sm font-medium text-destructive">{yieldSummary.total_reject}</span>
+                </div>
+              ) : null}
+              <p className="text-xs text-muted-foreground">
+                Total Yield = Output tahap terakhir (baik, sudah dikurangi reject) ÷ Input tahap pertama × 100% — reject sudah otomatis TIDAK ikut terhitung sebagai yield.
+              </p>
 
               {canProposeProductionStandard(role) ? (
                 <div className="border-t pt-3">

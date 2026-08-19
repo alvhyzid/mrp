@@ -119,10 +119,19 @@ export async function learnFromBatchCore(adminClient: SupabaseClient, companyId:
   }
 
   // active_duration_minutes — PER TAHAP, dari completed_at - started_at.
+  // BATAS ATAS KEWAJARAN (8 jam = 480 menit, generasi 1 shift penuh): sejak
+  // progres tahap bisa dicatat BACKDATE (tanggal kejadian dipilih staf, bukan
+  // dipaksa hari ini — lihat recordWorkOrderStepProgress.ts), started_at dan
+  // completed_at bisa jatuh di TANGGAL BACKDATE BERBEDA kalau staf mencatat
+  // "mulai" dan "selesai" tahap yang sama di 2 kunjungan terpisah berhari-hari
+  // -- selisihnya jadi rentang KALENDER (berhari-hari), bukan durasi AKTIF
+  // sungguhan. Sampel seperti itu HARUS dibuang, bukan diajukan ke K8 (akan
+  // merusak pembelajaran durasi tahap dengan angka ribuan menit yang salah).
+  const MAX_PLAUSIBLE_ACTIVE_DURATION_MINUTES = 480;
   for (const step of orderedSteps) {
     if (step.progress.started_at && step.progress.completed_at) {
       const minutes = (new Date(step.progress.completed_at).getTime() - new Date(step.progress.started_at).getTime()) / 60000;
-      if (minutes > 0) {
+      if (minutes > 0 && minutes <= MAX_PLAUSIBLE_ACTIVE_DURATION_MINUTES) {
         const { error: rpcError } = await adminClient.rpc('propose_production_standard', {
           p_company_id: companyId,
           p_item_id: workOrder.item_id,

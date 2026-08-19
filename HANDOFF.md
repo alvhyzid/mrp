@@ -4,6 +4,24 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Margin Watch Lapis 1-2 — 20 Agu 2026 (commit `b3938d4`, CI hijau)
+
+Fitur BARU: pengawasan margin BERJALAN per order (bukan cuma margin realized setelah kirim seperti `get_sales_order_margin` yang sudah ada). Detail lengkap desain & kategori ada di komentar `getMarginWatch.ts` dan `docs/rancangan-skema-database-mrp.md` (bagian `sales_order_line_margin_snapshots`). Ringkasan:
+
+- **Lapis 1**: baseline margin rencana dikunci sekali per baris SO (pola sama persis snapshot standar K8/kelayakan). Biaya SDM standar SENGAJA kosong — `routing_steps` belum menyimpan jumlah orang per tahap, genuinely tidak bisa dihitung, bukan lupa.
+- **Lapis 2**: 5 kategori selisih dihitung LIVE dari data nyata (harga bahan/kemasan vs harga master, pemakaian vs BOM standar, reject, SDM aktual, lembur/shift tambahan). Kategori tanpa data cukup ditandai eksplisit "belum bisa dihitung", tidak pernah diam-diam 0.
+- **Peringatan otomatis**: alert_type baru `margin_threshold_breach` ke department finance+management saat proyeksi menembus ambang yang bisa diatur pemilik order.
+
+**TEMUAN PENTING #1 — bug di infrastruktur alert yang sudah ada, ditemukan lewat percobaan nyata**: `upsert_department_alert()`/`resolve_department_alerts()` (dipakai alert lain: material_shortage dkk) sejak migration `20260819150000` (audit keamanan sesi sebelumnya) mengharuskan `company_id` diturunkan dari `related_work_order_id` ATAU `related_item_id` — kalau KEDUANYA null, fungsi **diam-diam return tanpa melakukan apa pun** (`resolve` tidak benar-benar mengubah status, dibuktikan lewat test langsung ke RPC). Alert margin (terkait `sales_order_line`, bukan WO/item) persis kena kasus ini. **Solusi yang dipakai**: fungsi mandiri baru `upsert_margin_threshold_alert()` (migration `20260820190000`), TIDAK menyentuh 2 fungsi lama itu (risiko efek samping ke pemanggil nyata lain belum diaudit penuh). **Kalau nanti alert_type BARU LAIN muncul yang juga tidak terkait WO/item, kena masalah yang sama** — perlu perbaikan di akar (fungsi lama itu sendiri) atau bikin fungsi mandiri lagi seperti ini.
+
+**TEMUAN PENTING #2 — data PO Box Drinkme di sistem TIDAK cocok dengan skenario yang diberikan sebagai acuan**: pemilik produk memberi contoh "harga master Rp1.500 vs PO sungguhan ke CV Gasper Rp2.925" sebagai kasus nyata yang HARUS terdeteksi sistem. Dicek: PO CV Gasper yang tercatat di sistem (dibuat sesi sebelumnya, `purchase_order_id: 7`) punya `unit_price: 1.500` — SAMA dengan master, BUKAN Rp2.925. Ini karena saat PO itu dibuat, harga sungguhan belum diberikan ke saya, jadi Rp1.500 dipakai sebagai placeholder (mengikuti harga master) — bukan angka nyata. **Belum saya perbaiki sendiri** (mengubah data transaksi finansial nyata butuh konfirmasi eksplisit, bukan tebakan dari deskripsi chat) — mekanismenya SUDAH terbukti benar lewat test dengan fixture terpisah (persis reproduksi kasus Rp14,25 juta), tinggal `purchase_order_lines.unit_price` untuk PO #7 dikoreksi ke Rp2.925 (lewat jalur resmi, bukan UPDATE langsung) begitu dikonfirmasi, baru Margin Watch SAS005 asli akan menampilkan temuan itu.
+
+**Verifikasi nyata terhadap SAS005 (sebelum diperbaiki di atas)**: kategori Selisih Harga SUDAH menemukan Rp28,25 juta selisih POSITIF (bahan lebih murah dari harga master) dari data saldo-awal Karanglo yang nyata (Inulin, Psylium Husk, dll) — membuktikan mekanisme jalan di data produksi asli, bukan cuma fixture uji.
+
+**Belum dikerjakan (di luar cakupan sesi ini)**: Lapis 3 (7 tuas perbaikan margin — diminta eksplisit "kerjakan SETELAH Lapis 1-2 terbukti jalan"), dan reframe tampilan kelayakan SAS001 dari biner FEASIBLE/TIDAK jadi kurva proyeksi pengiriman (diminta "sekalian" di pesan yang sama, TAPI merupakan fitur terpisah yang cukup besar — belum disentuh, perlu sesi/giliran kerja sendiri).
+
+---
+
 ## ATURAN BAKU MIGRASI — WAJIB DIBACA SEBELUM MENULIS `CREATE FUNCTION` BARU
 
 Ditulis setelah audit keamanan menyeluruh 19 Agu 2026 menemukan 12+2 fungsi database bisa dipanggil anon key TANPA login sama sekali (lihat bagian "Audit Keamanan Menyeluruh" di bawah untuk kronologi lengkap).

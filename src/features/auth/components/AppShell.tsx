@@ -20,7 +20,8 @@ import {
   UserAvatar,
   DeliveryTruck,
   Money,
-  Star
+  Star,
+  Book
 } from '@carbon/icons-react';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import {
@@ -111,6 +112,10 @@ const TOP_ITEM: NavItem = { label: 'Ringkasan', href: '/dashboard', visible: () 
 // Visibilitas PER ITEM sengaja tetap identik dengan sebelum restrukturisasi ini —
 // cuma pengelompokan & format tampilannya yang berubah.
 const NAV_SECTIONS: NavSection[] = [
+  {
+    title: 'Kamus',
+    items: [{ label: 'Antrean Kamus', href: '/kamus', visible: () => true, icon: Book }]
+  },
   {
     title: 'MRP',
     items: [

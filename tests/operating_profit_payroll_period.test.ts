@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { NextRequest } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { getMonthlyOperatingProfit } from '../src/features/mrp/server/getMonthlyOperatingProfit';
 
 // Perintah Gabungan A-F, Bagian E (21 Agu 2026) -- keputusan pemilik produk:
 // Laba Operasional bulanan IKUT periode gajian (26 bulan sebelumnya s/d 25
@@ -69,6 +71,16 @@ describe('get_monthly_operating_profit — periode gajian (payroll_period_start_
     return data.session.access_token;
   }
 
+  // Server function dipanggil LANGSUNG (bukan lewat HTTP ke dev server sungguhan
+  // -- CI tidak menjalankan `next dev`, jadi fetch ke localhost:3000 akan SELALU
+  // gagal di sana meski lolos lokal). Pola sama dengan tests/margin_watch.test.ts dkk.
+  async function callGetMonthlyOperatingProfit(token: string, year: number, month: number) {
+    const req = new NextRequest(`http://localhost/api/reports/monthly-operating-profit?year=${year}&month=${month}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return getMonthlyOperatingProfit(req, year, month);
+  }
+
   beforeAll(async () => {
     const { data: company } = await adminClient
       .from('companies')
@@ -129,9 +141,9 @@ describe('get_monthly_operating_profit — periode gajian (payroll_period_start_
   it('(NEGATIF/FALLBACK) company TANPA payroll_period_start_day -> tetap bulan KALENDER (perilaku lama, zero regresi)', async () => {
     await makeShipment(10, 10000, 6000, '2026-08-01'); // awal bulan kalender Agustus
     const token = await loginAsAdmin();
-    const res = await fetch('http://localhost:3000/api/reports/monthly-operating-profit?year=2026&month=8', { headers: { Authorization: `Bearer ${token}` } });
-    const body = await res.json();
-    expect(res.status).toBe(200);
+    const result = await callGetMonthlyOperatingProfit(token, 2026, 8);
+    const body = result.body as any;
+    expect(result.status).toBe(200);
     expect(Number(body.total_margin)).toBeCloseTo(40000, 2); // 10*(10000-6000)
     expect(body.period_start).toBe('2026-08-01');
     expect(body.period_end).toBe('2026-08-31');
@@ -142,15 +154,15 @@ describe('get_monthly_operating_profit — periode gajian (payroll_period_start_
     await makeShipment(5, 20000, 8000, '2026-08-20'); // sebelum tgl 26 -> masuk periode "Agustus" (26 Jul-25 Agu)
 
     const token = await loginAsAdmin();
-    const resAug = await fetch('http://localhost:3000/api/reports/monthly-operating-profit?year=2026&month=8', { headers: { Authorization: `Bearer ${token}` } });
-    const bodyAug = await resAug.json();
+    const resultAug = await callGetMonthlyOperatingProfit(token, 2026, 8);
+    const bodyAug = resultAug.body as any;
     expect(bodyAug.period_start).toBe('2026-07-26');
     expect(bodyAug.period_end).toBe('2026-08-25');
     // Margin periode "Agustus" (26 Jul-25 Agu) sekarang berisi shipment 1 Agu (40rb) + shipment 20 Agu (5*(20000-8000)=60rb) = 100rb.
     expect(Number(bodyAug.total_margin)).toBeCloseTo(100000, 2);
 
-    const resSep = await fetch('http://localhost:3000/api/reports/monthly-operating-profit?year=2026&month=9', { headers: { Authorization: `Bearer ${token}` } });
-    const bodySep = await resSep.json();
+    const resultSep = await callGetMonthlyOperatingProfit(token, 2026, 9);
+    const bodySep = resultSep.body as any;
     expect(bodySep.period_start).toBe('2026-08-26');
     expect(bodySep.period_end).toBe('2026-09-25');
     expect(Number(bodySep.total_margin)).toBeCloseTo(0, 2); // belum ada shipment di periode ini
@@ -161,13 +173,13 @@ describe('get_monthly_operating_profit — periode gajian (payroll_period_start_
     await makeShipment(1, 50000, 30000, '2026-08-26'); // masuk periode "September" (mulai 26 Agu)
 
     const token = await loginAsAdmin();
-    const resAug = await fetch('http://localhost:3000/api/reports/monthly-operating-profit?year=2026&month=8', { headers: { Authorization: `Bearer ${token}` } });
-    const bodyAug = await resAug.json();
+    const resultAug = await callGetMonthlyOperatingProfit(token, 2026, 8);
+    const bodyAug = resultAug.body as any;
     // total sebelumnya 100rb + tambahan 20rb (tgl 25) = 120rb, TIDAK termasuk tgl 26.
     expect(Number(bodyAug.total_margin)).toBeCloseTo(120000, 2);
 
-    const resSep = await fetch('http://localhost:3000/api/reports/monthly-operating-profit?year=2026&month=9', { headers: { Authorization: `Bearer ${token}` } });
-    const bodySep = await resSep.json();
+    const resultSep = await callGetMonthlyOperatingProfit(token, 2026, 9);
+    const bodySep = resultSep.body as any;
     expect(Number(bodySep.total_margin)).toBeCloseTo(20000, 2); // cuma shipment tgl 26
   });
 });

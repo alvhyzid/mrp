@@ -4,7 +4,7 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
-## ANTREAN KERJA OTONOM A→G — 21 Agu 2026 (multi-sesi — A/B/C SELESAI, D/E/F/G BELUM, lanjutkan dari sini)
+## ANTREAN KERJA OTONOM A→G — 21 Agu 2026 (multi-sesi — A/B/C/D/E/F SELESAI, G BELUM, lanjutkan dari sini)
 
 Pemilik produk memberi instruksi besar berjenjang A→G, eksplisit ditandai **multi-sesi** ("bukan 2 jam, berhenti di titik aman kapan pun, lanjutkan dari antrean ini di sesi berikutnya tanpa instruksi ulang"). **PRINSIP BARU yang berlaku mulai sekarang** (menggantikan arahan generik-multi-tenant sebelumnya, lihat memory `build-for-real-tenant-not-speculative-abstraction`): bangun untuk kebutuhan NYATA PT Indo Taste, konfigurasi/kolom baru boleh kalau ongkosnya kecil, JANGAN bikin tabel konfigurasi/plugin/lapisan abstraksi generik untuk tenant yang belum ada. Larangan hardcode nama produk/orang/tahap di LOGIKA tetap berlaku.
 
@@ -106,7 +106,33 @@ Komponen generik `ProvenanceInfoButton` (`src/components/ui/provenance-info-butt
 
 **Test baru**: `tests/process_mining.test.ts` (5 test, termasuk 2 skenario negatif — tanpa data sama sekali tidak menghasilkan angka menyesatkan, sampel <3 menghasilkan `null` bukan rata-rata dari titik terlalu sedikit — plus 1 test membuktikan durasi dihitung PERSIS dari selisih waktu nyata, bukan diperkirakan).
 
-**F. Kesiapan AI Tenant** — BELUM DIMULAI. Dokumen `docs/spesifikasi-kesiapan-ai-tenant.md` SUDAH ADA di repo (disalin dari Downloads 21 Agu) — baca BAGIAN 2. Ambang §1.4 dipakai apa adanya sebagai seed. `metric_key` yang tidak bisa dihitung dari data nyata → BERHENTI & laporkan (STOP CONDITION), jangan bikin angka pengganti. Satu guard tunggal, TANPA LLM.
+**F. Kesiapan AI Tenant — SELESAI (versi generik minimal, 6 dari 7 kemampuan §1.4).** Halaman `/ai-readiness` TENANT-FACING (semua role login, beda dari Bagian C/E yang leadership-only) — skor kesiapan per kemampuan AI + gerbang beneran (bukan cuma peringatan) + daftar tugas berdampak.
+
+**STOP CONDITION §7 DICEK, TERPICU SEBAGIAN** — 3 dari 10 `metric_key` yang diminta dokumen **TIDAK BISA dihitung dari data nyata saat ini**, dilaporkan (bukan diproksi/dipalsukan):
+- `quality.downtime_classified` & `quality.ncr_root_cause` (§1.5) — **tidak ada tabel downtime maupun NCR di skema sama sekali.** §2.2 dokumen sumber keliru berasumsi tabel itu sudah ada (diverifikasi lewat pencarian penuh `supabase/migrations/*.sql` + `docs/rancangan-skema-database-mrp.md` — nol referensi). Tidak diproksi diam-diam pakai `production_disruptions` (maknanya beda — itu gangguan produksi terjadwal/tak terjadwal, bukan downtime mesin per definisi §1.5).
+- `eval.pass_rate` (prasyarat kemampuan "Advisor / saran tindakan") — **tidak ada infrastruktur eval suite** (butuh 30-50 soal+jawaban benar dari pemilik produk sendiri). Ini SAMA PERSIS dgn blocker Fase 1-3 AI roadmap yang sudah tercatat sebelumnya di HANDOFF ini (butuh pemilik produk personal, bukan sesuatu yang bisa diasumsikan Claude Code). **Kemampuan "Advisor / saran tindakan" karena itu TIDAK diseed sama sekali** (bukan diseed lalu dikunci permanen dgn angka palsu — lebih jujur tidak ada daripada ada tapi mustahil dibuka).
+
+**6 kemampuan lain SEMUA diseed & terukur dari data nyata**: Panel Asal-Usul (tanpa prasyarat, selalu 100%), Process Mining, Copilot Data Pabrik, Narasi & Laporan, Penjelasan Margin & Biaya, Anomaly Detection.
+
+**Penyimpangan jujur lain**: (1) `ai_capabilities`/`ai_capability_requirements` dibuat GLOBAL (bukan per-tenant seperti §1.4 minta) — baru ada 1 tenant nyata, kolom override-per-tenant belum dibangun (prinsip "jangan bangun abstraksi spekulatif utk tenant yang belum ada"; ambang §1.4 dipakai apa adanya sbg default global, TINJAU dulu sebelum tenant kedua — lihat §8 dokumen sumber). (2) Mesin pengukuran dihitung LIVE tiap dashboard dibuka lalu di-cache ke `ai_capability_status` (upsert) — BUKAN dijadwalkan cron harian seperti §3.2 minta (belum ada infrastruktur cron/Vercel Cron di proyek ini; query murah utk skala 1 tenant, sama pola dgn `computeAiProjectProgress.ts` Bagian C).
+
+**Skema**: `ai_capabilities`, `ai_capability_requirements` (katalog global, seed lewat migration langsung — bukan seeder per-company), `ai_capability_status` (hasil per tenant, di-cache), `ai_capability_overrides` (HANYA `super_admin` platform, RLS + gerbang TypeScript dobel, TIDAK ADA UI tenant yang mengarah ke sini sama sekali), `ai_answer_feedback` (disiapkan §3.6, belum ada pemanggil nyata — tidak ada fitur AI yang menjawab apa pun saat ini) — migration `20260822090000`.
+
+**Rumus kesiapan** (keputusan eksplisit, didokumentasikan di kode): tiap prasyarat → `persen = min(100, aktual/ambang × 100)` (dibatasi maks 100 begitu terpenuhi); kemampuan terbuka HANYA kalau SEMUA prasyarat `is_blocking` benar-benar terpenuhi (gerbang keras, bukan skor); skor kemampuan = rata-rata tertimbang (`weight`) dari persen tiap prasyarat.
+
+**Komponen `AnswerBasis`** (`src/components/ui/answer-basis.tsx`) dibangun sesuai §3.5 — disiapkan sekarang, BELUM dipasang di fitur AI apa pun (tidak ada fitur AI yang menjawab pakai LLM di proyek ini saat ini), sama pola dgn `ProvenanceInfoButton` yang dibangun mendahului retrofit penuh.
+
+**Perubahan kecil pada modul Kamus** (diizinkan eksplisit §4 "boleh menambah filter yang dibutuhkan"): tambah filter `scope` di `listKamusTerms`/`/api/kamus`, dan `KamusPage` sekarang membaca `status`/`priority`/`scope` dari URL query saat halaman dibuka — dipakai tombol "Yang Bisa Anda Kerjakan" di `/ai-readiness` utk membuka antrean Kamus persis pada baris yang relevan (§3.4). Efek samping: `KamusPage` sekarang pakai `useSearchParams()`, jadi `app/(shell)/kamus/page.tsx` dibungkus `<Suspense>` (murni syarat Next.js, ditemukan lewat build gagal sebelum commit).
+
+### BUKTI YANG DIMINTA (§6 dokumen)
+1. **Query nyata tiap `metric_key` utk Indo Taste (company_id=1) hari ini**: `process_mining` 11,9% (riwayat 2,02 hari dari ambang 90; 43 transisi dari ambang 200) · `copilot_data_pabrik` 0% (0 dari ambang 70% kamus prioritas 1-2 dikonfirmasi — backlog SUDAH ada 51 baris tapi belum ada yang benar-benar dikonfirmasi manusia) · `narasi_laporan` 2,7% · `penjelasan_margin_biaya` 0% · `anomaly_detection` 0% (0 item DIPELAJARI — K8 belum pernah belajar dari batch nyata) · `panel_asal_usul` 100% (tanpa prasyarat). **SEMUA kemampuan bergerbang MASIH TERKUNCI utk Indo Taste hari ini** — jujur, bukan cacat: kamus baru berupa backlog belum dijawab manusia, K8 belum pernah belajar, riwayat transisi baru 2 hari.
+2. **Sebelum/sesudah 5 baris kamus dikonfirmasi**: diuji dgn 3→8 dari 10 baris fixture (representatif >5) — skor Copilot naik dari 0% → 42,9% (di bawah ambang) → terbuka penuh di 80% aktual (>70% ambang), dibuktikan test.
+3. **Skenario negatif 1**: gerbang tunggal `isCapabilityUnlocked()` menolak kemampuan yang prasyaratnya belum terpenuhi — dibuktikan test (belum ada endpoint kemampuan hilir sungguhan yang MEMANGGIL guard ini, karena belum ada fitur Copilot/dst yang live; guard-nya sendiri sudah teruji siap dipanggil).
+4. **Skenario negatif 2**: `company_admin` (admin TENANT) mencoba membuat override → **403 ditolak**, 0 baris tersimpan — HANYA `super_admin` platform yang boleh.
+5. **Skenario negatif 3**: user company A membaca `ai_capability_status` company B lewat client `authenticated` biasa → **0 baris** (RLS, bukan cuma filter aplikasi).
+6. **Idempoten**: `recomputeAiReadiness` dijalankan 2× dgn data sama → `ai_capability_status` identik (upsert, bukan insert dobel) — dibuktikan test.
+
+**Test baru**: `tests/ai_readiness.test.ts` (7 test, mencakup ke-6 bukti di atas).
 
 **G. Absensi Geo-QR — HANYA W1** — BELUM DIMULAI. Dokumen `docs/rancangan-absensi-geo-qr.md` SUDAH ADA di repo (disalin dari Downloads 21 Agu). W2-W5 DITUNDA (butuh jawaban Q1/Q2/Q4/Q5/Q6/Q7 dari pemilik produk yang belum ada). W1 saja: skema+RLS+state machine harian+geofence per plant+event ledger append-only+rekap harian. Yang sudah final (JANGAN buat master jam kerja kedua — pakai kalender kerja yang sudah ada): istirahat 12.00-13.00 Sen-Jum (efektif 7 jam), Sabtu tanpa istirahat (efektif 5 jam), lokasi HANYA saat clock-in/out (bukan pelacakan terus-menerus), di luar geofence = DI_LUAR_AREA+antrean review (BUKAN ditolak), PHL kehadiran=dasar upah harian (Rp50.000+parkir Rp2.000, Rohmat +bensin Rp10.000 — angka ini SUDAH cocok dgn data payroll nyata yang diisi sesi ini — lihat bagian "Data payroll final" di atas).
 

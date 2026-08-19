@@ -13,7 +13,7 @@ interface ApiResult {
 // generateKamusBacklog.ts), jadi tidak mungkin nyasar ke sini.
 export async function listKamusTerms(
   request: NextRequest,
-  filters: { status?: string; priority?: number; domain?: string; assignedToRole?: string }
+  filters: { status?: string; priority?: number; domain?: string; assignedToRole?: string; scope?: string }
 ): Promise<ApiResult> {
   try {
     const { appUser } = await getCurrentUser(request);
@@ -26,6 +26,7 @@ export async function listKamusTerms(
     if (filters.status) query = query.eq('status', filters.status);
     if (filters.priority) query = query.eq('priority', filters.priority);
     if (filters.domain) query = query.eq('domain', filters.domain);
+    if (filters.scope) query = query.eq('scope', filters.scope);
     if (filters.assignedToRole) query = query.eq('assigned_to_role', filters.assignedToRole);
     query = query.order('priority', { ascending: true }).order('term_key', { ascending: true });
 

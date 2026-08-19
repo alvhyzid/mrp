@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -55,14 +55,18 @@ const departmentLabels: Record<string, string> = {
 
 export default function KamusPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [isLeadership, setIsLeadership] = useState(false);
 
   const [terms, setTerms] = useState<KamusTerm[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [statusFilter, setStatusFilter] = useState('DRAF_AI');
-  const [priorityFilter, setPriorityFilter] = useState('');
+  // Nilai awal filter BOLEH datang dari URL (mis. ?status=DRAF_AI&priority=1&scope=METRIC) --
+  // dipakai halaman /ai-readiness utk deep-link "buka antrean tepat pada baris terkait" (BAGIAN F §3.4).
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'DRAF_AI');
+  const [priorityFilter, setPriorityFilter] = useState(searchParams.get('priority') || '');
+  const [scopeFilter, setScopeFilter] = useState(searchParams.get('scope') || '');
 
   const [drafts, setDrafts] = useState<Record<number, { plain: string; pitfall: string; range: string }>>({});
   const [savingId, setSavingId] = useState<number | null>(null);
@@ -82,6 +86,7 @@ export default function KamusPage() {
     const params = new URLSearchParams();
     if (statusFilter) params.set('status', statusFilter);
     if (priorityFilter) params.set('priority', priorityFilter);
+    if (scopeFilter) params.set('scope', scopeFilter);
     const response = await fetch(`/api/kamus?${params.toString()}`, { headers: { Authorization: `Bearer ${accessToken}` } });
     const data = await response.json();
     if (!response.ok) {
@@ -92,7 +97,7 @@ export default function KamusPage() {
     setTerms(data.terms || []);
     setError('');
     setLoading(false);
-  }, [getAccessToken, statusFilter, priorityFilter]);
+  }, [getAccessToken, statusFilter, priorityFilter, scopeFilter]);
 
   useEffect(() => {
     const checkAccessAndLoad = async () => {
@@ -119,7 +124,7 @@ export default function KamusPage() {
   useEffect(() => {
     if (!checkingAccess) loadTerms();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, priorityFilter]);
+  }, [statusFilter, priorityFilter, scopeFilter]);
 
   const progressByPriority = useMemo(() => {
     const p1and2 = terms.filter((t) => t.priority <= 2);

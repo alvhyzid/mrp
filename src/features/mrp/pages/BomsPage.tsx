@@ -53,6 +53,8 @@ type Bom = {
   version: number;
   standard_yield_qty: number;
   standard_yield_uom: string;
+  standard_yield_basis_note: string | null;
+  standard_yield_source: string | null;
   status: string;
   buffer_percentage: number | null;
   lines: BomLine[];
@@ -75,10 +77,17 @@ type FormLine = {
 
 const emptyFormLine: FormLine = { component_item_id: '', qty_per_batch: '', uom: '', routing_step_id: '' };
 
+const yieldSourceLabels: Record<string, string> = {
+  ESTIMASI_MANUAL: 'Estimasi Manual',
+  DIPELAJARI: 'Dipelajari dari Batch Nyata'
+};
+
 const emptyForm = {
   parent_item_id: '',
   standard_yield_qty: '',
   standard_yield_uom: '',
+  standard_yield_basis_note: '',
+  standard_yield_source: '',
   status: 'draft',
   buffer_percentage: '',
   lines: [{ ...emptyFormLine }] as FormLine[]
@@ -230,6 +239,8 @@ export default function BomsPage() {
       parent_item_id: String(bom.parent_item_id),
       standard_yield_qty: String(bom.standard_yield_qty),
       standard_yield_uom: bom.standard_yield_uom,
+      standard_yield_basis_note: bom.standard_yield_basis_note ?? '',
+      standard_yield_source: bom.standard_yield_source ?? '',
       status: bom.status,
       buffer_percentage: bom.buffer_percentage !== null && bom.buffer_percentage !== undefined ? String(bom.buffer_percentage) : '',
       lines: bom.lines.map((line) => ({
@@ -313,6 +324,8 @@ export default function BomsPage() {
       parent_item_id: Number(form.parent_item_id),
       standard_yield_qty: standardYieldQty,
       standard_yield_uom: form.standard_yield_uom,
+      standard_yield_basis_note: form.standard_yield_basis_note,
+      standard_yield_source: form.standard_yield_source,
       status: form.status,
       buffer_percentage: form.buffer_percentage === '' ? null : Number(form.buffer_percentage),
       lines: linesPayload
@@ -378,8 +391,8 @@ export default function BomsPage() {
         id: 'yield',
         header: 'Hasil Standar',
         cell: ({ row }) => (
-          <span className="text-data">
-            {row.original.standard_yield_qty} {row.original.standard_yield_uom}
+          <span className="text-data" title={`Angka presisi penuh: ${row.original.standard_yield_qty}`}>
+            ±{Math.round(row.original.standard_yield_qty)} {row.original.parent_item_base_uom ?? row.original.standard_yield_uom}
           </span>
         )
       },
@@ -476,8 +489,23 @@ export default function BomsPage() {
             <CardHeader>
               <CardDescription className="uppercase tracking-[0.2em]">Detail Komponen</CardDescription>
               <CardTitle className="text-xl">
-                {viewingBom.parent_item_code} — v{viewingBom.version} ({viewingBom.standard_yield_qty} {viewingBom.standard_yield_uom})
+                {viewingBom.parent_item_code} — v{viewingBom.version} (±{Math.round(viewingBom.standard_yield_qty)} {viewingBom.parent_item_base_uom ?? viewingBom.standard_yield_uom})
               </CardTitle>
+              <CardDescription>
+                Angka presisi penuh yang dipakai untuk perhitungan: {viewingBom.standard_yield_qty} {viewingBom.parent_item_base_uom ?? viewingBom.standard_yield_uom} per batch standar
+                {viewingBom.standard_yield_source ? (
+                  <Badge variant="secondary" className="ml-2">
+                    {yieldSourceLabels[viewingBom.standard_yield_source] ?? viewingBom.standard_yield_source}
+                  </Badge>
+                ) : null}
+              </CardDescription>
+              <CardDescription>
+                {viewingBom.standard_yield_basis_note ? (
+                  <>Asal angka: {viewingBom.standard_yield_basis_note}</>
+                ) : (
+                  <span className="italic">Belum ada keterangan asal angka — isi lewat form edit BOM.</span>
+                )}
+              </CardDescription>
               {viewingBom.buffer_percentage !== null && viewingBom.buffer_percentage !== undefined ? (
                 <CardDescription>Buffer {viewingBom.buffer_percentage}% — kebutuhan bahan per batch dihitung dengan tambahan ini.</CardDescription>
               ) : null}
@@ -490,7 +518,7 @@ export default function BomsPage() {
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Komponen</th>
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Tipe</th>
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        Jumlah per {viewingBom.standard_yield_qty} {viewingBom.standard_yield_uom}
+                        Jumlah per {viewingBom.standard_yield_qty} {viewingBom.parent_item_base_uom ?? viewingBom.standard_yield_uom}
                       </th>
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Per Unit Output</th>
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Tahap SOP</th>
@@ -594,6 +622,36 @@ export default function BomsPage() {
                         value={form.standard_yield_uom}
                         onChange={(event) => setForm((prev) => ({ ...prev, standard_yield_uom: event.target.value }))}
                         required
+                      />
+                    </label>
+                  </div>
+
+                  <div className="grid max-w-2xl gap-3 sm:grid-cols-2">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Sumber Angka Hasil Standar (opsional)</span>
+                      <Select
+                        value={form.standard_yield_source || undefined}
+                        onValueChange={(value) => setForm((prev) => ({ ...prev, standard_yield_source: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Belum ditentukan" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(yieldSourceLabels).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                              {label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </label>
+
+                    <label className="flex flex-col gap-1.5 sm:col-span-2">
+                      <span className="text-sm font-medium text-foreground">Keterangan Asal Angka Hasil Standar (opsional)</span>
+                      <Input
+                        placeholder='mis. "10.000 g adonan × yield 85% ÷ 2,5 g/gummy ÷ 60 gummy/botol"'
+                        value={form.standard_yield_basis_note}
+                        onChange={(event) => setForm((prev) => ({ ...prev, standard_yield_basis_note: event.target.value }))}
                       />
                     </label>
                   </div>

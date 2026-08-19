@@ -159,6 +159,7 @@ Semua "benda" yang dikenal sistem — bahan mentah, WIP, produk jadi, kemasan. P
 Header resep/komposisi. Satu item bisa punya beberapa versi (`version`), resep lama tetap tersimpan untuk histori/audit.
 - `bom_id`, `company_id`, `parent_item_id` (→ `item_id`), `version`, `standard_yield_qty`, `standard_yield_uom`, `status` (draft / active / archived)
 - `buffer_percentage` (nullable, mis. 3-5 — diatur PPIC saat bikin/edit BOM, kompensasi kehilangan produksi akibat kendala mesin dsb. Dipakai untuk hitung kebutuhan bahan mentah SEBENARNYA: `qty_dibutuhkan = (rasio BOM × qty target batch) × (1 + buffer_percentage/100)` — supaya walau ada yang terbuang di proses, hasil akhir tetap kena target)
+- **`standard_yield_basis_note`/`standard_yield_source` (21 Agu 2026)** — keterangan asal-usul `standard_yield_qty`, keduanya nullable, diisi manual lewat form edit BOM. `standard_yield_source` pola sama dengan `production_standards.source` (ESTIMASI_MANUAL/DIPELAJARI). **PENTING soal tampilan**: `standard_yield_uom` di kolom ini BISA drift dari satuan asli item (bebas diketik manual saat bikin BOM, pernah kejadian nyata tersimpan "pcs" generik padahal item-nya sebenarnya "botol") — UI (`BomsPage.tsx`) SEKARANG selalu menampilkan `items.base_uom` milik `parent_item_id` (field `parent_item_base_uom` dari `listBoms`), BUKAN `boms.standard_yield_uom`, supaya tidak ikut drift. Kolom `standard_yield_uom` di database TETAP ada (dipakai internal/histori), cuma TIDAK dipakai lagi sebagai sumber label tampilan.
 
 ### `bom_lines`
 Daftar komponen per BOM, dalam `base_uom`.

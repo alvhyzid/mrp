@@ -80,7 +80,9 @@ export async function createBom(request: NextRequest): Promise<ApiResult> {
           standard_yield_qty: input.standard_yield_qty,
           standard_yield_uom: input.standard_yield_uom,
           status: input.status,
-          buffer_percentage: input.buffer_percentage
+          buffer_percentage: input.buffer_percentage,
+          standard_yield_basis_note: input.standard_yield_basis_note,
+          standard_yield_source: input.standard_yield_source
         }
       ])
       .select('bom_id')

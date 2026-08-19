@@ -4,6 +4,21 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Perbaikan tampilan BOM (satuan + keterangan asal angka) — 21 Agu 2026
+
+Pemilik produk bingung membaca "FG-GUMMY-ZALA-N200 — v1 (56.6667 pcs)" — dua masalah nyata, DIPERBAIKI:
+
+**Audit "pcs" hardcoded di kode: NOL ditemukan** — grep menyeluruh ke `src/`/`app/`/migration SQL, tidak ada satu pun `'pcs'` literal atau fallback default `?? 'pcs'`. Akar masalahnya BUKAN kode, MURNI DATA: `items.base_uom` untuk 20 item memang tersimpan generik `"pcs"` (termasuk item Gummy Zala sendiri), dan `boms.standard_yield_uom` (field TERPISAH, bisa diketik manual saat bikin BOM) juga ikut "pcs" — dua sumber yang bisa saling drift.
+
+- **17 dari 20 item "pcs" diganti ke satuan spesifik** (lewat `PATCH /api/items`, bukan update langsung) — HANYA item yang satuannya JELAS dari nama item itu sendiri (mis. "Botol PET N200"→botol, "Karton Gummy (isi 27 botol)"→karton, "Sachet"→sachet, "Box isi 14 Sachet"→box, "Label Stiker..."→lembar) — bukan tebakan. 3 item (Inner Sleeve, Plastic Wrap Box, Silica Gel) SENGAJA dibiarkan "pcs" karena satuan fisiknya tidak cukup jelas dari nama untuk diganti tanpa menebak.
+- **`BomsPage.tsx` sekarang SELALU menampilkan `items.base_uom` (field `parent_item_base_uom`)**, bukan `boms.standard_yield_uom` yang bisa drift — perbaikan ini berlaku untuk SEMUA BOM ke depannya, bukan cuma BOM Gummy Zala yang dikeluhkan.
+- **Keterangan asal angka**: kolom baru `boms.standard_yield_basis_note` (teks bebas) + `standard_yield_source` (ESTIMASI_MANUAL/DIPELAJARI, pola sama K8) — nullable, diisi manual lewat form edit BOM. **BOM Gummy Zala (bom_id 227) BELUM diisi** — rumus contoh yang diberikan pemilik produk ("10.000 g × yield 85% ÷ 2,5 g ÷ 60") tidak saya masukkan sebagai fakta tersimpan karena saya tidak punya konfirmasi itu angka SEBENARNYA untuk resep ini (bukan cuma contoh ilustrasi) — mekanismenya sudah siap, tinggal diisi lewat form begitu dikonfirmasi.
+- **Tampilan angka**: ringkasan sekarang menunjukkan versi dibulatkan ("±57 botol") dengan angka presisi penuh tetap ada di detail (tooltip di tabel, teks eksplisit di panel detail) — perhitungan internal TIDAK berubah, tetap presisi penuh (invarian proyek).
+
+**Test baru**: `tests/bom_yield_display.test.ts` (5 test, termasuk 2 skenario negatif — item satuan gram tampil "g" bukan "pcs" generik; BOM tanpa keterangan tampil `null` apa adanya bukan dikarang; plus sumber tidak valid ditolak).
+
+---
+
 ## Koreksi Bagian D/E setelah A→F — 21 Agu 2026 (2 koreksi data + keputusan Bagian E)
 
 Pemilik produk mengoreksi 2 hal nyata setelah laporan Bagian A→F pertama, plus menjawab pertanyaan opsi Bagian E.

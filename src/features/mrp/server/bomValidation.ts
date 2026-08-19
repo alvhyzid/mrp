@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export const bomStatuses = ['draft', 'active', 'archived'];
+export const bomYieldSources = ['ESTIMASI_MANUAL', 'DIPELAJARI'];
 
 export interface BomLineInput {
   component_item_id: number;
@@ -19,6 +20,8 @@ export interface BomInput {
   status: string;
   buffer_percentage: number | null;
   lines: BomLineInput[];
+  standard_yield_basis_note: string | null;
+  standard_yield_source: string | null;
 }
 
 function parsePositiveInt(value: unknown, fieldLabel: string): { value?: number; error?: string } {
@@ -61,6 +64,12 @@ export function parseBomInput(body: Record<string, unknown>): { input?: BomInput
       return { error: 'Persentase buffer harus di antara 0 dan 100.' };
     }
     bufferPercentage = parsedBuffer;
+  }
+
+  const standardYieldBasisNote = String(body.standard_yield_basis_note ?? '').trim();
+  const standardYieldSource = String(body.standard_yield_source ?? '').trim();
+  if (standardYieldSource && !bomYieldSources.includes(standardYieldSource)) {
+    return { error: 'Sumber angka hasil standar tidak valid.' };
   }
 
   const rawLines = Array.isArray(body.lines) ? body.lines : [];
@@ -110,7 +119,9 @@ export function parseBomInput(body: Record<string, unknown>): { input?: BomInput
       standard_yield_uom: standardYieldUom,
       status,
       buffer_percentage: bufferPercentage,
-      lines
+      lines,
+      standard_yield_basis_note: standardYieldBasisNote || null,
+      standard_yield_source: standardYieldSource || null
     }
   };
 }

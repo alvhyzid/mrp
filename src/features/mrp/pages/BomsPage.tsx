@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { canManageBom, canViewFinancialData } from '@/lib/roles';
 import { typeLabels, typeBadgeVariant } from '../itemTypeLabels';
 import { formatCurrency } from '@/lib/currency';
+import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 
 const bomStatuses = ['draft', 'active', 'archived'];
 
@@ -488,24 +489,17 @@ export default function BomsPage() {
           <Card>
             <CardHeader>
               <CardDescription className="uppercase tracking-[0.2em]">Detail Komponen</CardDescription>
-              <CardTitle className="text-xl">
+              <CardTitle className="flex items-center gap-2 text-xl">
                 {viewingBom.parent_item_code} — v{viewingBom.version} (±{Math.round(viewingBom.standard_yield_qty)} {viewingBom.parent_item_base_uom ?? viewingBom.standard_yield_uom})
+                <ProvenanceInfoButton
+                  label="Hasil Standar per Batch"
+                  envelope={{
+                    formula: viewingBom.standard_yield_basis_note ?? 'Belum ada keterangan asal angka — isi lewat form edit BOM.',
+                    inputs: [{ label: 'Angka presisi penuh dipakai perhitungan', value: `${viewingBom.standard_yield_qty} ${viewingBom.parent_item_base_uom ?? viewingBom.standard_yield_uom} per batch` }],
+                    standardStatus: viewingBom.standard_yield_source as 'ESTIMASI_MANUAL' | 'DIPELAJARI' | null
+                  }}
+                />
               </CardTitle>
-              <CardDescription>
-                Angka presisi penuh yang dipakai untuk perhitungan: {viewingBom.standard_yield_qty} {viewingBom.parent_item_base_uom ?? viewingBom.standard_yield_uom} per batch standar
-                {viewingBom.standard_yield_source ? (
-                  <Badge variant="secondary" className="ml-2">
-                    {yieldSourceLabels[viewingBom.standard_yield_source] ?? viewingBom.standard_yield_source}
-                  </Badge>
-                ) : null}
-              </CardDescription>
-              <CardDescription>
-                {viewingBom.standard_yield_basis_note ? (
-                  <>Asal angka: {viewingBom.standard_yield_basis_note}</>
-                ) : (
-                  <span className="italic">Belum ada keterangan asal angka — isi lewat form edit BOM.</span>
-                )}
-              </CardDescription>
               {viewingBom.buffer_percentage !== null && viewingBom.buffer_percentage !== undefined ? (
                 <CardDescription>Buffer {viewingBom.buffer_percentage}% — kebutuhan bahan per batch dihitung dengan tambahan ini.</CardDescription>
               ) : null}

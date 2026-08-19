@@ -75,8 +75,9 @@ export async function seedAiProjectStructure(adminClient: SupabaseClient, compan
       sort_order: 3,
       checklist: [
         { label: 'Audit komponen penampil angka yang sudah ada', done: true },
-        { label: 'Prototipe konkret dipasang di komponen BARU (BOM: standard_yield_basis_note/standard_yield_source)', done: true },
-        { label: 'Tipe ProvenanceEnvelope generik dirancang', done: false },
+        { label: 'Tipe ProvenanceEnvelope generik dirancang (src/lib/provenance.ts)', done: true },
+        { label: 'Implementasi + pasang di komponen BARU (BOM standard_yield_qty)', done: true },
+        { label: 'Dipasang di Margin Watch (margin baseline + biaya SDM standar)', done: true },
         { label: 'Keputusan retrofit komponen lama: sekarang atau bertahap', done: false }
       ]
     },
@@ -84,7 +85,7 @@ export async function seedAiProjectStructure(adminClient: SupabaseClient, compan
       code: 'f0-panel-asal-usul',
       phaseCode: 'fase0',
       name: 'Panel asal-usul',
-      description: '[Direklasifikasi dari AUTO_QUERY ke CHECKLIST 21 Agu 2026 -- panel generik belum dibangun, baru 1 prototipe di BOM.]',
+      description: '[Direklasifikasi dari AUTO_QUERY ke CHECKLIST 21 Agu 2026. Tipe ProvenanceEnvelope + komponen ProvenanceInfoButton generik SUDAH dibangun (src/lib/provenance.ts, src/components/ui/provenance-info-button.tsx) -- checklist di bawah = target uji "20 angka lintas modul bisa dijelaskan" dari dokumen sumber.]',
       weight_percent: 15,
       owner_type: 'CLAUDE_CODE',
       suggested_role: null,
@@ -93,7 +94,28 @@ export async function seedAiProjectStructure(adminClient: SupabaseClient, compan
       action_type: 'BUKA_CHECKLIST',
       action_target: null,
       sort_order: 4,
-      checklist: [{ label: 'Prototipe: klik BOM lihat keterangan asal angka standard_yield_qty', done: true }, { label: 'Panel generik lintas modul dirancang', done: false }, { label: '20 angka lintas modul diuji bisa "dijelaskan"', done: false }]
+      checklist: [
+        { label: 'BOM: hasil standar per batch (standard_yield_qty)', done: true },
+        { label: 'Margin Watch: margin rencana (baseline)', done: true },
+        { label: 'Margin Watch: biaya SDM standar per unit', done: true },
+        { label: 'Margin Watch: biaya bahan standar per unit' },
+        { label: 'Margin Watch: biaya kemasan standar per unit' },
+        { label: 'Margin Watch: selisih harga bahan/kemasan (Lapis 2)' },
+        { label: 'Margin Watch: selisih pemakaian bahan (Lapis 2)' },
+        { label: 'Margin Watch: selisih reject (Lapis 2)' },
+        { label: 'K8: unit_per_batch (production_standards)' },
+        { label: 'K8: batches_per_day (production_standards)' },
+        { label: 'Kelayakan jadwal: kekurangan bahan per item' },
+        { label: 'Kelayakan jadwal: tanggal selesai proyeksi' },
+        { label: 'BOM: biaya standar per komponen' },
+        { label: 'Item: standard_cost' },
+        { label: 'Laba Operasional: margin kontribusi bulanan' },
+        { label: 'Laba Operasional: overhead SDM bulanan' },
+        { label: 'Work Order: kebutuhan bahan per batch (buffer_percentage)' },
+        { label: 'Batch produksi: yield aktual vs rencana' },
+        { label: 'Employee: biaya pemberi kerja per bulan (BPJS uplift)' },
+        { label: 'Routing: kapasitas kerja/hari (work_centers)' }
+      ]
     },
     {
       code: 'f0-process-mining',

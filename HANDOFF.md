@@ -79,7 +79,22 @@ Pemilik produk memberi instruksi besar berjenjang A→G, eksplisit ditandai **mu
 
 **Test baru**: `tests/ai_project_dashboard.test.ts` (7 test, termasuk 2 skenario negatif eksplisit di atas).
 
-**D. Fondasi Provenance & Panel Asal-Usul (Fase 0.2 & 0.3)** — BELUM DIMULAI sebagai sistem generik, TAPI **1 prototipe konkret sudah dibangun sesi ini** (BOM `standard_yield_basis_note`/`standard_yield_source`, lihat bagian "Perbaikan tampilan BOM" di bawah) — pola ini (catatan asal + sumber ESTIMASI_MANUAL/DIPELAJARI) bisa jadi acuan kalau `ProvenanceEnvelope` generik dibangun nanti. Dokumen `docs/langkah-membangun-fitur-ai.md` SUDAH ADA di repo (disalin dari Downloads 21 Agu) — baca §0.2/0.3 sebelum membangun versi generiknya — TANPA LLM. **Sudah dipakai sesi ini** utk seed checklist Bagian C (task `f0-provenance-komponen`/`f0-panel-asal-usul`), progres tercatat 50%/33% dari yang benar-benar selesai (bukan ditebak).
+**D. Fondasi Provenance & Panel Asal-Usul (Fase 0.2 & 0.3) — SELESAI (versi generik minimal, bukan sistem besar).**
+
+Tipe `ProvenanceEnvelope` (`src/lib/provenance.ts`) — KECIL & KONKRET sesuai prinsip baru proyek ini: `formula`, `inputs` (label+value), `sourceDocument` (opsional), `standardStatus` (ESTIMASI_MANUAL/DIPELAJARI, opsional), `history` (opsional, kebanyakan angka BELUM punya riwayat terlacak — jujur ditandai "belum terlacak" bukan dikosongkan diam-diam).
+
+Komponen generik `ProvenanceInfoButton` (`src/components/ui/provenance-info-button.tsx`) — ikon info kecil, klik → dialog menampilkan rumus/input/sumber/status/riwayat. SATU komponen dipakai lintas modul (BUKAN diimplementasikan ulang tiap tempat) — pakai `Dialog` yang sudah ada (bukan bikin komponen popover baru).
+
+**Dipasang di 2 modul (3 angka) sesi ini** (dari 5 kategori prioritas dokumen — "margin per unit, biaya SDM batch, kebutuhan batch, yield standar, kekurangan bahan"):
+1. BOM — hasil standar per batch (`standard_yield_qty`), retrofit dari prototipe ad-hoc sesi sebelumnya jadi generik.
+2. Margin Watch — margin rencana (baseline), kutip rumus resmi `docs/spesifikasi-aturan-biaya-v1.md §3`.
+3. Margin Watch — biaya SDM standar per unit, `inputs` diisi dari `labor_cost_notes` yang sudah ada (bukan data baru, cuma disalurkan lewat komponen generik).
+
+**Checklist "20 angka lintas modul" diisi PENUH** (task `f0-panel-asal-usul`, Bagian C) — 20 target nyata (bukan generik "20 angka" tanpa isi), 3 DICENTANG (yang di atas), 17 SISANYA jujur BELUM (kekurangan bahan, K8 unit_per_batch/batches_per_day, Laba Operasional, dst — infrastrukturnya (`ProvenanceInfoButton`) SUDAH SIAP dipasang, tinggal kerja mekanis memasang di tiap tempat).
+
+**Keputusan retrofit komponen LAMA** (2 pertanyaan sisa checklist) — SENGAJA belum diputuskan sesi ini (dokumen: "keputusan 👤+🧠", bukan keputusan sepihak Claude Code).
+
+**Test**: TIDAK ADA test baru khusus Bagian D — permukaan barunya murni presentasional (tipe + komponen UI tanpa server logic baru), diverifikasi lewat typecheck+build+test suite penuh tetap hijau (150 test dari Bagian A-C tidak terganggu), bukan lewat test unit baru. `labor_cost_notes`/`standard_margin_total` yang jadi isi envelope SUDAH diuji di tempat asalnya (`tests/margin_watch.test.ts` dkk).
 
 **E. Process Mining (Fase 0.4)** — BELUM DIMULAI. Query atas `status_transition_log`. WAJIB tampilkan jumlah data pendasar eksplisit ("berdasarkan N transisi sejak tanggal X") — data masih sedikit (produksi nyata belum jalan), tampilkan "data belum cukup" kalau memang belum cukup, JANGAN angka menyesatkan. Task `f0-process-mining` di Dashboard Proyek AI (Bagian C) sudah menunggu, progres 0%.
 

@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { canViewPlanningFeasibility, canViewFinancialData } from '@/lib/roles';
 import { formatCurrency } from '@/lib/currency';
+import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 
 const statusLabels: Record<string, string> = { confirmed: 'Dikonfirmasi', in_production: 'Sedang Produksi', completed: 'Selesai', cancelled: 'Batal' };
 const statusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical'> = {
@@ -488,11 +489,33 @@ export default function SalesOrdersPage() {
                           </span>
                           /unit (bahan {formatCurrency(marginResult.standard_material_cost_per_unit)} + kemasan {formatCurrency(marginResult.standard_packaging_cost_per_unit)} + SDM{' '}
                           {formatCurrency(marginResult.standard_labor_cost_per_unit)}
-                          {!marginResult.labor_cost_complete ? ' [sebagian]' : ''})
+                          {!marginResult.labor_cost_complete ? ' [sebagian]' : ''}
+                          <ProvenanceInfoButton
+                            label="Biaya SDM Standar per Unit"
+                            envelope={{
+                              formula: 'Untuk tiap level produksi (item utama + WIP bersarang): kru harian ÷ batch standar/hari ÷ unit/batch, dikali rasio kebutuhan ke unit teratas.',
+                              inputs: marginResult.labor_cost_notes.map((n, i) => ({ label: `Level ${i + 1}`, value: n })),
+                              standardStatus: marginResult.labor_cost_complete ? null : 'ESTIMASI_MANUAL'
+                            }}
+                          />
+                          )
                         </span>
                         <span className="text-muted-foreground">
                           Margin rencana (baseline){!marginResult.labor_cost_complete ? ' (SEBELUM SDM)' : ''}:{' '}
                           <span className="font-medium text-foreground">{formatCurrency(marginResult.standard_margin_total, { maxDecimals: 0 })}</span>
+                          <ProvenanceInfoButton
+                            label="Margin Rencana (Baseline)"
+                            envelope={{
+                              formula: 'Margin kontribusi = (harga jual × qty terkirim) − biaya produksi order. Baseline dikunci sekali per baris SO (snapshot).',
+                              inputs: [
+                                { label: 'Harga jual/unit', value: formatCurrency(marginResult.unit_price, { maxDecimals: 0 }) },
+                                { label: 'Biaya bahan/unit', value: formatCurrency(marginResult.standard_material_cost_per_unit) },
+                                { label: 'Biaya kemasan/unit', value: formatCurrency(marginResult.standard_packaging_cost_per_unit) },
+                                { label: 'Biaya SDM/unit', value: formatCurrency(marginResult.standard_labor_cost_per_unit) }
+                              ],
+                              sourceDocument: 'docs/spesifikasi-aturan-biaya-v1.md §3'
+                            }}
+                          />
                         </span>
                         <span className="text-muted-foreground">
                           Proyeksi margin berjalan{!marginResult.labor_cost_complete ? ' (SEBELUM SDM)' : ''}:{' '}

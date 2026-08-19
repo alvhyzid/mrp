@@ -44,6 +44,14 @@ describe('computeMonthlyEmployerUplift — basis di-clamp floor/ceiling, bukan g
     expect(aboveCeiling.upliftAmount).toBeCloseTo(belowCeiling.upliftAmount, 2);
   });
 
+  it('(NEGATIF) override basis PER ORANG -- ditemukan data nyata basis TIDAK SELALU = clamp(gaji): Dimas gaji Rp7.500.000 tapi basis Rp6.500.000', () => {
+    const withoutOverride = computeMonthlyEmployerUplift(7500000, true, config);
+    const withOverride = computeMonthlyEmployerUplift(7500000, true, config, 6500000);
+    expect(withoutOverride.clampedBasis).toBe(7500000); // formula clamp lama (tanpa override)
+    expect(withOverride.clampedBasis).toBe(6500000); // basis nyata, BEDA dari hasil clamp
+    expect(withOverride.upliftAmount).toBeLessThan(withoutOverride.upliftAmount);
+  });
+
   it('(NEGATIF) bpjs_kesehatan_enrolled=null (belum dikonfirmasi) TIDAK diikutkan Kesehatan, TAPI JKK/JKM/JHT tetap dihitung + catatan eksplisit muncul', () => {
     const enrolledTrue = computeMonthlyEmployerUplift(3500000, true, config);
     const enrolledNull = computeMonthlyEmployerUplift(3500000, null, config);
@@ -255,5 +263,83 @@ describe('compute_production_batch_labor_cost (SQL, sisi biaya SDM AKTUAL) — k
     const upliftMonthly = 3737000 * 0.0889; // JKK+JKM+JHT+Kesehatan = 8.89%, basis floor (gaji 3.5jt < floor)
     const expected = ((3500000 + upliftMonthly) / 173.3333) * 7;
     expect(Number(cost)).toBeCloseTo(expected, 0);
+  });
+});
+
+describe('computeStandardLaborCostPerUnit — kru wage_type=daily (PHL) ikut tunjangan per hari hadir', () => {
+  let companyId: number;
+  let plantId: number;
+  let itemId: number;
+
+  beforeAll(async () => {
+    const { data: company } = await adminClient
+      .from('companies')
+      .insert([{ name: 'PhlAllowanceTestCorp', industry_type: 'manufacturing', status: 'trial' }])
+      .select('company_id')
+      .single();
+    companyId = company!.company_id;
+
+    const { data: plant } = await adminClient
+      .from('production_plants')
+      .insert([{ company_id: companyId, name: 'Plant PhlAllowanceTest', is_active: true }])
+      .select('production_plant_id')
+      .single();
+    plantId = plant!.production_plant_id;
+
+    const { data: item } = await adminClient
+      .from('items')
+      .insert([{ company_id: companyId, item_code: 'PHL-ALLOW-TOP', name: 'Item Uji Tunjangan PHL', type: 'finished_good', base_uom: 'pcs', purchase_uom: 'pcs', uom_conversion_factor: 1 }])
+      .select('item_id')
+      .single();
+    itemId = item!.item_id;
+
+    const { data: bom } = await adminClient
+      .from('boms')
+      .insert([{ company_id: companyId, parent_item_id: itemId, version: 1, standard_yield_qty: 1, standard_yield_uom: 'pcs', status: 'active' }])
+      .select('bom_id')
+      .single();
+    const { data: rawItem } = await adminClient
+      .from('items')
+      .insert([{ company_id: companyId, item_code: 'PHL-ALLOW-RAW', name: 'Bahan Uji', type: 'raw_material', base_uom: 'g', purchase_uom: 'g', uom_conversion_factor: 1 }])
+      .select('item_id')
+      .single();
+    await adminClient.from('bom_lines').insert([{ bom_id: bom!.bom_id, component_item_id: rawItem!.item_id, qty_per_unit_output: 1, uom: 'g' }]);
+
+    const { data: routing } = await adminClient.from('routings').insert([{ company_id: companyId, item_id: itemId, version: 1 }]).select('routing_id').single();
+
+    // PHL dgn tunjangan transport (parkir) per hari hadir -- data nyata 21 Agu 2026.
+    await adminClient
+      .from('employees')
+      .insert([{ company_id: companyId, production_plant_id: plantId, name: 'PHL Allowance Test', position: 'Operator', department: 'production', wage_type: 'daily', wage_rate: 50000, daily_transport_allowance: 2000, is_active: true }]);
+
+    await adminClient
+      .from('routing_step_standard_crew')
+      .insert([{ company_id: companyId, routing_id: routing!.routing_id, routing_step_id: null, role_label: 'Operator PHL', wage_type: 'daily', headcount: 1, hours_per_day: 7, is_full_day_dedicated: true, source: 'ESTIMASI_MANUAL' }]);
+
+    await adminClient.from('production_standards').insert([
+      { company_id: companyId, item_id: itemId, metric_key: 'unit_per_batch', value: 10, source: 'ESTIMASI_MANUAL', sample_count: 0 },
+      { company_id: companyId, item_id: itemId, metric_key: 'batches_per_day', value: 1, source: 'ESTIMASI_MANUAL', sample_count: 0 }
+    ]);
+  });
+
+  afterAll(async () => {
+    const { data: boms } = await adminClient.from('boms').select('bom_id').eq('company_id', companyId);
+    const bomIds = (boms ?? []).map((b) => b.bom_id);
+    await adminClient.from('routing_step_standard_crew').delete().eq('company_id', companyId);
+    await adminClient.from('production_standards').delete().eq('company_id', companyId);
+    await adminClient.from('bom_lines').delete().in('bom_id', bomIds.length ? bomIds : [-1]);
+    await adminClient.from('boms').delete().eq('company_id', companyId);
+    await adminClient.from('routings').delete().eq('company_id', companyId);
+    await adminClient.from('employees').delete().eq('company_id', companyId);
+    await adminClient.from('items').delete().eq('company_id', companyId);
+    await adminClient.from('production_plants').delete().eq('company_id', companyId);
+    await adminClient.from('companies').delete().eq('company_id', companyId);
+  });
+
+  it('tunjangan transport PHL (parkir) IKUT dijumlah ke biaya SDM standar -- sebelumnya diam-diam diabaikan utk wage_type=daily', async () => {
+    const result = await computeStandardLaborCostPerUnit(adminClient, companyId, itemId);
+    // dailyCostPerPerson = wage_rate(50000) + transport(2000) = 52000. dailyCrewCost = 52000*1 headcount = 52000.
+    // costPerUnit = 52000 / 1 batch/hari / 10 unit/batch = 5200.
+    expect(result.costPerUnit).toBeCloseTo(5200, 2);
   });
 });

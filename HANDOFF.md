@@ -19,6 +19,36 @@ Pemilik produk bingung membaca "FG-GUMMY-ZALA-N200 — v1 (56.6667 pcs)" — dua
 
 ---
 
+## Data payroll final (tunjangan per orang + basis BPJS per orang + 10 PHL nyata) — 21 Agu 2026
+
+Melanjutkan koreksi di atas — 2 data yang tadinya "menunggu nama/rincian" sekarang lengkap dari dokumen payroll.
+
+### 1. Tunjangan + BPJS Kesehatan per orang — SEMUA 19 karyawan kontrak + Darmini terisi
+
+`daily_meal_allowance`/`daily_transport_allowance`/`bpjs_kesehatan_enrolled` diisi PERSIS sesuai tabel dari pemilik produk (bukan disamaratakan per jabatan). **Bayu (GM) dapat penanganan khusus**: tunjangannya TETAP Rp500.000 makan + Rp500.000 transport per BULAN (bukan per hari hadir) — kolom baru `employees.allowance_frequency` ('daily'/'monthly_fixed') ditambahkan khusus utk kasus ini (migration `20260821160000`, ongkos kecil sesuai prinsip baru — bukan sistem tunjangan generik).
+
+**Temuan basis BPJS TIDAK seragam** (dikonfirmasi pemilik produk): mayoritas karyawan basisnya PERSIS = formula clamp(gaji, floor, ceiling) yang sudah ada — TAPI Dimas (gaji Rp7.500.000) basis sesungguhnya Rp6.500.000, dan Bayu (gaji Rp14.000.000) basis Rp8.000.000, KEDUANYA beda dari hasil clamp. Kolom baru `employees.bpjs_contribution_basis` (nullable, override per orang) ditambahkan — diisi HANYA utk Dimas & Bayu, yang lain dibiarkan `null` (formula clamp lama sudah tepat utk mereka, dibuktikan lewat rekonsiliasi Ruud Ayu/Asni yang basisnya persis = gaji mereka sendiri, sesuai clamp).
+
+**Overhead SDM dihitung ulang**: Rp65.666.907 (lama, sebelum tunjangan+Kesehatan) → **Rp73.352.547** (baru, gaji pokok + BPJS lengkap + tunjangan, basis 21 hari kerja standar). Target pemilik produk Rp74.694.305, selisih Rp1.341.758 (±1,8%) — **BUKAN bug**, murni beda basis: angka pemilik produk adalah ANGKA AKTUAL dari kehadiran nyata yang bervariasi per orang (disebutkan eksplisit "27/26/24 hari hadir"), sedangkan angka sistem adalah proyeksi STANDAR (asumsi 21 hari kerja seragam, `standard_working_days_per_month`) — dua hal yang secara desain TIDAK akan pernah sama persis, sama seperti prinsip "standar vs aktual" yang berlaku di seluruh sistem ini. `company_settings.monthly_overhead_baseline` sudah diupdate ke Rp73.352.547.
+
+### 2. 10 PHL NYATA menggantikan 18 PHL simulasi (SEMUA, bukan cuma sebagian)
+
+Bilal, Yunita, Nanda, Diah, Lely, Nindi, Mayang, Zidan, Mina — Operator Produksi, PHL, plant Karanglo (lini serbuk), `wage_type=daily`, `wage_rate=50.000`, `daily_transport_allowance=2.000` (parkir/hari hadir). Rohmat sama + `daily_transport_allowance=12.000` (parkir 2.000 + bensin 10.000 — keterangan resmi "pindah dari Dieng" dicatat di kolom posisi). **18 PHL simulasi (6 gummy + 12 powder) SEMUA dinonaktifkan** — bukan cuma yang punya padanan, karena lini gummy sekarang dikonfirmasi TIDAK PUNYA PHL sama sekali (Koreksi 2 di bawah), jadi ke-6 PHL gummy simulasi tidak digantikan siapa pun.
+
+**Gap kode ditemukan & ditambal saat verifikasi**: `computeStandardLaborCostPerUnit.ts` SEBELUMNYA hanya menambahkan tunjangan makan/transport ke kru `wage_type=monthly` — kru `wage_type=daily` (PHL) TIDAK ikut tunjangan sama sekali walau datanya sudah ada. Ditambal (PHL sekarang ikut tunjangan per hari hadir juga) SEBELUM data PHL nyata di atas benar-benar termanfaatkan.
+
+**Angka SAS001/SAS005 final** (setelah SEMUA koreksi 21 Agu — kru gummy nyata + tunjangan + BPJS per-orang):
+| | SAS001 (Gummy) | SAS005 (Serbuk) |
+|---|---|---|
+| Biaya SDM standar/unit | Rp8.260,04 | Rp781,05 |
+| Margin rencana total | Rp1.428.412.806 | Rp63.245.800 |
+
+`labor_cost_complete` MASIH `false` untuk keduanya — premix (gummy 1, serbuk 5) masih belum ada kru, dan Darmini (satu-satunya karyawan `monthly` yang BPJS Kesehatan-nya masih `null`/belum dikonfirmasi) ikut ke rata-rata company-wide `wage_type=monthly` yang dipakai kru gummy — **catatan imprecision yang SUDAH diketahui sejak Bagian B**: rata-rata tarif kru diambil company-wide per `wage_type`, TIDAK difilter per plant/departemen, jadi Darmini (janitor, bukan produksi) ikut masuk hitungan rata-rata kru gummy. Belum diperbaiki (di luar cakupan sesi ini, dicatat sebagai gap terbuka).
+
+**Semua item "menunggu" dari koreksi sebelumnya SEKARANG TERJAWAB PENUH** — dihapus dari daftar tunggu di bawah.
+
+---
+
 ## Koreksi Bagian D/E setelah A→F — 21 Agu 2026 (2 koreksi data + keputusan Bagian E)
 
 Pemilik produk mengoreksi 2 hal nyata setelah laporan Bagian A→F pertama, plus menjawab pertanyaan opsi Bagian E.
@@ -158,16 +188,16 @@ Struktur `employees` diperluas (migration `20260821090000` + `20260821091500`): 
 
 ### Catatan menunggu (Bagian A-F) — JANGAN DITEBAK, tunggu konfirmasi/data
 
-**Sudah terjawab 21 Agu 2026** (lihat "Koreksi Bagian D/E setelah A→F" di atas): cara pembayaran Darmini, konfirmasi basis UMK, peran "Staff PPIC" (memang tidak ada), pilihan periode Laba Operasional (ikut periode gaji, SUDAH diterapkan).
+**Sudah terjawab 21 Agu 2026** (lihat "Data payroll final" & "Koreksi Bagian D/E setelah A→F" di atas): cara pembayaran Darmini, konfirmasi basis UMK, peran "Staff PPIC" (memang tidak ada), pilihan periode Laba Operasional (ikut periode gaji, SUDAH diterapkan), nama 10 PHL nyata (SUDAH menggantikan simulasi), tunjangan makan/transport per orang (SUDAH terisi, termasuk kasus khusus Bayu tunjangan bulanan tetap), BPJS Kesehatan per orang (SUDAH terisi utk 19 karyawan kontrak — Darmini masih `null`, lihat item 3 di bawah), basis BPJS per orang (SUDAH — override utk Dimas/Bayu, lainnya pakai formula clamp).
 
 **Masih menunggu:**
-1. **Nama lengkap 10 PHL nyata lini serbuk** — struktur tarif sudah diketahui (Rp1.100.000/22 hari + parkir Rp44.000/22 hari, 1 orang +bensin), tapi TANPA nama tidak bisa menggantikan 10 PHL simulasi tanpa menebak identitas.
-2. **Harga stok Plant Ruko Dieng (CSV)** — jalur & klasifikasi sudah siap, pemuatan tertunda sampai data harga datang.
-3. **Kategori tunjangan makan/transport untuk jabatan yang tidak persis cocok ke 3 tingkatan yang diberikan** (mis. "General Manager" vs "Direktur"; "Manager PPIC"/"RnD Staff"/"PPIC Jr. Spv" — dicoba dihitung mundur dari angka rekonsiliasi 21 Agu, hasilnya TIDAK konsisten, sengaja tidak dipaksakan).
-4. **Siapa saja yang TIDAK ikut BPJS Kesehatan per orang** — masih `null` (belum dikonfirmasi) untuk semua 19 karyawan kontrak + Darmini.
-5. **Apakah model biaya pemberi kerja (Bagian D) perlu diperluas ke PHL (wage_type='daily')** — saat ini HANYA diterapkan ke karyawan bulanan.
-6. **Aturan atribusi tunjangan makan/transport ke batch produksi tertentu** — sisi biaya SDM AKTUAL per batch (`compute_production_batch_labor_cost`) sengaja belum menghitung tunjangan (per hari hadir, bukan per batch).
-7. **Apakah overhead SDM (`monthly_overhead_baseline`) sebaiknya dihitung sebagai SISA** (total biaya pemberi kerja semua karyawan − biaya SDM tercatat di batch) — BELUM dibangun, butuh item 1 & 4 di atas dulu (lihat penjelasan lengkap di "Koreksi Bagian D/E setelah A→F").
+1. **Harga stok Plant Ruko Dieng (CSV)** — jalur & klasifikasi sudah siap, pemuatan tertunda sampai data harga datang.
+2. **Kategori tunjangan makan/transport untuk jabatan yang tidak persis cocok ke 3 tingkatan awal** — SUDAH TERJAWAB oleh data lengkap 21 Agu (tabel per orang), item ini kadaluarsa/tidak relevan lagi.
+3. **Keikutsertaan BPJS Kesehatan Darmini** — belum ada di data yang diberikan (dia peran pendukung/janitor, mungkin memang tidak relevan) — dampaknya kecil tapi tetap ikut ke rata-rata kru `wage_type=monthly` company-wide (lihat gap #6 di bawah).
+4. **Apakah model biaya pemberi kerja (Bagian D) perlu diperluas ke PHL selain tunjangan** (BPJS untuk PHL) — saat ini PHL sudah ikut tunjangan (baru ditambal 21 Agu) tapi BELUM ikut BPJS Kesehatan/JKK/JKM/JHT — tidak dikonfirmasi apakah PHL informal ini terdaftar BPJS.
+5. **Aturan atribusi tunjangan makan/transport ke batch produksi tertentu** — sisi biaya SDM AKTUAL per batch (`compute_production_batch_labor_cost`) sengaja belum menghitung tunjangan (per hari hadir, bukan per batch).
+6. **Rata-rata tarif kru company-wide TIDAK difilter per plant/departemen** — imprecision yang sudah diketahui sejak Bagian B, sekarang nyata dampaknya: Darmini (janitor, bukan produksi) ikut masuk rata-rata kru gummy karena sama-sama `wage_type=monthly`. Belum diperbaiki.
+7. **Apakah overhead SDM (`monthly_overhead_baseline`) sebaiknya dihitung sebagai SISA** (total biaya pemberi kerja semua karyawan − biaya SDM tercatat di batch) — MASIH statis manual (Rp73.352.547, direkonsiliasi ke rekonsiliasi 21 Agu, selisih ±1,8% karena beda basis standar-vs-aktual, BUKAN bug). Formula SISA belum dibangun — butuh cara menentukan batch mana masuk periode gaji mana (`production_batches.started_at` sudah ada, belum dipakai untuk ini).
 8. **Jawaban tim finance** — dokumen pertanyaan sudah dikirim pemilik produk, belum ada jawaban.
 
 ---

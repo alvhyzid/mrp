@@ -1,6 +1,7 @@
 export const wageTypes = ['hourly', 'daily', 'monthly', 'piece_rate'];
 export const employeeDepartments = ['production', 'ppic', 'finance', 'purchasing', 'warehouse', 'hr', 'management', 'fat', 'rnd'];
 export const employmentStatuses = ['kontrak', 'phl', 'freelance'];
+export const allowanceFrequencies = ['daily', 'monthly_fixed'];
 
 export interface EmployeeInput {
   name: string;
@@ -18,6 +19,8 @@ export interface EmployeeInput {
   daily_meal_allowance: number | null;
   daily_transport_allowance: number | null;
   bpjs_kesehatan_enrolled: boolean | null;
+  bpjs_contribution_basis: number | null;
+  allowance_frequency: string;
 }
 
 function parseOptionalInt(value: unknown, fieldLabel: string): { value: number | null; error?: string } {
@@ -87,6 +90,14 @@ export function parseEmployeeInput(body: Record<string, unknown>): { input?: Emp
   const daily_transport_allowance = parseOptionalNonNegativeNumber(body.daily_transport_allowance, 'Tunjangan transport');
   if (daily_transport_allowance.error) return { error: daily_transport_allowance.error };
 
+  const bpjs_contribution_basis = parseOptionalNonNegativeNumber(body.bpjs_contribution_basis, 'Basis iuran BPJS');
+  if (bpjs_contribution_basis.error) return { error: bpjs_contribution_basis.error };
+
+  const allowance_frequency = String(body.allowance_frequency ?? 'daily').trim();
+  if (!allowanceFrequencies.includes(allowance_frequency)) {
+    return { error: 'Frekuensi tunjangan tidak valid.' };
+  }
+
   const factory_employee_code = String(body.factory_employee_code ?? '').trim();
   const ptkp_status = String(body.ptkp_status ?? '').trim();
   const ter_category = String(body.ter_category ?? '').trim();
@@ -107,7 +118,9 @@ export function parseEmployeeInput(body: Record<string, unknown>): { input?: Emp
       ter_rate_percent: ter_rate_percent.value,
       daily_meal_allowance: daily_meal_allowance.value,
       daily_transport_allowance: daily_transport_allowance.value,
-      bpjs_kesehatan_enrolled: parseOptionalBoolean(body.bpjs_kesehatan_enrolled)
+      bpjs_kesehatan_enrolled: parseOptionalBoolean(body.bpjs_kesehatan_enrolled),
+      bpjs_contribution_basis: bpjs_contribution_basis.value,
+      allowance_frequency
     }
   };
 }

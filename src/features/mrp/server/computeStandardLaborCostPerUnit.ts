@@ -67,9 +67,10 @@ export async function computeStandardLaborCostPerUnit(adminClient: SupabaseClien
     .from('company_settings')
     .select('setting_key, setting_value')
     .eq('company_id', companyId)
-    .in('setting_key', ['work_calendar_weekday_hours', 'standard_hours_per_month']);
+    .in('setting_key', ['work_calendar_weekday_hours', 'standard_hours_per_month', 'standard_working_days_per_month']);
   const weekdayHours = Number(calendarSettings?.find((s) => s.setting_key === 'work_calendar_weekday_hours')?.setting_value ?? 7);
   const hoursPerMonth = Number(calendarSettings?.find((s) => s.setting_key === 'standard_hours_per_month')?.setting_value ?? 173.3333);
+  const workingDaysPerMonth = Number(calendarSettings?.find((s) => s.setting_key === 'standard_working_days_per_month')?.setting_value ?? 21);
 
   const { config: employerCostConfig, missingKeys: employerCostMissingKeys } = await getEmployerCostConfig(adminClient, companyId);
 
@@ -117,7 +118,7 @@ export async function computeStandardLaborCostPerUnit(adminClient: SupabaseClien
       // kalau tidak ada satu pun, level ini dicatat sebagai tidak lengkap.
       const { data: employeesOfType } = await adminClient
         .from('employees')
-        .select('wage_rate, bpjs_kesehatan_enrolled, daily_meal_allowance, daily_transport_allowance')
+        .select('wage_rate, bpjs_kesehatan_enrolled, daily_meal_allowance, daily_transport_allowance, bpjs_contribution_basis, allowance_frequency')
         .eq('company_id', companyId)
         .eq('is_active', true)
         .eq('wage_type', c.wage_type);
@@ -129,9 +130,15 @@ export async function computeStandardLaborCostPerUnit(adminClient: SupabaseClien
       // Tunjangan makan+transport per hari HADIR -- rata-rata dari karyawan yang
       // datanya sudah terisi (null dihitung 0, BUKAN dikeluarkan dari rata-rata --
       // kalau belum ada satu pun yang terisi, hasilnya memang 0 sampai datanya diisi,
-      // bukan angka karangan).
+      // bukan angka karangan). allowance_frequency='monthly_fixed' (ditemukan dari
+      // data nyata, mis. GM dapat tunjangan tetap bulanan bukan per hari hadir) --
+      // dikonversi ke setara per-hari (dibagi hari kerja standar/bulan) supaya
+      // tetap konsisten digabung ke formula per-hari di bawah.
       const avgDailyAllowance =
-        employeesOfType.reduce((s, e) => s + Number(e.daily_meal_allowance ?? 0) + Number(e.daily_transport_allowance ?? 0), 0) / employeesOfType.length;
+        employeesOfType.reduce((s, e) => {
+          const raw = Number(e.daily_meal_allowance ?? 0) + Number(e.daily_transport_allowance ?? 0);
+          return s + (e.allowance_frequency === 'monthly_fixed' ? raw / workingDaysPerMonth : raw);
+        }, 0) / employeesOfType.length;
 
       // Iuran pemberi kerja (BPJS Kesehatan+JKK+JKM+JHT, Bagian D 21 Agu 2026) --
       // HANYA utk wage_type=monthly (satu-satunya kasus yang dicontohkan pemilik
@@ -140,7 +147,9 @@ export async function computeStandardLaborCostPerUnit(adminClient: SupabaseClien
       let avgMonthlyEmployerUplift = 0;
       if (c.wage_type === 'monthly') {
         if (employerCostConfig) {
-          const uplifts = employeesOfType.map((e) => computeMonthlyEmployerUplift(Number(e.wage_rate), e.bpjs_kesehatan_enrolled, employerCostConfig));
+          const uplifts = employeesOfType.map((e) =>
+            computeMonthlyEmployerUplift(Number(e.wage_rate), e.bpjs_kesehatan_enrolled, employerCostConfig, e.bpjs_contribution_basis !== null ? Number(e.bpjs_contribution_basis) : null)
+          );
           avgMonthlyEmployerUplift = uplifts.reduce((s, u) => s + u.upliftAmount, 0) / uplifts.length;
           const unconfirmedBpjsCount = uplifts.filter((u) => u.notes.length > 0).length;
           if (unconfirmedBpjsCount > 0) {
@@ -155,7 +164,10 @@ export async function computeStandardLaborCostPerUnit(adminClient: SupabaseClien
       const avgWageRateWithUplift = avgWageRate + avgMonthlyEmployerUplift;
 
       if (c.wage_type === 'daily') {
-        dailyCostPerPerson = avgWageRate; // PHL: dibayar penuh 1 hari terlepas jam
+        // PHL: dibayar penuh 1 hari terlepas jam, DITAMBAH tunjangan per hari
+        // hadir kalau ada (data nyata 21 Agu 2026: PHL serbuk dapat uang
+        // parkir, 1 orang +uang bensin -- disimpan di daily_transport_allowance).
+        dailyCostPerPerson = avgWageRate + avgDailyAllowance;
       } else if (c.wage_type === 'monthly') {
         dailyCostPerPerson =
           (c.is_full_day_dedicated

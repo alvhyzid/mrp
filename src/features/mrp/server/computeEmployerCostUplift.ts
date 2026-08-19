@@ -59,12 +59,21 @@ export async function getEmployerCostConfig(adminClient: SupabaseClient, company
 // angkanya lebih rendah dari yang sesungguhnya. JKK/JKM/JHT tidak punya opsi
 // keikutsertaan di data yang diberikan (beda dari Kesehatan), jadi selalu
 // dihitung.
+//
+// Basis: PER ORANG (bpjs_contribution_basis kalau diisi), fallback ke
+// clamp(gaji, floor, ceiling) tenant kalau belum ada override -- ditemukan
+// dari data nyata (21 Agu 2026) BASIS TIDAK SELALU = clamp(gaji): Dimas
+// (gaji Rp7.500.000) basisnya Rp6.500.000, Bayu (gaji Rp14.000.000) basisnya
+// Rp8.000.000 -- keduanya beda dari hasil clamp. Mayoritas karyawan lain
+// KEBETULAN basisnya persis cocok formula clamp (makanya formula lama tidak
+// salah, cuma tidak lengkap utk 2 kasus di atas).
 export function computeMonthlyEmployerUplift(
   monthlyWageRate: number,
   bpjsKesehatanEnrolled: boolean | null,
-  config: EmployerCostConfig
+  config: EmployerCostConfig,
+  contributionBasisOverride?: number | null
 ): { upliftAmount: number; clampedBasis: number; notes: string[] } {
-  const clampedBasis = Math.min(Math.max(monthlyWageRate, config.wageBasisFloor), config.wageBasisCeiling);
+  const clampedBasis = contributionBasisOverride ?? Math.min(Math.max(monthlyWageRate, config.wageBasisFloor), config.wageBasisCeiling);
   const jkk = (clampedBasis * config.jkkRatePercent) / 100;
   const jkm = (clampedBasis * config.jkmRatePercent) / 100;
   const jht = (clampedBasis * config.jhtRatePercent) / 100;

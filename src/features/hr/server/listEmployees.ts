@@ -23,7 +23,7 @@ export async function listEmployees(request: NextRequest): Promise<ApiResult> {
     const { data: employees, error } = await adminClient
       .from('employees')
       .select(
-        'employee_id, production_plant_id, department, name, position, wage_type, wage_rate, linked_user_id, is_active, created_at, factory_employee_code, employment_status, ptkp_status, ter_category, ter_rate_percent, daily_meal_allowance, daily_transport_allowance, bpjs_kesehatan_enrolled'
+        'employee_id, production_plant_id, department, name, position, wage_type, wage_rate, linked_user_id, is_active, created_at, factory_employee_code, employment_status, ptkp_status, ter_category, ter_rate_percent, daily_meal_allowance, daily_transport_allowance, bpjs_kesehatan_enrolled, bpjs_contribution_basis, allowance_frequency'
       )
       .eq('company_id', appUser.company_id)
       .order('name', { ascending: true });
@@ -65,7 +65,9 @@ export async function listEmployees(request: NextRequest): Promise<ApiResult> {
         ter_rate_percent: showWage ? employee.ter_rate_percent : null,
         daily_meal_allowance: showWage ? employee.daily_meal_allowance : null,
         daily_transport_allowance: showWage ? employee.daily_transport_allowance : null,
-        bpjs_kesehatan_enrolled: showWage ? employee.bpjs_kesehatan_enrolled : null
+        bpjs_kesehatan_enrolled: showWage ? employee.bpjs_kesehatan_enrolled : null,
+        bpjs_contribution_basis: showWage ? employee.bpjs_contribution_basis : null,
+        allowance_frequency: employee.allowance_frequency
       };
     });
 

@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { canViewFinancialData, isCompanyLeadership } from '@/lib/roles';
 import { itemTypes, typeLabels, typeBadgeVariant } from '../itemTypeLabels';
+import { formatCurrency } from '@/lib/currency';
 
 type Item = {
   item_id: number;
@@ -244,11 +245,7 @@ export default function ItemsPage() {
       baseColumns.push({
         accessorKey: 'standard_cost',
         header: 'Biaya Standar',
-        cell: ({ row }) => (
-          <span className="text-data">
-            {row.original.standard_cost === null ? <span className="text-muted-foreground">-</span> : row.original.standard_cost}
-          </span>
-        )
+        cell: ({ row }) => <span className="text-data">{formatCurrency(row.original.standard_cost)}</span>
       });
     }
 

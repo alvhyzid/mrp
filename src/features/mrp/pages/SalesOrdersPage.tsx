@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { canViewPlanningFeasibility, canViewFinancialData } from '@/lib/roles';
+import { formatCurrency } from '@/lib/currency';
 
 const statusLabels: Record<string, string> = { confirmed: 'Dikonfirmasi', in_production: 'Sedang Produksi', completed: 'Selesai', cancelled: 'Batal' };
 const statusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical'> = {
@@ -431,7 +432,7 @@ export default function SalesOrdersPage() {
                         <td className="px-3 py-1.5">
                           {line.qty_remaining_to_ship > 0 ? <span className="font-medium text-foreground">{line.qty_remaining_to_ship}</span> : <span className="text-muted-foreground">0</span>} {line.item_base_uom}
                         </td>
-                        {showPriceColumn ? <td className="px-3 py-1.5">{line.unit_price === null ? <span className="text-muted-foreground">-</span> : line.unit_price}</td> : null}
+                        {showPriceColumn ? <td className="px-3 py-1.5">{line.unit_price === null ? <span className="text-muted-foreground">-</span> : formatCurrency(line.unit_price, { maxDecimals: 0 })}</td> : null}
                         {canViewPlanningFeasibility(role) ? (
                           <td className="px-3 py-1.5">
                             <Button size="sm" variant="outline" disabled={feasibilityLoading && feasibilityLineId === line.sales_order_line_id} onClick={() => handleCheckFeasibility(line.sales_order_line_id)}>
@@ -478,22 +479,25 @@ export default function SalesOrdersPage() {
                       ) : null}
                       <div className="grid gap-1 sm:grid-cols-2">
                         <span className="text-muted-foreground">
-                          Harga jual: <span className="text-foreground">Rp{marginResult.unit_price.toLocaleString('id-ID')}</span>/unit
+                          Harga jual: <span className="text-foreground">{formatCurrency(marginResult.unit_price, { maxDecimals: 0 })}</span>/unit
                         </span>
                         <span className="text-muted-foreground">
-                          Biaya standar: <span className="text-foreground">Rp{(marginResult.standard_material_cost_per_unit + marginResult.standard_packaging_cost_per_unit + marginResult.standard_labor_cost_per_unit).toLocaleString('id-ID', { maximumFractionDigits: 2 })}</span>/unit
-                          (bahan Rp{marginResult.standard_material_cost_per_unit.toLocaleString('id-ID', { maximumFractionDigits: 2 })} + kemasan Rp
-                          {marginResult.standard_packaging_cost_per_unit.toLocaleString('id-ID', { maximumFractionDigits: 2 })} + SDM Rp
-                          {marginResult.standard_labor_cost_per_unit.toLocaleString('id-ID', { maximumFractionDigits: 2 })}
+                          Biaya standar:{' '}
+                          <span className="text-foreground">
+                            {formatCurrency(marginResult.standard_material_cost_per_unit + marginResult.standard_packaging_cost_per_unit + marginResult.standard_labor_cost_per_unit)}
+                          </span>
+                          /unit (bahan {formatCurrency(marginResult.standard_material_cost_per_unit)} + kemasan {formatCurrency(marginResult.standard_packaging_cost_per_unit)} + SDM{' '}
+                          {formatCurrency(marginResult.standard_labor_cost_per_unit)}
                           {!marginResult.labor_cost_complete ? ' [sebagian]' : ''})
                         </span>
                         <span className="text-muted-foreground">
-                          Margin rencana (baseline){!marginResult.labor_cost_complete ? ' (SEBELUM SDM)' : ''}: <span className="font-medium text-foreground">Rp{Math.round(marginResult.standard_margin_total).toLocaleString('id-ID')}</span>
+                          Margin rencana (baseline){!marginResult.labor_cost_complete ? ' (SEBELUM SDM)' : ''}:{' '}
+                          <span className="font-medium text-foreground">{formatCurrency(marginResult.standard_margin_total, { maxDecimals: 0 })}</span>
                         </span>
                         <span className="text-muted-foreground">
                           Proyeksi margin berjalan{!marginResult.labor_cost_complete ? ' (SEBELUM SDM)' : ''}:{' '}
                           <span className={`font-medium ${marginResult.projected_margin_total < marginResult.standard_margin_total ? 'text-destructive' : 'text-success'}`}>
-                            Rp{Math.round(marginResult.projected_margin_total).toLocaleString('id-ID')}
+                            {formatCurrency(marginResult.projected_margin_total, { maxDecimals: 0 })}
                           </span>
                           {!marginResult.projection_complete ? <span className="text-warning-subtle-foreground"> (belum lengkap — lihat catatan tiap kategori)</span> : null}
                         </span>
@@ -525,7 +529,7 @@ export default function SalesOrdersPage() {
                             <div className="flex items-center justify-between">
                               <span className="font-medium text-foreground">{cat.label}</span>
                               <span className={`font-medium ${cat.total_impact < 0 ? 'text-destructive' : cat.total_impact > 0 ? 'text-success' : 'text-muted-foreground'}`}>
-                                {cat.total_impact === 0 && cat.items.length === 0 ? '-' : `Rp${Math.round(cat.total_impact).toLocaleString('id-ID')}`}
+                                {cat.total_impact === 0 && cat.items.length === 0 ? '-' : formatCurrency(cat.total_impact, { maxDecimals: 0 })}
                               </span>
                             </div>
                             {cat.incomplete_reason ? <p className="mt-1 text-xs text-muted-foreground">{cat.incomplete_reason}</p> : null}
@@ -537,7 +541,7 @@ export default function SalesOrdersPage() {
                                       {item.item_code !== '-' ? `${item.item_code} — ` : ''}
                                       {item.name}: {item.detail}
                                     </span>
-                                    <span className={item.impact < 0 ? 'text-destructive' : 'text-success'}>Rp{Math.round(item.impact).toLocaleString('id-ID')}</span>
+                                    <span className={item.impact < 0 ? 'text-destructive' : 'text-success'}>{formatCurrency(item.impact, { maxDecimals: 0 })}</span>
                                   </li>
                                 ))}
                               </ul>

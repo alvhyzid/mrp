@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { canAccessHrDashboard, canManageHr } from '@/lib/roles';
+import { formatCurrency } from '@/lib/currency';
 
 const wageTypeLabels: Record<string, string> = {
   hourly: 'Per Jam',
@@ -320,7 +321,7 @@ export default function HrDashboardPage() {
             <span className="text-muted-foreground">-</span>
           ) : (
             <span className="text-data">
-              {row.original.wage_rate} / {row.original.wage_type}
+              {formatCurrency(row.original.wage_rate, { maxDecimals: 0 })} / {row.original.wage_type}
             </span>
           )
       });

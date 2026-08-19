@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { canManageBom, canViewFinancialData } from '@/lib/roles';
 import { typeLabels, typeBadgeVariant } from '../itemTypeLabels';
+import { formatCurrency } from '@/lib/currency';
 
 const bomStatuses = ['draft', 'active', 'archived'];
 
@@ -529,15 +530,7 @@ export default function BomsPage() {
                             <span className="text-muted-foreground">Sejak tahap 1</span>
                           )}
                         </td>
-                        {canViewCost ? (
-                          <td className="px-3 py-1.5">
-                            {line.component_standard_cost === null ? (
-                              <span className="text-muted-foreground">-</span>
-                            ) : (
-                              line.component_standard_cost
-                            )}
-                          </td>
-                        ) : null}
+                        {canViewCost ? <td className="px-3 py-1.5">{formatCurrency(line.component_standard_cost)}</td> : null}
                       </tr>
                     ))}
                   </tbody>

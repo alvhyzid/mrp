@@ -3,6 +3,7 @@ import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
 import { canViewFinancialData } from '@/lib/roles';
 import { computeStandardCostPerUnit } from './computeStandardCostPerUnit';
 import { computeStandardLaborCostPerUnit } from './computeStandardLaborCostPerUnit';
+import { formatCurrency, formatNumberId } from '@/lib/currency';
 
 interface ApiResult {
   status: number;
@@ -264,7 +265,7 @@ async function computePriceVarianceCategory(
         item_code: item.item_code,
         name: item.name,
         impact,
-        detail: `Standar Rp${Number(item.standard_cost).toLocaleString('id-ID')} vs aktual Rp${actualPrice.toLocaleString('id-ID')} × ${qtyNeeded.toLocaleString('id-ID', { maximumFractionDigits: 2 })} unit${avgActualCostByItem.has(itemId) ? '' : ' (dari PO belum diterima)'}`
+        detail: `Standar ${formatCurrency(Number(item.standard_cost))} vs aktual ${formatCurrency(actualPrice)} × ${formatNumberId(qtyNeeded)} unit${avgActualCostByItem.has(itemId) ? '' : ' (dari PO belum diterima)'}`
       });
     }
   }
@@ -388,7 +389,7 @@ async function computeRejectVarianceCategory(
       item_code: '-',
       name: `Reject (satuan ${topUom})`,
       impact,
-      detail: `${totalRejectInTopUom.toLocaleString('id-ID', { maximumFractionDigits: 2 })} ${topUom} reject × biaya standar Rp${standardCostPerUnitKnown.toLocaleString('id-ID', { maximumFractionDigits: 2 })}/unit`
+      detail: `${formatNumberId(totalRejectInTopUom)} ${topUom} reject × biaya standar ${formatCurrency(standardCostPerUnitKnown)}/unit`
     });
   }
 
@@ -498,7 +499,7 @@ async function computeLaborCategories(
       item_code: '-',
       name: batchNumberById.get(a.production_batch_id) ?? `Batch #${a.production_batch_id}`,
       impact: -cost,
-      detail: `${hours} jam${a.is_overtime ? ' (ditandai lembur)' : shift ? ` (shift ${shift.name})` : ''} × Rp${Math.round(rate).toLocaleString('id-ID')}/jam`
+      detail: `${hours} jam${a.is_overtime ? ' (ditandai lembur)' : shift ? ` (shift ${shift.name})` : ''} × ${formatCurrency(rate, { maxDecimals: 0 })}/jam`
     });
   }
 

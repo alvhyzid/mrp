@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { formatCurrency } from '@/lib/currency';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { canManagePurchasing } from '@/lib/roles';
 
@@ -250,7 +251,7 @@ export default function PurchasingPage() {
               <td className="px-3 py-1.5">
                 {line.qty_received} {line.purchase_uom}
               </td>
-              {po.lines.some((l) => l.unit_price !== null) ? <td className="px-3 py-1.5">{line.unit_price !== null ? line.unit_price.toLocaleString('id-ID') : '-'}</td> : null}
+              {po.lines.some((l) => l.unit_price !== null) ? <td className="px-3 py-1.5">{formatCurrency(line.unit_price, { maxDecimals: 0 })}</td> : null}
             </tr>
           ))}
         </tbody>

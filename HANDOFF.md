@@ -78,7 +78,30 @@ Struktur `employees` diperluas (migration `20260821090000` + `20260821091500`): 
 - **Dampak nyata pada overhead bulanan**: `monthly_overhead_baseline` dihitung ulang dari gaji NYATA peran non-produksi (9 karyawan: Direktur, GM, Manager PPIC, Staf Purchasing, HR Generalist, Helper Gudang, FAT Spv, RnD Staff, PPIC Jr. Spv — department ≠ production) + uplift JKK/JKM/JHT (BPJS Kesehatan=0 karena belum ada satu pun yang keikutsertaannya dikonfirmasi) → **Rp60.500.000 (lama, simulasi) → Rp65.666.907 (baru, gaji nyata + BPJS employer), naik ±8,5%**. Sudah diupdate di `company_settings`.
 - **Test baru**: `tests/employer_cost_uplift.test.ts` (7 test: rumus clamp floor/ceiling tervalidasi ke angka Dina, 3 skenario negatif — gaji di atas ceiling tetap dipotong bukan dihitung penuh, `bpjs_kesehatan_enrolled=null` tidak dianggap ikut tapi juga tidak dianggap "dikonfirmasi tidak ikut", company tanpa config BPJS fallback aman — plus verifikasi SQL vs JS menghasilkan angka identik).
 
-**Bagian E (periode payroll 26-25), F (formatter Rupiah terpusat) — BELUM DIMULAI.**
+### Bagian E — Periode penggajian (26 s/d 25), opsi overhead bulanan DILAPORKAN bukan diputuskan
+
+`company_settings.payroll_period_start_day = 26` disimpan untuk company_id=1 (konfigurasi tenant, bisa beda per perusahaan lain). **Belum dipakai di kode mana pun** — sengaja, karena keputusan berikut BUKAN wewenang saya:
+
+**Pertanyaan yang perlu dijawab pemilik produk**: `get_monthly_operating_profit()` (Laba Operasional bulanan, K2 Tingkat 2) saat ini mengelompokkan margin pengiriman berdasar **bulan KALENDER** (1-31/28/30). Sekarang periode gaji pabrik sudah dikonfirmasi 26 s/d 25 (bukan kalender) — 2 opsi:
+
+1. **Tetap bulan kalender** (tidak berubah) — Laba Operasional bulanan terus dihitung 1-31 seperti sekarang. Overhead (termasuk gaji, lihat Bagian D) dikurangkan penuh di bulan kalender itu, TIDAK peduli tanggal gajian sungguhan. Lebih sederhana, tapi "bulan" di laporan tidak 1:1 dengan "bulan gajian" yang dialami HRD/Finance.
+2. **Ikut periode gaji (26 s/d 25)** — Laba Operasional "Agustus 2026" berarti 26 Juli s/d 25 Agustus. Lebih match dengan realita arus kas gaji, tapi butuh perubahan query `get_monthly_operating_profit()` (ganti `extract(year/month from shipment_date)` jadi rentang tanggal eksplisit) DAN kemungkinan bikin bingung kalau dibandingkan ke laporan lain yang masih pakai kalender (PPh 21 tahunan, laporan pajak, dst — biasanya tetap kalender).
+
+**Belum saya putuskan salah satu** — perlu jawaban pemilik produk sebelum `get_monthly_operating_profit()` diubah.
+
+### Bagian F — Formatter Rupiah terpusat (SELESAI)
+
+**`src/lib/currency.ts`** — `formatCurrency(value, options?)` SATU-SATUNYA tempat simbol "Rp" boleh ditulis di lapisan tampilan (default `currencyCode='IDR'`, siap kalau nanti ada tenant non-IDR — tapi belum ada UI yang membaca `company_settings.currency_code` per-tenant secara dinamis, itu masih hardcode default di fungsi, DISCLOSED bukan disembunyikan — lihat catatan di bawah). `formatNumberId(value)` — varian tanpa simbol utk kolom angka murni. `null`/`undefined`/`NaN` selalu jadi `"-"` (BUKAN "Rp0" — supaya tidak disalahartikan data kosong sebagai angka nyata nol), nilai 0 sungguhan tetap tampil "Rp0". **STANDING INVARIANT dijaga**: fungsi ini PURE (tidak memutasi input), pembulatan cuma terjadi di STRING HASIL, nilai sumber & seluruh perhitungan tetap presisi penuh — dibuktikan test.
+
+**`format_rupiah_id()` (SQL, migration `20260821120000`)** — padanan untuk kalimat notifikasi yang dibuat DI DALAM Postgres (`system_alerts.message`). Dipakai di `upsert_margin_threshold_alert()` — sebelumnya menulis `Rp1523025` (angka mentah tanpa pemisah ribuan) di kalimat alert, sekarang `Rp1.523.025` konsisten dengan sisi TS.
+
+**Disapu ke `formatCurrency`/`formatNumberId`** (7 file, semua raw `toLocaleString`/nilai mentah tanpa format diganti): `SalesOrdersPage.tsx` (panel Margin Watch — harga jual, biaya standar, margin, tiap kategori selisih, KOLOM Harga Jual di tabel baris SO yang SEBELUMNYA tidak diformat SAMA SEKALI — ditemukan saat sapuan, bukan sekadar ganti yang sudah ada), `PurchasingPage.tsx` & `CustomerPurchaseOrdersPage.tsx` (kolom Harga Satuan PO — SEBELUMNYA tampil angka mentah tanpa "Rp"/pemisah ribuan sama sekali), `ItemsPage.tsx` (kolom Biaya Standar — sama, sebelumnya mentah), `BomsPage.tsx` (kolom biaya komponen per baris BOM — sama), `HrDashboardPage.tsx` (kolom Upah — sebelumnya `{wage_rate} / {wage_type}` tanpa format), `getMarginWatch.ts`/`computeStandardLaborCostPerUnit.ts` (kalimat catatan/detail yang ditampilkan di panel Margin Watch).
+
+**Dicek TAPI TIDAK perlu diubah** (sudah tidak menampilkan uang, atau memang belum ada UI-nya): PDF Surat Jalan (`SuratJalanPreview.tsx`) — sengaja TIDAK PERNAH menampilkan harga/biaya sama sekali (aturan Kontrol Akses Data Finansial, dokumen ini bisa dilihat pihak luar); `WorkOrdersPage.tsx`/`WarehouseDashboardPage.tsx` — `unit_cost` cuma ada di tipe data & input form mentah, tidak pernah dirender sebagai nilai terformat; Laba Operasional bulanan (`get_monthly_operating_profit`) — belum ada halaman UI yang memanggilnya sama sekali, jadi tidak ada tempat untuk disapu (dicatat supaya begitu halaman itu dibuat, WAJIB pakai `formatCurrency` sejak awal, bukan format manual baru).
+
+**Kode mata uang per-tenant** disimpan di `company_settings.currency_code` (diisi `'IDR'` utk company_id=1) TAPI belum ada satu pun titik di kode yang MEMBACA kunci ini secara dinamis dan mengoper ke `formatCurrency({currencyCode: ...})` — semua pemanggilan saat ini pakai default `'IDR'` bawaan fungsi. Ini cukup untuk sekarang (cuma ada tenant IDR), tapi kalau nanti ada tenant currency lain, perlu kerja tambahan mengalirkan `currency_code` dari company_settings ke tiap komponen yang memformat uang — BELUM dikerjakan, dicatat eksplisit supaya tidak dikira sudah otomatis multi-currency.
+
+**Test baru**: `tests/currency_formatter.test.ts` (12 test — format standar cocok contoh acuan "Rp1.108.255,93", angka bulat tidak dipaksa ",00", TIDAK memutasi nilai sumber, dan 5 skenario negatif: null/undefined/NaN/Infinity semua "-" bukan "Rp0" atau "RpNaN", 0 sungguhan tetap "Rp0", mata uang non-IDR belum crash, plus 3 test `format_rupiah_id` SQL termasuk pembulatan desimal & nol).
 
 ### Catatan menunggu (Bagian A-F) — JANGAN DITEBAK, tunggu konfirmasi/data
 1. **Cara pembayaran Darmini** (Freelance Helper, Rp1.500.000) — per hari/bulan/pekerjaan belum dikonfirmasi, belum ditambahkan ke `employees` karena `wage_type` wajib diisi.
@@ -90,6 +113,7 @@ Struktur `employees` diperluas (migration `20260821090000` + `20260821091500`): 
 7. **Siapa saja yang TIDAK ikut BPJS Kesehatan** — disebutkan "terlihat di data [PDF]" tapi tidak ada di teks yang diberikan ke sesi ini; kolom `bpjs_kesehatan_enrolled` sengaja dibiarkan `null` untuk semua, bukan ditebak.
 8. **Apakah model biaya pemberi kerja (Bagian D) perlu diperluas ke PHL (wage_type='daily')** — saat ini HANYA diterapkan ke karyawan bulanan (satu-satunya yang dicontohkan); begitu data PHL nyata & aturan BPJS untuk mereka dikonfirmasi, perlu diputuskan apakah model yang sama berlaku.
 9. **Aturan atribusi tunjangan makan/transport ke batch produksi tertentu** — sisi biaya SDM AKTUAL per batch (`compute_production_batch_labor_cost`) sengaja belum menghitung tunjangan (per hari hadir, bukan per batch) karena 1 karyawan bisa kerja di beberapa batch sehari — perlu aturan pembagian dari pemilik produk sebelum ini bisa ditambahkan konsisten.
+10. **Apakah Laba Operasional bulanan mengikuti periode gaji (26-25) atau tetap bulan kalender** — lihat opsi lengkap di bagian "Bagian E" di atas, sengaja dilaporkan sebagai opsi bukan diputuskan sepihak.
 
 ---
 

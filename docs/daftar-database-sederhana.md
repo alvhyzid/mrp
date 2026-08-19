@@ -176,6 +176,13 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 - Harga Jual per Unit — SENSITIF, disalin dari PO (unit_price)
 - Jumlah Sudah Dikirim (qty_shipped) — otomatis bertambah tiap ada pengiriman berstatus "shipped" (17 Agu 2026)
 
+**Database Baseline Margin (Margin Watch)** (`sales_order_line_margin_snapshots`)
+- ID Baris SO (sales_order_line_id, unik) · Harga Jual (unit_price) · Biaya Bahan Standar per Unit (standard_material_cost_per_unit) · Biaya Kemasan Standar per Unit (standard_packaging_cost_per_unit)
+- Biaya SDM Standar per Unit — SELALU kosong untuk saat ini, belum bisa dihitung dari data yang ada (standard_labor_cost_per_unit)
+- Data Biaya Lengkap? (cost_data_complete) · Kode Item yang Belum Punya Harga Master (missing_cost_item_codes)
+- Ambang Margin Minimum — satu-satunya yang boleh diubah kapan saja, kirim peringatan kalau proyeksi margin turun di bawahnya (margin_floor_threshold)
+- Dikunci sekali saat pertama kali panel Margin Watch dibuka untuk baris SO itu — tidak berubah lagi meski harga master berubah belakangan (sama seperti standar K8/kelayakan jadwal)
+
 **Database Header Pengiriman** (`shipments`)
 - ID Pengiriman (shipment_id) · ID Perusahaan (company_id) · ID SO (sales_order_id) · Tanggal Kirim (shipment_date) · Status (status: draft/shipped/delivered/cancelled)
 - Nomor Surat Jalan (shipment_number, otomatis dibuat, unik per perusahaan) · Nomor Kendaraan (vehicle_number) · Nama Sopir (driver_name)
@@ -236,7 +243,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 
 **Database Notifikasi Sistem** (`system_alerts`)
 - ID Alert (system_alert_id) · ID Perusahaan (company_id)
-- Jenis Alert: kekurangan bahan/PO telat/stok rendah/produksi terlambat/pekerja absen/gangguan produksi/SO siap produksi/PO butuh approval/**proyeksi stok habis**/**risiko kadaluarsa karena jarang dipakai** (alert_type)
+- Jenis Alert: kekurangan bahan/PO telat/stok rendah/produksi terlambat/pekerja absen/gangguan produksi/SO siap produksi/PO butuh approval/**proyeksi stok habis**/**risiko kadaluarsa karena jarang dipakai**/**proyeksi margin di bawah ambang** (alert_type)
 - Department Tujuan — nullable, null berarti terlihat semua department; company_admin/general_manager selalu lihat semua terlepas kolom ini (target_department)
 - ID Work Order Terkait, ID PO Terkait, ID Item Terkait (nullable) · Pesan (message) · Tingkat Keparahan (severity) · Status (status) · Tanggal Dibuat (created_at) · Dikonfirmasi Oleh (acknowledged_by) · Waktu Dikonfirmasi (acknowledged_at)
 

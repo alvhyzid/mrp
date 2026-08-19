@@ -260,7 +260,24 @@ Tercipta OTOMATIS saat `customer_purchase_orders` diproses — komitmen produksi
 
 > **Satu SO line bisa punya BANYAK Work Order** — PPIC bebas memecah 1 SO line jadi beberapa WO (mis. per hari/per kapasitas produksi: WO day 1, day 2, day 3), tidak harus 1:1. Dashboard PO tetap menjumlahkan total progres dari semua WO yang terhubung ke SO line yang sama.
 
-> **Perhitungan margin:** dihitung PER PENGIRIMAN (bukan nunggu SO selesai total). Untuk tiap `shipment_lines`: **Pendapatan** = `qty_shipped × sales_order_lines.unit_price`, **Biaya** = biaya bahan (`work_order_consumption` × `lots.unit_cost`, proporsional ke lot yang dikirim) + biaya SDM (`work_order_assignments` terkait). **Margin** = Pendapatan − Biaya. Dihitung dari data yang ada, bukan tabel baru.
+> **Perhitungan margin (realized, per pengiriman):** dihitung PER PENGIRIMAN (bukan nunggu SO selesai total). Untuk tiap `shipment_lines`: **Pendapatan** = `qty_shipped × sales_order_lines.unit_price`, **Biaya** = biaya bahan (`work_order_consumption` × `lots.unit_cost`, proporsional ke lot yang dikirim) + biaya SDM (`work_order_assignments` terkait). **Margin** = Pendapatan − Biaya. Dihitung dari data yang ada, bukan tabel baru. Beda dari **Margin Watch** (proyeksi BERJALAN, sebelum pengiriman) di bawah.
+
+### `sales_order_line_feasibility_snapshots`
+D.4 (Fase Produksi Nyata) — snapshot `unit_per_batch`/`batches_per_day` yang dipakai `getPlanningFeasibility`, dikunci SEKALI (panggilan pertama untuk 1 baris SO), tidak pernah ikut berubah diam-diam kalau `production_standards` yang mendasarinya berubah belakangan.
+- `sales_order_line_feasibility_snapshot_id`, `company_id`, `sales_order_line_id` (unik — 1 snapshot per baris SO)
+- `unit_per_batch`, `batches_per_day`, `created_at`
+
+### `sales_order_line_margin_snapshots`
+Margin Watch Lapis 1 (20 Agu 2026) — baseline margin RENCANA per baris SO, pola snapshot SAMA PERSIS dengan feasibility di atas (dikunci sekali, immutable untuk kolom biaya/harga). Dipakai Lapis 2 (`getMarginWatch`) sebagai titik acuan proyeksi margin berjalan.
+- `sales_order_line_margin_snapshot_id`, `company_id`, `sales_order_line_id` (unik)
+- `unit_price` (disalin dari `sales_order_lines` saat snapshot dibuat)
+- `standard_material_cost_per_unit`, `standard_packaging_cost_per_unit` (nullable — dari eksplosi BOM berjenjang × `items.standard_cost` tiap bahan/kemasan leaf, dibagi per tipe item)
+- `standard_labor_cost_per_unit` (SELALU NULL untuk saat ini — `routing_steps` belum menyimpan jumlah orang per tahap, cuma durasi, jadi biaya SDM standar per unit genuinely tidak bisa dihitung dari data yang ada; bukan lupa, keputusan sadar supaya tidak mengarang angka)
+- `cost_data_complete` (boolean) + `missing_cost_item_codes` (text[]) — eksplisit menandai kalau ADA bahan/kemasan leaf yang belum punya `items.standard_cost`, supaya baseline yang tidak lengkap TIDAK diam-diam dianggap benar 100%
+- `margin_floor_threshold` (nullable, numeric) — SATU-SATUNYA kolom yang BOLEH di-`UPDATE` dari app layer (preferensi pemilik order, kapan saja); kolom lain immutable sejak snapshot dibuat
+- `created_at`
+
+> **Margin Watch Lapis 2 (pembongkaran selisih, dihitung LIVE tiap panggilan, TIDAK disnapshot):** dari baseline di atas dibandingkan data AKTUAL (`lots.unit_cost`/`purchase_order_lines.unit_price` yang belum diterima, `work_order_consumption`, `work_order_step_progress.qty_reject`, `compute_production_batch_labor_cost()`), dipecah 5 kategori — Selisih Harga Bahan/Kemasan (bandingkan ke **harga master LIVE**, bukan snapshot — sengaja, supaya menangkap drift terbaru), Selisih Pemakaian Bahan, Selisih Reject, Biaya SDM Aktual (TANPA pembanding standar, alasan sama seperti `standard_labor_cost_per_unit`), Lembur & Shift Tambahan (jam dengan `is_overtime` ATAU shift mulai ≥14:00, proksi generik "shift tambahan" — tidak hardcode nama shift). Kategori tanpa data cukup ditandai `complete:false` + `incomplete_reason` eksplisit, TIDAK PERNAH diam-diam jadi 0.
 
 ### `shipments` & `shipment_lines`
 Satu SO bisa dikirim bertahap (parsial).
@@ -339,7 +356,7 @@ Visibilitas real-time tahap produksi per BATCH — penting karena batch-batch da
 ### `system_alerts`
 Peringatan otomatis dari sistem.
 - `system_alert_id`, `company_id`
-- `alert_type` (material_shortage / po_delayed / low_stock / production_delay / worker_absence / production_disruption / so_ready_for_production / po_needs_approval / stock_depletion_forecast / expiry_risk_low_usage)
+- `alert_type` (material_shortage / po_delayed / low_stock / production_delay / worker_absence / production_disruption / so_ready_for_production / po_needs_approval / stock_depletion_forecast / expiry_risk_low_usage / margin_threshold_breach)
 - `target_department` (nullable — production/ppic/finance/purchasing/warehouse/hr/management, dipakai `employees.department`. NULL = terlihat oleh semua department. `company_admin`/`general_manager` SELALU lihat semua alert, TERLEPAS dari kolom ini — bukan filter yang berlaku untuk mereka)
 - `related_work_order_id`, `related_po_id`, `related_item_id` (nullable)
 - `message`, `severity` (info/warning/critical), `status` (open / acknowledged / resolved), `created_at`
@@ -350,6 +367,8 @@ Peringatan otomatis dari sistem.
 > **Proyeksi stok habis & risiko kadaluarsa (`stock_depletion_forecast`, `expiry_risk_low_usage`):** dihitung dari **rata-rata pemakaian harian** tiap item (dari riwayat `work_order_consumption`), **dihitung ULANG setiap kali ada data baru masuk** (tiap akhir shift/update batch) — real-time, bukan terjadwal.
 > - `stock_depletion_forecast`: sisa stok ÷ rata-rata pemakaian harian = perkiraan hari sampai habis. Kalau mendekati `suppliers.lead_time_days`, alert dini ke Purchasing.
 > - `expiry_risk_low_usage`: kalau proyeksi "habis terpakai" LEBIH LAMA dari `lots.expiry_date` (bahan keburu kadaluarsa sebelum habis, kasus khas bahan MOQ besar tapi pemakaian kecil) → alert risiko dini, bukan cuma H-berapa hari standar.
+
+> **`margin_threshold_breach` (Margin Watch, 20 Agu 2026) — overload `related_po_id` beda dari alert lain.** Alert ini terkait `sales_order_line`, BUKAN `work_order`/`item`, jadi `related_po_id` (kolom fleksibel tanpa FK) dipakai menyimpan `sales_order_line_id` untuk tipe ini secara khusus — ditulis lewat fungsi mandiri `upsert_margin_threshold_alert()`, BUKAN `upsert_department_alert()`/`resolve_department_alerts()` yang dipakai alert lain (keduanya, sejak migration `20260819150000` audit keamanan, mengharuskan `related_work_order_id`/`related_item_id` untuk menurunkan `company_id` — diam-diam tidak melakukan apa pun kalau keduanya NULL, persis kasus alert margin). `target_department` = `finance` + `management` (2 baris).
 
 ---
 

@@ -61,6 +61,8 @@ export * from './getBatchLaborCost';
 export * from './getSalesOrderMargin';
 export * from './getMonthlyOperatingProfit';
 export * from './getPlanningFeasibility';
+export * from './getMarginWatch';
+export * from './updateMarginFloorThreshold';
 export * from './learnFromBatch';
 export * from './startProductionBatch';
 export * from './completeProductionBatch';

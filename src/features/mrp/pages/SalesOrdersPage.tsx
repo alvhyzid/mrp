@@ -8,7 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { DataTable } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { canViewPlanningFeasibility } from '@/lib/roles';
+import { Input } from '@/components/ui/input';
+import { canViewPlanningFeasibility, canViewFinancialData } from '@/lib/roles';
 
 const statusLabels: Record<string, string> = { confirmed: 'Dikonfirmasi', in_production: 'Sedang Produksi', completed: 'Selesai', cancelled: 'Batal' };
 const statusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical'> = {
@@ -88,6 +89,29 @@ type FeasibilityResult = {
   reason?: string;
 };
 
+type MarginVarianceItem = { item_code: string; name: string; impact: number; detail: string };
+type MarginVarianceCategory = { category: string; label: string; total_impact: number; complete: boolean; incomplete_reason: string | null; items: MarginVarianceItem[] };
+type MarginWatchResult = {
+  item_code: string;
+  item_name: string;
+  qty_ordered: number;
+  unit_price: number;
+  standard_material_cost_per_unit: number;
+  standard_packaging_cost_per_unit: number;
+  standard_labor_cost_per_unit: number | null;
+  standard_labor_cost_note: string;
+  cost_data_complete: boolean;
+  missing_cost_item_codes: string[];
+  standard_margin_per_unit: number;
+  standard_margin_total: number;
+  margin_floor_threshold: number | null;
+  categories: MarginVarianceCategory[];
+  total_variance_impact: number;
+  projected_margin_total: number;
+  projection_complete: boolean;
+  snapshot_taken_at: string;
+};
+
 const shipmentStatusLabels: Record<string, string> = { draft: 'Draft', shipped: 'Terkirim', delivered: 'Diterima', cancelled: 'Batal' };
 const shipmentStatusBadgeVariant: Record<string, 'secondary' | 'warning' | 'success' | 'critical'> = {
   draft: 'secondary',
@@ -111,6 +135,14 @@ export default function SalesOrdersPage() {
   const [feasibilityLoading, setFeasibilityLoading] = useState(false);
   const [feasibilityError, setFeasibilityError] = useState('');
   const [feasibilityResult, setFeasibilityResult] = useState<FeasibilityResult | null>(null);
+
+  const [marginLineId, setMarginLineId] = useState<number | null>(null);
+  const [marginLoading, setMarginLoading] = useState(false);
+  const [marginError, setMarginError] = useState('');
+  const [marginResult, setMarginResult] = useState<MarginWatchResult | null>(null);
+  const [marginThresholdInput, setMarginThresholdInput] = useState('');
+  const [marginThresholdStatus, setMarginThresholdStatus] = useState<'idle' | 'saving' | 'error'>('idle');
+  const [marginThresholdMessage, setMarginThresholdMessage] = useState('');
 
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
@@ -166,6 +198,59 @@ export default function SalesOrdersPage() {
     setFeasibilityLineId(null);
     setFeasibilityResult(null);
     setFeasibilityError('');
+    setMarginLineId(null);
+    setMarginResult(null);
+    setMarginError('');
+  };
+
+  // Margin Watch Lapis 1 (baseline dikunci sekali) + Lapis 2 (selisih 5
+  // kategori dari data AKTUAL berjalan) — 20 Agu 2026.
+  const handleCheckMarginWatch = async (lineId: number) => {
+    setMarginLineId(lineId);
+    setMarginLoading(true);
+    setMarginError('');
+    setMarginResult(null);
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      setMarginLoading(false);
+      setMarginError('Sesi Anda sudah tidak valid, silakan login ulang.');
+      return;
+    }
+    const response = await fetch(`/api/sales-order-lines/${lineId}/margin-watch`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const data = await response.json();
+    setMarginLoading(false);
+    if (!response.ok) {
+      setMarginError(data.error || 'Gagal memuat Margin Watch.');
+      return;
+    }
+    setMarginResult(data as MarginWatchResult);
+    setMarginThresholdInput(data.margin_floor_threshold !== null ? String(data.margin_floor_threshold) : '');
+  };
+
+  const handleSaveMarginThreshold = async () => {
+    if (!marginLineId) return;
+    setMarginThresholdStatus('saving');
+    setMarginThresholdMessage('');
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      setMarginThresholdStatus('error');
+      setMarginThresholdMessage('Sesi Anda sudah tidak valid, silakan login ulang.');
+      return;
+    }
+    const response = await fetch('/api/sales-order-lines/margin-watch-threshold', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ sales_order_line_id: marginLineId, margin_floor_threshold: marginThresholdInput === '' ? null : Number(marginThresholdInput) })
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setMarginThresholdStatus('error');
+      setMarginThresholdMessage(data.error || 'Gagal menyimpan ambang margin.');
+      return;
+    }
+    setMarginThresholdStatus('idle');
+    setMarginThresholdMessage('Ambang tersimpan.');
+    await handleCheckMarginWatch(marginLineId);
   };
 
   // P2 (Fase Produksi Nyata) — sebelum ini, kelayakan jadwal/kekurangan bahan per
@@ -324,6 +409,7 @@ export default function SalesOrdersPage() {
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Sisa Belum Dikirim</th>
                       {showPriceColumn ? <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Harga Satuan</th> : null}
                       {canViewPlanningFeasibility(role) ? <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Kelayakan</th> : null}
+                      {canViewFinancialData(role) ? <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Margin Watch</th> : null}
                     </tr>
                   </thead>
                   <tbody>
@@ -352,11 +438,102 @@ export default function SalesOrdersPage() {
                             </Button>
                           </td>
                         ) : null}
+                        {canViewFinancialData(role) ? (
+                          <td className="px-3 py-1.5">
+                            <Button size="sm" variant="outline" disabled={marginLoading && marginLineId === line.sales_order_line_id} onClick={() => handleCheckMarginWatch(line.sales_order_line_id)}>
+                              {marginLoading && marginLineId === line.sales_order_line_id ? 'Memuat...' : 'Margin Watch'}
+                            </Button>
+                          </td>
+                        ) : null}
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+
+              {marginLineId && expandedSo.lines.some((l) => l.sales_order_line_id === marginLineId) ? (
+                <div className="rounded-md border p-4">
+                  <p className="mb-3 text-sm font-medium uppercase tracking-wide text-muted-foreground">Margin Watch — Baseline vs Proyeksi Berjalan</p>
+                  {marginError ? <p className="text-sm text-destructive">{marginError}</p> : null}
+                  {marginLoading ? <p className="text-sm text-muted-foreground">Memuat...</p> : null}
+                  {marginResult && !marginLoading ? (
+                    <div className="flex flex-col gap-3 text-sm">
+                      {!marginResult.cost_data_complete ? (
+                        <p className="rounded-md border border-warning/40 bg-warning-subtle p-2 text-xs text-warning-subtle-foreground">
+                          Baseline BELUM LENGKAP — bahan berikut belum punya harga master (standard_cost), tidak ikut dijumlah: {marginResult.missing_cost_item_codes.join(', ')}.
+                        </p>
+                      ) : null}
+                      <div className="grid gap-1 sm:grid-cols-2">
+                        <span className="text-muted-foreground">
+                          Harga jual: <span className="text-foreground">Rp{marginResult.unit_price.toLocaleString('id-ID')}</span>/unit
+                        </span>
+                        <span className="text-muted-foreground">
+                          Biaya standar: <span className="text-foreground">Rp{(marginResult.standard_material_cost_per_unit + marginResult.standard_packaging_cost_per_unit).toLocaleString('id-ID', { maximumFractionDigits: 2 })}</span>/unit
+                          (bahan Rp{marginResult.standard_material_cost_per_unit.toLocaleString('id-ID', { maximumFractionDigits: 2 })} + kemasan Rp
+                          {marginResult.standard_packaging_cost_per_unit.toLocaleString('id-ID', { maximumFractionDigits: 2 })}, SDM standar {marginResult.standard_labor_cost_note})
+                        </span>
+                        <span className="text-muted-foreground">
+                          Margin rencana (baseline): <span className="font-medium text-foreground">Rp{Math.round(marginResult.standard_margin_total).toLocaleString('id-ID')}</span>
+                        </span>
+                        <span className="text-muted-foreground">
+                          Proyeksi margin berjalan:{' '}
+                          <span className={`font-medium ${marginResult.projected_margin_total < marginResult.standard_margin_total ? 'text-destructive' : 'text-success'}`}>
+                            Rp{Math.round(marginResult.projected_margin_total).toLocaleString('id-ID')}
+                          </span>
+                          {!marginResult.projection_complete ? <span className="text-warning-subtle-foreground"> (belum lengkap — lihat catatan tiap kategori)</span> : null}
+                        </span>
+                      </div>
+
+                      <div className="flex items-end gap-2 border-t pt-3">
+                        <label className="flex flex-col gap-1">
+                          <span className="text-xs font-medium text-muted-foreground">Ambang Margin Minimum (opsional)</span>
+                          <Input
+                            type="number"
+                            step="any"
+                            placeholder="mis. 35000000"
+                            className="w-48"
+                            value={marginThresholdInput}
+                            onChange={(event) => setMarginThresholdInput(event.target.value)}
+                          />
+                        </label>
+                        <Button size="sm" variant="outline" disabled={marginThresholdStatus === 'saving'} onClick={handleSaveMarginThreshold}>
+                          {marginThresholdStatus === 'saving' ? 'Menyimpan...' : 'Simpan Ambang'}
+                        </Button>
+                        <span className="text-xs text-muted-foreground">Kirim peringatan ke Finance & Manajemen kalau proyeksi margin turun di bawah angka ini.</span>
+                      </div>
+                      {marginThresholdMessage ? <p className={`text-xs ${marginThresholdStatus === 'error' ? 'text-destructive' : 'text-success'}`}>{marginThresholdMessage}</p> : null}
+
+                      <div className="flex flex-col gap-2 border-t pt-3">
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Rincian Selisih (terbesar dampaknya di atas)</p>
+                        {marginResult.categories.map((cat) => (
+                          <div key={cat.category} className="rounded-md border p-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium text-foreground">{cat.label}</span>
+                              <span className={`font-medium ${cat.total_impact < 0 ? 'text-destructive' : cat.total_impact > 0 ? 'text-success' : 'text-muted-foreground'}`}>
+                                {cat.total_impact === 0 && cat.items.length === 0 ? '-' : `Rp${Math.round(cat.total_impact).toLocaleString('id-ID')}`}
+                              </span>
+                            </div>
+                            {cat.incomplete_reason ? <p className="mt-1 text-xs text-muted-foreground">{cat.incomplete_reason}</p> : null}
+                            {cat.items.length > 0 ? (
+                              <ul className="mt-1 flex flex-col gap-0.5 text-xs">
+                                {cat.items.map((item, idx) => (
+                                  <li key={idx} className="flex items-center justify-between gap-2">
+                                    <span className="text-muted-foreground">
+                                      {item.item_code !== '-' ? `${item.item_code} — ` : ''}
+                                      {item.name}: {item.detail}
+                                    </span>
+                                    <span className={item.impact < 0 ? 'text-destructive' : 'text-success'}>Rp{Math.round(item.impact).toLocaleString('id-ID')}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
 
               {feasibilityLineId && expandedSo.lines.some((l) => l.sales_order_line_id === feasibilityLineId) ? (
                 <div className="rounded-md border p-4">

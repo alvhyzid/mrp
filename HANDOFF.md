@@ -4,7 +4,7 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
-## ANTREAN KERJA OTONOM A→G — 21 Agu 2026 (multi-sesi — A/B/C/D/E/F SELESAI, G BELUM, lanjutkan dari sini)
+## ANTREAN KERJA OTONOM A→G — 21 Agu 2026 (multi-sesi — SEMUA A-G SELESAI per bagiannya masing-masing; G hanya W1, W2-W5 masih perlu jawaban pemilik produk)
 
 Pemilik produk memberi instruksi besar berjenjang A→G, eksplisit ditandai **multi-sesi** ("bukan 2 jam, berhenti di titik aman kapan pun, lanjutkan dari antrean ini di sesi berikutnya tanpa instruksi ulang"). **PRINSIP BARU yang berlaku mulai sekarang** (menggantikan arahan generik-multi-tenant sebelumnya, lihat memory `build-for-real-tenant-not-speculative-abstraction`): bangun untuk kebutuhan NYATA PT Indo Taste, konfigurasi/kolom baru boleh kalau ongkosnya kecil, JANGAN bikin tabel konfigurasi/plugin/lapisan abstraksi generik untuk tenant yang belum ada. Larangan hardcode nama produk/orang/tahap di LOGIKA tetap berlaku.
 
@@ -134,10 +134,34 @@ Komponen generik `ProvenanceInfoButton` (`src/components/ui/provenance-info-butt
 
 **Test baru**: `tests/ai_readiness.test.ts` (7 test, mencakup ke-6 bukti di atas).
 
-**G. Absensi Geo-QR — HANYA W1** — BELUM DIMULAI. Dokumen `docs/rancangan-absensi-geo-qr.md` SUDAH ADA di repo (disalin dari Downloads 21 Agu). W2-W5 DITUNDA (butuh jawaban Q1/Q2/Q4/Q5/Q6/Q7 dari pemilik produk yang belum ada). W1 saja: skema+RLS+state machine harian+geofence per plant+event ledger append-only+rekap harian. Yang sudah final (JANGAN buat master jam kerja kedua — pakai kalender kerja yang sudah ada): istirahat 12.00-13.00 Sen-Jum (efektif 7 jam), Sabtu tanpa istirahat (efektif 5 jam), lokasi HANYA saat clock-in/out (bukan pelacakan terus-menerus), di luar geofence = DI_LUAR_AREA+antrean review (BUKAN ditolak), PHL kehadiran=dasar upah harian (Rp50.000+parkir Rp2.000, Rohmat +bensin Rp10.000 — angka ini SUDAH cocok dgn data payroll nyata yang diisi sesi ini — lihat bagian "Data payroll final" di atas).
+**G. Absensi Geo-QR — HANYA W1 — SELESAI.** Halaman `/attendance` (semua role login melihat riwayat sendiri; HR/company_admin melihat semua + mencatat manual + menyetujui koreksi/izin). W2 (tablet QR dinamis+offline), W3 (PWA karyawan), W4 (konsol HRD penuh+ekspor payroll), W5 (integrasi kapasitas/labor log/notifikasi) **DITUNDA** — belum dikerjakan, butuh jawaban Q1/Q2/Q6/Q7 (arah scan tablet, foto selfie, format ekspor payroll, jumlah karyawan tanpa smartphone) yang BELUM dijawab pemilik produk.
 
-### Melanjutkan sesi ini (D→G) — mulai dari sini di sesi berikutnya
-Urutan tetap D→E→F→G. Ketiga dokumen (D sudah ada, F, G) sudah tersalin ke `docs/` — TIDAK perlu cari lagi ke Downloads. Pola kerja yang sudah terbukti sepanjang Bagian A-C: skema kecil bertarget (bukan abstraksi generik spekulatif) + RLS default-deny utk `authenticated` + gerbang role di server function pakai admin client + test dgn skenario negatif eksplisit + commit per bagian + cek STOP CONDITION masing-masing dokumen SEBELUM membangun UI penuh.
+**Q3 (jam istirahat) & sebagian Q5 SUDAH final** dari instruksi sebelumnya, diterapkan persis: Sen-Jum 08.00-16.00 dgn istirahat 12.00-13.00 (efektif 7 jam), Sabtu 08.00-13.00 tanpa istirahat (efektif 5 jam) — **DIPAKAI ULANG** dari `company_settings.work_calendar_weekday_hours`/`work_calendar_saturday_hours` yang SUDAH ADA (Bagian D/E), TIDAK membuat master jam kerja kedua. **Q4 (toleransi keterlambatan) BELUM dijawab** — dipakai default 15 menit (`company_settings.attendance_late_tolerance_minutes`, PERLU KONFIRMASI HRD, tidak menunggu jawaban sesuai instruksi). **Q1/Q2/Q6/Q7 tetap terbuka**, TIDAK menghalangi W1 karena W1 murni skema+state machine, bukan UI tablet/PWA/ekspor.
+
+**Penyimpangan jujur dari §6 dokumen** (semua didokumentasikan di kepala migration `20260823090000`): (1) TIDAK membuat tabel `attendance_days` baru — tabel `employee_attendance` yang **SUDAH ADA** (migration `20260813120000`, sebelumnya cuma tampilan HR, tanpa jalur tulis nyata) diperluas jadi rekap harian yang dimaksud, menghindari 2 tabel bersaing menjawab "status hari ini". (2) TIDAK membuat `qr_token_log` — QR dinamis tablet adalah W2 (belum ada penerbit token); kolom `qr_token_id` disiapkan nullable di `attendance_events` supaya W2 tidak perlu migrasi ulang. (3) `plant_geofences` BUKAN tabel tersendiri — 3 kolom (`center_lat`/`center_lng`/`geofence_radius_meters`) ditambahkan langsung ke `production_plants` (relasi 1:1, prinsip "kolom sederhana lebih baik dari tabel baru").
+
+**Koreksi bug ditemukan sendiri saat menulis test**: percobaan pertama memakai trigger DB keras yang memblokir UPDATE/DELETE `attendance_events` TANPA KECUALIAN (termasuk service_role) — ternyata LEBIH KETAT dari pola "ledger" yang sudah berlaku di seluruh proyek ini (`status_transition_log` TIDAK punya trigger begitu, append-only-nya murni disiplin aplikasi) dan membuat pembersihan data test sendiri gagal (FK `companies`←`attendance_events` tak bisa dilepas). Diperbaiki migration `20260823100000` — trigger dihapus, diganti disiplin yang sama: RLS default-deny + tidak ada server function yang pernah `.update()`/`.delete()` tabel ini.
+
+**Skema** (migration `20260823090000` + fixup `20260823100000`): `attendance_events` (ledger), `attendance_devices` (device binding v1 — HP pertama otomatis terdaftar, ganti perangkat → `PENDING_APPROVAL`), `attendance_corrections`, `leave_requests` — semua RLS SELECT scoped company, TIDAK ADA policy insert/update authenticated (pola konsisten Kamus/Kesiapan AI), semua tulis lewat server function (`src/features/attendance/server/`). `employee_attendance` diperluas: `work_minutes`/`late_minutes`/`overtime_minutes`/`source_event_ids`/`geofence_status`/`flags`, `status` DIPERLUAS (union, bukan diganti — 5 nilai lama dari `scripts/seed-debug-employees.js` tetap valid + 10 nilai baru sesuai state machine dokumen).
+
+**Rekap dihitung ULANG dari event, tidak pernah diedit manual** (`recomputeAttendanceDay.ts`) — geofence via haversine (`geofence.ts`), late/overtime dari `company_settings` (jam mulai shift baru: `attendance_weekday_start_time`/`attendance_saturday_start_time`, default '08:00', belum pernah dikonfirmasi eksplisit — sama status dgn ambang toleransi). Auto-close hari HADIR yang terbuka di masa lalu (`closeStaleOpenAttendanceDays.ts`, dipanggil live tiap dashboard dibuka — belum ada cron di proyek ini, pola sama Bagian F).
+
+### BUKTI YANG DIMINTA (§8 kriteria selesai)
+1. ✅ Scan di luar geofence → `DI_LUAR_AREA` + masuk antrean review, bukan hilang — dibuktikan test.
+2. ✅ `client_event_id` sama dikirim 2× → idempoten, SATU event tersimpan — dibuktikan test.
+3. ✅ Karyawan tidak bisa melihat riwayat karyawan lain — dibuktikan test (+ antrean review HANYA muncul utk HR).
+4. ✅ Koreksi TIDAK mengubah event asli, rekap terhitung ulang dari event (jumlah event bertambah 1, bukan diedit) — dibuktikan test.
+5. ✅ Rekap cocok dgn perhitungan manual (angka acuan literal: masuk 08:10, pulang 16:20, Senin → kerja 430 menit, terlambat 0 menit [10 menit < toleransi 15], lembur 10 menit) — dibuktikan test.
+6. ✅ Lupa clock-out ter-auto-close + flag, muncul di antrean HRD — dibuktikan test.
+7. ⏸️ **QR statis ditolak** — TIDAK BISA diuji (belum ada penerbit QR, itu W2). ⏸️ **Ekspor payroll** — TIDAK BISA dibangun (format kolom/Q6 belum dijawab, itu W4).
+8. ✅ Izin disetujui → status hari itu `IZIN` bukan `ALPA` — dibuktikan test (bonus, di luar 8 poin literal §8 tapi termuat di §3).
+
+**Test baru**: `tests/attendance_geo_qr_w1.test.ts` (11 test, mencakup semua bukti di atas + 3 skenario negatif: karyawan atas nama karyawan lain, non-HR mencatat manual, non-HR memutuskan izin).
+
+**Simplifikasi yang disadari** (bukan lupa): tidak ada kalender hari libur nasional (ALPA dihitung utk semua hari kerja masa lalu tanpa event KECUALI Minggu — Sabtu tetap dianggap hari kerja sesuai jadwal yang sudah ada); pindah plant di tengah hari BELUM ditangani sebagai perpindahan eksplisit (event boleh beda plant_id, rekap harian hanya ambil plant dari event IN pertama); foto selfie/anti-titip-absen v1.1 belum dibangun (Q2 belum dijawab, lagipula perlu PWA/HP yang itu W3).
+
+### A→G SEMUA SELESAI per lingkupnya masing-masing (22 Agu 2026)
+D, E, F selesai penuh; G selesai HANYA W1 (W2-W5 sengaja ditunda, butuh pemilik produk). Kalau ada sesi lanjutan setelah ini, opsi berikutnya (BUKAN queue A-G lama, itu sudah tuntas): (1) wawancara Q1/Q2/Q4[sebagian sudah default]/Q6/Q7 absensi ke pemilik produk lalu lanjut W2-W5, (2) 3 gerbang Fase 1-3 AI roadmap di bawah (butuh pemilik produk personal), (3) kalibrasi ambang §1.4 Kesiapan AI setelah beberapa bulan data nyata (§8 dokumen sumber), (4) tinjau Q3/Q5 PHL "hadir tapi tidak dipekerjakan" yang masih belum eksplisit dijawab. TANYAKAN ke pemilik produk urutan prioritas berikutnya, jangan asumsi sendiri — queue eksplisit A-G yang mengarahkan sesi-sesi sebelumnya sudah habis.
 
 ### Yang TIDAK BISA dibangun & kenapa (Fase 1-3 dokumen AI, gerbang eksplisit — BUKAN diabaikan, BUTUH pemilik produk)
 1. **Akun & API key penyedia model LLM + ketentuan datanya** — tidak ada di sesi ini, tidak bisa ditebak/dibuat sendiri.

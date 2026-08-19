@@ -23,7 +23,8 @@ import {
   Star,
   Book,
   Analytics,
-  Meter
+  Meter,
+  Time
 } from '@carbon/icons-react';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import {
@@ -150,7 +151,10 @@ const NAV_SECTIONS: NavSection[] = [
   },
   {
     title: 'HR',
-    items: [{ label: 'Dashboard', href: '/hr', visible: canAccessHrDashboard, icon: UserMultiple }]
+    items: [
+      { label: 'Dashboard', href: '/hr', visible: canAccessHrDashboard, icon: UserMultiple },
+      { label: 'Absensi', href: '/attendance', visible: () => true, icon: Time }
+    ]
   },
   {
     title: 'Finance',

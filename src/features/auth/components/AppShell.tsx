@@ -19,7 +19,8 @@ import {
   Settings as SettingsIcon,
   UserAvatar,
   DeliveryTruck,
-  Money
+  Money,
+  Star
 } from '@carbon/icons-react';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import {
@@ -151,6 +152,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Settings',
     items: [
+      { label: 'Apa yang Baru', href: '/whats-new', visible: () => true, icon: Star },
       { label: 'Data Perusahaan', href: '/company', visible: (role) => role === 'company_admin', icon: SettingsIcon },
       { label: 'Tim & Undangan', href: '/team', visible: (role) => role === 'company_admin', icon: UserMultiple },
       { label: 'Profil Saya', href: '/profile', visible: () => true, icon: UserAvatar }

@@ -10,11 +10,11 @@ Pemilik produk memberi instruksi besar berjenjang A→G, eksplisit ditandai **mu
 
 ### Status tiap bagian
 
-**A. Audit Keterlihatan UI — SEBAGIAN SELESAI (A1 selesai, A2 sebagian, A3/A4 belum sebagai halaman kode)**
-- **A1 (inventaris)** — SELESAI, tabel di bawah.
+**A. Audit Keterlihatan UI — SELESAI**
+- **A1 (inventaris)** — SELESAI, tabel di bawah. Semua 14 baris diverifikasi ULANG punya jalan masuk navigasi (2 gap awal sudah ditambal, 12 sisanya dikonfirmasi sudah benar).
 - **A2 (buat jalan masuk yang hilang)** — 2 dari 2 temuan nyata DIPERBAIKI: (1) halaman `/team` (kelola tim & undangan, sudah lama ada) TIDAK PERNAH punya link navigasi sama sekali — ditambahkan ke section "Settings". (2) Laba Operasional bulanan (`get_monthly_operating_profit`) SEBELUMNYA cuma API, TIDAK ADA halaman UI sama sekali — dibuat halaman baru `/operating-profit` (`OperatingProfitPage.tsx`, section nav baru "Finance"), pemilih bulan/tahun, tampilkan `period_start`/`period_end` eksplisit (Bagian E) pakai `formatCurrency` (Bagian F).
-- **A3 (halaman "Apa yang Baru")** — BELUM dibuat sebagai halaman kode (butuh keputusan desain: daftar manual vs otomatis dari commit log — di luar cakupan waktu sesi ini). Isi tekstualnya ADA di laporan akhir sesi ini (ringkasan fitur + link + kegunaan).
-- **A4 (bukti daftar URL)** — Tabel di bawah berisi PATH relatif (bukan domain staging lengkap — domain staging tidak diketahui dari sesi ini, pemilik produk perlu menambahkan domainnya sendiri di depan tiap path).
+- **A3 (halaman "Apa yang Baru")** — SELESAI. Halaman baru `/whats-new` (`WhatsNewPage.tsx`, menu Settings → "Apa yang Baru", terlihat semua role login) — daftar 12 fitur terbaru DIKELOLA MANUAL (bukan otomatis dari commit log — itu sistem tersendiri yang belum dibutuhkan, sesuai prinsip baru "jangan bikin abstraksi untuk kebutuhan yang belum nyata"), tiap entri link langsung + satu kalimat kegunaan. **Perlu diperbarui manual tiap kali ada fitur baru terlihat pengguna** — bukan sekali jadi selamanya.
+- **A4 (bukti daftar URL)** — Daftar lengkap di laporan akhir sesi. PATH relatif (domain staging tidak diketahui dari sesi ini — pemilik produk tambahkan domainnya sendiri di depan tiap path).
 
 **Tabel A1 — Inventaris fitur 5 sesi terakhir:**
 
@@ -63,7 +63,8 @@ Pemilik produk bingung membaca "FG-GUMMY-ZALA-N200 — v1 (56.6667 pcs)" — dua
 
 **Audit "pcs" hardcoded di kode: NOL ditemukan** — grep menyeluruh ke `src/`/`app/`/migration SQL, tidak ada satu pun `'pcs'` literal atau fallback default `?? 'pcs'`. Akar masalahnya BUKAN kode, MURNI DATA: `items.base_uom` untuk 20 item memang tersimpan generik `"pcs"` (termasuk item Gummy Zala sendiri), dan `boms.standard_yield_uom` (field TERPISAH, bisa diketik manual saat bikin BOM) juga ikut "pcs" — dua sumber yang bisa saling drift.
 
-- **17 dari 20 item "pcs" diganti ke satuan spesifik** (lewat `PATCH /api/items`, bukan update langsung) — HANYA item yang satuannya JELAS dari nama item itu sendiri (mis. "Botol PET N200"→botol, "Karton Gummy (isi 27 botol)"→karton, "Sachet"→sachet, "Box isi 14 Sachet"→box, "Label Stiker..."→lembar) — bukan tebakan. 3 item (Inner Sleeve, Plastic Wrap Box, Silica Gel) SENGAJA dibiarkan "pcs" karena satuan fisiknya tidak cukup jelas dari nama untuk diganti tanpa menebak.
+- **17 dari 20 item "pcs" diganti ke satuan spesifik** (lewat `PATCH /api/items`, bukan update langsung) — HANYA item yang satuannya JELAS dari nama item itu sendiri (mis. "Botol PET N200"→botol, "Karton Gummy (isi 27 botol)"→karton, "Sachet"→sachet, "Box isi 14 Sachet"→box, "Label Stiker..."→lembar) — bukan tebakan.
+- **3 item sisa DIKONFIRMASI pemilik produk 21 Agu 2026, sekarang diterapkan**: Inner Sleeve → `base_uom`/`purchase_uom` jadi "lembar". Silica Gel → dikonfirmasi tetap "pcs" (tidak ada perubahan). Plastic Wrap Box → `base_uom` TETAP "pcs" (BOM sudah konsumsi per box, tidak diubah), `purchase_uom` jadi "roll" dengan `uom_conversion_factor=3000` (1 roll = 3.000 pcs) — supaya Purchasing bisa PO per roll sementara konsumsi/stok tetap dihitung per pcs.
 - **`BomsPage.tsx` sekarang SELALU menampilkan `items.base_uom` (field `parent_item_base_uom`)**, bukan `boms.standard_yield_uom` yang bisa drift — perbaikan ini berlaku untuk SEMUA BOM ke depannya, bukan cuma BOM Gummy Zala yang dikeluhkan.
 - **Keterangan asal angka**: kolom baru `boms.standard_yield_basis_note` (teks bebas) + `standard_yield_source` (ESTIMASI_MANUAL/DIPELAJARI, pola sama K8) — nullable, diisi manual lewat form edit BOM. **BOM Gummy Zala (bom_id 227) BELUM diisi** — rumus contoh yang diberikan pemilik produk ("10.000 g × yield 85% ÷ 2,5 g ÷ 60") tidak saya masukkan sebagai fakta tersimpan karena saya tidak punya konfirmasi itu angka SEBENARNYA untuk resep ini (bukan cuma contoh ilustrasi) — mekanismenya sudah siap, tinggal diisi lewat form begitu dikonfirmasi.
 - **Tampilan angka**: ringkasan sekarang menunjukkan versi dibulatkan ("±57 botol") dengan angka presisi penuh tetap ada di detail (tooltip di tabel, teks eksplisit di panel detail) — perhitungan internal TIDAK berubah, tetap presisi penuh (invarian proyek).
@@ -243,15 +244,17 @@ Struktur `employees` diperluas (migration `20260821090000` + `20260821091500`): 
 
 **Sudah terjawab 21 Agu 2026** (lihat "Data payroll final" & "Koreksi Bagian D/E setelah A→F" di atas): cara pembayaran Darmini, konfirmasi basis UMK, peran "Staff PPIC" (memang tidak ada), pilihan periode Laba Operasional (ikut periode gaji, SUDAH diterapkan), nama 10 PHL nyata (SUDAH menggantikan simulasi), tunjangan makan/transport per orang (SUDAH terisi, termasuk kasus khusus Bayu tunjangan bulanan tetap), BPJS Kesehatan per orang (SUDAH terisi utk 19 karyawan kontrak — Darmini masih `null`, lihat item 3 di bawah), basis BPJS per orang (SUDAH — override utk Dimas/Bayu, lainnya pakai formula clamp).
 
-**Masih menunggu:**
+**Dijawab 21 Agu 2026 (pesan lanjutan, "jangan tunggu lagi")**: satuan 3 item BOM (lihat bagian "Perbaikan tampilan BOM"); BPJS Darmini — SEMENTARA tanpa BPJS Kesehatan (`bpjs_kesehatan_enrolled` tetap `null`, dibaca sistem sebagai "tidak diikutkan, bukan ditebak ikut" — sudah PERSIS perilaku yang diminta, tidak perlu ubah data, cuma dikonfirmasi ini bukan gap lagi); BPJS PHL — DIKONFIRMASI TIDAK diperluas (PHL cuma gaji+parkir+bensin, tidak ada komponen BPJS sama sekali) — item #4 lama jadi tidak relevan.
+
+**Masih menunggu (genuinely, bukan diabaikan):**
 1. **Harga stok Plant Ruko Dieng (CSV)** — jalur & klasifikasi sudah siap, pemuatan tertunda sampai data harga datang.
-2. **Kategori tunjangan makan/transport untuk jabatan yang tidak persis cocok ke 3 tingkatan awal** — SUDAH TERJAWAB oleh data lengkap 21 Agu (tabel per orang), item ini kadaluarsa/tidak relevan lagi.
-3. **Keikutsertaan BPJS Kesehatan Darmini** — belum ada di data yang diberikan (dia peran pendukung/janitor, mungkin memang tidak relevan) — dampaknya kecil tapi tetap ikut ke rata-rata kru `wage_type=monthly` company-wide (lihat gap #6 di bawah).
-4. **Apakah model biaya pemberi kerja (Bagian D) perlu diperluas ke PHL selain tunjangan** (BPJS untuk PHL) — saat ini PHL sudah ikut tunjangan (baru ditambal 21 Agu) tapi BELUM ikut BPJS Kesehatan/JKK/JKM/JHT — tidak dikonfirmasi apakah PHL informal ini terdaftar BPJS.
-5. **Aturan atribusi tunjangan makan/transport ke batch produksi tertentu** — sisi biaya SDM AKTUAL per batch (`compute_production_batch_labor_cost`) sengaja belum menghitung tunjangan (per hari hadir, bukan per batch).
-6. **Rata-rata tarif kru company-wide TIDAK difilter per plant/departemen** — imprecision yang sudah diketahui sejak Bagian B, sekarang nyata dampaknya: Darmini (janitor, bukan produksi) ikut masuk rata-rata kru gummy karena sama-sama `wage_type=monthly`. Belum diperbaiki.
-7. **Apakah overhead SDM (`monthly_overhead_baseline`) sebaiknya dihitung sebagai SISA** (total biaya pemberi kerja semua karyawan − biaya SDM tercatat di batch) — MASIH statis manual (Rp73.352.547, direkonsiliasi ke rekonsiliasi 21 Agu, selisih ±1,8% karena beda basis standar-vs-aktual, BUKAN bug). Formula SISA belum dibangun — butuh cara menentukan batch mana masuk periode gaji mana (`production_batches.started_at` sudah ada, belum dipakai untuk ini).
-8. **Jawaban tim finance** — dokumen pertanyaan sudah dikirim pemilik produk, belum ada jawaban.
+2. **Konfirmasi HRD untuk BPJS Kesehatan Darmini** — status SEMENTARA "tidak diikutkan" sudah diterapkan (lihat di atas), tapi ini BUKAN keputusan final — masih perlu konfirmasi HRD kapan pun tersedia.
+3. **Aturan atribusi tunjangan makan/transport ke batch produksi tertentu** — sisi biaya SDM AKTUAL per batch (`compute_production_batch_labor_cost`) sengaja belum menghitung tunjangan (per hari hadir, bukan per batch).
+4. **Rata-rata tarif kru company-wide TIDAK difilter per plant/departemen** — imprecision yang sudah diketahui sejak Bagian B, sekarang nyata dampaknya: Darmini (janitor, bukan produksi) ikut masuk rata-rata kru gummy karena sama-sama `wage_type=monthly`. Belum diperbaiki.
+5. **Apakah overhead SDM (`monthly_overhead_baseline`) sebaiknya dihitung sebagai SISA** (total biaya pemberi kerja semua karyawan − biaya SDM tercatat di batch) — MASIH statis manual (Rp73.352.547, direkonsiliasi ke rekonsiliasi 21 Agu, selisih ±1,8% karena beda basis standar-vs-aktual, BUKAN bug). Formula SISA belum dibangun — butuh cara menentukan batch mana masuk periode gaji mana (`production_batches.started_at` sudah ada, belum dipakai untuk ini).
+6. **Jawaban tim finance** — dokumen pertanyaan sudah dikirim pemilik produk, belum ada jawaban.
+
+**Item kadaluarsa (sudah terjawab data lengkap 21 Agu, dihapus dari daftar)**: kategori tunjangan untuk jabatan ambigu (SUDAH ada tabel per orang lengkap).
 
 ---
 

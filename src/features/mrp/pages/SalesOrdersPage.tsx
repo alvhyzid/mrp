@@ -55,8 +55,10 @@ type SalesOrder = {
   shipments: SoShipmentSummary[];
 };
 
-type MaterialShortage = { item_id: number; item_code: string; name: string; needed: number; available: number; short: number };
-type ComponentToProduce = { item_id: number; item_code: string; name: string; qty_needed: number };
+type BlockingStage = { sequence_no: number; step_name: string };
+type MaterialShortage = { item_id: number; item_code: string; name: string; needed: number; available: number; short: number; blocking_stage: BlockingStage | null };
+type ComponentToProduce = { item_id: number; item_code: string; name: string; qty_needed: number; blocking_stage: BlockingStage | null };
+type LateStageBlock = { item_id: number; item_code: string; name: string; blocking_stage: BlockingStage; expected_date: string | null; stage_ready_date: string | null };
 type FeasibilityResult = {
   item_code: string;
   item_name: string;
@@ -67,7 +69,15 @@ type FeasibilityResult = {
   days_needed?: number;
   requested_ship_date?: string;
   today?: string;
-  material_blocked_until: string | null;
+  routing_available?: boolean;
+  // production_start_blocked_until = kapan produksi bisa MULAI (cuma diblokir
+  // bahan tahap PERTAMA). order_ship_ready_date = kapan order realistis SELESAI/
+  // siap dikirim (mempertimbangkan bahan tahap belakangan juga) -- dua tanggal
+  // ini SENGAJA dipisah (sebelumnya tercampur jadi 1 angka), lihat
+  // getPlanningFeasibility.ts.
+  production_start_blocked_until: string | null;
+  order_ship_ready_date?: string;
+  late_stage_material_blocks?: LateStageBlock[];
   total_working_days_to_deadline?: number;
   effective_working_days_after_material_block?: number;
   feasible: boolean | null;
@@ -365,16 +375,30 @@ export default function SalesOrdersPage() {
                             {feasibilityResult.batches_per_day} batch/hari
                           </span>
                         </div>
+                        {feasibilityResult.routing_available === false ? (
+                          <p className="rounded-md border border-warning/40 bg-warning-subtle p-2 text-xs text-warning-subtle-foreground">
+                            Item ini belum punya Routing (tahap SOP) di sistem — semua bahan dianggap dibutuhkan sejak mulai produksi (belum bisa sadar-tahap).
+                          </p>
+                        ) : null}
+
                         <div className="grid gap-1 sm:grid-cols-2">
                           <span className="text-muted-foreground">
                             Hari kerja tersedia s/d {feasibilityResult.requested_ship_date}: <span className="text-foreground">{feasibilityResult.total_working_days_to_deadline} hari</span>
                           </span>
                           <span className="text-muted-foreground">
-                            Efektif (setelah bahan tersedia): <span className="text-foreground">{feasibilityResult.effective_working_days_after_material_block} hari</span>
+                            Efektif (setelah bahan mulai tersedia): <span className="text-foreground">{feasibilityResult.effective_working_days_after_material_block} hari</span>
                           </span>
-                          {feasibilityResult.material_blocked_until ? (
+                          {feasibilityResult.production_start_blocked_until ? (
                             <span className="text-muted-foreground sm:col-span-2">
-                              Produksi baru bisa mulai <span className="text-foreground">{feasibilityResult.material_blocked_until}</span> (menunggu PO bahan datang)
+                              Produksi baru bisa MULAI <span className="text-foreground">{feasibilityResult.production_start_blocked_until}</span> (menunggu PO bahan tahap awal datang)
+                            </span>
+                          ) : null}
+                          {feasibilityResult.order_ship_ready_date ? (
+                            <span className="text-muted-foreground sm:col-span-2">
+                              Estimasi SELESAI/siap kirim: <span className="text-foreground">{feasibilityResult.order_ship_ready_date}</span>
+                              {feasibilityResult.requested_ship_date && feasibilityResult.order_ship_ready_date > feasibilityResult.requested_ship_date ? (
+                                <span className="text-destructive"> (lewat dari tanggal diminta {feasibilityResult.requested_ship_date})</span>
+                              ) : null}
                             </span>
                           ) : null}
                           {!feasibilityResult.feasible ? (
@@ -388,6 +412,26 @@ export default function SalesOrdersPage() {
                           <p className="rounded-md border border-warning/40 bg-warning-subtle p-2 text-xs text-warning-subtle-foreground">{feasibilityResult.standard_drift.message}</p>
                         ) : null}
 
+                        {feasibilityResult.late_stage_material_blocks && feasibilityResult.late_stage_material_blocks.length > 0 ? (
+                          <div>
+                            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                              Bahan Tahap Belakangan (tidak menghalangi mulai, tapi mundurkan tanggal selesai)
+                            </p>
+                            <ul className="flex flex-col gap-0.5 text-xs">
+                              {feasibilityResult.late_stage_material_blocks.map((b) => (
+                                <li key={b.item_id}>
+                                  {b.item_code} — {b.name} (tahap {b.blocking_stage.sequence_no}. {b.blocking_stage.step_name}):{' '}
+                                  {b.expected_date ? (
+                                    <span className="text-foreground">ETA {b.expected_date}</span>
+                                  ) : (
+                                    <span className="text-destructive">belum ada PO/ETA tercatat</span>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+
                         {feasibilityResult.components_to_produce && feasibilityResult.components_to_produce.length > 0 ? (
                           <div>
                             <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Perlu Diproduksi (bukan kekurangan beli — bahan penyusunnya cukup)</p>
@@ -395,6 +439,7 @@ export default function SalesOrdersPage() {
                               {feasibilityResult.components_to_produce.map((c) => (
                                 <li key={c.item_id}>
                                   {c.item_code} — {c.name}: <span className="text-data font-medium text-foreground">{Math.round(c.qty_needed * 100) / 100}</span>
+                                  {c.blocking_stage ? <span className="text-muted-foreground"> (tahap {c.blocking_stage.sequence_no}. {c.blocking_stage.step_name})</span> : null}
                                 </li>
                               ))}
                             </ul>
@@ -409,6 +454,7 @@ export default function SalesOrdersPage() {
                                 <thead>
                                   <tr className="border-b">
                                     <th className="h-7 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Item</th>
+                                    <th className="h-7 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Tahap</th>
                                     <th className="h-7 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Butuh</th>
                                     <th className="h-7 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Stok</th>
                                     <th className="h-7 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Kurang</th>
@@ -420,6 +466,7 @@ export default function SalesOrdersPage() {
                                       <td className="px-2 py-1">
                                         {s.item_code} — {s.name}
                                       </td>
+                                      <td className="px-2 py-1 text-muted-foreground">{s.blocking_stage ? `${s.blocking_stage.sequence_no}. ${s.blocking_stage.step_name}` : 'Sejak tahap 1'}</td>
                                       <td className="px-2 py-1">{Math.round(s.needed * 100) / 100}</td>
                                       <td className="px-2 py-1">{Math.round(s.available * 100) / 100}</td>
                                       <td className="px-2 py-1 font-medium text-destructive">{Math.round(s.short * 100) / 100}</td>

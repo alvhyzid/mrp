@@ -158,6 +158,7 @@ Header resep/komposisi. Satu item bisa punya beberapa versi (`version`), resep l
 ### `bom_lines`
 Daftar komponen per BOM, dalam `base_uom`.
 - `bom_line_id`, `bom_id`, `component_item_id` (→ `item_id`), `qty_per_unit_output`, `uom`
+- `routing_step_id` (nullable, → `routing_steps.routing_step_id`) — tahap routing ITEM INDUK BOM ini yang MULAI memakai komponen ini (mis. Box baru dipakai di tahap "Filling Box", bukan sejak tahap pertama/Mixing). NULL = belum diklasifikasi, diperlakukan sebagai "dibutuhkan sejak tahap pertama routing" (perilaku konservatif, sama seperti sebelum kolom ini ada — tidak ada regresi untuk BOM yang belum diisi). Dipakai oleh Deteksi Konflik Perencanaan (`getPlanningFeasibility`) supaya kekurangan bahan tahap-akhir (mis. kemasan) hanya menunda tanggal SELESAI/kirim, bukan ikut menunda tanggal MULAI produksi. Harus menunjuk ke routing milik `parent_item_id` BOM itu sendiri (divalidasi saat simpan), bukan routing item lain.
 
 ### `work_centers`
 Master data mesin/stasiun kerja — fisiknya ada di SATU lokasi pabrik.

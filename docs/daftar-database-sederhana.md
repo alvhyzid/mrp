@@ -83,6 +83,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 
 **Database Detail Komponen Resep** (`bom_lines`)
 - ID Baris (bom_line_id) · ID BOM (bom_id) · ID Item Komponen (component_item_id) · Jumlah per Unit Output (qty_per_unit_output) · Satuan (uom)
+- ID Tahap Routing — nullable, tahap alur produksi ITEM INDUK yang mulai memakai komponen ini (mis. kemasan box baru dipakai di tahap "Filling Box", bukan sejak tahap pertama); kosong = dianggap dibutuhkan sejak tahap pertama, supaya kelayakan jadwal (Sales Order) bisa membedakan bahan yang menghalangi MULAI produksi vs yang cuma menghalangi SELESAI/kirim (routing_step_id)
 
 **Database Mesin/Stasiun Kerja** (`work_centers`)
 - ID Mesin (work_center_id) · ID Perusahaan (company_id) · ID Lokasi Pabrik (production_plant_id) · Nama Mesin (name) · Kode Mesin (code) · Status Aktif (is_active)

@@ -46,7 +46,7 @@ export async function listBoms(request: NextRequest): Promise<ApiResult> {
     const bomIds = boms.map((bom) => bom.bom_id);
     const { data: lines, error: linesError } = await adminClient
       .from('bom_lines')
-      .select('bom_line_id, bom_id, component_item_id, qty_per_unit_output, uom')
+      .select('bom_line_id, bom_id, component_item_id, qty_per_unit_output, uom, routing_step_id')
       .in('bom_id', bomIds);
 
     if (linesError) {
@@ -72,7 +72,8 @@ export async function listBoms(request: NextRequest): Promise<ApiResult> {
           component_item_type: componentItem?.type ?? null,
           component_standard_cost: canSeeCost ? (componentItem?.standard_cost ?? null) : null,
           qty_per_unit_output: line.qty_per_unit_output,
-          uom: line.uom
+          uom: line.uom,
+          routing_step_id: line.routing_step_id
         };
       });
 

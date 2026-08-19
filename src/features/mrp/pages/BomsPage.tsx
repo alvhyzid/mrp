@@ -37,7 +37,11 @@ type BomLine = {
   component_standard_cost: number | null;
   qty_per_unit_output: number;
   uom: string;
+  routing_step_id: number | null;
 };
+
+type RoutingStepOption = { routing_step_id: number; sequence_no: number; step_name: string };
+type RoutingOption = { routing_id: number; item_id: number; steps: RoutingStepOption[] };
 
 type Bom = {
   bom_id: number;
@@ -65,9 +69,10 @@ type FormLine = {
   component_item_id: string;
   qty_per_batch: string;
   uom: string;
+  routing_step_id: string;
 };
 
-const emptyFormLine: FormLine = { component_item_id: '', qty_per_batch: '', uom: '' };
+const emptyFormLine: FormLine = { component_item_id: '', qty_per_batch: '', uom: '', routing_step_id: '' };
 
 const emptyForm = {
   parent_item_id: '',
@@ -90,6 +95,7 @@ export default function BomsPage() {
   const [bomsLoading, setBomsLoading] = useState(true);
 
   const [items, setItems] = useState<ItemOption[]>([]);
+  const [routings, setRoutings] = useState<RoutingOption[]>([]);
 
   const [viewingBomId, setViewingBomId] = useState<number | null>(null);
   const [editingBomId, setEditingBomId] = useState<number | null>(null);
@@ -143,6 +149,19 @@ export default function BomsPage() {
     }
   }, [getAccessToken]);
 
+  const loadRoutings = useCallback(async () => {
+    const accessToken = await getAccessToken();
+    if (!accessToken) return;
+
+    const response = await fetch('/api/routings', {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const data = await response.json();
+    if (response.ok) {
+      setRoutings(data.routings || []);
+    }
+  }, [getAccessToken]);
+
   useEffect(() => {
     const checkAccessAndLoad = async () => {
       if (!hasSupabaseConfig || !supabase) {
@@ -172,13 +191,22 @@ export default function BomsPage() {
       setCanManage(canManageBom(meData?.user?.role));
       setCanViewCost(canViewFinancialData(meData?.user?.role));
       setCheckingAccess(false);
-      await Promise.all([loadBoms(), loadItems()]);
+      await Promise.all([loadBoms(), loadItems(), loadRoutings()]);
     };
 
     checkAccessAndLoad();
-  }, [router, loadBoms, loadItems]);
+  }, [router, loadBoms, loadItems, loadRoutings]);
 
   const itemsById = useMemo(() => new Map(items.map((item) => [item.item_id, item])), [items]);
+  const routingByItemId = useMemo(() => new Map(routings.map((r) => [r.item_id, r])), [routings]);
+  const routingStepById = useMemo(() => {
+    const map = new Map<number, RoutingStepOption>();
+    for (const routing of routings) {
+      for (const step of routing.steps) map.set(step.routing_step_id, step);
+    }
+    return map;
+  }, [routings]);
+  const selectedParentRouting = routingByItemId.get(Number(form.parent_item_id));
 
   const resetForm = () => {
     setEditingBomId(null);
@@ -209,7 +237,8 @@ export default function BomsPage() {
         // produksi — disimpan di database sebagai qty_per_unit_output (per 1 unit
         // hasil), dikonversi bolak-balik dengan standard_yield_qty.
         qty_per_batch: String(line.qty_per_unit_output * bom.standard_yield_qty),
-        uom: line.uom
+        uom: line.uom,
+        routing_step_id: line.routing_step_id ? String(line.routing_step_id) : ''
       }))
     });
     setFormStatus('idle');
@@ -274,7 +303,8 @@ export default function BomsPage() {
       // Konversi dari "per batch standar" (yang diisi user) ke "per unit output"
       // (yang disimpan di database) — prinsip BOM per-unit-output di CLAUDE.md.
       qty_per_unit_output: Number(line.qty_per_batch) / standardYieldQty,
-      uom: line.uom
+      uom: line.uom,
+      routing_step_id: line.routing_step_id ? Number(line.routing_step_id) : null
     }));
 
     const payload = {
@@ -462,6 +492,7 @@ export default function BomsPage() {
                         Jumlah per {viewingBom.standard_yield_qty} {viewingBom.standard_yield_uom}
                       </th>
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Per Unit Output</th>
+                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Tahap SOP</th>
                       {canViewCost ? (
                         <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Biaya Standar</th>
                       ) : null}
@@ -488,6 +519,15 @@ export default function BomsPage() {
                         </td>
                         <td className="px-3 py-1.5">
                           {line.qty_per_unit_output.toLocaleString('id-ID', { maximumFractionDigits: 6 })} {line.uom}
+                        </td>
+                        <td className="px-3 py-1.5 text-xs">
+                          {line.routing_step_id && routingStepById.get(line.routing_step_id) ? (
+                            <span>
+                              {routingStepById.get(line.routing_step_id)!.sequence_no}. {routingStepById.get(line.routing_step_id)!.step_name}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">Sejak tahap 1</span>
+                          )}
                         </td>
                         {canViewCost ? (
                           <td className="px-3 py-1.5">
@@ -608,7 +648,7 @@ export default function BomsPage() {
                     </div>
 
                     {form.lines.map((line, index) => (
-                      <div key={index} className="grid grid-cols-[1fr_140px_100px_auto] items-end gap-2 rounded-md border p-2">
+                      <div key={index} className="grid grid-cols-[1fr_120px_90px_170px_auto] items-end gap-2 rounded-md border p-2">
                         <label className="flex flex-col gap-1">
                           <span className="text-xs font-medium text-muted-foreground">Item Komponen</span>
                           <Select value={line.component_item_id} onValueChange={(value) => handleComponentChange(index, value)}>
@@ -642,6 +682,34 @@ export default function BomsPage() {
                         <label className="flex flex-col gap-1">
                           <span className="text-xs font-medium text-muted-foreground">Satuan</span>
                           <Input value={line.uom} onChange={(event) => updateLine(index, { uom: event.target.value })} required />
+                        </label>
+
+                        <label className="flex flex-col gap-1">
+                          <span className="text-xs font-medium text-muted-foreground">Tahap SOP (opsional)</span>
+                          {selectedParentRouting ? (
+                            <Select
+                              value={line.routing_step_id}
+                              onValueChange={(value) => updateLine(index, { routing_step_id: value === '__none__' ? '' : value })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Sejak tahap 1 (default)" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__">Sejak tahap 1 (default)</SelectItem>
+                                {[...selectedParentRouting.steps]
+                                  .sort((a, b) => a.sequence_no - b.sequence_no)
+                                  .map((step) => (
+                                    <SelectItem key={step.routing_step_id} value={String(step.routing_step_id)}>
+                                      {step.sequence_no}. {step.step_name}
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <span className="rounded-md border border-dashed px-2 py-1.5 text-xs text-muted-foreground">
+                              Item induk belum punya Routing
+                            </span>
+                          )}
                         </label>
 
                         <Button

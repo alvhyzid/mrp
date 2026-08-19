@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
 import { canManageBom } from '@/lib/roles';
-import { parseBomInput } from './bomValidation';
+import { parseBomInput, validateLineRoutingSteps } from './bomValidation';
 import { findBomCycleError } from './bomCycleCheck';
 
 interface ApiResult {
@@ -55,6 +55,11 @@ export async function createBom(request: NextRequest): Promise<ApiResult> {
       return { status: 400, body: { error: cycleError } };
     }
 
+    const routingStepError = await validateLineRoutingSteps(adminClient, appUser.company_id, input.parent_item_id, input.lines);
+    if (routingStepError) {
+      return { status: 400, body: { error: routingStepError } };
+    }
+
     const { data: latestVersion } = await adminClient
       .from('boms')
       .select('version')
@@ -90,7 +95,8 @@ export async function createBom(request: NextRequest): Promise<ApiResult> {
         bom_id: insertedBom.bom_id,
         component_item_id: line.component_item_id,
         qty_per_unit_output: line.qty_per_unit_output,
-        uom: line.uom
+        uom: line.uom,
+        routing_step_id: line.routing_step_id
       }))
     );
 

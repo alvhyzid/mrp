@@ -1,7 +1,11 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
 import { canViewPlanningFeasibility } from '@/lib/roles';
-import { explodeBomRequirements } from './explodeBomRequirements';
+import { explodeBomRequirements, type BlockingStage, type MaterialShortage, type ComponentToProduce } from './explodeBomRequirements';
+
+function itemById2(shortages: MaterialShortage[], toProduce: ComponentToProduce[], itemId: number): { item_code: string; name: string } | undefined {
+  return shortages.find((s) => s.item_id === itemId) ?? toProduce.find((c) => c.item_id === itemId);
+}
 
 interface ApiResult {
   status: number;
@@ -124,43 +128,69 @@ export async function getPlanningFeasibility(request: NextRequest, salesOrderLin
     const batchesNeeded = Math.ceil(Number(soLine.qty_ordered) / Number(unitPerBatch));
     const daysNeeded = Math.ceil(batchesNeeded / Number(batchesPerDay));
 
-    // Deteksi blocker material: komponen BOM item ini yang stok-nya 0 (di plant mana
-    // pun company ini) TAPI ada PO supplier yang belum sepenuhnya diterima -> tanggal
-    // paling awal Filling bisa mulai = expected_date PO itu (yang PALING LAMBAT, kalau
-    // ada beberapa komponen blocked sekaligus).
-    const { data: bom } = await adminClient.from('boms').select('bom_id').eq('company_id', appUser.company_id).eq('parent_item_id', item.item_id).eq('status', 'active').maybeSingle();
-    let materialBlockedUntil: string | null = null;
-    if (bom) {
-      const { data: bomLines } = await adminClient.from('bom_lines').select('component_item_id').eq('bom_id', bom.bom_id);
-      const componentItemIds = (bomLines ?? []).map((l) => l.component_item_id);
-      if (componentItemIds.length > 0) {
-        const { data: stockRows } = await adminClient.from('lots').select('item_id, quantity_on_hand').in('item_id', componentItemIds).eq('status', 'available');
-        const stockByItem = new Map<number, number>();
-        for (const row of stockRows ?? []) {
-          stockByItem.set(row.item_id, (stockByItem.get(row.item_id) ?? 0) + Number(row.quantity_on_hand));
+    // SADAR-TAHAP (Fase Produksi Nyata, perbaikan model kelayakan 20 Agu 2026):
+    // sebelum ini, SEMUA komponen BOM (bahkan kemasan yang baru dipakai di tahap
+    // AKHIR, mis. Box di tahap "Filling Box") dianggap memblokir MULAINYA
+    // produksi -- padahal semestinya cuma memblokir tahap itu sendiri dan
+    // sesudahnya. Sekarang: eksplosi BOM berjenjang (explodeBomRequirements)
+    // sudah membawa blocking_stage per shortage/komponen-yang-perlu-diproduksi.
+    // Shortage yang blocking_stage-nya = tahap PERTAMA routing item ini (atau
+    // routing_step_id belum diklasifikasi -- default tahap pertama, TIDAK ADA
+    // REGRESI dari perilaku lama) itu yang memblokir MULAI produksi. Shortage di
+    // tahap sesudahnya cuma memperlambat tanggal SELESAI/kirim, bukan mulainya.
+    const { shortages: materialShortages, toProduce: componentsToProduce, firstStageSequenceNo } = await explodeBomRequirements(
+      adminClient,
+      appUser.company_id,
+      item.item_id,
+      Number(soLine.qty_ordered)
+    );
+
+    const blockedEntries = [
+      ...materialShortages.map((s) => ({ item_id: s.item_id, blocking_stage: s.blocking_stage })),
+      ...componentsToProduce.map((c) => ({ item_id: c.item_id, blocking_stage: c.blocking_stage }))
+    ];
+    const startBlockingItemIds = blockedEntries
+      .filter((e) => (e.blocking_stage?.sequence_no ?? firstStageSequenceNo) === firstStageSequenceNo)
+      .map((e) => e.item_id);
+    // Tahap SESUDAH tahap pertama saja -- per item (bisa beda tahap kalau muncul
+    // di beberapa entri, ambil yang paling akhir/paling membatasi untuk item itu).
+    const lateStageByItemId = new Map<number, { sequence_no: number; step_name: string }>();
+    for (const entry of blockedEntries) {
+      if (entry.blocking_stage && entry.blocking_stage.sequence_no !== firstStageSequenceNo) {
+        const existing = lateStageByItemId.get(entry.item_id);
+        if (!existing || entry.blocking_stage.sequence_no > existing.sequence_no) {
+          lateStageByItemId.set(entry.item_id, entry.blocking_stage);
         }
-        const zeroStockItemIds = componentItemIds.filter((id) => (stockByItem.get(id) ?? 0) <= 0);
-        if (zeroStockItemIds.length > 0) {
-          const { data: relevantPos } = await adminClient
-            .from('purchase_orders')
-            .select('purchase_order_id, expected_date')
-            .eq('company_id', appUser.company_id)
-            .in('status', ['ordered', 'partially_received']);
-          const posById = new Map((relevantPos ?? []).map((po) => [po.purchase_order_id, po]));
+      }
+    }
 
-          if (posById.size > 0) {
-            const { data: pendingLines } = await adminClient
-              .from('purchase_order_lines')
-              .select('purchase_order_id, item_id, qty_ordered, qty_received')
-              .in('item_id', zeroStockItemIds)
-              .in('purchase_order_id', Array.from(posById.keys()));
+    // Cari expected_date PO supplier yang BELUM sepenuhnya diterima, per item --
+    // dipakai baik untuk shortage tahap pertama (memblokir mulai) maupun tahap
+    // sesudahnya (memblokir selesai/kirim).
+    const allBlockedItemIds = Array.from(new Set(blockedEntries.map((e) => e.item_id)));
+    const etaByItemId = new Map<number, string>();
+    if (allBlockedItemIds.length > 0) {
+      const { data: relevantPos } = await adminClient
+        .from('purchase_orders')
+        .select('purchase_order_id, expected_date')
+        .eq('company_id', appUser.company_id)
+        .in('status', ['ordered', 'partially_received']);
+      const posById = new Map((relevantPos ?? []).map((po) => [po.purchase_order_id, po]));
 
-            for (const line of pendingLines ?? []) {
-              if (Number(line.qty_received) < Number(line.qty_ordered)) {
-                const po = posById.get(line.purchase_order_id);
-                if (po?.expected_date && (!materialBlockedUntil || po.expected_date > materialBlockedUntil)) {
-                  materialBlockedUntil = po.expected_date;
-                }
+      if (posById.size > 0) {
+        const { data: pendingLines } = await adminClient
+          .from('purchase_order_lines')
+          .select('purchase_order_id, item_id, qty_ordered, qty_received')
+          .in('item_id', allBlockedItemIds)
+          .in('purchase_order_id', Array.from(posById.keys()));
+
+        for (const line of pendingLines ?? []) {
+          if (Number(line.qty_received) < Number(line.qty_ordered)) {
+            const po = posById.get(line.purchase_order_id);
+            if (po?.expected_date) {
+              const existing = etaByItemId.get(line.item_id);
+              if (!existing || po.expected_date > existing) {
+                etaByItemId.set(line.item_id, po.expected_date);
               }
             }
           }
@@ -168,8 +198,18 @@ export async function getPlanningFeasibility(request: NextRequest, salesOrderLin
       }
     }
 
+    // Kalau ada beberapa shortage tahap-pertama dengan PO berbeda, MULAI baru
+    // bisa dilakukan setelah yang PALING LAMBAT datang.
+    let productionStartBlockedUntil: string | null = null;
+    for (const itemId of startBlockingItemIds) {
+      const eta = etaByItemId.get(itemId);
+      if (eta && (!productionStartBlockedUntil || eta > productionStartBlockedUntil)) {
+        productionStartBlockedUntil = eta;
+      }
+    }
+
     const today = new Date().toISOString().slice(0, 10);
-    const earliestStart = materialBlockedUntil && materialBlockedUntil > today ? materialBlockedUntil : today;
+    const earliestStart = productionStartBlockedUntil && productionStartBlockedUntil > today ? productionStartBlockedUntil : today;
 
     const { data: calendarSettings } = await adminClient
       .from('company_settings')
@@ -182,13 +222,35 @@ export async function getPlanningFeasibility(request: NextRequest, salesOrderLin
     const totalWorkingDays = countWorkingDays(today, cpo.requested_ship_date, weekdayHours, saturdayHours);
     const effectiveWorkingDays = countWorkingDays(earliestStart, cpo.requested_ship_date, weekdayHours, saturdayHours);
 
-    const feasible = daysNeeded <= effectiveWorkingDays;
-    const realisticQty = feasible ? Number(soLine.qty_ordered) : Math.floor(effectiveWorkingDays * Number(batchesPerDay) * Number(unitPerBatch));
+    // Estimasi kuantitas realistis yang BISA terkirim tepat waktu -- diambil dari
+    // yang PALING MEMBATASI di antara: (a) jendela hari kerja sejak mulai
+    // produksi (kapasitas), dan (b) untuk tiap bahan tahap-akhir yang masih
+    // kurang & punya ETA PO, jendela hari kerja sejak bahan itu SIAP (bukan
+    // sejak mulai produksi) -- KETERBATASAN MODEL yang disadari: dipakai jendela
+    // throughput TOTAL yang sama (daysNeeded) untuk tahap akhir itu, bukan
+    // kapasitas per-tahap yang sesungguhnya (data durasi/kapasitas per tahap
+    // belum cukup rinci) -- estimasi ini cenderung KONSERVATIF (melebih-lebihkan
+    // risiko keterlambatan), bukan optimistis.
+    let realisticQty = Number(soLine.qty_ordered);
+    realisticQty = Math.min(realisticQty, Math.floor(effectiveWorkingDays * Number(batchesPerDay) * Number(unitPerBatch)));
 
-    // P2 — daftar kekurangan bahan LENGKAP (eksplosi BOM berjenjang, bukan cuma
-    // 1 level seperti materialBlockedUntil di atas) + daftar komponen WIP yang
-    // perlu DIPRODUKSI (bukan dibeli) karena bahan penyusunnya sendiri sudah cukup.
-    const { shortages: materialShortages, toProduce: componentsToProduce } = await explodeBomRequirements(adminClient, appUser.company_id, item.item_id, Number(soLine.qty_ordered));
+    let orderShipReadyDate = addWorkingDays(earliestStart, daysNeeded, weekdayHours, saturdayHours);
+    const lateStageBlocks: Array<{ item_id: number; item_code: string; name: string; blocking_stage: BlockingStage; expected_date: string | null; stage_ready_date: string | null }> = [];
+    for (const [itemId, stage] of lateStageByItemId) {
+      const item2 = itemById2(materialShortages, componentsToProduce, itemId);
+      const eta = etaByItemId.get(itemId) ?? null;
+      const stageReady = eta ? (eta > earliestStart ? eta : earliestStart) : null;
+      lateStageBlocks.push({ item_id: itemId, item_code: item2?.item_code ?? '', name: item2?.name ?? '', blocking_stage: stage, expected_date: eta, stage_ready_date: stageReady });
+      if (stageReady) {
+        const stageFinishCandidate = addWorkingDays(stageReady, daysNeeded, weekdayHours, saturdayHours);
+        if (stageFinishCandidate > orderShipReadyDate) orderShipReadyDate = stageFinishCandidate;
+        const stageWorkingDays = countWorkingDays(stageReady, cpo.requested_ship_date, weekdayHours, saturdayHours);
+        realisticQty = Math.min(realisticQty, Math.floor(stageWorkingDays * Number(batchesPerDay) * Number(unitPerBatch)));
+      }
+    }
+    realisticQty = Math.max(0, realisticQty);
+
+    const feasible = realisticQty >= Number(soLine.qty_ordered) && orderShipReadyDate <= cpo.requested_ship_date;
 
     return {
       status: 200,
@@ -202,7 +264,10 @@ export async function getPlanningFeasibility(request: NextRequest, salesOrderLin
         days_needed: daysNeeded,
         requested_ship_date: cpo.requested_ship_date,
         today,
-        material_blocked_until: materialBlockedUntil,
+        routing_available: firstStageSequenceNo !== null,
+        production_start_blocked_until: productionStartBlockedUntil,
+        order_ship_ready_date: orderShipReadyDate,
+        late_stage_material_blocks: lateStageBlocks,
         total_working_days_to_deadline: totalWorkingDays,
         effective_working_days_after_material_block: effectiveWorkingDays,
         feasible,
@@ -240,4 +305,24 @@ function countWorkingDays(startDateStr: string, endDateStr: string, weekdayHours
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return count;
+}
+
+// Tanggal hari kerja ke-N (inklusif) mulai dari startDateStr -- dipakai untuk
+// mengubah "N hari kerja dari tanggal X" jadi tanggal kalender sungguhan.
+// workingDaysNeeded <= 0 mengembalikan startDateStr apa adanya.
+function addWorkingDays(startDateStr: string, workingDaysNeeded: number, weekdayHours: number, saturdayHours: number): string {
+  if (workingDaysNeeded <= 0) return startDateStr;
+  let count = 0;
+  const cursor = new Date(`${startDateStr}T00:00:00Z`);
+  let lastWorkingDay = startDateStr;
+  while (count < workingDaysNeeded) {
+    const dow = cursor.getUTCDay();
+    const isWorkingDay = dow === 0 ? false : dow === 6 ? saturdayHours > 0 : weekdayHours > 0;
+    if (isWorkingDay) {
+      count += 1;
+      lastWorkingDay = cursor.toISOString().slice(0, 10);
+    }
+    if (count < workingDaysNeeded) cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return lastWorkingDay;
 }

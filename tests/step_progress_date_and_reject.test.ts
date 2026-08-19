@@ -274,18 +274,26 @@ describe('Progres Tahap — tanggal kejadian bisa dipilih (gap a) + reject per t
 
     // Mixing: mulai backdate 5 hari lalu, selesai backdate 3 hari lalu -- rentang
     // 2 hari (2880 menit) JAUH di atas batas wajar 480 menit -> harus DIBUANG.
-    await recordWorkOrderStepProgress(
-      makeRequest({ work_order_id: workOrderId, production_batch_id: batch2Id, routing_step_id: stepMixId, status: 'in_progress', qty_input: 100, uom_input: 'pcs', record_date: dateDaysAgo(5) }, ppicManagerToken)
+    // Tiap langkah setup DICEK statusnya secara eksplisit -- kalau salah satu
+    // panggilan ini gagal (mis. hiccup jaringan CI), kegagalannya harus jelas
+    // DI SINI, bukan menyamar jadi assertion K8 yang membingungkan di bawah.
+    async function recordStepOrThrow(body: Record<string, unknown>, label: string) {
+      const result = await recordWorkOrderStepProgress(makeRequest(body, ppicManagerToken));
+      if (result.status !== 200) throw new Error(`Setup gagal (${label}): status ${result.status} — ${JSON.stringify(result.body)}`);
+    }
+    await recordStepOrThrow(
+      { work_order_id: workOrderId, production_batch_id: batch2Id, routing_step_id: stepMixId, status: 'in_progress', qty_input: 100, uom_input: 'pcs', record_date: dateDaysAgo(5) },
+      'mixing mulai'
     );
-    await recordWorkOrderStepProgress(
-      makeRequest({ work_order_id: workOrderId, production_batch_id: batch2Id, routing_step_id: stepMixId, status: 'completed', qty_input: 100, uom_input: 'pcs', qty_recorded: 98, uom: 'pcs', record_date: dateDaysAgo(3) }, ppicManagerToken)
+    await recordStepOrThrow(
+      { work_order_id: workOrderId, production_batch_id: batch2Id, routing_step_id: stepMixId, status: 'completed', qty_input: 100, uom_input: 'pcs', qty_recorded: 98, uom: 'pcs', record_date: dateDaysAgo(3) },
+      'mixing selesai'
     );
     // Packing: mulai & selesai SAMA HARI (hari ini) -- durasi wajar, HARUS masuk sampel.
-    await recordWorkOrderStepProgress(
-      makeRequest({ work_order_id: workOrderId, production_batch_id: batch2Id, routing_step_id: stepPackId, status: 'in_progress', qty_input: 98, uom_input: 'pcs' }, ppicManagerToken)
-    );
-    await recordWorkOrderStepProgress(
-      makeRequest({ work_order_id: workOrderId, production_batch_id: batch2Id, routing_step_id: stepPackId, status: 'completed', qty_input: 98, uom_input: 'pcs', qty_recorded: 95, uom: 'pcs' }, ppicManagerToken)
+    await recordStepOrThrow({ work_order_id: workOrderId, production_batch_id: batch2Id, routing_step_id: stepPackId, status: 'in_progress', qty_input: 98, uom_input: 'pcs' }, 'packing mulai');
+    await recordStepOrThrow(
+      { work_order_id: workOrderId, production_batch_id: batch2Id, routing_step_id: stepPackId, status: 'completed', qty_input: 98, uom_input: 'pcs', qty_recorded: 95, uom: 'pcs' },
+      'packing selesai'
     );
 
     const { data: outputInsert, error: outputError } = await adminClient

@@ -13,6 +13,18 @@ import { Badge } from '@/components/ui/badge';
 // yang terlihat pengguna selesai dibangun -- item PALING BARU di paling atas.
 const items: { title: string; date: string; href: string; description: string }[] = [
   {
+    title: 'Dashboard Proyek AI',
+    date: '21 Agu 2026',
+    href: '/ai-project',
+    description: 'Khusus pemilik produk & leadership: progres roadmap fitur AI dihitung dari data nyata, bukan kira-kira, plus daftar "bisa dikerjakan sekarang".'
+  },
+  {
+    title: 'Kamus — Antrean Penjelasan Data',
+    date: '21 Agu 2026',
+    href: '/kamus',
+    description: 'Jelaskan makna kolom/metrik data supaya sistem dan tim baru tidak perlu bertanya berulang -- bisa dijawab siapa saja, kapan saja.'
+  },
+  {
     title: 'Laba Operasional',
     date: '21 Agu 2026',
     href: '/operating-profit',

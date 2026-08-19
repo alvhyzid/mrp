@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { getEmployerCostConfig, computeMonthlyEmployerUplift } from './computeEmployerCostUplift';
 
 export interface LaborCostResult {
   costPerUnit: number;
@@ -69,6 +70,8 @@ export async function computeStandardLaborCostPerUnit(adminClient: SupabaseClien
   const weekdayHours = Number(calendarSettings?.find((s) => s.setting_key === 'work_calendar_weekday_hours')?.setting_value ?? 7);
   const hoursPerMonth = Number(calendarSettings?.find((s) => s.setting_key === 'standard_hours_per_month')?.setting_value ?? 173.3333);
 
+  const { config: employerCostConfig, missingKeys: employerCostMissingKeys } = await getEmployerCostConfig(adminClient, companyId);
+
   let totalCostPerUnit = 0;
   const notes: string[] = [];
   let anyLevelCounted = false;
@@ -111,19 +114,52 @@ export async function computeStandardLaborCostPerUnit(adminClient: SupabaseClien
       // wage_rate representatif diambil dari rata-rata karyawan AKTIF perusahaan
       // ini dengan wage_type yang sama (data nyata, bukan angka bebas) --
       // kalau tidak ada satu pun, level ini dicatat sebagai tidak lengkap.
-      const { data: employeesOfType } = await adminClient.from('employees').select('wage_rate').eq('company_id', companyId).eq('is_active', true).eq('wage_type', c.wage_type);
+      const { data: employeesOfType } = await adminClient
+        .from('employees')
+        .select('wage_rate, bpjs_kesehatan_enrolled, daily_meal_allowance, daily_transport_allowance')
+        .eq('company_id', companyId)
+        .eq('is_active', true)
+        .eq('wage_type', c.wage_type);
       if (!employeesOfType || employeesOfType.length === 0) {
         notes.push(`${itemLabel}/${c.role_label}: tidak ada karyawan aktif wage_type=${c.wage_type} sebagai acuan tarif — baris kru ini dilewati.`);
         continue;
       }
       const avgWageRate = employeesOfType.reduce((s, e) => s + Number(e.wage_rate), 0) / employeesOfType.length;
+      // Tunjangan makan+transport per hari HADIR -- rata-rata dari karyawan yang
+      // datanya sudah terisi (null dihitung 0, BUKAN dikeluarkan dari rata-rata --
+      // kalau belum ada satu pun yang terisi, hasilnya memang 0 sampai datanya diisi,
+      // bukan angka karangan).
+      const avgDailyAllowance =
+        employeesOfType.reduce((s, e) => s + Number(e.daily_meal_allowance ?? 0) + Number(e.daily_transport_allowance ?? 0), 0) / employeesOfType.length;
+
+      // Iuran pemberi kerja (BPJS Kesehatan+JKK+JKM+JHT, Bagian D 21 Agu 2026) --
+      // HANYA utk wage_type=monthly (satu-satunya kasus yang dicontohkan pemilik
+      // produk, basis bulanan) -- wage_type lain dibiarkan seperti semula, TIDAK
+      // ditebak diperluas ke sana.
+      let avgMonthlyEmployerUplift = 0;
+      if (c.wage_type === 'monthly') {
+        if (employerCostConfig) {
+          const uplifts = employeesOfType.map((e) => computeMonthlyEmployerUplift(Number(e.wage_rate), e.bpjs_kesehatan_enrolled, employerCostConfig));
+          avgMonthlyEmployerUplift = uplifts.reduce((s, u) => s + u.upliftAmount, 0) / uplifts.length;
+          const unconfirmedBpjsCount = uplifts.filter((u) => u.notes.length > 0).length;
+          if (unconfirmedBpjsCount > 0) {
+            notes.push(
+              `${itemLabel}/${c.role_label}: ${unconfirmedBpjsCount} dari ${uplifts.length} karyawan acuan belum dikonfirmasi keikutsertaan BPJS Kesehatan-nya — iuran Kesehatan TIDAK diikutkan untuk mereka (bukan ditebak ikut).`
+            );
+          }
+        } else {
+          notes.push(`${itemLabel}/${c.role_label}: konfigurasi biaya pemberi kerja (BPJS/JKK/JKM/JHT) belum lengkap di company_settings (kunci hilang: ${employerCostMissingKeys.join(', ')}) — iuran pemberi kerja TIDAK diikutkan, cuma gaji pokok+tunjangan.`);
+        }
+      }
+      const avgWageRateWithUplift = avgWageRate + avgMonthlyEmployerUplift;
 
       if (c.wage_type === 'daily') {
         dailyCostPerPerson = avgWageRate; // PHL: dibayar penuh 1 hari terlepas jam
       } else if (c.wage_type === 'monthly') {
-        dailyCostPerPerson = c.is_full_day_dedicated
-          ? (avgWageRate / hoursPerMonth) * weekdayHours // dikhususkan penuh 1 hari -> setara upah 1 hari kerja penuh
-          : (avgWageRate / hoursPerMonth) * hoursPerDay; // dialokasikan proporsional jam (mis. SPV lintas lini)
+        dailyCostPerPerson =
+          (c.is_full_day_dedicated
+            ? (avgWageRateWithUplift / hoursPerMonth) * weekdayHours // dikhususkan penuh 1 hari -> setara upah 1 hari kerja penuh
+            : (avgWageRateWithUplift / hoursPerMonth) * hoursPerDay) + avgDailyAllowance; // dialokasikan proporsional jam (mis. SPV lintas lini); tunjangan per hari HADIR ditambah utuh (bukan diprorata jam)
       } else if (c.wage_type === 'hourly') {
         dailyCostPerPerson = avgWageRate * hoursPerDay;
       } else {

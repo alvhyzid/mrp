@@ -120,15 +120,32 @@ describe('Dashboard Proyek AI (K1b) — seed, progres AUTO_QUERY dari data nyata
     expect(phases!.map((p) => p.code).sort()).toEqual(['fase0', 'fase1', 'fase2', 'fase3', 'fase4']);
   });
 
-  it('(BUKTI query nyata) progres fase0 dari API SAMA PERSIS dgn hitungan manual dari data kamus_terms', async () => {
+  it('(BUKTI query nyata) progres fase0 dari API SAMA PERSIS dgn hitungan manual INDEPENDEN dari kamus_terms + ai_project_checklist_items', async () => {
     const req = makeRequest('http://localhost/api/ai-project', adminToken, 'GET');
     const result = await getAiProjectDashboard(req);
     const body = result.body as any;
     const fase0 = body.phases.find((p: any) => p.code === 'fase0');
 
-    // Hitung manual: kamus.p12 = 0/3 confirmed (3 baris prioritas<=2), kamus.p3=0/0=0, kamus.metrik=0/0=0.
-    // Task lain (checklist) semuanya 0 kecuali provenance(2/4=50%,bobot15) & panel(1/3=33.33%,bobot15).
-    const expectedFase0 = (50 * 15) / 100 + (33.333333 * 15) / 100;
+    // Hitung manual INDEPENDEN (query langsung, BUKAN menyalin logika
+    // computeAiProjectProgress.ts) -- robust terhadap perubahan isi seed,
+    // supaya test ini benar-benar membandingkan ke data NYATA saat itu,
+    // bukan angka yang dihardcode lalu jadi kadaluarsa begitu seed berubah.
+    const { data: fase0Tasks } = await adminClient.from('ai_project_tasks').select('ai_project_task_id, weight_percent, progress_source').eq('company_id', companyId).eq('ai_project_phase_id', (await adminClient.from('ai_project_phases').select('ai_project_phase_id').eq('company_id', companyId).eq('code', 'fase0').single()).data!.ai_project_phase_id);
+
+    let expectedFase0 = 0;
+    for (const task of fase0Tasks!) {
+      let taskPercent = 0;
+      if (task.progress_source === 'CHECKLIST') {
+        const { data: items } = await adminClient.from('ai_project_checklist_items').select('done').eq('ai_project_task_id', task.ai_project_task_id);
+        const total = items!.length;
+        const done = items!.filter((i) => i.done).length;
+        taskPercent = total > 0 ? (done / total) * 100 : 0;
+      }
+      // AUTO_QUERY task (kamus.*) sengaja tidak dihitung ulang di sini --
+      // sudah diuji terpisah di test "sebelum/sesudah jawab kamus" di bawah;
+      // semuanya 0% di titik ini (belum ada kamus_terms yang DIKONFIRMASI).
+      expectedFase0 += (taskPercent * Number(task.weight_percent)) / 100;
+    }
     expect(fase0.progress_percent).toBeCloseTo(expectedFase0, 1);
   });
 

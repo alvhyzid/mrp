@@ -115,6 +115,20 @@ type MarginWatchResult = {
   snapshot_taken_at: string;
 };
 
+const marginCategoryProvenance: Record<string, { formula: string; sourceDocument?: string }> = {
+  harga_bahan: {
+    formula:
+      'Per komponen BOM (eksplosi berjenjang): (harga aktual − standard_cost) × qty dibutuhkan untuk qty dipesan. Harga aktual diambil dari (a) rata-rata tertimbang unit_cost lot yang sudah dikonsumsi, atau kalau belum ada, (b) unit_price PO supplier yang belum diterima. Item tanpa sinyal harga aktual dilewati, bukan dianggap sama dengan standar.'
+  },
+  pemakaian_bahan: {
+    formula:
+      'Per komponen: (qty aktual dikonsumsi − qty standar untuk qty output sejauh ini) × standard_cost komponen. qty standar = rasio BOM per unit × qty output tercatat di work_order_outputs.'
+  },
+  reject: {
+    formula: 'Total qty_reject (satuan jual) tercatat di work_order_step_progress × biaya standar per unit item ini. Reject di satuan tahap-antara (bukan satuan jual) tidak dihitung rupiahnya.'
+  }
+};
+
 const shipmentStatusLabels: Record<string, string> = { draft: 'Draft', shipped: 'Terkirim', delivered: 'Diterima', cancelled: 'Batal' };
 const shipmentStatusBadgeVariant: Record<string, 'secondary' | 'warning' | 'success' | 'critical'> = {
   draft: 'secondary',
@@ -462,7 +476,7 @@ export default function SalesOrdersPage() {
                   {marginResult && !marginLoading ? (
                     <div className="flex flex-col gap-3 text-sm">
                       {!marginResult.labor_cost_complete ? (
-                        <p className="rounded-md border-2 border-destructive/50 bg-destructive/10 p-3 text-sm font-medium text-destructive">
+                        <div className="rounded-md border-2 border-destructive/50 bg-destructive/10 p-3 text-sm font-medium text-destructive">
                           ⚠ SEMUA angka margin di panel ini BELUM TERMASUK biaya SDM standar — margin rencana & proyeksi di bawah SELALU LEBIH BESAR dari kenyataan.
                           {marginResult.labor_cost_notes.length > 0 ? (
                             <ul className="mt-1 list-disc pl-5 text-xs font-normal">
@@ -471,7 +485,7 @@ export default function SalesOrdersPage() {
                               ))}
                             </ul>
                           ) : null}
-                        </p>
+                        </div>
                       ) : null}
                       {!marginResult.cost_data_complete ? (
                         <p className="rounded-md border border-warning/40 bg-warning-subtle p-2 text-xs text-warning-subtle-foreground">
@@ -562,7 +576,22 @@ export default function SalesOrdersPage() {
                         {marginResult.categories.map((cat) => (
                           <div key={cat.category} className="rounded-md border p-2">
                             <div className="flex items-center justify-between">
-                              <span className="font-medium text-foreground">{cat.label}</span>
+                              <span className="flex items-center gap-1 font-medium text-foreground">
+                                {cat.label}
+                                {marginCategoryProvenance[cat.category] ? (
+                                  <ProvenanceInfoButton
+                                    label={cat.label}
+                                    envelope={{
+                                      formula: marginCategoryProvenance[cat.category].formula,
+                                      inputs: [
+                                        { label: 'Total dampak', value: formatCurrency(cat.total_impact, { maxDecimals: 0 }) },
+                                        { label: 'Lengkap?', value: cat.complete ? 'Ya' : 'Belum — sebagian data belum tersedia' }
+                                      ],
+                                      sourceDocument: 'src/features/mrp/server/getMarginWatch.ts'
+                                    }}
+                                  />
+                                ) : null}
+                              </span>
                               <span className={`font-medium ${cat.total_impact < 0 ? 'text-destructive' : cat.total_impact > 0 ? 'text-success' : 'text-muted-foreground'}`}>
                                 {cat.total_impact === 0 && cat.items.length === 0 ? '-' : formatCurrency(cat.total_impact, { maxDecimals: 0 })}
                               </span>
@@ -645,6 +674,20 @@ export default function SalesOrdersPage() {
                               {feasibilityResult.requested_ship_date && feasibilityResult.order_ship_ready_date > feasibilityResult.requested_ship_date ? (
                                 <span className="text-destructive"> (lewat dari tanggal diminta {feasibilityResult.requested_ship_date})</span>
                               ) : null}
+                              <ProvenanceInfoButton
+                                label="Tanggal Selesai Proyeksi"
+                                envelope={{
+                                  formula:
+                                    'Tanggal produksi bisa MULAI (menunggu bahan tahap pertama datang) + hari kerja produksi (kebutuhan batch ÷ batch/hari) + hari tunggu tambahan kalau ada bahan tahap belakangan yang datang lebih lambat dari kebutuhannya (late_stage_material_blocks). Bukan sekadar mulai + durasi produksi — memperhitungkan bahan yang datang di tengah proses.',
+                                  inputs: [
+                                    { label: 'Produksi mulai', value: feasibilityResult.production_start_blocked_until ?? 'segera (bahan tahap awal tersedia)' },
+                                    { label: 'Hari produksi', value: String(feasibilityResult.days_needed ?? '-') },
+                                    { label: 'Bahan tahap belakangan terlambat', value: String(feasibilityResult.late_stage_material_blocks?.length ?? 0) },
+                                    { label: 'Estimasi selesai', value: feasibilityResult.order_ship_ready_date }
+                                  ],
+                                  sourceDocument: 'getPlanningFeasibility.ts'
+                                }}
+                              />
                             </span>
                           ) : null}
                           {!feasibilityResult.feasible ? (

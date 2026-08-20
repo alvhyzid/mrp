@@ -13,6 +13,24 @@ import { Badge } from '@/components/ui/badge';
 // yang terlihat pengguna selesai dibangun -- item PALING BARU di paling atas.
 const items: { title: string; date: string; href: string; description: string }[] = [
   {
+    title: 'Yield Aktual vs Rencana',
+    date: '25 Agu 2026',
+    href: '/production',
+    description: 'Detail Work Order sekarang menunjukkan hasil produksi sungguhan dibanding rencana (dengan persentase) -- sebelumnya harus dihitung manual, hasil produksi tidak pernah tampil berdampingan dengan rencananya.'
+  },
+  {
+    title: 'Biaya Pemberi Kerja per Bulan (Karyawan)',
+    date: '25 Agu 2026',
+    href: '/hr',
+    description: 'Dashboard HRD sekarang menampilkan total biaya perusahaan per karyawan bulanan (gaji + BPJS) di satu kolom, bukan cuma gaji pokok -- PHL/harian ditandai tidak berlaku karena tidak punya angka bulanan tetap.'
+  },
+  {
+    title: 'Klik Ikon Info untuk Lihat Asal Angka',
+    date: '25 Agu 2026',
+    href: '/sales-orders',
+    description: 'Panel "Asal Angka" (ikon info kecil) sekarang ada di lebih banyak tempat: Margin Watch (semua kategori selisih), tanggal selesai kelayakan jadwal, biaya standar Item & BOM, margin kontribusi Laba Operasional, dan kebutuhan bahan Work Order.'
+  },
+  {
     title: 'Dashboard Proyek AI',
     date: '21 Agu 2026',
     href: '/ai-project',

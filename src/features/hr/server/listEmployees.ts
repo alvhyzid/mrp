@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
 import { canManageHr } from '@/lib/roles';
+import { getEmployerCostConfig, computeMonthlyEmployerUplift } from '@/features/mrp';
 
 interface ApiResult {
   status: number;
@@ -40,9 +41,30 @@ export async function listEmployees(request: NextRequest): Promise<ApiResult> {
 
     const canSeeWages = canManageHr(appUser.role);
 
+    // Biaya pemberi kerja/bulan (BPJS uplift) HANYA punya arti "per bulan" yang
+    // stabil untuk wage_type=monthly -- PHL/harian tidak punya gaji bulanan
+    // tetap (tergantung hari hadir), jadi TIDAK dihitung di sini (null + alasan),
+    // bukan diperkirakan dari asumsi hari kerja yang bisa menyesatkan.
+    const { config: employerCostConfig } = await getEmployerCostConfig(adminClient, appUser.company_id);
+
     const result = (employees ?? []).map((employee) => {
       const isSelf = employee.linked_user_id === appUser.user_id;
       const showWage = canSeeWages || isSelf;
+
+      let employerMonthlyUplift: number | null = null;
+      let employerMonthlyUpliftNote: string | null = null;
+      if (showWage && employee.wage_type === 'monthly') {
+        if (!employerCostConfig) {
+          employerMonthlyUpliftNote = 'Konfigurasi rate BPJS perusahaan belum lengkap di company_settings.';
+        } else {
+          const uplift = computeMonthlyEmployerUplift(Number(employee.wage_rate), employee.bpjs_kesehatan_enrolled, employerCostConfig, employee.bpjs_contribution_basis);
+          employerMonthlyUplift = uplift.upliftAmount;
+          employerMonthlyUpliftNote = uplift.notes.join(' ') || null;
+        }
+      } else if (showWage && employee.wage_type !== 'monthly') {
+        employerMonthlyUpliftNote = 'Karyawan non-bulanan (PHL/harian) tidak punya biaya pemberi kerja "per bulan" yang tetap -- tergantung hari hadir.';
+      }
+
       return {
         employee_id: employee.employee_id,
         production_plant_id: employee.production_plant_id,
@@ -67,7 +89,9 @@ export async function listEmployees(request: NextRequest): Promise<ApiResult> {
         daily_transport_allowance: showWage ? employee.daily_transport_allowance : null,
         bpjs_kesehatan_enrolled: showWage ? employee.bpjs_kesehatan_enrolled : null,
         bpjs_contribution_basis: showWage ? employee.bpjs_contribution_basis : null,
-        allowance_frequency: employee.allowance_frequency
+        allowance_frequency: employee.allowance_frequency,
+        employer_monthly_uplift: employerMonthlyUplift,
+        employer_monthly_uplift_note: employerMonthlyUpliftNote
       };
     });
 

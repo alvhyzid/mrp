@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { canAccessProductionDashboard, canManageProductionDisruptions, canRecordStepProgress } from '@/lib/roles';
+import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 
 const statusLabels: Record<string, string> = { planned: 'Direncanakan', in_progress: 'Berjalan', paused: 'Dijeda', completed: 'Selesai', cancelled: 'Batal' };
 const statusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical' | 'secondary'> = {
@@ -28,7 +29,7 @@ const stepStatusLabels: Record<string, string> = { pending: 'Belum Mulai', in_pr
 const outputTypeLabels: Record<string, string> = { main_output: 'Produk Utama', reprocessable_waste: 'Sisa Bisa Diproses Ulang', disposed_waste: 'Sisa Dibuang' };
 const stepStatuses = ['pending', 'in_progress', 'completed'];
 
-type WorkOrder = { work_order_id: number; item_code: string | null; item_name: string | null; item_base_uom: string | null; routing_id: number | null; planned_qty: number; status: string; readiness: string; open_alert_count: number; so_number: string | null };
+type WorkOrder = { work_order_id: number; item_code: string | null; item_name: string | null; item_base_uom: string | null; routing_id: number | null; planned_qty: number; status: string; readiness: string; open_alert_count: number; so_number: string | null; total_output_qty: number };
 type RoutingStep = { routing_step_id: number; sequence_no: number; step_name: string; active_duration_minutes: number; wait_duration_minutes: number };
 type StepProgress = { work_order_step_progress_id: number; production_batch_id: number | null; routing_step_id: number; status: string; qty_recorded: number | null; uom: string | null; started_at: string | null; completed_at: string | null };
 type ProductionBatch = { production_batch_id: number; batch_number: string; planned_qty: number; uom: string; status: string };
@@ -702,6 +703,21 @@ export default function ProductionDashboardPage() {
               <CardTitle className="text-xl">
                 {expandedWo.item_code} — {expandedWo.planned_qty} {expandedWo.item_base_uom}
               </CardTitle>
+              <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                Yield aktual vs rencana: <span className="font-medium text-foreground">{expandedWo.total_output_qty}</span> / {expandedWo.planned_qty} {expandedWo.item_base_uom}
+                {expandedWo.planned_qty > 0 ? ` (${Math.round((expandedWo.total_output_qty / expandedWo.planned_qty) * 10000) / 100}%)` : ''}
+                <ProvenanceInfoButton
+                  label="Yield Aktual vs Rencana"
+                  envelope={{
+                    formula:
+                      'Aktual = Σ qty di work_order_outputs untuk Work Order ini dengan output_type=main_output (SEMUA batch, akumulatif — belum tentu WO ini sudah selesai). Rencana = planned_qty Work Order. Persentase = aktual ÷ rencana × 100. Hasil produksi TIDAK PERNAH diasumsikan sama dengan rencana (prinsip inti sistem ini) — angka ini mencatat selisihnya apa adanya.',
+                    inputs: [
+                      { label: 'Rencana (planned_qty)', value: `${expandedWo.planned_qty} ${expandedWo.item_base_uom ?? ''}` },
+                      { label: 'Aktual (Σ work_order_outputs main_output)', value: `${expandedWo.total_output_qty} ${expandedWo.item_base_uom ?? ''}` }
+                    ]
+                  }}
+                />
+              </p>
             </CardHeader>
             <CardContent>
               <label className="mb-3 flex max-w-xs flex-col gap-1.5">

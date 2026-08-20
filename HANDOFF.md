@@ -79,7 +79,11 @@ Pemilik produk memberi instruksi besar berjenjang A→G, eksplisit ditandai **mu
 
 **Test baru**: `tests/ai_project_dashboard.test.ts` (7 test, termasuk 2 skenario negatif eksplisit di atas).
 
-**D. Fondasi Provenance & Panel Asal-Usul (Fase 0.2 & 0.3) — SELESAI SEBAGIAN (10 dari 20 angka target, 24 Agu 2026), infrastrukturnya lengkap.**
+**D. Fondasi Provenance & Panel Asal-Usul (Fase 0.2 & 0.3) — SELESAI 20/20 (25 Agu 2026).**
+
+*(Update 25 Agu 2026: pemilik produk memilih menyelesaikan 10 angka sisa dari sesi sebelumnya. 9 dari 10 murni kerja mekanis (pasang ProvenanceInfoButton di angka yang SUDAH tampil). 1 KEKECUALIAN ditemukan saat mengerjakan: "Batch produksi: yield aktual vs rencana" TERNYATA tidak punya panel UI sama sekali di mana pun — dicek WorkOrdersPage, ProductionDashboardPage, listWorkOrders.ts, tidak ada satu tempat pun yang menampilkan total qty output tercatat (work_order_outputs) berdampingan dengan planned_qty. Dialog "Ringkasan Yield Batch" yang sudah ada di PPIC menghitung hal BEDA — rasio qty_recorded tahap terakhir ÷ qty_input tahap pertama, bukan output vs rencana. Prinsip inti #4 CLAUDE.md ["Jangan pernah asumsikan hasil produksi = rencana"] karena itu SEBELUMNYA tidak punya bukti visual di UI manapun. Ditambahkan kecil: kolom total_output_qty di listWorkOrders.ts (Σ work_order_outputs.qty, output_type=main_output, per work_order) + baris "Yield Aktual vs Rencana" baru di ProductionDashboardPage.tsx panel detail WO, dengan ProvenanceInfoButton. Cakupan sengaja kecil — TIDAK membangun dashboard yield terpisah, cuma menaruh angka yang sudah ada datanya di tempat yang sudah ada.)*
+
+*(Riwayat 24 Agu 2026, dipertahankan:)*
 
 *(Koreksi 24 Agu 2026: laporan akhir sesi sebelumnya salah menyebut Bagian D "selesai" padahal baru 3/20 angka terpasang — pemilik produk menegur ini dengan tepat. Status yang benar: infrastruktur (tipe + komponen) selesai sejak awal, PEMASANGANNYA baru sebagian, dan sekarang ditambah sampai 10/20.)*
 
@@ -87,23 +91,35 @@ Tipe `ProvenanceEnvelope` (`src/lib/provenance.ts`) — KECIL & KONKRET sesuai p
 
 Komponen generik `ProvenanceInfoButton` (`src/components/ui/provenance-info-button.tsx`) — ikon info kecil, klik → dialog menampilkan rumus/input/sumber/status/riwayat. SATU komponen dipakai lintas modul (BUKAN diimplementasikan ulang tiap tempat) — pakai `Dialog` yang sudah ada (bukan bikin komponen popover baru).
 
-**Dipasang di 4 modul, 10 dari 20 angka target** (task `f0-panel-asal-usul`, checklist Bagian C, live company_id=1 disinkronkan manual sama seperti checklist lain — seeder idempoten tidak menimpa baris yang sudah ada):
+**Dipasang di 7 modul, 20 dari 20 angka target** (task `f0-panel-asal-usul`, checklist Bagian C, live company_id=1 disinkronkan manual — seeder idempoten tidak menimpa baris yang sudah ada):
 1. BOM — hasil standar per batch (`standard_yield_qty`).
 2. Margin Watch — margin rencana (baseline), kutip rumus resmi `docs/spesifikasi-aturan-biaya-v1.md §3`.
 3. Margin Watch — biaya SDM standar per unit, `inputs` dari `labor_cost_notes`.
-4. Margin Watch — biaya bahan standar per unit **(BARU 24 Agu)**.
-5. Margin Watch — biaya kemasan standar per unit **(BARU 24 Agu)**, satu tombol dgn #4 (angka berdampingan di UI, rumus sama: Σ qty_per_unit_output × standard_cost komponen dari BOM aktif).
-6. Kelayakan Jadwal (SalesOrdersPage) — `unit_per_batch` (K8) **(BARU 24 Agu)**.
-7. Kelayakan Jadwal — `batches_per_day` (K8) **(BARU 24 Agu)**, satu tombol dgn #6 + `batches_needed`/`days_needed` turunannya (ROUNDUP qty÷unit_per_batch), termasuk catatan snapshot dikunci per baris SO.
-8. Kelayakan Jadwal — kekurangan bahan per item **(BARU 24 Agu)**, formula eksplosi BOM berjenjang (`explodeBomRequirements.ts`).
-9. Laba Operasional — overhead SDM bulanan **(BARU 24 Agu)**, sumber `company_settings.monthly_overhead_baseline`, TIDAK dialokasi per batch di v1.
-10. PPIC Dashboard — kapasitas & utilisasi Work Center mingguan/harian **(BARU 24 Agu)**, formula kapasitas_harian × unit_count × hari_kerja/minggu, dibandingkan jam terjadwal nyata.
+4. Margin Watch — biaya bahan standar per unit.
+5. Margin Watch — biaya kemasan standar per unit, satu tombol dgn #4 (angka berdampingan di UI, rumus sama: Σ qty_per_unit_output × standard_cost komponen dari BOM aktif).
+6. Kelayakan Jadwal (SalesOrdersPage) — `unit_per_batch` (K8).
+7. Kelayakan Jadwal — `batches_per_day` (K8), satu tombol dgn #6 + `batches_needed`/`days_needed` turunannya (ROUNDUP qty÷unit_per_batch), termasuk catatan snapshot dikunci per baris SO.
+8. Kelayakan Jadwal — kekurangan bahan per item, formula eksplosi BOM berjenjang (`explodeBomRequirements.ts`).
+9. Laba Operasional — overhead SDM bulanan, sumber `company_settings.monthly_overhead_baseline`, TIDAK dialokasi per batch di v1.
+10. PPIC Dashboard — kapasitas & utilisasi Work Center mingguan/harian, formula kapasitas_harian × unit_count × hari_kerja/minggu, dibandingkan jam terjadwal nyata.
+11. Margin Watch Lapis 2 — selisih harga bahan/kemasan **(BARU 25 Agu)**, tombol di header kategori "Selisih Harga Bahan/Kemasan" (SalesOrdersPage).
+12. Margin Watch Lapis 2 — selisih pemakaian bahan **(BARU 25 Agu)**, tombol di header kategori "Selisih Pemakaian Bahan".
+13. Margin Watch Lapis 2 — selisih reject **(BARU 25 Agu)**, tombol di header kategori "Selisih Reject".
+14. Kelayakan Jadwal — tanggal selesai proyeksi (`order_ship_ready_date`) **(BARU 25 Agu)**, formula mulai produksi + hari produksi, diperpanjang kalau ada bahan tahap belakangan yang ETA-nya lebih lambat.
+15. BOM — biaya standar per komponen **(BARU 25 Agu)**, tombol di header kolom "Biaya Standar" (BomsPage) — passthrough langsung dari `items.standard_cost`, bukan hasil kalkulasi.
+16. Item — `standard_cost` **(BARU 25 Agu)**, tombol di header kolom "Biaya Standar" (ItemsPage) — nilai input manual, dijelaskan sebagai sumber hulu bagi #4/#5/#15.
+17. Laba Operasional — margin kontribusi bulanan **(BARU 25 Agu)**, tombol di kartu "Margin Kontribusi (Realized)", formula RPC `get_monthly_operating_profit` (migration `20260821140000`).
+18. Work Order — kebutuhan bahan per batch (`buffer_percentage`) **(BARU 25 Agu)**, dipasang di DUA lokasi WorkOrdersPage (form catat pemakaian + tabel "Kalkulasi Kebutuhan Bahan" saat buat batch) karena formulanya diduplikasi di dua tempat kode.
+19. Batch produksi — yield aktual vs rencana **(BARU 25 Agu, LIHAT CATATAN DI ATAS — ini BUKAN cuma pasang tombol, panel UI-nya belum ada sama sekali sebelum sesi ini)**.
+20. Employee — biaya pemberi kerja per bulan (BPJS uplift) **(BARU 25 Agu, JUGA BUKAN cuma pasang tombol)**: kolom baru "Biaya Pemberi Kerja/Bulan" di HrDashboardPage, dihitung server-side (`listEmployees.ts` memanggil `computeMonthlyEmployerUplift` dari domain mrp lewat `@/features/mrp` index — bukan reach langsung ke file internal, sesuai aturan folder struktur). HANYA berlaku `wage_type=monthly` — PHL/harian ditandai "N/A (non-bulanan)" dengan alasan eksplisit (gaji harian tidak punya angka bulanan tetap), bukan diperkirakan dari asumsi hari kerja.
 
-**10 SISANYA masih belum**: selisih Margin Watch Lapis 2 (harga/pemakaian/reject, 3 item), tanggal selesai proyeksi Kelayakan, biaya standar per komponen BOM, `items.standard_cost`, margin kontribusi bulanan Laba Operasional, kebutuhan bahan per batch (buffer_percentage Work Order), yield aktual vs rencana batch produksi, biaya pemberi kerja bulanan Employee (BPJS uplift) — infrastruktur (`ProvenanceInfoButton`) siap, tinggal kerja mekanis memasang.
+**Keputusan cakupan #19 & #20** (bukan keputusan sepihak diam-diam, dicatat di sini): kedua angka ini TIDAK pernah tampil di UI manapun sebelum sesi ini (dicek menyeluruh oleh sub-agent riset). Cakupan yang dibangun sengaja MINIMAL — satu baris/kolom angka + tombol provenance di tempat yang paling natural (panel detail Work Order untuk #19, tabel karyawan HR untuk #20) — BUKAN dashboard yield/payroll baru. Kalau pemilik produk mau tampilan lebih kaya (grafik tren yield, breakdown BPJS per komponen di UI), itu permintaan terpisah.
 
 **Keputusan retrofit komponen LAMA** (2 pertanyaan sisa checklist) — SENGAJA belum diputuskan sesi ini (dokumen: "keputusan 👤+🧠", bukan keputusan sepihak Claude Code).
 
 **Test**: TIDAK ADA test baru khusus Bagian D — permukaan barunya murni presentasional (tipe + komponen UI tanpa server logic baru), diverifikasi lewat typecheck+build+test suite penuh tetap hijau, bukan lewat test unit baru. Semua angka yang jadi isi envelope (`labor_cost_notes`, `standard_margin_total`, `batches_needed`, `material_shortages`, `overhead`, kapasitas Work Center) SUDAH diuji di tempat asalnya masing-masing.
+
+**Verifikasi 10 angka BARU 25 Agu 2026** (`npx tsc --noEmit` bersih, `npm run test` 174/174 lulus, PLUS jalan kaki nyata di browser — bukan cuma baca kode): dev server dijalankan, login sungguhan sebagai `company.a@debug.mrp` (tenant debug PT ITM berisi data mirip SAS001/SAS005 nyata), tiap halaman yang disentuh dibuka & di-screenshot, `console --errors` dicek bersih di semua halaman. 5 dialog Panel Asal-Usul BARU dibuka satu per satu dan dikonfirmasi menampilkan rumus/nilai input yang benar (Tanggal Selesai Proyeksi, Kebutuhan Bahan per Batch WO, Yield Aktual vs Rencana, kolom Biaya Pemberi Kerja/Bulan HR — nilai riil Rp332.219/Rp182.739/Rp440.100 dst per karyawan, PHL tampil "N/A (non-bulanan)" persis seperti didesain). **1 bug PRA-ADA ditemukan & diperbaiki saat verifikasi** (bukan dari perubahan sesi ini): `<ul>` di dalam `<p>` di panel peringatan "biaya SDM belum lengkap" (SalesOrdersPage.tsx) menyebabkan hydration error React — diganti `<p>`→`<div>`, satu baris, tidak mengubah logika/tampilan. **1 artefak data ditemukan, TIDAK disentuh**: batch produksi bernama `BROWSER-VERIFY-TEMP` (60 pcs, status Selesai) ada di tenant debug Company A — kemungkinan sisa verifikasi browser sesi sebelumnya yang lupa dibersihkan. Tidak berbahaya (tenant debug, bukan data produksi Indo Taste) tapi disebut di sini supaya sesi berikutnya tahu asalnya kalau menemukan data aneh di Company A.
 
 **E. Process Mining (Fase 0.4) — SELESAI.** Dashboard `/process-mining` (leadership-only, sama pola akses Bagian C) — murni query & agregasi atas `status_transition_log` yang SUDAH ADA, TIDAK ADA tabel baru, TANPA LLM.
 
@@ -173,6 +189,8 @@ Komponen generik `ProvenanceInfoButton` (`src/components/ui/provenance-info-butt
 
 ### A→G SEMUA SELESAI per lingkupnya masing-masing (22 Agu 2026)
 D, E, F selesai penuh; G selesai HANYA W1 (W2-W5 sengaja ditunda, butuh pemilik produk). Kalau ada sesi lanjutan setelah ini, opsi berikutnya (BUKAN queue A-G lama, itu sudah tuntas): (1) wawancara Q1/Q2/Q4[sebagian sudah default]/Q6/Q7 absensi ke pemilik produk lalu lanjut W2-W5, (2) 3 gerbang Fase 1-3 AI roadmap di bawah (butuh pemilik produk personal), (3) kalibrasi ambang §1.4 Kesiapan AI setelah beberapa bulan data nyata (§8 dokumen sumber), (4) tinjau Q3/Q5 PHL "hadir tapi tidak dipekerjakan" yang masih belum eksplisit dijawab. TANYAKAN ke pemilik produk urutan prioritas berikutnya, jangan asumsi sendiri — queue eksplisit A-G yang mengarahkan sesi-sesi sebelumnya sudah habis.
+
+**Update 25 Agu 2026**: pemilik produk ditanya (opsi di atas + "selesaikan sisa Bagian D") dan memilih menyelesaikan sisa Bagian D (10 angka Panel Asal-Usul yang belum) — lihat detail lengkap di subseksi D di atas, sekarang 20/20. `npx tsc --noEmit` bersih, `npm run test` 174/174 lulus (28 file test, tidak ada regresi). Opsi (1)-(4) di atas MASIH terbuka untuk sesi berikutnya — TANYAKAN ke pemilik produk lagi, jangan asumsi.
 
 ### Yang TIDAK BISA dibangun & kenapa (Fase 1-3 dokumen AI, gerbang eksplisit — BUKAN diabaikan, BUTUH pemilik produk)
 1. **Akun & API key penyedia model LLM + ketentuan datanya** — tidak ada di sesi ini, tidak bisa ditebak/dibuat sendiri.

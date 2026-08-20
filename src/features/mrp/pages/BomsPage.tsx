@@ -517,7 +517,18 @@ export default function BomsPage() {
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Per Unit Output</th>
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Tahap SOP</th>
                       {canViewCost ? (
-                        <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Biaya Standar</th>
+                        <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            Biaya Standar
+                            <ProvenanceInfoButton
+                              label="Biaya Standar Komponen"
+                              envelope={{
+                                formula: 'Diambil langsung dari items.standard_cost milik item komponen ini — data master (input manual di halaman Item), bukan hasil kalkulasi BOM.',
+                                inputs: [{ label: 'Sumber', value: 'Master Item → Biaya Standar' }]
+                              }}
+                            />
+                          </span>
+                        </th>
                       ) : null}
                     </tr>
                   </thead>

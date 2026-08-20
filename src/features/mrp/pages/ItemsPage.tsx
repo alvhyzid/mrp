@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { canViewFinancialData, isCompanyLeadership } from '@/lib/roles';
 import { itemTypes, typeLabels, typeBadgeVariant } from '../itemTypeLabels';
 import { formatCurrency } from '@/lib/currency';
+import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 
 type Item = {
   item_id: number;
@@ -244,7 +245,18 @@ export default function ItemsPage() {
     if (canViewCost) {
       baseColumns.push({
         accessorKey: 'standard_cost',
-        header: 'Biaya Standar',
+        header: () => (
+          <span className="flex items-center gap-1">
+            Biaya Standar
+            <ProvenanceInfoButton
+              label="Biaya Standar Item"
+              envelope={{
+                formula: 'Nilai input manual di form Item — tidak dihitung dari komponen/BOM apa pun. Dipakai sebagai harga master pada perhitungan biaya BOM, Margin Watch, dan Kelayakan Jadwal di seluruh sistem.',
+                inputs: [{ label: 'Cara isi/ubah', value: 'Form edit Item → field Biaya Standar' }]
+              }}
+            />
+          </span>
+        ),
         cell: ({ row }) => <span className="text-data">{formatCurrency(row.original.standard_cost)}</span>
       });
     }

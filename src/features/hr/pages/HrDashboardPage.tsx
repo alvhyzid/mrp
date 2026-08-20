@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { canAccessHrDashboard, canManageHr } from '@/lib/roles';
 import { formatCurrency } from '@/lib/currency';
+import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 
 const wageTypeLabels: Record<string, string> = {
   hourly: 'Per Jam',
@@ -92,6 +93,9 @@ type Employee = {
   daily_meal_allowance: number | null;
   daily_transport_allowance: number | null;
   bpjs_kesehatan_enrolled: boolean | null;
+  bpjs_contribution_basis: number | null;
+  employer_monthly_uplift: number | null;
+  employer_monthly_uplift_note: string | null;
 };
 
 type AttendanceRow = {
@@ -322,6 +326,33 @@ export default function HrDashboardPage() {
           ) : (
             <span className="text-data">
               {formatCurrency(row.original.wage_rate, { maxDecimals: 0 })} / {row.original.wage_type}
+            </span>
+          )
+      });
+      columns.push({
+        id: 'employer_monthly_uplift',
+        header: () => (
+          <span className="flex items-center gap-1">
+            Biaya Pemberi Kerja/Bulan
+            <ProvenanceInfoButton
+              label="Biaya Pemberi Kerja per Bulan"
+              envelope={{
+                formula:
+                  'JKK + JKM + JHT (selalu dihitung) + BPJS Kesehatan (hanya kalau bpjs_kesehatan_enrolled=true eksplisit). Tiap komponen = basis iuran × rate tenant (company_settings). Basis iuran = bpjs_contribution_basis per orang kalau diisi, kalau tidak = clamp(gaji pokok, floor tenant, ceiling tenant). HANYA berlaku untuk karyawan wage_type=bulanan — PHL/harian tidak punya angka "per bulan" yang tetap.',
+                inputs: [{ label: 'Rate & floor/ceiling', value: 'company_settings (bpjs_*_employer_rate_percent, bpjs_wage_basis_floor/ceiling)' }],
+                sourceDocument: 'computeEmployerCostUplift.ts'
+              }}
+            />
+          </span>
+        ),
+        cell: ({ row }) =>
+          row.original.employer_monthly_uplift !== null ? (
+            <span className="text-data" title={row.original.employer_monthly_uplift_note ?? undefined}>
+              {formatCurrency(row.original.employer_monthly_uplift, { maxDecimals: 0 })}
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground" title={row.original.employer_monthly_uplift_note ?? undefined}>
+              {row.original.wage_type === 'monthly' ? '-' : 'N/A (non-bulanan)'}
             </span>
           )
       });

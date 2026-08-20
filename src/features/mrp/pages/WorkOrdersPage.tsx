@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { canManageWorkOrder } from '@/lib/roles';
 import { workOrderPriorities } from '../server/workOrderValidation';
+import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 
 const priorityLabels: Record<string, string> = { low: 'Rendah', normal: 'Normal', high: 'Tinggi', urgent: 'Mendesak' };
 const priorityBadgeVariant: Record<string, 'secondary' | 'info' | 'warning' | 'critical'> = { low: 'secondary', normal: 'info', high: 'warning', urgent: 'critical' };
@@ -610,9 +611,21 @@ export default function WorkOrdersPage() {
                               <p className="text-sm font-medium text-foreground">
                                 {line.component_item_code} — {line.component_item_name}
                               </p>
-                              <p className="mb-2 text-xs text-muted-foreground">
+                              <p className="mb-2 flex items-center gap-1 text-xs text-muted-foreground">
                                 Kebutuhan: {bufferedQty.toLocaleString('id-ID', { maximumFractionDigits: 4 })} {line.uom} untuk batch {selectedBatch?.batch_number} ({batchQty} {selectedBatch?.uom})
                                 {expandedBom.buffer_percentage ? ` — sudah + buffer ${expandedBom.buffer_percentage}%` : ''}
+                                <ProvenanceInfoButton
+                                  label="Kebutuhan Bahan per Batch"
+                                  envelope={{
+                                    formula: 'Kebutuhan = qty_per_unit_output (BOM) × qty batch × (1 + buffer_percentage BOM ÷ 100). Buffer mengantisipasi susut/reject saat proses — dikonfigurasi per BOM, bukan nilai tetap sistem.',
+                                    inputs: [
+                                      { label: 'Qty per unit output (BOM)', value: line.qty_per_unit_output.toLocaleString('id-ID', { maximumFractionDigits: 6 }) },
+                                      { label: 'Qty batch', value: `${batchQty} ${selectedBatch?.uom ?? ''}` },
+                                      { label: 'Buffer BOM', value: `${expandedBom.buffer_percentage ?? 0}%` },
+                                      { label: 'Kebutuhan (dengan buffer)', value: `${bufferedQty.toLocaleString('id-ID', { maximumFractionDigits: 4 })} ${line.uom}` }
+                                    ]
+                                  }}
+                                />
                               </p>
                               {lotsForComponent.length === 0 ? (
                                 <p className="text-sm text-destructive">Belum ada stok lot tersedia untuk item ini.</p>
@@ -796,8 +809,19 @@ export default function WorkOrdersPage() {
 
                 {expandedBom && Number(batchPlannedQty) > 0 ? (
                   <div className="mt-3">
-                    <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    <p className="mb-1 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                       Kalkulasi Kebutuhan Bahan{expandedBom.buffer_percentage ? ` (sudah + buffer ${expandedBom.buffer_percentage}%)` : ' (BOM ini belum punya buffer_percentage)'}
+                      <ProvenanceInfoButton
+                        label="Kebutuhan Bahan per Batch"
+                        envelope={{
+                          formula:
+                            'Tanpa Buffer = qty_per_unit_output (BOM) × qty batch direncanakan. Dibutuhkan (+buffer) = Tanpa Buffer × (1 + buffer_percentage BOM ÷ 100). Buffer mengantisipasi susut/reject saat proses — dikonfigurasi per BOM.',
+                          inputs: [
+                            { label: 'Qty batch direncanakan', value: String(batchPlannedQty) },
+                            { label: 'Buffer BOM', value: `${expandedBom.buffer_percentage ?? 0}%` }
+                          ]
+                        }}
+                      />
                     </p>
                     {expandedBom.lines.length === 0 ? (
                       <p className="text-sm text-muted-foreground">BOM untuk item ini belum punya komponen.</p>

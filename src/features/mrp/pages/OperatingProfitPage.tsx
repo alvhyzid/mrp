@@ -183,7 +183,18 @@ export default function OperatingProfitPage() {
           <div className="grid gap-4 sm:grid-cols-3">
             <Card>
               <CardContent className="flex flex-col gap-1 pt-6">
-                <span className="text-xs uppercase tracking-wide text-muted-foreground">Margin Kontribusi (Realized)</span>
+                <span className="flex items-center gap-1 text-xs uppercase tracking-wide text-muted-foreground">
+                  Margin Kontribusi (Realized)
+                  <ProvenanceInfoButton
+                    label="Margin Kontribusi Bulanan"
+                    envelope={{
+                      formula:
+                        'Σ (qty_shipped × (harga jual per unit − unit_cost lot yang dikirim)) untuk semua baris pengiriman berstatus terkirim/diterima dalam periode ini. unit_cost diambil dari lot aktual yang dikirim (biaya sungguhan lot itu, bukan standar) — kalau lot belum punya unit_cost, dianggap 0 di baris itu.',
+                      inputs: [{ label: 'Periode', value: `${formatDateId(result.period_start)} – ${formatDateId(result.period_end)}` }],
+                      sourceDocument: 'get_monthly_operating_profit (migration 20260821140000)'
+                    }}
+                  />
+                </span>
                 <span className="text-2xl font-semibold text-foreground">{formatCurrency(result.total_margin, { maxDecimals: 0 })}</span>
                 <span className="text-xs text-muted-foreground">Dari semua pengiriman yang sudah keluar gudang di periode ini</span>
               </CardContent>

@@ -35,14 +35,15 @@ export async function listWorkOrders(request: NextRequest): Promise<ApiResult> {
     const soLineIds = Array.from(new Set(workOrders.map((wo) => wo.sales_order_line_id).filter((id): id is number => !!id)));
     const plantIds = Array.from(new Set(workOrders.map((wo) => wo.production_plant_id)));
 
-    const [itemsRes, soLinesRes, plantsRes, readinessRes, consumptionRes] = await Promise.all([
+    const [itemsRes, soLinesRes, plantsRes, readinessRes, consumptionRes, outputsRes] = await Promise.all([
       adminClient.from('items').select('item_id, item_code, name, base_uom').in('item_id', itemIds),
       soLineIds.length
         ? adminClient.from('sales_order_lines').select('sales_order_line_id, sales_order_id, qty_ordered').in('sales_order_line_id', soLineIds)
         : Promise.resolve({ data: [] as { sales_order_line_id: number; sales_order_id: number; qty_ordered: number }[], error: null }),
       adminClient.from('production_plants').select('production_plant_id, name').in('production_plant_id', plantIds),
       adminClient.from('work_orders_readiness').select('work_order_id, readiness, open_alert_count').in('work_order_id', woIds),
-      adminClient.from('work_order_consumption').select('work_order_id, qty_consumed').in('work_order_id', woIds)
+      adminClient.from('work_order_consumption').select('work_order_id, qty_consumed').in('work_order_id', woIds),
+      adminClient.from('work_order_outputs').select('work_order_id, qty').in('work_order_id', woIds).eq('output_type', 'main_output')
     ]);
 
     if (itemsRes.error) return { status: 500, body: { error: itemsRes.error.message } };
@@ -50,6 +51,7 @@ export async function listWorkOrders(request: NextRequest): Promise<ApiResult> {
     if (plantsRes.error) return { status: 500, body: { error: plantsRes.error.message } };
     if (readinessRes.error) return { status: 500, body: { error: readinessRes.error.message } };
     if (consumptionRes.error) return { status: 500, body: { error: consumptionRes.error.message } };
+    if (outputsRes.error) return { status: 500, body: { error: outputsRes.error.message } };
 
     const salesOrderIds = Array.from(new Set((soLinesRes.data ?? []).map((line) => line.sales_order_id)));
     const { data: salesOrders, error: soError } = salesOrderIds.length
@@ -66,6 +68,11 @@ export async function listWorkOrders(request: NextRequest): Promise<ApiResult> {
     const consumedByWoId = new Map<number, number>();
     for (const row of consumptionRes.data ?? []) {
       consumedByWoId.set(row.work_order_id, (consumedByWoId.get(row.work_order_id) ?? 0) + Number(row.qty_consumed));
+    }
+
+    const outputByWoId = new Map<number, number>();
+    for (const row of outputsRes.data ?? []) {
+      outputByWoId.set(row.work_order_id, (outputByWoId.get(row.work_order_id) ?? 0) + Number(row.qty));
     }
 
     const result = workOrders.map((wo) => {
@@ -93,7 +100,8 @@ export async function listWorkOrders(request: NextRequest): Promise<ApiResult> {
         scheduled_end: wo.scheduled_end,
         readiness: readiness?.readiness ?? wo.status,
         open_alert_count: readiness?.open_alert_count ?? 0,
-        total_consumed_events: consumedByWoId.has(wo.work_order_id) ? consumedByWoId.get(wo.work_order_id) : 0
+        total_consumed_events: consumedByWoId.has(wo.work_order_id) ? consumedByWoId.get(wo.work_order_id) : 0,
+        total_output_qty: outputByWoId.get(wo.work_order_id) ?? 0
       };
     });
 

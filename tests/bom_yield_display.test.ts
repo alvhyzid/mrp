@@ -7,12 +7,15 @@ import { listBoms } from '../src/features/mrp/server/listBoms';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Perbaikan tampilan BOM (21 Agu 2026) -- pemilik produk bingung membaca
-// "FG-GUMMY-ZALA-N200 - v1 (56.6667 pcs)": satuan generik "pcs" tidak
+// "FG-GUMMY-ZALA-N200 - v1 (56.6667 pcs)" (item CONTOH nyata saat itu, sejak
+// 26 Agu 2026 diarsipkan -- studi kasus produk sudah pindah ke MLVT, tapi
+// contoh bug-nya tetap valid sebagai ilustrasi): satuan generik "pcs" tidak
 // membedakan botol/karton/sachet, dan angka pecahan tanpa keterangan terlihat
 // seperti salah hitung. PRINSIP UTAMA yang diuji: (1) satuan yang ditampilkan
 // HARUS ikut satuan ASLI item (base_uom), bukan field standard_yield_uom yang
 // bisa "pcs" generik dan drift dari item; (2) standard_yield_basis_note/source
-// -- nullable, TIDAK PERNAH dikarang kalau belum diisi.
+// -- nullable, TIDAK PERNAH dikarang kalau belum diisi. Fixture test pakai
+// item uji terisolasi sendiri, TIDAK menyentuh FG-GUMMY-ZALA-N200 asli.
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;

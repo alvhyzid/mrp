@@ -9,9 +9,21 @@ if (!supabaseUrl || !serviceRoleKey) {
 }
 const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
-// Acceptance test literal spesifikasi-aturan-biaya-v1.md rev.3 §5 (Contoh 1-3). Pola
-// fixture SAMA seperti tests/shipments_physical_stage.test.ts (company terisolasi,
-// dibersihkan total di afterAll) — TIDAK menyentuh data real-case company_id=1 (PT ITM).
+// REGRESI ARITMATIKA RUMUS BIAYA v1 (BUKAN test produk aktif — dipertahankan sengaja
+// 26 Agu 2026, lihat HANDOFF.md studi kasus MLVT). `spesifikasi-aturan-biaya-v1.md`
+// rev.4 (Gummy Zala/Drinkme) SUDAH KADALUARSA sebagai formula yang BERLAKU di sistem
+// (digantikan formula resmi Gummy Zala V2/Drinkme V1 14 Agu 2026, lalu SAS001/SAS005
+// dihapus total sebagai bagian penggantian studi kasus ke MLVT) — TAPI angka literal
+// rev.4 di sini tetap berharga sebagai REGRESI: membuktikan mesin hitung biaya standar
+// (materialCost/laborCost/packagingCost/margin) menghasilkan angka yang PERSIS benar
+// untuk satu set input yang sudah divalidasi manual dulu, terlepas dari produk mana pun
+// yang sedang jadi studi kasus aktif. Sengaja TIDAK ditulis ulang ke angka MLVT — itu
+// akan membuang validasi yang sudah susah payah dikerjakan tanpa menambah nilai apa pun
+// (test MLVT yang baru dibuat TERPISAH, bukan menggantikan file ini).
+//
+// Pola fixture SAMA seperti tests/shipments_physical_stage.test.ts (company terisolasi,
+// dibersihkan total di afterAll) — TIDAK PERNAH menyentuh data real-case company_id=1
+// (PT ITM), baik sebelum maupun sesudah SAS001/SAS005 dihapus.
 //
 // CATATAN LINGKUP (dicatat juga di HANDOFF.md):
 // - Contoh 1 (premix gelatin + gummy Zala) diuji END-TO-END lewat operasi DB
@@ -31,7 +43,7 @@ const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistS
 //   margin) memakai angka literal yang MEMANG diberikan spec.
 // - Contoh 3 (agregasi order -> margin -> laba bulanan) diuji sebagai FORMULA-LEVEL
 //   test yang sama alasannya dengan Contoh 2.
-describe('Margin v1 — acceptance test literal spesifikasi-aturan-biaya-v1.md §5', () => {
+describe('Margin v1 — REGRESI ARITMATIKA rumus biaya standar (angka literal spesifikasi-aturan-biaya-v1.md rev.4 KADALUARSA, dipertahankan sengaja sbg regresi — lihat komentar file)', () => {
   let companyId: number;
   let plantId: number;
   const itemIds: Record<string, number> = {};
@@ -279,7 +291,7 @@ describe('Margin v1 — acceptance test literal spesifikasi-aturan-biaya-v1.md �
 
   // rev.4 (dikoreksi 18 Agu sore): batch gummy 10kg (bukan 9kg) -> skala 30,489354,
   // premix gelatin 853,70g (bukan 768,33g), output premix 2.290,77g (bukan 2.061,69g).
-  it('Contoh 1a — batch Premix Gelatin (rev.4, batch 10kg): total Rp184.190,68, Rp80,4057/g', async () => {
+  it('REGRESI 1a — batch Premix Gelatin (angka literal rev.4 KADALUARSA, batch 10kg): total Rp184.190,68, Rp80,4057/g', async () => {
     // Baris bahan (subtotal PERSIS dari spec, qty diturunkan presisi penuh).
     await consumeMaterial('RM-GELATIN-NB250', premixBatchId, premixWorkOrderId, 179277.4, rawMaterialPrices['RM-GELATIN-NB250']);
     await consumeMaterial('RM-CITRICACID', premixBatchId, premixWorkOrderId, 355.71, rawMaterialPrices['RM-CITRICACID']);
@@ -304,7 +316,7 @@ describe('Margin v1 — acceptance test literal spesifikasi-aturan-biaya-v1.md �
     expect(perGram).toBeCloseTo(80.4057, 3);
   });
 
-  it('Contoh 1b — batch Gummy Zala (rev.4, batch 10kg): bahan Rp1.108.255,93, SDM Rp169.642,86, Rp22.551,16/botol, kemasan Rp8.829,63, margin Rp76.619,22', async () => {
+  it('REGRESI 1b — batch Gummy Zala (angka literal rev.4 KADALUARSA, batch 10kg): bahan Rp1.108.255,93, SDM Rp169.642,86, Rp22.551,16/botol, kemasan Rp8.829,63, margin Rp76.619,22', async () => {
     // Bahan (subtotal PERSIS dari spec §5 Contoh 1 Langkah B rev.4, qty presisi penuh).
     await consumeMaterial('RM-MALTITOL', gummyBatchId, gummyWorkOrderId, 384165.86, rawMaterialPrices['RM-MALTITOL']);
     await consumeMaterial('RM-POLYSORB', gummyBatchId, gummyWorkOrderId, 408557.35, rawMaterialPrices['RM-POLYSORB']);
@@ -371,7 +383,7 @@ describe('Margin v1 — acceptance test literal spesifikasi-aturan-biaya-v1.md �
 
   // Contoh 2 — FORMULA-LEVEL (lihat catatan lingkup di atas file: resep top-level
   // Drinkme tidak tersedia, cuma agregat biaya per-batch yang diberikan spec).
-  it('Contoh 2 — batch Serbuk Drinkme 60kg (formula-level, angka literal spec)', () => {
+  it('REGRESI 2 — batch Serbuk Drinkme 60kg (formula-level, angka literal rev.4 KADALUARSA)', () => {
     const bahanBatch = 4965906.16;
     const sdmBatch = 336126.37;
     // "226,19" box adalah tampilan dibulatkan 2 desimal (bukan qty presisi penuh yang
@@ -391,7 +403,7 @@ describe('Margin v1 — acceptance test literal spesifikasi-aturan-biaya-v1.md �
 
   // Contoh 3 — FORMULA-LEVEL (agregasi order, sama alasan dengan Contoh 2 untuk SAS005;
   // SAS001 dihitung dari angka per-botol Contoh 1b yang SUDAH divalidasi via DB sungguhan).
-  it('Contoh 3 — agregasi order -> margin kontribusi -> laba operasional bulanan (rev.4)', () => {
+  it('REGRESI 3 — agregasi order -> margin kontribusi -> laba operasional bulanan (angka literal rev.4 KADALUARSA)', () => {
     // "76.619,22"/"5.570,29" per unit di spec §5 adalah tampilan dibulatkan 2 desimal —
     // dikalikan qty besar (20.000/10.000) membesarkan selisih pembulatan itu. Angka
     // agregat §5 Contoh 3 rev.4 (Rp1.532.384.305,79 dst) dipakai sebagai SUMBER presisi

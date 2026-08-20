@@ -4,12 +4,15 @@ import { explodeBomRequirements } from '../src/features/mrp/server/explodeBomReq
 import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Fase Produksi Nyata, P2 — sebelum ini, kekurangan bahan HANYA dicek 1 level di
-// getPlanningFeasibility.ts, yang melewatkan kasus nyata SAS005: Maltodextrin
-// dipakai LANGSUNG di adonan Drinkme DAN sebagai carrier di dalam 5 premix
-// WIP-nya sekaligus -- baru ketahuan kurang kalau kedua pemakaian dijumlah.
-// Test ini membuktikan eksplosi berjenjang menjumlahkan KEDUA pemakaian dengan
-// benar, dengan fixture kecil yang meniru pola yang sama (bukan mengulang
-// verifikasi manual SAS005 yang sudah dilakukan langsung terhadap data dev asli).
+// getPlanningFeasibility.ts, yang melewatkan kasus nyata SAS005 (order Drinkme --
+// DIHAPUS 26 Agu 2026 sebagai bagian penggantian studi kasus ke MLVT, lihat
+// HANDOFF.md): Maltodextrin dipakai LANGSUNG di adonan Drinkme DAN sebagai carrier
+// di dalam 5 premix WIP-nya sekaligus -- baru ketahuan kurang kalau kedua pemakaian
+// dijumlah. Test ini membuktikan eksplosi berjenjang menjumlahkan KEDUA pemakaian
+// dengan benar, dengan fixture kecil yang meniru pola yang sama (bukan mengulang
+// verifikasi manual SAS005 yang dulu dilakukan langsung terhadap data dev asli --
+// fixture ini pakai item uji sendiri, tidak pernah menyentuh SAS005, jadi tidak
+// terpengaruh sama sekali oleh penghapusannya).
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

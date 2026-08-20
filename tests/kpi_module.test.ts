@@ -104,17 +104,26 @@ describe('Modul KPI (KPI-1) — registry, snapshot, kartu, KPI Saya', () => {
 
     // Fixture verifikasi Margin Kontribusi % (permintaan pemilik produk 25 Agu 2026,
     // ANGKA DIPERBARUI 26 Agu 2026 setelah formula resmi Gummy Zala V2/Drinkme V1
-    // diterapkan ke BOM -- rev.4 lama SUDAH KADALUARSA, jangan pakai lagi):
-    // 2 produk dgn harga NYATA (Gummy Rp108.000, Drinkme Rp33.000, sama dgn item asli
-    // FG-GUMMY-ZALA-N200/PMBX001ITM) tapi unit_cost dipilih SENGAJA supaya margin%
+    // diterapkan ke BOM -- rev.4 lama SUDAH KADALUARSA, jangan pakai lagi). CATATAN
+    // STUDI KASUS (26 Agu 2026): Gummy Zala/Drinkme SEJAK ITU sudah diganti MLVT
+    // sebagai produk yang dipakai sebagai studi kasus aktif -- SAS001/SAS005 (order
+    // asli kedua produk ini) sudah DIHAPUS dari sistem, item FG-GUMMY-ZALA-N200/
+    // PMBX001ITM DIARSIPKAN (bukan dihapus). Angka di bawah TETAP VALID sebagai
+    // acceptance-test rumus (harga Rp108.000/Rp33.000 & margin 68,2%/18,7% adalah
+    // angka literal yang PERNAH resmi utk produk itu selagi aktif) -- fixture ini
+    // pakai item UJI sendiri (`TESTGUMMY-FG`/`TESTDRINKME-FG`, terisolasi), BUKAN
+    // item asli, jadi tidak terpengaruh penghapusan/pengarsipan itu sama sekali.
+    // 2 produk dgn harga yg DULU nyata (Gummy Rp108.000, Drinkme Rp33.000, sama dgn
+    // item asli sebelum diarsipkan) tapi unit_cost dipilih SENGAJA supaya margin%
     // PERSIS 68.2% (Gummy) & 18.7% (Drinkme) -- literal acceptance-test number resmi
     // (biaya bahan/produksi/kemasan diverifikasi pemilik produk 26 Agu 2026). CATATAN
     // JUJUR: unit_cost di sini MASIH manual (bukan hasil computeStandardCostPerUnit
     // live), karena standar biaya sistem untuk kedua produk ini MASIH tidak lengkap --
     // Gummy: harga PTS-01 (Potassium Sorbate) & SOD-01 (Sodium Benzoate) belum ada;
     // kedua produk: kru standar Premix Gelatin (Zala) & 5 premix Drinkme belum diisi
-    // di production_standards, jadi computeStandardLaborCostPerUnit masih "incomplete".
-    // Begitu 2 gerbang data itu terisi, angka test ini WAJIB diganti hasil live sistem.
+    // di production_standards, jadi computeStandardLaborCostPerUnit masih "incomplete"
+    // (produk sudah diarsipkan, gerbang data ini TIDAK akan diisi lagi -- dicatat
+    // sebagai riwayat, bukan pekerjaan yang masih ditunggu).
     const { data: customer } = await adminClient.from('customers').insert([{ company_id: companyId, name: 'Customer KpiModuleTest' }]).select('customer_id').single();
     customerId = customer!.customer_id;
     const { data: gummyItem } = await adminClient

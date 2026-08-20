@@ -1,0 +1,170 @@
+{
+  "_CATATAN": "Ini CATATAN SEBELUM-HAPUS (pre-delete snapshot) hasil query langsung -- BUKAN pengganti pg_dump. Dibuat sebagai jaring pengaman tambahan yang murah untuk 14 baris SAS001/SAS005 yang akan dihapus permanen (Tahap 2 pembersihan studi kasus, 26 Agu 2026). Backup pg_dump penuh via GitHub Actions tetap wajib dan terpisah untuk melindungi seluruh database (37 lot bahan baku, karyawan, payroll, dll) -- file ini TIDAK melindungi itu.",
+  "taken_at": "2026-08-20T11:54:21.413Z",
+  "row_counts": {
+    "customer_purchase_orders": 2,
+    "customer_po_approvals": 6,
+    "sales_orders": 2,
+    "sales_order_lines": 2,
+    "sales_order_line_feasibility_snapshots": 2
+  },
+  "total_rows": 14,
+  "tables": {
+    "customer_purchase_orders": [
+      {
+        "customer_purchase_order_id": 99,
+        "company_id": 1,
+        "customer_id": 77,
+        "po_number": "SAS001",
+        "po_date": "2026-08-10",
+        "requested_ship_date": "2026-09-10",
+        "status": "processed",
+        "payment_terms": "tempo",
+        "payment_status": "pending",
+        "processed_by": 1,
+        "processed_at": "2026-08-18T07:55:44.112+00:00",
+        "created_at": "2026-08-18T07:54:34.225409+00:00",
+        "pic_name": null,
+        "pic_position": null,
+        "pic_phone": null,
+        "pic_email": null,
+        "idempotency_key": null
+      },
+      {
+        "customer_purchase_order_id": 100,
+        "company_id": 1,
+        "customer_id": 77,
+        "po_number": "SAS005",
+        "po_date": "2026-08-12",
+        "requested_ship_date": "2026-09-12",
+        "status": "processed",
+        "payment_terms": "tempo",
+        "payment_status": "pending",
+        "processed_by": 1,
+        "processed_at": "2026-08-18T07:55:51.199+00:00",
+        "created_at": "2026-08-18T07:55:45.349507+00:00",
+        "pic_name": null,
+        "pic_position": null,
+        "pic_phone": null,
+        "pic_email": null,
+        "idempotency_key": null
+      }
+    ],
+    "customer_po_approvals": [
+      {
+        "customer_po_approval_id": 277,
+        "customer_purchase_order_id": 99,
+        "department": "finance",
+        "status": "approved",
+        "approved_by": 77,
+        "approved_at": "2026-08-18T07:55:37.963+00:00",
+        "notes": null
+      },
+      {
+        "customer_po_approval_id": 278,
+        "customer_purchase_order_id": 99,
+        "department": "ppic",
+        "status": "approved",
+        "approved_by": 78,
+        "approved_at": "2026-08-18T07:55:39.363+00:00",
+        "notes": null
+      },
+      {
+        "customer_po_approval_id": 279,
+        "customer_purchase_order_id": 99,
+        "department": "manager",
+        "status": "approved",
+        "approved_by": 1,
+        "approved_at": "2026-08-18T07:55:40.46+00:00",
+        "notes": null
+      },
+      {
+        "customer_po_approval_id": 280,
+        "customer_purchase_order_id": 100,
+        "department": "finance",
+        "status": "approved",
+        "approved_by": 77,
+        "approved_at": "2026-08-18T07:55:46.504+00:00",
+        "notes": null
+      },
+      {
+        "customer_po_approval_id": 281,
+        "customer_purchase_order_id": 100,
+        "department": "ppic",
+        "status": "approved",
+        "approved_by": 78,
+        "approved_at": "2026-08-18T07:55:47.455+00:00",
+        "notes": null
+      },
+      {
+        "customer_po_approval_id": 282,
+        "customer_purchase_order_id": 100,
+        "department": "manager",
+        "status": "approved",
+        "approved_by": 1,
+        "approved_at": "2026-08-18T07:55:48.346+00:00",
+        "notes": null
+      }
+    ],
+    "sales_orders": [
+      {
+        "sales_order_id": 82,
+        "company_id": 1,
+        "customer_purchase_order_id": 99,
+        "customer_id": 77,
+        "production_plant_id": 11,
+        "status": "confirmed",
+        "created_at": "2026-08-18T07:55:42.963883+00:00",
+        "so_number": "003/8-ITM/2026",
+        "idempotency_key": "cpo-99"
+      },
+      {
+        "sales_order_id": 83,
+        "company_id": 1,
+        "customer_purchase_order_id": 100,
+        "customer_id": 77,
+        "production_plant_id": 11,
+        "status": "confirmed",
+        "created_at": "2026-08-18T07:55:50.674017+00:00",
+        "so_number": "004/8-ITM/2026",
+        "idempotency_key": "cpo-100"
+      }
+    ],
+    "sales_order_lines": [
+      {
+        "sales_order_line_id": 200,
+        "sales_order_id": 82,
+        "item_id": 371,
+        "qty_ordered": 20000,
+        "unit_price": 108000,
+        "qty_shipped": 0
+      },
+      {
+        "sales_order_line_id": 201,
+        "sales_order_id": 83,
+        "item_id": 75,
+        "qty_ordered": 10000,
+        "unit_price": 33000,
+        "qty_shipped": 0
+      }
+    ],
+    "sales_order_line_feasibility_snapshots": [
+      {
+        "sales_order_line_feasibility_snapshot_id": 18,
+        "company_id": 1,
+        "sales_order_line_id": 200,
+        "unit_per_batch": 56.6667,
+        "batches_per_day": 4,
+        "created_at": "2026-08-18T18:29:25.267725+00:00"
+      },
+      {
+        "sales_order_line_feasibility_snapshot_id": 19,
+        "company_id": 1,
+        "sales_order_line_id": 201,
+        "unit_per_batch": 226.19,
+        "batches_per_day": 3,
+        "created_at": "2026-08-18T18:29:28.430684+00:00"
+      }
+    ]
+  }
+}

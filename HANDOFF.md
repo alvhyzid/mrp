@@ -4,6 +4,104 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Penggantian studi kasus produk uji: Gummy Zala/Drinkme → MLVT — Tahap 2 SIAP, BELUM DIJALANKAN — 26 Agu 2026
+
+Lampu hijau pemilik produk untuk Tahap 2 pembersihan diterima, TAPI eksekusi masih
+menunggu verifikasi backup pg_dump (dijalankan pemilik produk sendiri via GitHub
+Actions, sesi ini tidak punya akses `gh`/token). **Migrasi
+`supabase/migrations/20260826130000_retire_gummy_zala_drinkme_case_study.sql` sudah
+ditulis dan diverifikasi logikanya, TAPI SENGAJA BELUM di-`db push`** ke staging
+maupun dev — menunggu konfirmasi backup sah.
+
+**Prasyarat 1b (rekonsiliasi selisih nilai stok) — TUNTAS, tidak ada yang tidak
+terjelaskan.** Total 37 lot Rp270.766.422,02 (company_id=1) = 35 item dari
+`docs/saldo-awal-gudang-karanglo-180826.md` (Rp233.686.422,02 — BUKAN Rp237.374.438
+seperti tertulis di header rekonsiliasi dokumen itu sendiri, yang ternyata TIDAK cocok
+dengan jumlah baris-barisnya sendiri, selisih ~Rp3,69 juta — inkonsistensi PRA-ADA di
+dokumen sumber, bukan sesuatu yang berubah sesi ini) **PLUS 2 item di luar dokumen
+itu**: `PMPKF001ITM` (Sachet Drinkme, Rp35.880.000) dan `PKG-PLASTIC-WRAP-BOX`
+(Rp1.200.000). 233.686.422,02 + 35.880.000 + 1.200.000 = 270.766.422,02 — **cocok
+persis, nol sisa tak terjelaskan.** Kemasan Etawa Fit (Box + Sachet Roll,
+Rp30.674.000) TERNYATA SUDAH termasuk dalam 35 item dokumen itu sendiri (bukan
+tambahan di luar dokumen seperti dugaan awal) — koreksi atas asumsi sebelumnya.
+
+**Prasyarat 1c (dokumen ter-link ke SAS001/SAS005) — TUNTAS, nihil.** `documents`/
+`document_links` masih 0 baris total di seluruh sistem (fitur baru dibangun 26 Agu,
+belum ada satu pun dokumen diunggah) — tidak ada yang ter-link, tidak ada risiko.
+
+**Prasyarat 1d (PMPKF001ITM tercetak atau polos) — TIDAK BISA DIPASTIKAN dari data
+yang ada, DITAHAN sesuai instruksi eksplisit ("jangan putuskan sendiri").** Nama item
+di semua seed script cuma "Sachet"/"Sachet Film" (generik, tanpa info cetak).
+`docs/rencana-kerja-fase-produksi-nyata.md` A2 menyebut "Pesan kemasan Drinkme
+(sachet & box, lead cetak 2 minggu)" sebagai tindakan TERPISAH yang masih perlu
+dilakukan — mengindikasikan (bukan memastikan) stok 260.000 pcs yang ADA SEKARANG
+mungkin belum dicetak, tapi tidak ada field/dokumen yang secara eksplisit menyatakan
+status cetak stok yang sudah ada. **PMPKF001ITM TIDAK disentuh migrasi** (tidak
+dihapus, tidak diarsipkan) sampai pemilik produk menjawab.
+
+**Snapshot pra-hapus**: `docs/pre-delete-snapshot-SAS001-SAS005.json` — seluruh 14
+baris (customer_purchase_orders×2, customer_po_approvals×6, sales_orders×2,
+sales_order_lines×2, sales_order_line_feasibility_snapshots×2) diambil apa adanya
+lewat query langsung, BUKAN pengganti pg_dump (dicatat eksplisit di header file itu
+sendiri) — pelengkap murah untuk pemulihan cepat 14 baris ini secara spesifik, bukan
+perlindungan untuk 37 lot/karyawan/payroll yang tetap butuh pg_dump penuh.
+
+**Migrasi pembersihan (belum dijalankan) — desain kunci**:
+- SATU TRANSAKSI (file migrasi = satu transaksi Postgres by default lewat
+  `supabase db push`) — langsung menjawab pelajaran insiden 182 baris `companies`
+  yatim sebelumnya (lihat entri "Pembersihan sisa test otomatis" di atas).
+- IDEMPOTEN via `WHERE` yang cuma cocok sekali (`po_number in ('SAS001','SAS005')`,
+  `item_code in (...)`, `is_active/status` guard) — dijalankan ulang = 0 baris
+  berubah, tidak error.
+- PORTABEL staging↔dev: dicocokkan lewat `po_number`/`item_code`/nama company
+  ("PT ITM"), BUKAN primary key literal (ID beda antar project, dikonfirmasi:
+  staging `mrp-rebuild-test-2A` punya "PT ITM" di company_id=3 dgn SO id=2, dev di
+  company_id=1 dgn SO id=82/83) — file yang SAMA PERSIS jalan di keduanya.
+- Kalau tidak ada company "PT ITM" di project yang di-push (mis. rebuild CI dari
+  migrasi kosong) → `raise notice` dan `return`, TIDAK error — aman direplay CI.
+- **Dihapus permanen** (14 baris, sesuai audit): `sales_order_line_feasibility_snapshots`
+  → `sales_order_lines` → `sales_orders` → `customer_po_approvals` →
+  `customer_purchase_orders` (urutan FK-safe).
+- **Diarsipkan** (`items.is_active=false` / `boms.status='archived'`, TIDAK dihapus):
+  `FG-GUMMY-ZALA-N200`, `PMBX001ITM`, `PMSC001ITM`, `WIP-PREMIX-GELATIN-ZALA`
+  (**keputusan sendiri, bukan disebut eksplisit pemilik produk** — dianggap analog
+  `PMSC001ITM`/WIP Sachet yang eksplisit disebut, sama-sama formulasi khusus produk
+  lama, ditandai di sini supaya bisa dikoreksi kalau salah), `PKG-BOTOL-PET-N200`,
+  `PKG-LABEL-STIKER-N200`, `PKG-INNER-SLEEVE`, `PKG-OUTER-BOX`, `PKG-SEAL-STICKER`,
+  `PKG-KARTON-GUMMY-27`, `PMPKB001ITM`, `PKG-KARTON-SERBUK-42` + 4 BOM terkait.
+- **Tidak disentuh** (raw material generik, prinsip "jangan hapus master yang
+  direferensikan"): SELURUH bahan baku termasuk `PTS-01`/`SOD-01`/
+  `FLA-DELIFRU-STRAWFRU-01` yang baru ditambahkan 25 Agu 2026 utk formula resmi
+  Gummy Zala V2 — preservative/flavor generik, TIDAK ikut diarsipkan sekalipun
+  formula produknya diarsipkan (bisa dipakai produk lain kelak).
+
+**Test — TIDAK ADA perubahan logika, cuma nama & komentar** (sesuai instruksi
+eksplisit "jangan hilangkan kebenaran yang sudah divalidasi"):
+`tests/margin_v1_acceptance.test.ts` diganti nama jadi "REGRESI ARITMATIKA" +
+komentar header baru menjelaskan rev.4 KADALUARSA sbg formula AKTIF tapi test-nya
+sengaja dipertahankan sbg regresi rumus (BUKAN ditulis ulang ke MLVT — permintaan
+eksplisit). `tests/kpi_module.test.ts`, `tests/bom_yield_display.test.ts`,
+`tests/planning_feasibility_shortage.test.ts` — komentar diperbarui supaya tidak
+menyesatkan pembaca masa depan (item asli sudah diarsipkan/SAS005 sudah dihapus),
+TANPA mengubah fixture/assertion sama sekali. `npx tsc --noEmit` bersih, `npm test`
+**192/192 lulus sebelum perubahan komentar — dan 192/192 lulus lagi sesudahnya**
+(jumlah sama persis, jalan penuh, bukan cuma file yang diubah).
+
+**Belum dikerjakan, menunggu pemilik produk**:
+1. Konfirmasi backup pg_dump sah (ukuran file, format COPY/INSERT, ada baris data di
+   tabel sampel seperti `sales_orders`/lot) — TANPA ini migrasi tidak akan di-`db push`
+   ke staging maupun dev, sesuai instruksi eksplisit.
+2. Jawaban 1d (PMPKF001ITM tercetak atau polos).
+3. Setelah backup dikonfirmasi: jalankan migrasi ke **staging** dulu (project
+   `mrp-rebuild-test-2A`, `.env.staging.local`), laporkan hasil (row count sebelum/
+   sesudah, 192 test tetap lulus di staging), tunggu persetujuan lagi sebelum ke dev.
+
+**CATATAN dari pemilik produk (bukan tugas sesi ini, paralel)**: `routing_step_standard_crew`
+nol baris untuk 10 tahap serbuk (Sachet + Box) — penahan HPP MLVT nanti, PPIC/produksi
+yang mengisi.
+
+---
+
 ## Master Dokumen MD-1 (Bagian C) — 26 Agu 2026
 
 Gerbang waktu "setelah SAS001 & SAS005 terkirim" DIBATALKAN eksplisit oleh pemilik produk

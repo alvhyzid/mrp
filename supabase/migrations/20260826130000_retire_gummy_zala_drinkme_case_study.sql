@@ -20,9 +20,16 @@
 -- diuji di staging dulu, baru dijalankan ke dev, tanpa diedit.
 --
 -- DIHAPUS PERMANEN (14 baris di dev, sesuai audit Tahap 1 -- 0 turunan produksi
--- pernah ada: nol work_orders/production_batches/lots/shipments untuk kedua order ini):
+-- pernah ada: nol work_orders/production_batches/work_order_consumption/
+-- work_order_outputs/lots/lot_genealogy/shipments/delivery_confirmations/
+-- document_signatures/labor log/system_alerts untuk kedua order ini, diverifikasi
+-- ULANG 26 Agu 2026 termasuk system_alerts.related_po_id secara khusus):
+--   sales_order_line_margin_snapshots (baseline Margin Watch, 0 baris saat ini --
+--   dihapus defensif kalau sempat dibuat lagi sebelum migrasi ini dijalankan) ->
 --   sales_order_line_feasibility_snapshots -> sales_order_lines -> sales_orders ->
 --   customer_po_approvals -> customer_purchase_orders (PO "SAS001"/"SAS005", company "PT ITM")
+--   + system_alerts (related_work_order_id/related_item_id/related_po_id, 0 baris
+--   saat ini, dihapus defensif dengan alasan sama).
 --
 -- DIARSIPKAN (is_active=false utk items, status='archived' utk boms -- TIDAK dihapus):
 --   FG-GUMMY-ZALA-N200, PMBX001ITM (Box Minuman Serbuk), PMSC001ITM (WIP Sachet),
@@ -37,12 +44,23 @@
 -- lihat prinsip "bangun untuk kebutuhan nyata" -- termasuk PTS-01/SOD-01/
 -- FLA-DELIFRU-STRAWFRU-01 yang baru ditambahkan 25 Agu 2026 utk formula resmi Gummy
 -- Zala V2 -- preservative & flavor generik, tidak diarsipkan sekalipun formulanya
--- diarsipkan): PMPKF001ITM (Sachet Drinkme) DITAHAN, belum diputuskan -- lihat
--- HANDOFF.md poin 1d, tercetak merek atau polos belum bisa dipastikan dari data.
+-- diarsipkan): PMPKF001ITM (Sachet Drinkme, 260.000 pcs) dan PKG-PLASTIC-WRAP-BOX
+-- (6.000 pcs) -- KEPUTUSAN FINAL pemilik produk 26 Agu 2026 ("penegasan lingkup"):
+-- KEDUANYA TETAP AKTIF, TIDAK diarsipkan, TERLEPAS dari tercetak merek atau polos
+-- (pertanyaan 1d TIDAK PERLU dijawab lagi) -- alasannya bukan status cetak, tapi
+-- keduanya punya STOK BERNILAI SUNGGUHAN yang bisa dipakai ulang studi kasus lain.
+
+-- BUKTI WAJIB pasca-eksekusi (instruksi eksplisit): total nilai persediaan available
+-- (SUM quantity_on_hand x unit_cost, company "PT ITM") HARUS SAMA PERSIS sebelum &
+-- sesudah migrasi ini -- migrasi ini TIDAK PERNAH menyentuh tabel `lots` sama sekali
+-- (tidak ada DELETE/UPDATE terhadap lots di bawah), jadi identik by construction;
+-- baseline dev tercatat 26 Agu 2026: Rp270.766.422,02 / 37 lot available.
 
 do $$
 declare
   v_company_id integer;
+  v_deleted_margin integer;
+  v_deleted_alerts integer;
   v_deleted_feasibility integer;
   v_deleted_sol integer;
   v_deleted_so integer;
@@ -56,6 +74,53 @@ begin
     raise notice 'Tidak ada company bernama PT ITM di project ini -- tidak ada yang dihapus/diarsipkan (aman, migrasi ini portable staging/dev).';
     return;
   end if;
+
+  with target_cpo as (
+    select customer_purchase_order_id from customer_purchase_orders
+    where company_id = v_company_id and po_number in ('SAS001', 'SAS005')
+  ),
+  target_so as (
+    select sales_order_id from sales_orders
+    where customer_purchase_order_id in (select customer_purchase_order_id from target_cpo)
+  ),
+  target_sol as (
+    select sales_order_line_id from sales_order_lines
+    where sales_order_id in (select sales_order_id from target_so)
+  ),
+  del_margin as (
+    delete from sales_order_line_margin_snapshots
+    where sales_order_line_id in (select sales_order_line_id from target_sol)
+    returning 1
+  )
+  select count(*) into v_deleted_margin from del_margin;
+
+  with target_cpo as (
+    select customer_purchase_order_id from customer_purchase_orders
+    where company_id = v_company_id and po_number in ('SAS001', 'SAS005')
+  ),
+  target_so as (
+    select sales_order_id from sales_orders
+    where customer_purchase_order_id in (select customer_purchase_order_id from target_cpo)
+  ),
+  target_wo as (
+    -- Defensif -- audit Tahap 1 (26 Agu 2026) memastikan 0 work_orders pernah ada
+    -- untuk SAS001/SAS005 (nol produksi pernah berjalan), jadi ini SELALU kosong,
+    -- tapi tetap ditulis benar (bukan perbandingan ID yang salah ruang) untuk jaga-jaga.
+    select work_order_id from work_orders
+    where sales_order_line_id in (
+      select sales_order_line_id from sales_order_lines where sales_order_id in (select sales_order_id from target_so)
+    )
+  ),
+  del_alerts as (
+    delete from system_alerts
+    where company_id = v_company_id
+      and (
+        related_work_order_id in (select work_order_id from target_wo)
+        or related_po_id in (select customer_purchase_order_id from target_cpo)
+      )
+    returning 1
+  )
+  select count(*) into v_deleted_alerts from del_alerts;
 
   with target_cpo as (
     select customer_purchase_order_id from customer_purchase_orders
@@ -145,6 +210,6 @@ begin
   )
   select count(*) into v_archived_boms from archived_boms;
 
-  raise notice 'Dihapus: % feasibility_snapshots, % sales_order_lines, % sales_orders, % customer_po_approvals, % customer_purchase_orders. Diarsipkan: % items, % boms.',
-    v_deleted_feasibility, v_deleted_sol, v_deleted_so, v_deleted_approvals, v_deleted_cpo, v_archived_items, v_archived_boms;
+  raise notice 'Dihapus: % margin_snapshots, % system_alerts, % feasibility_snapshots, % sales_order_lines, % sales_orders, % customer_po_approvals, % customer_purchase_orders. Diarsipkan: % items, % boms.',
+    v_deleted_margin, v_deleted_alerts, v_deleted_feasibility, v_deleted_sol, v_deleted_so, v_deleted_approvals, v_deleted_cpo, v_archived_items, v_archived_boms;
 end $$;

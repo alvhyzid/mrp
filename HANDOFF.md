@@ -29,15 +29,13 @@ tambahan di luar dokumen seperti dugaan awal) — koreksi atas asumsi sebelumnya
 `document_links` masih 0 baris total di seluruh sistem (fitur baru dibangun 26 Agu,
 belum ada satu pun dokumen diunggah) — tidak ada yang ter-link, tidak ada risiko.
 
-**Prasyarat 1d (PMPKF001ITM tercetak atau polos) — TIDAK BISA DIPASTIKAN dari data
-yang ada, DITAHAN sesuai instruksi eksplisit ("jangan putuskan sendiri").** Nama item
-di semua seed script cuma "Sachet"/"Sachet Film" (generik, tanpa info cetak).
-`docs/rencana-kerja-fase-produksi-nyata.md` A2 menyebut "Pesan kemasan Drinkme
-(sachet & box, lead cetak 2 minggu)" sebagai tindakan TERPISAH yang masih perlu
-dilakukan — mengindikasikan (bukan memastikan) stok 260.000 pcs yang ADA SEKARANG
-mungkin belum dicetak, tapi tidak ada field/dokumen yang secara eksplisit menyatakan
-status cetak stok yang sudah ada. **PMPKF001ITM TIDAK disentuh migrasi** (tidak
-dihapus, tidak diarsipkan) sampai pemilik produk menjawab.
+**Prasyarat 1d (PMPKF001ITM tercetak atau polos) — TERJAWAB, pertanyaannya sendiri
+jadi tidak relevan.** Pemilik produk memutuskan lewat pesan "PENEGASAN LINGKUP" (26
+Agu 2026): `PMPKF001ITM` (Sachet Drinkme, 260.000 pcs) DAN `PKG-PLASTIC-WRAP-BOX`
+(6.000 pcs) TETAP AKTIF, TIDAK diarsipkan — bukan karena status cetaknya terjawab
+(tetap tidak diketahui), tapi karena keduanya punya STOK BERNILAI SUNGGUHAN yang
+tetap layak dipakai ulang studi kasus lain, terlepas dari tercetak atau polos.
+Keputusan ini sudah ditulis eksplisit di migrasi (lihat komentar migrasi di bawah).
 
 **Snapshot pra-hapus**: `docs/pre-delete-snapshot-SAS001-SAS005.json` — seluruh 14
 baris (customer_purchase_orders×2, customer_po_approvals×6, sales_orders×2,
@@ -59,9 +57,13 @@ perlindungan untuk 37 lot/karyawan/payroll yang tetap butuh pg_dump penuh.
   company_id=1 dgn SO id=82/83) — file yang SAMA PERSIS jalan di keduanya.
 - Kalau tidak ada company "PT ITM" di project yang di-push (mis. rebuild CI dari
   migrasi kosong) → `raise notice` dan `return`, TIDAK error — aman direplay CI.
-- **Dihapus permanen** (14 baris, sesuai audit): `sales_order_line_feasibility_snapshots`
-  → `sales_order_lines` → `sales_orders` → `customer_po_approvals` →
-  `customer_purchase_orders` (urutan FK-safe).
+- **Dihapus permanen** (14 baris sesuai audit + 2 tabel defensif yang saat ini 0
+  baris tapi eksplisit disebut ulang di "penegasan lingkup" 26 Agu 2026 --
+  `sales_order_line_margin_snapshots`/baseline Margin Watch, `system_alerts`
+  via `related_work_order_id`/`related_item_id`/`related_po_id`):
+  `sales_order_line_margin_snapshots` + `system_alerts` →
+  `sales_order_line_feasibility_snapshots` → `sales_order_lines` → `sales_orders` →
+  `customer_po_approvals` → `customer_purchase_orders` (urutan FK-safe).
 - **Diarsipkan** (`items.is_active=false` / `boms.status='archived'`, TIDAK dihapus):
   `FG-GUMMY-ZALA-N200`, `PMBX001ITM`, `PMSC001ITM`, `WIP-PREMIX-GELATIN-ZALA`
   (**keputusan sendiri, bukan disebut eksplisit pemilik produk** — dianggap analog
@@ -89,12 +91,24 @@ TANPA mengubah fixture/assertion sama sekali. `npx tsc --noEmit` bersih, `npm te
 
 **Belum dikerjakan, menunggu pemilik produk**:
 1. Konfirmasi backup pg_dump sah (ukuran file, format COPY/INSERT, ada baris data di
-   tabel sampel seperti `sales_orders`/lot) — TANPA ini migrasi tidak akan di-`db push`
-   ke staging maupun dev, sesuai instruksi eksplisit.
-2. Jawaban 1d (PMPKF001ITM tercetak atau polos).
+   tabel sampel seperti `sales_orders`/lot) — pemilik produk sedang menjalankan &
+   memeriksa sendiri (26 Agu 2026, terlihat sedang membuka `backup-full-*.sql` di
+   editor). TANPA konfirmasi eksplisit ini migrasi TIDAK akan di-`db push` ke staging
+   maupun dev, sesuai instruksi eksplisit ("Tanpa bukti ini, jangan lanjut").
+2. **Bukti wajib pasca-eksekusi** (instruksi "penegasan lingkup" 26 Agu 2026): total
+   nilai persediaan available (`SUM quantity_on_hand × unit_cost`, company "PT ITM")
+   HARUS SAMA PERSIS sebelum & sesudah — baseline tercatat **Rp270.766.422,02 / 37
+   lot available**. Migrasi TIDAK PERNAH menyentuh tabel `lots` sama sekali, jadi
+   identik by construction, TAPI tetap WAJIB diverifikasi lewat query setelah
+   eksekusi (bukan diasumsikan) — kalau beda sepeser pun, HENTIKAN dan laporkan,
+   jangan diperbaiki sendiri (instruksi eksplisit).
 3. Setelah backup dikonfirmasi: jalankan migrasi ke **staging** dulu (project
    `mrp-rebuild-test-2A`, `.env.staging.local`), laporkan hasil (row count sebelum/
-   sesudah, 192 test tetap lulus di staging), tunggu persetujuan lagi sebelum ke dev.
+   sesudah, nilai persediaan sebelum/sesudah, 192 test tetap lulus di staging),
+   tunggu persetujuan lagi sebelum ke dev.
+4. Setelah dev: bangun studi kasus MLVT (item + 4 premix + BOM + SO
+   "043/6-ITM/2026") — instruksi lanjutan sudah diterima, TIDAK dikerjakan sebelum
+   pembersihan Tahap 2 selesai & disetujui.
 
 **CATATAN dari pemilik produk (bukan tugas sesi ini, paralel)**: `routing_step_standard_crew`
 nol baris untuk 10 tahap serbuk (Sachet + Box) — penahan HPP MLVT nanti, PPIC/produksi

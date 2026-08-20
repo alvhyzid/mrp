@@ -136,7 +136,7 @@ export default function KpiPage() {
             <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Ringkasan</p>
             <h1 className="text-2xl font-semibold text-foreground">KPI Perusahaan</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              5 KPI awal (Margin, Biaya/unit, Laba Operasional, Yield, Nilai Persediaan) -- baseline dulu, target kemudian. Klik ikon ⓘ di tiap kartu untuk detail lengkap.
+              6 KPI awal (Margin, Margin %, Biaya/unit, Laba Operasional, Yield, Nilai Persediaan) -- baseline dulu, target kemudian. Klik ikon ⓘ di tiap kartu untuk detail lengkap.
             </p>
           </div>
           <Link href="/kpi/saya" className="text-sm font-medium text-primary underline underline-offset-2">
@@ -150,12 +150,12 @@ export default function KpiPage() {
           <Card>
             <CardHeader>
               <CardDescription className="uppercase tracking-[0.2em]">Belum Ada KPI</CardDescription>
-              <CardTitle className="text-lg">{isCompanyLeadership(role) ? 'Seed 5 KPI awal untuk memulai' : 'Tidak ada KPI yang bisa Anda lihat dari role ini'}</CardTitle>
+              <CardTitle className="text-lg">{isCompanyLeadership(role) ? 'Seed 6 KPI awal untuk memulai' : 'Tidak ada KPI yang bisa Anda lihat dari role ini'}</CardTitle>
             </CardHeader>
             {isCompanyLeadership(role) ? (
               <CardContent className="flex flex-col gap-2">
                 <Button size="sm" className="w-fit" disabled={seeding} onClick={handleSeed}>
-                  {seeding ? 'Menjalankan...' : 'Seed 5 KPI Awal'}
+                  {seeding ? 'Menjalankan...' : 'Seed 6 KPI Awal'}
                 </Button>
                 {seedMessage ? <p className="text-xs text-muted-foreground">{seedMessage}</p> : null}
               </CardContent>

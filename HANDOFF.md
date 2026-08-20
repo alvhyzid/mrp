@@ -4,10 +4,14 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
-## Kerja otonom A-F (±2 jam) — 26 Agu 2026 — STATUS: A & B SELESAI, C-F menyusul di bawah
+## Kerja otonom A-F (±2 jam) — 26 Agu 2026 — STATUS: A/B/C SELESAI, D/E/F BELUM (waktu habis)
 
 Instruksi eksplisit: kerjakan berurutan tanpa koordinasi, berhenti di titik aman,
 catat posisi persis, jangan improvisasi fakta bisnis (tapi keputusan TEKNIS boleh).
+Bagian B ternyata jauh lebih memakan waktu dari perkiraan (3 percobaan migrasi,
+2 bug baru ditemukan+diperbaiki lewat uji staging sungguhan) -- Bagian D/E/F
+(kerangka MLVT, dokumentasi formula, Master Dokumen lanjutan) BELUM dikerjakan,
+dicatat sebagai antrean sesi berikutnya, BUKAN diabaikan.
 
 ### A. Target GPM 35% dicabut — SELESAI
 Migrasi `20260826140000_remove_gpm_35_target.sql` — `kpi_registry.target_value`
@@ -89,8 +93,56 @@ ke kondisi sebelum diuji (hanya "Staging Verify Co" tersisa, tidak berubah).
 | work_centers | 3 | **3 (TIDAK BERUBAH)** |
 
 `npx tsc --noEmit` bersih. `npm test` PENUH dijalankan ULANG setelah dev
-benar-benar kosong (bukan cuma sebelum) -- hasil dicatat di bagian C di bawah
-begitu selesai (sedang berjalan saat catatan ini ditulis).
+benar-benar kosong (bukan cuma sebelum) — **192/192 lulus**, 0 baris `companies`
+bocor (self-cleaning tests bekerja sesuai desain).
+
+### C. Uji ketahanan data kosong — SELESAI, TIDAK ADA BUG DITEMUKAN
+
+Diverifikasi via Playwright: login `company.b@debug.mrp` (tenant uji terpisah,
+BUKAN akun yang menunjuk data nyata — sesuai instruksi), kunjungi 26 halaman
+utama (Ringkasan, Kamus, PO Client, Sales Order, BOM, Routing, Work Order, PO
+Supplier, Warehouse, Item Master, Pengiriman, PPIC, Produksi, HR, Absensi, Laba
+Operasional, KPI Perusahaan, KPI Saya, Master Dokumen, Apa yang Baru, Kesiapan
+AI, Dashboard Proyek AI, Process Mining, Data Perusahaan, Tim, Profil). **Hasil:
+0 error console, 0 "NaN", 0 "undefined" tampil di layar, 0 halaman blank, semua
+HTTP 200.** Spot-check visual manual pada halaman paling berisiko (BOM, Work
+Order, KPI, Warehouse Dashboard) — semua menampilkan pesan kosong yang jelas dan
+membantu ("Belum ada BOM.", "Belum ada Work Order.", "Tidak ada peringatan
+terbuka saat ini.", "Seed 6 KPI Awal untuk memulai" dgn tombol aksi) — bukan
+tabel kosong tanpa keterangan.
+
+**1 temuan kecil, diperbaiki**: `KpiPage.tsx` masih menyebut "5 KPI awal" di
+teks deskripsi/tombol (stale sejak KPI ke-6 Margin Kontribusi % ditambahkan 25
+Agu 2026) — diperbaiki jadi "6 KPI awal" (2 tempat: teks deskripsi + label
+tombol seed). BUKAN bug data-kosong, ditemukan kebetulan saat spot-check.
+
+**1 temuan data, dibersihkan (bukan bug kode)**: `company.b@debug.mrp` TERNYATA
+tidak benar-benar kosong sebelum diuji — ada sisa 9 baris data uji POD dari sesi
+lampau (item "PODTEST-B-ITEM", customer/plant "Company B POD Test...", 1 SO, 1
+CPO, 2 shipment, 1 lot) yang sebelumnya tidak pernah dibersihkan. Dibersihkan
+tuntas (urutan FK-safe manual, 12 tabel) sebelum uji ulang — `company.b@debug.mrp`
+sekarang BENAR-BENAR kosong, hasil uji di atas dari kondisi bersih ini. **Catatan
+untuk sesi mendatang**: kalau memakai `company.b@debug.mrp` untuk uji coba lagi,
+jangan lupa bersihkan sisa setelah selesai (pelajaran yang sama berulang kali
+sesi ini).
+
+`npx tsc --noEmit` bersih setelah perbaikan `KpiPage.tsx` (perubahan teks murni,
+tidak perlu re-run `npm test` penuh — tidak ada logika yang berubah).
+
+### D-F — BELUM DIKERJAKAN, antrean sesi berikutnya
+
+- **D. Kerangka studi kasus MLVT** (customer, SO/PO 043/6-ITM/2026, produk MLVT
+  ETAWAFIT, struktur BOM 4 premix + formula utama, kolom "Amount to Add") — BELUM
+  dimulai. Kemasan Etawa Fit (Box + Sachet Roll) SUDAH ada di stok (tidak
+  tersentuh reset Bagian B, sesuai instruksi) — siap dipakai begitu item MLVT
+  dibuat.
+- **E. Dokumentasi** (`docs/formula-mlvt-etawa-v1.md`, koreksi angka kepala
+  `docs/saldo-awal-gudang-karanglo-180826.md` Rp237.374.438→Rp233.686.422 +
+  catatan "data ini sudah tidak dimuat di sistem, arsip") — BELUM dimulai.
+  `docs/routing-serbuk-10-tahap-referensi.md` (dari Bagian B) SUDAH jadi bagian
+  dari dokumentasi ini, siap dipakai Bagian D.
+- **F. Master Dokumen lanjutan** — BELUM dimulai (MD-1 dari sesi sebelumnya sudah
+  jalan, tinggal cek apakah masih ada default yang perlu dikoreksi).
 
 ---
 

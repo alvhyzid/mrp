@@ -93,10 +93,13 @@ Undangan company_admin/manager ke calon anggota tim baru.
 ## Kelompok 2: Master Data Produksi
 
 ### `production_plants`
-Satu company bisa punya beberapa lokasi pabrik fisik berbeda (mis. PT ITM: 2 lokasi produksi gummy, 1 lokasi produksi minuman serbuk). Rujukan lokasi untuk mesin, stok, tenaga kerja, dan work order. **Untuk saat ini, 1 plant = 1 gudang** (tidak perlu tabel `warehouses` terpisah — bisa direvisit kalau nanti 1 plant butuh multi-gudang fisik).
+Satu company bisa punya beberapa lokasi pabrik fisik berbeda. Rujukan lokasi untuk mesin, stok, tenaga kerja, dan work order. **Untuk saat ini, 1 plant = 1 gudang** (tidak perlu tabel `warehouses` terpisah — bisa direvisit kalau nanti 1 plant butuh multi-gudang fisik).
 - `production_plant_id`, `company_id`, `name`, `address`
 - `product_focus` (nullable, teks bebas — mis. "gummy", "powder_drink") — dipakai sebagai **saran/default cerdas** saat memilih plant pada aksi "Process" PO→SO, BUKAN validasi keras yang memblokir pilihan lain
-- `is_active`
+- `is_active` — plant `is_active=false` DIKECUALIKAN dari kalkulasi kapasitas/perencanaan, dan `createWorkOrder` MENOLAK pembuatan Work Order di plant ini (400, pesan eksplisit)
+- `alias_notes` (nullable, 27 Agu 2026) — sebutan lain di lapangan untuk plant yang sama (mis. "KL Bizhub (Karanglo)" dikenal juga sebagai "Gudang KL BIZ" di dokumen stock opname dan "Karanglo" sehari-hari)
+
+> **PT ITM (27 Agu 2026, setelah konsolidasi) — 3 plant nyata:** (1) **Ruko Dieng** — produksi Gummy, beroperasi; (2) **Puncak Dieng** — produksi Gummy, `is_active=false` (BELUM beroperasi); (3) **KL Bizhub (Karanglo)** — produksi Minuman Serbuk, beroperasi. Sebelumnya sistem sempat punya 4 baris plant (termasuk "Karanglo" dan "KL Bizhub" sebagai 2 baris terpisah padahal 1 lokasi fisik yang sama, dan "Pabrik Utama PT ITM" — sisa demo lama, 33 karyawan nonaktif + 2 work_center tak terpakai, dihapus total) — digabung/dibereskan lewat migrasi `20260827090000_consolidate_production_plants.sql`.
 
 ### `shifts`
 Definisi shift kerja pabrik (mis. Shift Pagi 07:00-15:00, Shift Malam 15:00-23:00) — per lokasi pabrik, karena jam kerja bisa beda antar lokasi.
@@ -174,9 +177,11 @@ Master data mesin/stasiun kerja — fisiknya ada di SATU lokasi pabrik.
 
 ### `routings`
 Header urutan tahapan produksi per item — sengaja TETAP generik (tidak diikat 1 plant), dianggap sama di semua lokasi yang memproduksi item itu. Master data yang dipakai ULANG lintas banyak Work Order (persis BOM) — bukan didefinisikan ulang tiap WO.
-- `routing_id`, `company_id`, `item_id`, `version`, `status` (draft / active / archived)
+- `routing_id`, `company_id`, `item_id`, `version`
 
-> **Edit = versi baru, BUKAN menimpa data lama:** kalau estimasi durasi tahap perlu diperbarui (mis. "Mixing" ternyata cuma 20 menit, bukan 1 jam seperti rencana awal) SETELAH routing berstatus `active` (sudah dipakai WO), buat baris `routings` baru dengan `version` naik + `routing_steps` baru, lalu `status` versi lama diubah jadi `archived`. WO yang SUDAH ADA tetap merujuk `routing_id` versi lamanya (riwayat tidak berubah), WO BARU otomatis pakai versi `active` terbaru. Kalau routing masih `draft` (belum pernah dipakai WO manapun), boleh diedit langsung di tempat tanpa perlu versi baru.
+> **DRIFT DOKUMENTASI (ditemukan 27 Agu 2026, saat membangun kerangka studi kasus MLVT):** paragraf di bawah ini mendeskripsikan `status` (draft/active/archived) sebagai bagian skema `routings` — tapi kolom itu TIDAK PERNAH benar-benar dibuat di migrasi manapun yang terpasang (dicek langsung, hanya `routing_id`/`company_id`/`item_id`/`version` yang ada). Tidak jelas apakah ini rencana yang belum sempat diimplementasikan atau deskripsi yang salah tulis sejak awal. Perilaku "edit = versi baru" di paragraf ini TIDAK bisa ditegakkan otomatis tanpa kolom status — saat ini murni konvensi manual (siapa pun yang mengedit routing yang sudah dipakai WO harus INGAT membuat versi baru sendiri, sistem tidak mencegah edit langsung). Di luar cakupan Bagian D (kerangka MLVT) untuk menambah kolom ini — dicatat di sini supaya tidak ditemukan ulang dari nol; keputusan menambah kolom `status` sungguhan (dan migrasi data existing routing ke situ) menunggu pemilik produk.
+
+> **Edit = versi baru, BUKAN menimpa data lama (niat desain, lihat catatan drift di atas):** kalau estimasi durasi tahap perlu diperbarui (mis. "Mixing" ternyata cuma 20 menit, bukan 1 jam seperti rencana awal) SETELAH routing berstatus `active` (sudah dipakai WO), buat baris `routings` baru dengan `version` naik + `routing_steps` baru, lalu `status` versi lama diubah jadi `archived`. WO yang SUDAH ADA tetap merujuk `routing_id` versi lamanya (riwayat tidak berubah), WO BARU otomatis pakai versi `active` terbaru. Kalau routing masih `draft` (belum pernah dipakai WO manapun), boleh diedit langsung di tempat tanpa perlu versi baru.
 
 ### `routing_steps`
 - `routing_step_id`, `routing_id`, `sequence_no`, `step_name`
@@ -274,6 +279,7 @@ PO dari client — TERPISAH dari `sales_orders`. Statusnya berjalan sebelum jadi
 - `status` (new / on_hold / cancelled / processed) — `new` → `processed` HANYA boleh terjadi kalau ketiga baris `customer_po_approvals` berstatus `approved`
 - `payment_terms` (full / tempo), `payment_status` (pending / partial / confirmed)
 - `processed_by` (nullable, → `user_id`), `processed_at`
+- `notes` (nullable, 27 Agu 2026) — konteks non-finansial yang tidak tertampung kolom lain (mis. siapa yang mengajukan dari sisi internal, catatan penyesuaian tanggal dokumen). Ditambahkan saat kerangka studi kasus MLVT ETAWAFIT dibangun (`20260827120000_mlvt_case_study_skeleton.sql`).
 - Line: `customer_purchase_order_line_id`, `customer_purchase_order_id`, `item_id` (SETIAP VARIAN kemasan/ukuran = `item_id` terpisah), `qty_ordered`, `unit_price` (harga jual disepakati — nilai sensitif, lihat "Kontrol Akses Data Finansial")
 
 ### `customer_po_approvals`

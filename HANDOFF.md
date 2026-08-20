@@ -4,7 +4,7 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
-## Kerja otonom A-F (±2 jam) — 26 Agu 2026 — STATUS: A/B/C SELESAI, D/E/F BELUM (waktu habis)
+## Kerja otonom A-F (±2 jam) — 26-27 Agu 2026 — STATUS: A/B/C/D/E/F SELESAI, konsolidasi plant SELESAI
 
 Instruksi eksplisit: kerjakan berurutan tanpa koordinasi, berhenti di titik aman,
 catat posisi persis, jangan improvisasi fakta bisnis (tapi keputusan TEKNIS boleh).
@@ -129,20 +129,95 @@ sesi ini).
 `npx tsc --noEmit` bersih setelah perbaikan `KpiPage.tsx` (perubahan teks murni,
 tidak perlu re-run `npm test` penuh — tidak ada logika yang berubah).
 
-### D-F — BELUM DIKERJAKAN, antrean sesi berikutnya
+### Konsolidasi production_plants — 27 Agu 2026 — SELESAI
 
-- **D. Kerangka studi kasus MLVT** (customer, SO/PO 043/6-ITM/2026, produk MLVT
-  ETAWAFIT, struktur BOM 4 premix + formula utama, kolom "Amount to Add") — BELUM
-  dimulai. Kemasan Etawa Fit (Box + Sachet Roll) SUDAH ada di stok (tidak
-  tersentuh reset Bagian B, sesuai instruksi) — siap dipakai begitu item MLVT
-  dibuat.
-- **E. Dokumentasi** (`docs/formula-mlvt-etawa-v1.md`, koreksi angka kepala
-  `docs/saldo-awal-gudang-karanglo-180826.md` Rp237.374.438→Rp233.686.422 +
-  catatan "data ini sudah tidak dimuat di sistem, arsip") — BELUM dimulai.
-  `docs/routing-serbuk-10-tahap-referensi.md` (dari Bagian B) SUDAH jadi bagian
-  dari dokumentasi ini, siap dipakai Bagian D.
-- **F. Master Dokumen lanjutan** — BELUM dimulai (MD-1 dari sesi sebelumnya sudah
-  jalan, tinggal cek apakah masih ada default yang perlu dikoreksi).
+Dikerjakan SEBELUM Bagian D (blocker eksplisit: MLVT harus menunjuk plant yang
+benar). Migrasi `20260827090000_consolidate_production_plants.sql`. Kondisi
+sebelum: 4 baris plant (Pabrik Utama PT ITM, Karanglo, Ruko Dieng, KL Bizhub).
+Investigasi referensi PENUH dilakukan dulu (karyawan/homebase, work_center,
+routing_steps, production_disruptions, attendance) sebelum tindakan apa pun,
+temuan dilaporkan ke pemilik produk, 2 pertanyaan dikonfirmasi via AskUserQuestion
+sebelum eksekusi (disposisi "Pabrik Utama PT ITM", kepindahan Sandra Wedi Pradika).
+
+Hasil: **3 plant** — Ruko Dieng (Gummy, aktif, 18 karyawan) · Puncak Dieng (Gummy,
+`is_active=false`, belum beroperasi, baru dibuat) · **KL Bizhub (Karanglo)**
+(Minuman Serbuk, aktif, 12 karyawan = 10 PHL eks-Karanglo + Sandra Wedi Pradika +
+Angga Ade Mahendra eks-KL Bizhub, 1 work_center Mesin Filling Sachet). "Pabrik
+Utama PT ITM" DIHAPUS TOTAL setelah dikonfirmasi: 33 karyawan SEMUA
+`is_active=false` (demo lama, pola nama depan generik yang jadi cikal-bakal nama
+lengkap di Ruko Dieng, mis. "Alvan"→"Alvan Handyka Yudha") + 2 work_center 0
+`routing_steps` + nol jejak di `employee_attendance`/`leave_requests`/
+`work_order_assignments`. Kolom baru `production_plants.alias_notes` (nullable)
+menyimpan 3 sebutan lapangan untuk KL Bizhub (Karanglo). `createWorkOrder` sekarang
+menolak WO di plant `is_active=false` (400, pesan eksplisit); dropdown plant di
+`WorkOrdersPage` difilter ke plant aktif saja. Test: `tests/production_plants.test.ts`
+(3 skenario: WO ditolak di plant tidak aktif, WO ditolak referensi plant terhapus,
+WO berhasil di plant aktif). Docs (`rancangan-skema-database-mrp.md`,
+`daftar-database-sederhana.md`) diperbarui.
+
+### D. Kerangka Studi Kasus MLVT — 27 Agu 2026 — SELESAI
+
+Migrasi `20260827120000_mlvt_case_study_skeleton.sql` (idempoten, dibuktikan
+dengan re-run 2x tanpa duplikat). Dibuat: customer "PT. Sastro Utama Media Grup" ·
+PO client 182/RND/SUMG/VI/2026 + SO **043/6-ITM/2026** (2.500 box @ Rp23.000,
+plant KL Bizhub (Karanglo), status `processed`, 3 approval department disetujui) ·
+8 item BARU (4 premix WIP: PMBASE/PMSPC/PMHOT/PMSW-MLVT/001ITM · WIP Sachet ·
+FG "MLVT ETAWAFIT" dgn NIE BPOM · 2 kemasan: Sachet Roll Etawa Fit [base_uom
+"sachet", factor 3333,333333/roll] + Box Etawa Fit) — **item bahan baku SENGAJA
+TIDAK dibuat** sesuai instruksi eksplisit, pemilik produk akan input manual · BOM
+Box LENGKAP (2 baris, `status='active'`) · BOM Sachet 4/6 baris terisi (Castor
+Sugar & Zeofree menunggu item bahan baku) · BOM 4 premix KERANGKA (0 baris,
+seluruh komponennya bahan baku) · routing Sachet+Box 10 tahap disalin PERSIS dari
+`docs/routing-serbuk-10-tahap-referensi.md` (termasuk `production_standards`
+level-item & level-tahap, nilai sama seperti Drinkme lama sebagai titik awal).
+
+**TEMUAN TEKNIS PENTING** (diperbaiki, bukan sekadar dicatat): `computeStandardCostPerUnit`/
+`computeStandardLaborCostPerUnit`/`explodeBomRequirements`/`getMarginWatch` HANYA
+menelusuri BOM `status='active'` — kalau BOM Sachet dibiarkan `draft` (status yang
+"jujur" untuk BOM belum lengkap), SELURUH baris di baliknya (4 premix + kemasan
+sachet roll) tidak akan pernah tereksplorasi sama sekali, termasuk kontribusi
+kemasan Rp4.698,50/box yang jadi target verifikasi eksplisit pemilik produk. BOM
+Sachet SENGAJA diset `active` walau 2 baris belum lengkap; ketidaklengkapan tetap
+jujur ditampilkan lewat `missingCostItemCodes` (mekanisme yang sudah ada), BUKAN
+lewat status BOM. Diverifikasi manual: `packagingCostPerUnit` = **Rp7.198,50 TEPAT**
+(target pemilik produk), `complete=false`, 4 premix ditandai belum ada harga.
+
+Drift dokumentasi ditemukan (di luar cakupan untuk diperbaiki, dicatat): kolom
+`routings.status` (draft/active/archived) didokumentasikan di
+`rancangan-skema-database-mrp.md` tapi TIDAK PERNAH benar-benar dibuat di migrasi
+manapun — `daftar-database-sederhana.md` sudah benar menandainya
+"[RENCANA — BELUM DIBANGUN]", `rancangan-skema-database-mrp.md` sudah diperbaiki
+sesi ini supaya konsisten. Test: `tests/mlvt_case_study_skeleton.test.ts` (4
+skenario: biaya kemasan tepat, routing tersalin persis, PO duplikat ditolak,
+proses-ulang PO processed ditolak fungsi DB).
+
+### E. Dokumentasi — 27 Agu 2026 — SELESAI
+
+`docs/formula-mlvt-etawa-v1.md` dibuat (formula verbatim, formulator Dhiska, 14
+Agu 2026, status Production, termasuk status kelengkapan tiap baris BOM di
+database supaya tidak perlu ditebak ulang saat bahan baku diinput). Header
+`docs/saldo-awal-gudang-karanglo-180826.md` dikoreksi (Rp237.374.438 →
+Rp233.686.422, dengan catatan koreksi + alasan) dan diberi catatan arsip ("tidak
+lagi dimuat di sistem sejak reset Bagian B, dipertahankan sebagai referensi") —
+baris tabel datanya TIDAK disentuh.
+
+### F. Master Dokumen lanjutan — DICEK, SUDAH SELESAI dari sesi sebelumnya
+
+MD-1 (migrasi `20260826110000_master_dokumen_md1.sql`, fitur `src/features/documents/`)
+sudah lengkap dan lulus test (`tests/master_dokumen_md1.test.ts`): retensi arsip
+tanpa hard delete, xlsx/docx unduh, hapus berkas yatim dibatasi `company_admin`,
+sensitivity UMUM/DEPARTEMEN/TERBATAS (dokumen HRD default TERBATAS + log akses),
+9 jenis dokumen dari seed, pengingat kedaluwarsa 90/60/30 hari
+(`seedDocumentTypes.ts`). Tidak ada pekerjaan tersisa yang teridentifikasi.
+
+**Cek ringan anomali kpi_registry (instruksi: jangan buang waktu berlebihan)**:
+digrep seluruh `tests/*.ts` untuk `delete` terhadap `kpi_registry`/`kamus_terms`
+— hanya 2 file (`ai_readiness.test.ts`, `ai_project_dashboard.test.ts`) yang
+menghapus baris di tabel itu, dan KEDUANYA scoped ke `company_id` fixture
+terisolasi milik tes itu sendiri (`AiReadinessTestCorpA/B`,
+`AiProjectDashboardTestCorp`), tidak pernah menyentuh company_id=1. Tidak
+ditemukan kandidat penyebab di test suite saat ini — penyebab tetap tidak
+terlacak, konsisten dengan laporan Bagian A sebelumnya.
 
 ---
 

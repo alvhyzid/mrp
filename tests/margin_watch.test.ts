@@ -210,6 +210,12 @@ describe('Margin Watch — baseline (Lapis 1) + selisih 5 kategori (Lapis 2)', (
     // dijumlah ke mana pun (bukan diam-diam dianggap 0).
     expect(body.standard_packaging_cost_per_unit).toBeCloseTo(1500, 2);
     expect(body.standard_material_cost_per_unit).toBeCloseTo(0, 2);
+    // Rincian PER KOMPONEN (27 Agu 2026, Bagian D MLVT) -- bukan cuma total lump-sum.
+    expect(body.packaging_breakdown).toHaveLength(1);
+    expect(body.packaging_breakdown[0].item_code).toBe('MARGINWATCH-BOX');
+    expect(body.packaging_breakdown[0].qty_per_unit_output).toBeCloseTo(1, 4);
+    expect(body.packaging_breakdown[0].unit_cost).toBeCloseTo(1500, 2);
+    expect(body.packaging_breakdown[0].cost_per_unit_output).toBeCloseTo(1500, 2);
     // Fixture tidak punya routing/kru standar utk item ini -> SDM standar
     // tetap dihitung (sebagai 0, bukan null) TAPI ditandai labor_cost_complete
     // false dengan catatan eksplisit kenapa (pola sama dgn cost_data_complete).

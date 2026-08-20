@@ -2,7 +2,24 @@
 
 **Sumber:** `GUDANGKL180826.pdf` (stok opname pabrik) — plant Karanglo = produksi MINUMAN SERBUK. Data plant Ruko Dieng (gummy) menyusul.
 **Aturan nilai:** `unit_cost` lot = Total Biaya ÷ Kuantitas (presisi penuh, TANPA pembulatan saat simpan). Satuan bahan = gram; kemasan = pcs/roll. **Expiry date TIDAK tersedia di laporan** → lot saldo awal dibuat tanpa expiry (FEFO buta untuk lot-lot ini; bisa dilengkapi menyusul lewat edit lot).
-**Rekonsiliasi:** total 2.823.468 unit / Rp237.374.438 — cocok dengan laporan sumber.
+**Rekonsiliasi:** total 2.823.468 unit / ~~Rp237.374.438~~ **Rp233.686.422** — cocok
+dengan laporan sumber.
+
+> **KOREKSI (27 Agu 2026):** Rp237.374.438 adalah salah tulis pada header laporan
+> sumber sendiri — tidak cocok dengan penjumlahan baris-barisnya sendiri (selisih
+> ~Rp3,69 juta). Angka Rp233.686.422 adalah hasil penjumlahan ulang seluruh baris di
+> tabel bagian 1 di bawah, dan sudah dikonfirmasi rekonsiliasi PENUH (sampai ke rupiah)
+> terhadap total nilai persediaan sistem sebelum reset (Rp270.766.422,02 = Rp233.686.422
+> gudang Karanglo + Rp35.880.000 Sachet Drinkme + Rp1.200.000 Plastic Wrap Box, dua item
+> terakhir di luar cakupan dokumen ini). Baris-baris tabel di bawah TIDAK diubah — ini
+> koreksi angka header saja.
+>
+> **ARSIP, TIDAK LAGI DIMUAT DI SISTEM:** seluruh data di dokumen ini (termasuk lot yang
+> pernah dibuat darinya) DIHAPUS dari database saat reset total studi kasus 26 Agu 2026
+> (migrasi `20260826210000_total_reset_case_study.sql`, Bagian B) — studi kasus baru
+> (MLVT ETAWAFIT) mulai dari nol, bahan diinput manual oleh pemilik produk. Dokumen ini
+> DIPERTAHANKAN sebagai arsip referensi kalau saldo gudang Karanglo perlu dimuat ulang ke
+> sistem di masa depan — isinya TIDAK dihapus atau diubah selain koreksi header di atas.
 
 ## 1. Daftar Muat (lot saldo awal, plant Karanglo)
 

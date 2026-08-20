@@ -138,6 +138,27 @@ export async function getMarginWatch(request: NextRequest, salesOrderLineId: num
     }
     explodeRatio(item.item_id, 1);
 
+    // Rincian biaya kemasan PER KOMPONEN (27 Agu 2026, Bagian D MLVT) --
+    // standard_packaging_cost_per_unit di atas cuma TOTAL; leafRatioPerUnit sudah
+    // dihitung untuk kategori 1/2 di bawah, jadi dipakai ulang di sini supaya
+    // pengguna bisa lihat komponen kemasan mana yang menyumbang biaya berapa
+    // (mis. MLVT: 10 sachet x Rp469,85 + 1 box x Rp2.500), bukan cuma angka lump-sum.
+    const packagingBreakdown = [...leafRatioPerUnit.entries()]
+      .map(([leafItemId, ratio]) => {
+        const leafItem = itemById.get(leafItemId);
+        if (!leafItem || leafItem.type !== 'packaging') return null;
+        const unitCost = leafItem.standard_cost !== null && leafItem.standard_cost !== undefined ? Number(leafItem.standard_cost) : null;
+        return {
+          item_code: leafItem.item_code,
+          name: leafItem.name,
+          qty_per_unit_output: ratio,
+          unit_cost: unitCost,
+          cost_per_unit_output: unitCost !== null ? ratio * unitCost : null
+        };
+      })
+      .filter((row): row is { item_code: string; name: string; qty_per_unit_output: number; unit_cost: number | null; cost_per_unit_output: number | null } => row !== null)
+      .sort((a, b) => (b.cost_per_unit_output ?? 0) - (a.cost_per_unit_output ?? 0));
+
     // ===== Kategori 1 — Selisih HARGA bahan/kemasan =====
     const priceCategory = await computePriceVarianceCategory(adminClient, appUser.company_id, leafRatioPerUnit, itemById, qtyOrdered);
 
@@ -178,6 +199,7 @@ export async function getMarginWatch(request: NextRequest, salesOrderLineId: num
         unit_price: Number(snapshot.unit_price),
         standard_material_cost_per_unit: standardMaterialCost,
         standard_packaging_cost_per_unit: standardPackagingCost,
+        packaging_breakdown: packagingBreakdown,
         standard_labor_cost_per_unit: Number(snapshot.standard_labor_cost_per_unit ?? 0),
         labor_cost_complete: snapshot.labor_cost_complete,
         labor_cost_notes: snapshot.labor_cost_notes ?? [],

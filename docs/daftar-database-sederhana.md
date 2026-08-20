@@ -41,7 +41,9 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 ## Kelompok 2: Master Data Produksi
 
 **Database Lokasi Pabrik** (`production_plants`)
-- ID Pabrik (production_plant_id) · ID Perusahaan (company_id) · Nama Lokasi (name) · Alamat (address) · Fokus Produk — saran, bukan pembatas (product_focus) · Status Aktif (is_active)
+- ID Pabrik (production_plant_id) · ID Perusahaan (company_id) · Nama Lokasi (name) · Alamat (address) · Fokus Produk — saran, bukan pembatas (product_focus) · Status Aktif (is_active) — plant tidak aktif dikecualikan dari kapasitas/perencanaan, dan tidak bisa dipakai bikin Work Order
+- Catatan Alias — nullable, 27 Agu 2026, sebutan lain di lapangan untuk lokasi fisik yang sama (alias_notes)
+- PT ITM per 27 Agu 2026: 3 plant — Ruko Dieng (Gummy, aktif) · Puncak Dieng (Gummy, BELUM aktif) · KL Bizhub (Karanglo) (Minuman Serbuk, aktif — gabungan 2 baris lama yang ternyata 1 lokasi fisik sama)
 
 **Database Shift Kerja** (`shifts`)
 - ID Shift (shift_id) · ID Perusahaan (company_id) · ID Lokasi Pabrik (production_plant_id) · Nama Shift (name) · Jam Mulai (start_time) · Jam Selesai (end_time) · Status Aktif (is_active)
@@ -182,6 +184,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 - Syarat Pembayaran (payment_terms) · Status Pembayaran (payment_status)
 - Diproses Oleh (processed_by) · Waktu Diproses (processed_at)
 - Kunci Anti-Duplikat — nullable, cegah submit ganda (idempotency_key)
+- Catatan — nullable, 27 Agu 2026, konteks non-finansial yang tidak tertampung kolom lain (mis. siapa yang mengajukan dari sisi internal) (notes)
 
 **Database Detail Item PO dari Client** (`customer_purchase_order_lines`)
 - ID Baris (customer_purchase_order_line_id) · ID PO Client (customer_purchase_order_id) · ID Item (item_id) · Jumlah Dipesan (qty_ordered)

@@ -93,6 +93,7 @@ type FeasibilityResult = {
 
 type MarginVarianceItem = { item_code: string; name: string; impact: number; detail: string };
 type MarginVarianceCategory = { category: string; label: string; total_impact: number; complete: boolean; incomplete_reason: string | null; items: MarginVarianceItem[] };
+type PackagingBreakdownRow = { item_code: string; name: string; qty_per_unit_output: number; unit_cost: number | null; cost_per_unit_output: number | null };
 type MarginWatchResult = {
   item_code: string;
   item_name: string;
@@ -100,6 +101,7 @@ type MarginWatchResult = {
   unit_price: number;
   standard_material_cost_per_unit: number;
   standard_packaging_cost_per_unit: number;
+  packaging_breakdown: PackagingBreakdownRow[];
   standard_labor_cost_per_unit: number;
   labor_cost_complete: boolean;
   labor_cost_notes: string[];
@@ -514,7 +516,14 @@ export default function SalesOrdersPage() {
                               formula: 'Dari BOM aktif item ini: Σ (qty_per_unit_output tiap komponen × standard_cost komponen tsb pada items), dipisah bahan-baku vs kemasan menurut Item.type.',
                               inputs: [
                                 { label: 'Biaya bahan/unit', value: formatCurrency(marginResult.standard_material_cost_per_unit) },
-                                { label: 'Biaya kemasan/unit', value: formatCurrency(marginResult.standard_packaging_cost_per_unit) }
+                                { label: 'Biaya kemasan/unit', value: formatCurrency(marginResult.standard_packaging_cost_per_unit) },
+                                ...marginResult.packaging_breakdown.map((row) => ({
+                                  label: `↳ ${row.name} (${row.item_code})`,
+                                  value:
+                                    row.unit_cost !== null
+                                      ? `${row.qty_per_unit_output.toLocaleString('id-ID', { maximumFractionDigits: 4 })} × ${formatCurrency(row.unit_cost)} = ${formatCurrency(row.cost_per_unit_output ?? 0)}`
+                                      : `${row.qty_per_unit_output.toLocaleString('id-ID', { maximumFractionDigits: 4 })} × (belum ada harga)`
+                                }))
                               ],
                               sourceDocument: 'docs/spesifikasi-aturan-biaya-v1.md §3'
                             }}

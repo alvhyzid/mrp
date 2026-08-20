@@ -37,7 +37,7 @@ type ProductionBatch = { production_batch_id: number; batch_number: string; plan
 const batchStatusLabels: Record<string, string> = { planned: 'Direncanakan', in_progress: 'Berjalan', completed: 'Selesai', cancelled: 'Batal' };
 const batchStatusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical'> = { planned: 'info', in_progress: 'warning', completed: 'success', cancelled: 'critical' };
 
-const disruptionTypeLabels: Record<string, string> = { equipment_breakdown: 'Mesin Rusak', utility_outage: 'Listrik/Utilitas Padam', external_factor: 'Faktor Eksternal', reprioritized: 'Dialihkan ke Pekerjaan Lain', other: 'Lainnya' };
+const disruptionTypeLabels: Record<string, string> = { equipment_breakdown: 'Mesin Rusak', utility_outage: 'Listrik/Utilitas Padam', external_factor: 'Faktor Eksternal', reprioritized: 'Dialihkan ke Pekerjaan Lain', changeover: 'Ganti Produk (Changeover)', other: 'Lainnya' };
 type ProductionPlant = { production_plant_id: number; name: string };
 type TodayBatch = {
   production_batch_id: number;
@@ -111,6 +111,7 @@ export default function ProductionDashboardPage() {
   const [selectedBatchId, setSelectedBatchId] = useState('');
   const [batchTransitionBusyId, setBatchTransitionBusyId] = useState<number | null>(null);
   const [batchTransitionMessage, setBatchTransitionMessage] = useState('');
+  const [reworkBatchIds, setReworkBatchIds] = useState<Set<number>>(new Set());
 
   const [todaysBatches, setTodaysBatches] = useState<TodayBatch[]>([]);
   const [todaysBatchesLoading, setTodaysBatchesLoading] = useState(true);
@@ -298,7 +299,7 @@ export default function ProductionDashboardPage() {
   const handleCompleteBatch = async (batchId: number) => {
     setBatchTransitionBusyId(batchId);
     setBatchTransitionMessage('');
-    const { ok, body } = await authedFetch('/api/production-batches/complete', { method: 'POST', body: JSON.stringify({ production_batch_id: batchId }) });
+    const { ok, body } = await authedFetch('/api/production-batches/complete', { method: 'POST', body: JSON.stringify({ production_batch_id: batchId, rework: reworkBatchIds.has(batchId) }) });
     setBatchTransitionBusyId(null);
     if (!ok) {
       setBatchTransitionMessage(body.error || 'Gagal menyelesaikan batch.');
@@ -571,6 +572,23 @@ export default function ProductionDashboardPage() {
                               </Button>
                             ) : null}
                             {canRecordStepProgress(role) && b.status === 'in_progress' ? (
+                              <label className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <input
+                                  type="checkbox"
+                                  checked={reworkBatchIds.has(b.production_batch_id)}
+                                  onChange={(e) =>
+                                    setReworkBatchIds((prev) => {
+                                      const next = new Set(prev);
+                                      if (e.target.checked) next.add(b.production_batch_id);
+                                      else next.delete(b.production_batch_id);
+                                      return next;
+                                    })
+                                  }
+                                />
+                                Rework
+                              </label>
+                            ) : null}
+                            {canRecordStepProgress(role) && b.status === 'in_progress' ? (
                               <Button size="sm" disabled={batchTransitionBusyId === b.production_batch_id} onClick={() => handleCompleteBatch(b.production_batch_id)}>
                                 {batchTransitionBusyId === b.production_batch_id ? '...' : 'Selesaikan'}
                               </Button>
@@ -750,9 +768,26 @@ export default function ProductionDashboardPage() {
                             {batchTransitionBusyId === batchId ? 'Memproses...' : 'Mulai Batch'}
                           </Button>
                         ) : selectedBatch.status === 'in_progress' ? (
-                          <Button size="sm" disabled={batchTransitionBusyId === batchId} onClick={() => handleCompleteBatch(batchId)}>
-                            {batchTransitionBusyId === batchId ? 'Memproses...' : 'Selesaikan Batch'}
-                          </Button>
+                          <>
+                            <label className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <input
+                                type="checkbox"
+                                checked={reworkBatchIds.has(batchId)}
+                                onChange={(e) =>
+                                  setReworkBatchIds((prev) => {
+                                    const next = new Set(prev);
+                                    if (e.target.checked) next.add(batchId);
+                                    else next.delete(batchId);
+                                    return next;
+                                  })
+                                }
+                              />
+                              Rework
+                            </label>
+                            <Button size="sm" disabled={batchTransitionBusyId === batchId} onClick={() => handleCompleteBatch(batchId)}>
+                              {batchTransitionBusyId === batchId ? 'Memproses...' : 'Selesaikan Batch'}
+                            </Button>
+                          </>
                         ) : null}
                       </div>
                     );

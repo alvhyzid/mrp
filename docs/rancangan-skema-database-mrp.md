@@ -105,7 +105,7 @@ Definisi shift kerja pabrik (mis. Shift Pagi 07:00-15:00, Shift Malam 15:00-23:0
 ### `production_disruptions`
 Mencatat gangguan operasional yang menyebabkan produksi terhambat/terhenti — mesin rusak, listrik padam, faktor eksternal, ATAU produksi dialihkan ke pekerjaan lain yang lebih mendesak.
 - `production_disruption_id`, `company_id`
-- `disruption_type` (equipment_breakdown / utility_outage / external_factor / reprioritized / other) — `reprioritized` dipakai saat WO di-pause karena dialihkan ke pekerjaan lain
+- `disruption_type` (equipment_breakdown / utility_outage / external_factor / reprioritized / changeover / other) — `reprioritized` dipakai saat WO di-pause karena dialihkan ke pekerjaan lain; `changeover` (25 Agu 2026, tumpangan §5 rencana KPI) dipakai saat waktu produksi habis untuk ganti produk antar batch — membuka KPI backlog SMED (`metric.downtime_persen_pareto`) dengan riwayat sejak dini, bukan menunggu KPI-2 dibangun
 - `production_plant_id` (WAJIB diisi — plant mana yang terdampak, penting untuk kasus menyeluruh di bawah)
 - `work_center_id` (nullable — dikosongkan kalau gangguan MENYELURUH 1 plant, mis. listrik padam se-pabrik, bukan 1 mesin spesifik)
 - `work_order_id` (nullable), `production_batch_id` (nullable), `routing_step_id` (nullable), `shift_id`
@@ -126,14 +126,13 @@ Data pekerja pabrik untuk keperluan biaya SDM — terpisah dari `users`. **Akses
 - **Field finansial baru di atas (PTKP/TER/tunjangan/BPJS) ikut aturan privasi yang SAMA PERSIS dengan `wage_rate`** (lihat "Kontrol Akses Data Finansial") — bukan gerbang baru yang lebih longgar.
 
 ### `employee_attendance`
-Absensi harian umum (jam masuk-pulang) — berlaku untuk SEMUA karyawan termasuk staf kantoran (Finance, HRD sendiri, dst) yang tidak pernah masuk ke Work Order sama sekali. Terpisah dari `work_order_assignments` yang tujuannya beda (biaya produksi, bukan kehadiran). Fondasi awal untuk modul HRD yang akan meluas ke payroll/legal nanti — tidak dibangun sekaligus sekarang.
-- `employee_attendance_id`, `company_id`, `employee_id`
-- `attendance_date`
-- `check_in_at`, `check_out_at` (nullable sampai check-out)
-- `status` (present / late / absent / on_leave / sick)
-- `notes` (nullable)
+Rekap HARIAN kehadiran per karyawan — berlaku untuk SEMUA karyawan termasuk staf kantoran yang tidak pernah masuk ke Work Order. Terpisah dari `work_order_assignments` (tujuannya beda: biaya produksi, bukan kehadiran). **DIPERLUAS 23 Agu 2026 (Absensi Geo-QR Gelombang 1)**: dulu diisi manual, sekarang DIHITUNG ULANG dari `attendance_events` (ledger di bawah) — TIDAK PERNAH diedit field-per-field oleh kode aplikasi lagi.
+- `employee_attendance_id`, `company_id`, `employee_id`, `attendance_date`
+- `check_in_at`, `check_out_at` (nullable sampai check-out) — `notes` (nullable)
+- `status` — DIPERLUAS (union, bukan diganti): 5 nilai lama `present`/`late`/`absent`/`on_leave`/`sick` TETAP VALID (data lama tetap terbaca) + nilai baru `BELUM_HADIR`/`HADIR`/`ISTIRAHAT`/`PULANG`/`TERLAMBAT`/`DI_LUAR_AREA`/`IZIN`/`SAKIT`/`CUTI`/`ALPA`/`KOREKSI_PENDING`
+- **Kolom BARU 23 Agu 2026**: `production_plant_id`, `work_minutes`/`late_minutes`/`overtime_minutes` (dihitung dari kalender kerja `company_settings`, bukan diketik), `source_event_ids` (integer[], jejak event ledger yang membentuk rekap ini), `geofence_status` (`DALAM`/`LUAR`/`TANPA_GPS`), `flags` (jsonb, mis. auto-close lupa clock-out)
 
-> **Akses:** `company_admin` & `hr_manager`/`hr_staff` — akses penuh semua karyawan. Manager tiap department — bisa lihat absensi staf DI department mereka sendiri (`employees.department` yang sama), untuk keperluan perencanaan kerja. Karyawan — cuma bisa lihat/submit absensinya sendiri.
+> **Akses:** `company_admin` & `hr_manager`/`hr_staff` — akses penuh semua karyawan. Manager tiap department — bisa lihat absensi staf DI department mereka sendiri (`employees.department` yang sama). Karyawan — cuma bisa lihat/submit absensinya sendiri. **Digerbang di TypeScript (service-role client), BUKAN di RLS langsung** — RLS tabel ini/turunannya hanya batas company, gerbang per-role lebih halus tetap satu tempat (`listAttendanceByDate` dkk).
 
 ### `company_settings`
 Konstanta yang bisa beda per perusahaan (tenant).
@@ -183,6 +182,35 @@ Header urutan tahapan produksi per item — sengaja TETAP generik (tidak diikat 
 - `active_duration_minutes`, `wait_duration_minutes`
 - `work_center_id` (opsional, referensi ke `work_centers`)
 - `duration_per_unit_minutes` (numeric, nullable) — durasi BERBASIS LAJU untuk tahap yang kecepatannya ditentukan mesin (mis. Filling Sachet: 2 mesin × 15-20 pcs/menit). Kalau terisi, durasi aktif SEBENARNYA tahap ini = qty batch × nilai ini, BUKAN `active_duration_minutes` yang tetap — satu logika ini (`src/features/mrp/server/stepDuration.ts`) WAJIB dipakai konsisten di Gantt, Dashboard Kapasitas, dan detail blok Gantt. NULL = tahap biasa, tetap pakai `active_duration_minutes` (perilaku lama, tidak ada regresi).
+
+### `production_standards` (K8, 18-19 Agu 2026) — DITEMUKAN belum pernah punya entri sendiri di sini walau dirujuk puluhan kali di dokumen ini; dilengkapi 25 Agu 2026
+Standar produksi per item (opsional per `routing_step_id` untuk metrik level-tahap) — dasar
+kapasitas/feasibility/biaya SDM standar di seluruh sistem.
+- `production_standard_id`, `company_id`, `item_id`, `routing_step_id` (nullable — null utk metrik level-item, terisi utk level-tahap)
+- `metric_key` (`yield_percentage`/`unit_per_batch`/`active_duration_minutes`/`batches_per_day` — `batches_per_day` ditambahkan 18 Agu 2026 utk Deteksi Konflik Perencanaan)
+- `value`, `source` (`ESTIMASI_MANUAL`/`DIPELAJARI`), `sample_count`, `last_calculated_at`
+- `pinned`/`pin_reason` — kunci nilai supaya tidak ikut "dipelajari" otomatis
+- `last_approved_by`/`last_approved_at` (19 Agu 2026) — audit ringkas siapa mengesahkan nilai SAAT INI (riwayat lengkap ada di `production_standard_proposals` di bawah)
+- unik `(company_id, item_id, routing_step_id, metric_key)`
+
+> **Flip ESTIMASI_MANUAL→DIPELAJARI BUKAN otomatis** (D.1, 19 Agu 2026) — `propose_production_standard()` HANYA menulis ke `production_standard_proposals`, tidak pernah menyentuh `value`/`source` langsung; penerapan cuma lewat `decide_production_standard_proposal()` (planner: `ppic_manager`/leadership). **Median untuk sampel kecil** (D.2): n<10 pakai `percentile_cont(0.5)` tanpa buang outlier (tidak bermakna statistik di n kecil); n≥10 baru mean + buang outlier ±2σ.
+
+### `production_standard_proposals`
+Riwayat LENGKAP usulan flip standar — 1 baris per usulan, disetujui/ditolak eksplisit oleh planner.
+- `production_standard_proposal_id`, `company_id`, `item_id`, `routing_step_id`
+- `metric_key`, `old_value`/`old_source`, `proposed_value`
+- `calculation_method` (`median`/`mean_trimmed`), `sample_count`
+- `status` (`pending`/`approved`/`rejected`), `created_at`/`updated_at`, `decided_by`/`decided_at`
+
+### `production_standard_samples`
+Sampel mentah (satu baris per batch/observasi) yang menjadi dasar `proposed_value` di atas.
+- `production_standard_sample_id`, `company_id`, `item_id`
+- `routing_step_id` (nullable, ditambahkan 19 Agu 2026 — TANPA ini sampel durasi dari tahap BERBEDA pada item yang sama akan tercampur jadi satu rolling window yang salah)
+- `metric_key`, `sample_value`, `recorded_at`
+
+### `production_standard_exclusions`
+Batch yang GAGAL gerbang kelengkapan (D.3, 19 Agu 2026) — log tercatat dilaporkan, BUKAN dilewati diam-diam (sekaligus indikator disiplin pengisian data tahap).
+- `production_standard_exclusion_id`, `company_id`, `production_batch_id`, `item_id`, `reason`, `missing_routing_step_ids` (integer[]), `created_at`
 
 ### `formula_templates`
 Menyimpan "Base Formula" sebagai referensi murni untuk R&D — TIDAK terhubung fungsional ke produksi.
@@ -328,6 +356,7 @@ Level eksekusi NYATA di lantai produksi — 1 Work Order biasanya dikerjakan lew
 - `planned_date` (date, nullable — kapan batch ini SEHARUSNYA dikerjakan, diisi PPIC saat bikin batch. Beda dari `started_at` yang baru terisi setelah benar-benar mulai — ini yang jadi acuan Dashboard Kapasitas Work Center, bukan `started_at`/`created_at`, supaya perencanaan ke depan/minggu depan terhitung benar)
 - `status` (planned / in_progress / completed / cancelled)
 - `started_at`, `completed_at`
+- `rework` (boolean, default false, 25 Agu 2026 — tumpangan §5 rencana KPI) — ditandai operator/SPV saat "Selesaikan Batch" kalau batch ini reproses ulang; dasar KPI backlog `metric.rejection_persen`/FPY nanti (KPI-2/3, belum dibangun), tapi datanya mulai terekam SEKARANG supaya punya riwayat sejak dini.
 
 ### `work_orders`
 Perintah produksi (SPK) — jantung eksekusi MRP, level rencana besar (bisa dipecah jadi banyak `production_batches`).
@@ -386,6 +415,16 @@ Peringatan otomatis dari sistem.
 
 > **`margin_threshold_breach` (Margin Watch, 20 Agu 2026) — overload `related_po_id` beda dari alert lain.** Alert ini terkait `sales_order_line`, BUKAN `work_order`/`item`, jadi `related_po_id` (kolom fleksibel tanpa FK) dipakai menyimpan `sales_order_line_id` untuk tipe ini secara khusus — ditulis lewat fungsi mandiri `upsert_margin_threshold_alert()`, BUKAN `upsert_department_alert()`/`resolve_department_alerts()` yang dipakai alert lain (keduanya, sejak migration `20260819150000` audit keamanan, mengharuskan `related_work_order_id`/`related_item_id` untuk menurunkan `company_id` — diam-diam tidak melakukan apa pun kalau keduanya NULL, persis kasus alert margin). `target_department` = `finance` + `management` (2 baris).
 
+### `status_transition_rules` (16 Agu 2026) — DITEMUKAN sudah ada di `daftar-database-sederhana.md` tapi belum di dokumen ini; dilengkapi 25 Agu 2026
+Daftar transisi status yang SAH per tabel — ditegakkan LANGSUNG di database lewat trigger, bukan cuma di kode aplikasi, jadi tidak bisa dilewati walau lewat koneksi service-role sekalipun.
+- `status_transition_rule_id`, `table_name`, `from_status`, `to_status`
+- Diterapkan ke 5 tabel: `customer_purchase_orders`, `sales_orders`, `work_orders`, `production_batches`, `customer_po_approvals`. Contoh transisi yang DITOLAK trigger: PO Client `Batal` → `Sudah Diproses`.
+
+### `status_transition_log`
+Audit trail terpusat, dicatat OTOMATIS oleh trigger yang sama setiap kali ada transisi status yang sah — beda dari kolom `approved_by`/`acknowledged_by` per tabel yang cuma menyimpan aksi TERAKHIR (riwayat sebelumnya tertimpa hilang).
+- `status_transition_log_id`, `company_id`, `table_name`, `record_id`
+- `from_status`, `to_status`, `changed_by` (nullable), `changed_at`, `reason` (nullable)
+
 ---
 
 ## Kelompok 6: Billing
@@ -395,13 +434,144 @@ Peringatan otomatis dari sistem.
 
 ---
 
-## Kelompok 7: KPI (KPI-1, 25 Agu 2026)
+## Kelompok 7: Kamus (K1, 21 Agu 2026)
+
+docs/rencana-modul-kamus-paralel.md. Antrean internal supaya pemilik produk & tim
+menjelaskan MAKNA kolom/metrik data secara paralel — BUKAN sistem AI (tanpa panggilan
+LLM), draf awal ditulis Claude Code manual.
+
+### `kamus_terms`
+- `kamus_term_id`, `company_id`, `scope` (`FIELD`/`METRIC`/`RELATION`/`RULE`)
+- `entity` (nama tabel, FIELD/RELATION), `field` (nama kolom, FIELD saja) — null selain itu
+- `term_key` (unik dibaca manusia, mis. `bom_lines.qty_per_unit_output` / `metric.margin_kontribusi`) — unik `(company_id, term_key)`
+- `priority` (1-5), `domain` (`uang`/`kuantitas`/`status`/`standar`/`proses`/`lainnya`)
+- `suggested_role` (teks bebas, BUKAN FK — proyek ini tidak punya tabel `roles` terpisah)
+- `status` (`BELUM`/`DRAF_AI`/`DIJAWAB`/`DIKONFIRMASI`/`TIDAK_RELEVAN`), `ai_draft`
+- `answer_plain`/`answer_pitfall`/`answer_range`, `answered_by`/`answered_at`, `confirmed_by`/`confirmed_at`
+- `assigned_to_role`, `assigned_note`, `created_at`/`updated_at`, `version`
+
+### `kamus_term_history`
+Audit trail — SATU-SATUNYA preseden pola "riwayat per-field" di proyek ini sebelum
+`kpi_registry_history` (Kelompok 11) meniru pola yang sama. Diisi OTOMATIS oleh trigger
+`kamus_terms_track_history()` (BEFORE UPDATE), bukan ditulis manual dari server function.
+- `kamus_term_history_id`, `kamus_term_id`, `changed_by`, `changed_at`, `field_changed`, `old_value`, `new_value`
+
+### `kamus_routing_rules`
+Aturan routing "kolom bernama begini → sarankan department X menjawab", dipakai generator backlog.
+- `kamus_routing_rule_id`, `company_id`, `domain`, `entity_pattern` (pola nama tabel/kata kunci), `suggested_role`, `rationale`, `created_at`
+
+> **Akses**: SELECT terbuka untuk semua staf company (antrean = hak semua orang tahu jawab). TIDAK ADA policy INSERT/UPDATE untuk `authenticated` sama sekali (default deny) — SEMUA tulis lewat server function pakai admin client dengan gerbang role di TypeScript.
+
+---
+
+## Kelompok 8: Dashboard Proyek AI (K1b, 21 Agu 2026)
+
+docs/instruksi-dashboard-proyek-ai.md. Alat internal LEADERSHIP-ONLY (company_admin/
+general_manager) — progres roadmap fitur AI dari data nyata, bukan kira-kira.
+
+### `ai_project_phases`
+- `ai_project_phase_id`, `company_id`, `code`, `name`, `description`, `weight_percent`, `sort_order`, `status` (`BELUM`/`BERJALAN`/`SELESAI`/`DITUNDA`) — unik `(company_id, code)`
+
+### `ai_project_tasks`
+- `ai_project_task_id`, `company_id`, `ai_project_phase_id`, `code`, `name`, `description`
+- `weight_percent` (bobot DI DALAM fase, jumlah per fase = 100)
+- `owner_type` (`PEMILIK_PRODUK`/`TIM`/`CLAUDE_CODE`/`CAMPURAN`), `suggested_role`
+- `progress_source` (`AUTO_QUERY`/`CHECKLIST`/`MANUAL_PERCENT`), `progress_key` (kunci rumus utk AUTO_QUERY)
+- `action_type` (`BUKA_KAMUS`/`BUKA_CHECKLIST`/`BUKA_HALAMAN`/`INFO_SAJA`), `action_target`
+- `blocked_by` (integer[], prasyarat task lain), `status`, `sort_order`
+- `manual_percent`/`manual_percent_set_by`/`manual_percent_set_at` — HANYA dipakai `progress_source=MANUAL_PERCENT`, ditegakkan app layer (`parseAiProjectTaskInput`) supaya AUTO_QUERY TIDAK PERNAH bisa diketik manual
+
+### `ai_project_checklist_items`
+- `ai_project_checklist_item_id`, `ai_project_task_id`, `label`, `done`, `done_by`, `done_at`, `note`, `sort_order`
+
+### `ai_project_progress_snapshots`
+Snapshot manual (tombol "Ambil Snapshot Sekarang", belum ada cron) — BUKAN time-series metrik
+generik (lihat catatan `kpi_snapshots`, Kelompok 11, kenapa tabel ini TIDAK dipakai ulang).
+- `ai_project_progress_snapshot_id`, `company_id`, `taken_at`, `overall_percent`, `per_phase` (jsonb)
+
+> **Akses**: SENGAJA TIDAK ADA policy authenticated sama sekali (default deny total, lebih ketat dari Kamus) — SEMUA baca/tulis lewat server function + gerbang `isCompanyLeadership()` di TypeScript. Alasan: roadmap internal proyek AI, bukan pekerjaan operasional harian yang relevan semua departemen.
+
+---
+
+## Kelompok 9: Kesiapan AI Tenant (22-24 Agu 2026)
+
+docs/spesifikasi-kesiapan-ai-tenant.md. TENANT-FACING (beda dari Kelompok 8 yang internal) —
+skor kesiapan per kemampuan AI + gerbang beneran (bukan cuma peringatan), tanpa LLM.
+
+### `ai_capabilities`
+Katalog GLOBAL (bukan per-tenant — baru ada satu tenant nyata, prinsip "jangan bangun
+abstraksi spekulatif utk tenant yang belum ada"). 6 dari 7 kemampuan diseed langsung di
+migration (kecuali "Advisor/saran tindakan" — butuh eval suite yang belum ada).
+- `ai_capability_id`, `code` (unik), `name`, `description`, `tier` (`CORE`/`INSIGHT`/`COPILOT`), `sort_order`, `created_at`
+
+### `ai_capability_requirements`
+Prasyarat terukur per kemampuan.
+- `ai_capability_requirement_id`, `capability_id`, `code`, `label`, `metric_key`, `threshold`, `comparator` (`GTE`/`LTE`), `weight`, `is_blocking`, `sort_order` — unik `(capability_id, code)`
+
+### `ai_capability_status`
+Hasil evaluasi PER TENANT — dihitung ulang `recomputeAiReadiness()` (LIVE tiap dashboard
+dibuka, di-cache lewat upsert; belum ada cron).
+- `ai_capability_status_id`, `company_id`, `capability_id`, `readiness_percent`, `is_unlocked`, `blocking_reasons` (jsonb), `computed_at` — unik `(company_id, capability_id)`
+
+### `ai_capability_overrides`
+Pengecualian sadar (demo/uji) — HANYA `super_admin` platform (BUKAN admin tenant manapun, termasuk `company_admin`), wajib beralasan + berbatas waktu. Tidak ada UI tenant yang mengarah ke sini.
+- `ai_capability_override_id`, `company_id`, `capability_id`, `unlocked_by`, `reason`, `expires_at`, `created_at`
+
+### `ai_answer_feedback`
+Disiapkan (§3.6 dokumen), BELUM ADA pemanggil nyata — tidak ada fitur AI yang menjawab pakai LLM di proyek ini saat ini.
+- `ai_answer_feedback_id`, `company_id`, `capability_id`, `user_id`, `question`, `answer`, `feedback_reason`, `readiness_snapshot` (jsonb), `created_at`
+
+> **Rumus kesiapan**: `persen = min(100, aktual/ambang × 100)` per prasyarat; kemampuan terbuka HANYA kalau SEMUA prasyarat `is_blocking=true` terpenuhi (gerbang keras, bukan skor); skor kemampuan = rata-rata tertimbang (`weight`) persen tiap prasyarat.
+> **Akses**: katalog (`ai_capabilities`/`ai_capability_requirements`) baca semua `authenticated`, tulis `super_admin` saja. `ai_capability_status` baca scoped company (tenant lihat miliknya sendiri). `ai_capability_overrides` HANYA `super_admin` baca MAUPUN tulis — admin tenant tidak bisa lihat/buat override tenant manapun.
+> **Penyimpangan jujur**: `quality.ncr_root_cause` (butuh tabel NCR, tidak ada) dan kemampuan "Advisor" (butuh eval suite, tidak ada) TIDAK diseed — dilaporkan, bukan diproksi pakai tabel lain yang maknanya beda.
+
+---
+
+## Kelompok 10: Absensi Geo-QR — Gelombang 1 (23 Agu 2026)
+
+docs/rancangan-absensi-geo-qr.md §11. HANYA Gelombang 1 (skema + state machine + geofence
++ ledger + rekap) — W2 (QR dinamis tablet), W3 (PWA karyawan), W4 (konsol HRD), W5
+(integrasi kapasitas) DITUNDA. `employee_attendance` (Kelompok 2) DIPERLUAS jadi rekap
+harian gelombang ini, bukan tabel `attendance_days` baru — lihat catatan di sana.
+`production_plants` (Kelompok 2) juga dapat 3 kolom baru: `center_lat`/`center_lng`/
+`geofence_radius_meters` (1 plant = 1 geofence, relasi 1:1 tidak butuh tabel `plant_geofences` terpisah).
+
+### `attendance_events`
+Ledger APPEND-ONLY (§6, §3.6 dokumen: "event adalah ledger; rekap harian adalah agregat").
+`employee_attendance` dihitung ULANG dari sini, tidak pernah diedit manual field-per-field.
+- `attendance_event_id`, `company_id`, `employee_id`, `production_plant_id`
+- `event_type` (`IN`/`OUT`/`BREAK_START`/`BREAK_END`), `occurred_at`
+- `method` (`QR_TABLET`/`GEO_PHONE`/`MANUAL_HRD`), `lat`/`lng`/`accuracy_m`
+- `geofence_status` (`DALAM`/`LUAR`/`TANPA_GPS`), `device_id`
+- `qr_token_id` (nullable, disiapkan utk W2 — belum ada penerbit token)
+- `client_event_id` (unik `(company_id, client_event_id)` — kunci idempotensi: kirim 2× dgn ID sama = 1 event tersimpan)
+- `photo_url`, `flags` (jsonb), `recorded_by` (diisi kalau `method=MANUAL_HRD`), `created_at`
+
+> **Append-only murni disiplin aplikasi** (pola SAMA `status_transition_log`) — TIDAK ADA trigger keras yang memblokir UPDATE/DELETE (percobaan pertama migrasi memakainya, diperbaiki migration susulan karena menyulitkan pembersihan data test tanpa manfaat nyata), TIDAK ADA policy authenticated utk tulis, dan TIDAK ADA satu pun server function yang memanggil `.update()`/`.delete()` pada tabel ini — koreksi selalu MENAMBAH event baru.
+
+### `attendance_devices`
+Device binding ringan v1 (§2.5) — HP pertama karyawan terdaftar otomatis; ganti perangkat butuh approval HRD.
+- `attendance_device_id`, `company_id`, `employee_id`, `device_fingerprint`, `device_type` (`EMPLOYEE_PHONE`/`GATE_TABLET`), `status` (`ACTIVE`/`PENDING_APPROVAL`/`REVOKED`), `registered_at`, `approved_by`/`approved_at` — unik `(employee_id, device_fingerprint)`
+
+### `attendance_corrections`
+Koreksi lupa-absen/salah-jam — state machine `PENDING`/`APPROVED`/`REJECTED`. Disetujui HRD → MENAMBAH event baru (tidak mengubah event asli).
+- `attendance_correction_id`, `company_id`, `employee_id`, `attendance_date`, `requested_event_type` (`IN`/`OUT`), `requested_occurred_at`, `reason`, `status`, `requested_by`, `decided_by`/`decided_at`, `resulting_event_id`, `created_at`
+
+### `leave_requests`
+Izin/sakit/cuti — TIDAK lewat `attendance_events` (tidak ada scan utk ketidakhadiran), langsung menimpa status hari itu di `employee_attendance` setelah disetujui.
+- `leave_request_id`, `company_id`, `employee_id`, `leave_type` (`IZIN`/`SAKIT`/`CUTI`), `start_date`/`end_date`, `reason`, `attachment_url`, `status`, `requested_by`, `decided_by`/`decided_at`, `created_at`
+
+> **Akses**: RLS keempat tabel HANYA batas company (isolasi tenant) — gerbang per-role lebih halus (company_admin/HR lihat semua, manager lihat departemennya, karyawan lihat miliknya sendiri) DITEGAKKAN DI TYPESCRIP, bukan RLS langsung, supaya satu tempat mengubah aturan (pola SAMA `employee_attendance`). TIDAK ADA policy INSERT/UPDATE authenticated di keempat tabel.
+
+---
+
+## Kelompok 11: KPI (KPI-1, 25 Agu 2026)
 
 docs/rencana-kerja-kpi.md + docs/penyerahan-opus-fitur-kpi.md + docs/revisi-kpi-visibilitas-tanggung-jawab.md.
-**Catatan cakupan**: 3 modul sebelumnya (Kamus/kamus_terms, Dashboard Proyek AI/ai_project_*,
-Kesiapan AI/ai_capabilities & ai_capability_*, Absensi/attendance_*) DITEMUKAN belum pernah
-didokumentasikan di sini walau memory proyek mewajibkan itu — bukan dirapikan sesi ini (di
-luar cakupan KPI-1), dicatat sebagai utang di HANDOFF.
+**Catatan cakupan**: 4 modul sebelumnya (Kamus, Dashboard Proyek AI, Kesiapan AI, Absensi)
+sempat DITEMUKAN belum pernah didokumentasikan di sini (25 Agu 2026, sesi yang sama) —
+sudah DILENGKAPI sebagai Kelompok 7-10 di atas (bukan lagi utang, lihat catatan audit
+lengkap di HANDOFF untuk daftar tabel LAIN yang juga ditemukan belum tercatat).
 
 ### `kpi_registry`
 Satu baris per KPI aktif per tenant. `metric_key` WAJIB merujuk `kamus_terms.term_key` scope
@@ -453,9 +623,20 @@ per unit (`metric.biaya_produksi_per_unit`, rata-rata sederhana lintas produk ak
 rata-rata `total_yield_pct` lintas batch selesai minggu berjalan — rumus PERSIS
 `getBatchYieldSummary.ts`), nilai persediaan (`metric.nilai_persediaan`, Σ
 `quantity_on_hand`×`unit_cost` lot available, BARU — sebelumnya tidak ada fungsi yang
-menghitung ini). **Semua `target_value` null** — termasuk margin (dokumen sumber menyebut
-"GPM 35% = target resmi", TAPI itu PERSENTASE sedangkan KPI margin di sini Rupiah absolut;
-menerapkannya akan jadi unit mismatch, jadi TIDAK diterapkan, dilaporkan ke pemilik produk).
+menghitung ini). **Semua `target_value` null** kecuali KPI ke-6 di bawah.
+
+**KPI ke-6, ditambahkan 25 Agu 2026 (koreksi pemilik produk)**: Margin Kontribusi %
+(`metric.margin_kontribusi_persen`) — data SAMA dgn margin kontribusi Rupiah (RPC
+`get_monthly_operating_profit`, periode sama), dinyatakan persentase = total margin ÷ total
+nilai jual × 100. `target_value=35` (GPM kebijakan finance) DITERAPKAN DI SINI, bukan di KPI
+Rupiah (unit mismatch, lihat catatan sebelumnya). **Catatan wajib tampil di kartu**: GPM
+sesungguhnya dihitung SETELAH overhead pabrik, Margin Kontribusi BELUM (aturan K2) — angka
+ini SELALU LEBIH TINGGI dari GPM riil, dipasang sebagai peringatan dini konservatif.
+Diverifikasi via fixture test (`tests/kpi_module.test.ts`): harga+biaya nyata Gummy Zala
+(Rp108.000, biaya Rp34.344) → 68,2%; Drinkme (Rp33.000, biaya Rp26.829) → 18,7% — cocok
+dgn angka acuan pemilik produk. **PERTANYAAN TERBUKA ke tim finance** (dicatat HANDOFF):
+apakah GPM 35% sungguh dihitung setelah overhead pabrik? Kalau ya, KPI GPM yang benar-benar
+sepadan (bukan proksi konservatif ini) perlu dibangun terpisah nanti.
 
 ---
 
@@ -481,5 +662,10 @@ production_batches ──< work_order_assignments ──> employees (siapa terli
 production_batches ──< work_order_step_progress (progres per batch, karena bisa beda tahap bersamaan)
 work_orders ──< system_alerts (dipantau untuk status "Ready to Start"/"Blocked")
 companies ──< invoices ──> subscription_plans
+companies ──< kamus_terms ──< kamus_term_history; kamus_routing_rules terpisah (aturan saran, bukan per-term)
+companies ──< ai_project_phases ──< ai_project_tasks ──< ai_project_checklist_items; ai_project_progress_snapshots terpisah (snapshot manual)
+ai_capabilities ──< ai_capability_requirements (katalog GLOBAL, bukan per-company)
+companies ──< ai_capability_status ──> ai_capabilities; companies ──< ai_capability_overrides, ai_answer_feedback ──> ai_capabilities
+employees ──< attendance_events, attendance_devices, attendance_corrections, leave_requests; employee_attendance dihitung ULANG dari attendance_events
 kamus_terms ──< kpi_registry (metric_key, FK komposit) ──< kpi_snapshots, kpi_actions, kpi_responsibilities, kpi_registry_history
 ```

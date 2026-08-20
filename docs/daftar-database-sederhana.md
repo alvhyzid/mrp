@@ -48,7 +48,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 
 **Database Gangguan Produksi** (`production_disruptions`)
 - ID Gangguan (production_disruption_id) · ID Perusahaan (company_id)
-- Jenis: mesin/listrik padam/faktor eksternal/dialihkan ke pekerjaan lain/lainnya (disruption_type)
+- Jenis: mesin/listrik padam/faktor eksternal/dialihkan ke pekerjaan lain/**ganti produk (changeover, BARU 25 Agu 2026)**/lainnya (disruption_type)
 - ID Lokasi Pabrik — wajib diisi (production_plant_id)
 - ID Mesin — kosong kalau gangguan menyeluruh (work_center_id) · ID Work Order (work_order_id) · ID Batch (production_batch_id) · ID Tahap (routing_step_id) · ID Shift (shift_id) · Waktu Mulai (started_at) · Waktu Selesai (resolved_at) · Keterangan (description)
 
@@ -104,6 +104,29 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 
 **Database Referensi Formula** (`formula_templates`)
 - ID Formula (formula_template_id) · ID Perusahaan (company_id) · Nama (name) · Catatan (notes) · Komposisi Referensi (reference_composition)
+
+**Database Standar Produksi** (`production_standards`) — K8, 18-19 Agu 2026
+- ID Standar (production_standard_id) · ID Perusahaan (company_id) · ID Item (item_id) · ID Tahap (routing_step_id, nullable)
+- Jenis Metrik: persen yield/unit per batch/durasi aktif menit/batch per hari (metric_key) · Nilai (value)
+- Sumber: estimasi manual/dipelajari dari data (source) · Jumlah Sampel (sample_count) · Terakhir Dihitung (last_calculated_at)
+- Dikunci? (pinned) · Alasan Dikunci (pin_reason) — supaya tidak ikut dipelajari otomatis
+- Disahkan Oleh (last_approved_by) · Waktu Sahkan (last_approved_at)
+- Perubahan nilai TIDAK PERNAH otomatis — sistem hanya mengusulkan (lihat tabel usulan di bawah), planner yang mengesahkan
+
+**Database Usulan Standar Produksi** (`production_standard_proposals`)
+- ID Usulan (production_standard_proposal_id) · ID Perusahaan (company_id) · ID Item (item_id) · ID Tahap (routing_step_id)
+- Jenis Metrik (metric_key) · Nilai Lama/Sumber Lama (old_value/old_source) · Nilai Diusulkan (proposed_value)
+- Cara Hitung: median/rata-rata dibuang pencilan (calculation_method) · Jumlah Sampel (sample_count)
+- Status: menunggu/disetujui/ditolak (status) · Diputuskan Oleh (decided_by) · Waktu Putus (decided_at)
+
+**Database Sampel Standar Produksi** (`production_standard_samples`)
+- ID Sampel (production_standard_sample_id) · ID Perusahaan (company_id) · ID Item (item_id) · ID Tahap (routing_step_id, nullable)
+- Jenis Metrik (metric_key) · Nilai Sampel (sample_value) · Waktu Catat (recorded_at)
+
+**Database Pengecualian Standar Produksi** (`production_standard_exclusions`)
+- ID Pengecualian (production_standard_exclusion_id) · ID Perusahaan (company_id) · ID Batch (production_batch_id) · ID Item (item_id)
+- Alasan (reason) · ID Tahap yang Datanya Kosong (missing_routing_step_ids) · Waktu Catat (created_at)
+- Batch yang gagal gerbang kelengkapan data tahap — dicatat sebagai log, bukan dilewati diam-diam
 
 ---
 
@@ -230,6 +253,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 - ID Shift (shift_id) · Jumlah Rencana — bebas diatur PPIC, tidak terpaku ukuran standar BOM (planned_qty) · Satuan (uom)
 - Tanggal Rencana — kapan batch SEHARUSNYA dikerjakan, dasar Dashboard Kapasitas (planned_date)
 - Status: rencana/berjalan/selesai/batal (status) · Waktu Mulai (started_at) · Waktu Selesai (completed_at)
+- Rework? — ditandai saat "Selesaikan Batch", BARU 25 Agu 2026 (rework)
 
 > 1 Work Order biasanya dikerjakan lewat 3-5 batch fisik per shift — masing-masing punya bahan, hasil, dan jejak lot sendiri untuk traceability BPOM/halal.
 
@@ -281,11 +305,102 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 
 ---
 
-## Kelompok 7: KPI (25 Agu 2026)
+## Kelompok 7: Kamus (21 Agu 2026)
 
-> Catatan: 4 modul sebelumnya (Kamus, Dashboard Proyek AI, Kesiapan AI, Absensi) belum
-> pernah ditambahkan ke dokumen ini walau seharusnya — bukan dirapikan di sesi ini,
-> dicatat sebagai utang dokumentasi di HANDOFF.md.
+**Database Istilah Kamus** (`kamus_terms`)
+- ID Istilah (kamus_term_id) · ID Perusahaan (company_id) · Cakupan (scope: Field/Metrik/Relasi/Aturan)
+- Nama Tabel (entity) · Nama Kolom (field) · Kunci Istilah (term_key) · Prioritas 1-5 (priority)
+- Kategori (domain: uang/kuantitas/status/standar/proses/lainnya) · Departemen Disarankan (suggested_role)
+- Status (status: Belum/Draf AI/Dijawab/Dikonfirmasi/Tidak Relevan) · Draf AI (ai_draft)
+- Jawaban Sederhana/Jebakan/Rentang Wajar (answer_plain/answer_pitfall/answer_range)
+- Dijawab/Dikonfirmasi Oleh & Kapan (answered_by/at, confirmed_by/at) · Ditugaskan ke (assigned_to_role) · Versi (version)
+
+**Database Riwayat Istilah Kamus** (`kamus_term_history`)
+- ID Riwayat (kamus_term_history_id) · ID Istilah (kamus_term_id) · Diubah Oleh/Kapan (changed_by/changed_at) · Field Berubah (field_changed) · Nilai Lama/Baru (old_value/new_value)
+
+**Database Aturan Routing Kamus** (`kamus_routing_rules`)
+- ID Aturan (kamus_routing_rule_id) · ID Perusahaan (company_id) · Kategori (domain) · Pola Nama (entity_pattern) · Departemen Disarankan (suggested_role) · Alasan (rationale)
+
+> Semua staf company boleh baca (antrean terbuka utk siapa saja yang tahu jawab). Tulis hanya lewat sistem, tidak ada jalan pintas.
+
+---
+
+## Kelompok 8: Dashboard Proyek AI (21 Agu 2026)
+
+> Khusus pemilik & manajemen (leadership) — alat internal roadmap fitur AI, bukan fitur operasional harian.
+
+**Database Fase Proyek AI** (`ai_project_phases`)
+- ID Fase (ai_project_phase_id) · ID Perusahaan (company_id) · Kode (code) · Nama (name) · Keterangan (description) · Bobot % (weight_percent) · Urutan (sort_order) · Status (status)
+
+**Database Tugas Proyek AI** (`ai_project_tasks`)
+- ID Tugas (ai_project_task_id) · ID Fase (ai_project_phase_id) · Kode/Nama/Keterangan · Bobot % dalam fase (weight_percent)
+- Jenis Pemilik (owner_type: Pemilik Produk/Tim/Claude Code/Campuran) · Departemen Disarankan (suggested_role)
+- Sumber Progres (progress_source: Hitung Otomatis/Checklist/Persen Manual) · Kunci Rumus (progress_key)
+- Jenis Aksi & Tujuannya (action_type/action_target) · Prasyarat (blocked_by) · Status · Urutan
+- Persen Manual + Siapa/Kapan (manual_percent/manual_percent_set_by/at) — HANYA dipakai kalau sumber progresnya "Persen Manual"
+
+**Database Checklist Tugas Proyek AI** (`ai_project_checklist_items`)
+- ID Item (ai_project_checklist_item_id) · ID Tugas (ai_project_task_id) · Label (label) · Selesai? (done) · Diselesaikan Oleh/Kapan (done_by/at) · Catatan (note) · Urutan (sort_order)
+
+**Database Snapshot Progres Proyek AI** (`ai_project_progress_snapshots`)
+- ID Snapshot (ai_project_progress_snapshot_id) · ID Perusahaan (company_id) · Diambil Kapan (taken_at) · Persen Total (overall_percent) · Rincian per Fase (per_phase)
+
+---
+
+## Kelompok 9: Kesiapan AI Tenant (22-24 Agu 2026)
+
+> Terlihat SEMUA staf login (beda dari Dashboard Proyek AI yang khusus leadership) — skor kesiapan tiap kemampuan AI perusahaan.
+
+**Database Katalog Kemampuan AI** (`ai_capabilities`) — sama untuk semua tenant (belum bisa dikonfigurasi per perusahaan)
+- ID Kemampuan (ai_capability_id) · Kode (code) · Nama/Keterangan (name/description) · Tingkat (tier: Inti/Wawasan/Copilot) · Urutan (sort_order)
+
+**Database Prasyarat Kemampuan AI** (`ai_capability_requirements`)
+- ID Prasyarat (ai_capability_requirement_id) · ID Kemampuan (capability_id) · Kode/Label · Kunci Metrik (metric_key) · Ambang (threshold) · Pembanding (comparator: ≥/≤) · Bobot (weight) · Mengunci Keras? (is_blocking) · Urutan
+
+**Database Status Kesiapan AI** (`ai_capability_status`) — dihitung ulang otomatis, bukan diisi manual
+- ID Status (ai_capability_status_id) · ID Perusahaan (company_id) · ID Kemampuan (capability_id) · Persen Siap (readiness_percent) · Terbuka? (is_unlocked) · Alasan Terkunci (blocking_reasons) · Dihitung Kapan (computed_at)
+
+**Database Pengecualian Kemampuan AI** (`ai_capability_overrides`) — HANYA staf platform kami (super_admin), BUKAN admin perusahaan tenant manapun
+- ID (ai_capability_override_id) · ID Perusahaan (company_id) · ID Kemampuan (capability_id) · Dibuka Oleh (unlocked_by) · Alasan (reason) · Kedaluwarsa (expires_at)
+
+**Database Umpan Balik Jawaban AI** (`ai_answer_feedback`) — disiapkan, belum ada fitur AI yang memakainya
+- ID (ai_answer_feedback_id) · ID Perusahaan (company_id) · ID Kemampuan (capability_id) · ID Pengguna (user_id) · Pertanyaan/Jawaban (question/answer) · Alasan Feedback (feedback_reason) · Cuplikan Kesiapan (readiness_snapshot)
+
+---
+
+## Kelompok 10: Absensi Geo-QR — Gelombang 1 (23 Agu 2026)
+
+> HANYA Gelombang 1 (pencatatan dasar). Gelombang 2-5 (QR dinamis tablet, aplikasi karyawan, konsol HRD penuh, integrasi kapasitas) BELUM dikerjakan.
+
+**Database Kejadian Absensi** (`attendance_events`) — CATATAN PERMANEN, tidak pernah diedit/dihapus
+- ID Kejadian (attendance_event_id) · ID Perusahaan (company_id) · ID Karyawan (employee_id) · ID Lokasi Pabrik (production_plant_id)
+- Jenis (event_type: Masuk/Keluar/Mulai Istirahat/Selesai Istirahat) · Waktu Kejadian (occurred_at)
+- Cara Absen (method: QR Tablet/GPS HP/Manual HRD) · Lokasi GPS (lat/lng/accuracy_m)
+- Status Area (geofence_status: Dalam/Luar/Tanpa GPS) · ID Perangkat (device_id) · ID Token QR (qr_token_id, disiapkan utk nanti)
+- ID Kejadian dari Aplikasi (client_event_id, mencegah tercatat dobel) · Foto (photo_url) · Dicatat Oleh (recorded_by, kalau manual HRD)
+
+**Database Perangkat Absensi** (`attendance_devices`)
+- ID (attendance_device_id) · ID Perusahaan (company_id) · ID Karyawan (employee_id) · Sidik Jari Perangkat (device_fingerprint) · Jenis (device_type: HP Karyawan/Tablet Gerbang) · Status (Aktif/Menunggu Persetujuan/Dicabut) · Terdaftar Kapan (registered_at) · Disetujui Oleh/Kapan (approved_by/at)
+
+**Database Koreksi Absensi** (`attendance_corrections`)
+- ID Koreksi (attendance_correction_id) · ID Perusahaan (company_id) · ID Karyawan (employee_id) · Tanggal (attendance_date)
+- Jenis Diminta (requested_event_type: Masuk/Keluar) · Waktu Diminta (requested_occurred_at) · Alasan (reason)
+- Status (Menunggu/Disetujui/Ditolak) · Diminta/Diputuskan Oleh & Kapan · Hasil jadi Kejadian Baru (resulting_event_id)
+
+**Database Pengajuan Izin/Sakit/Cuti** (`leave_requests`)
+- ID Pengajuan (leave_request_id) · ID Perusahaan (company_id) · ID Karyawan (employee_id) · Jenis (leave_type: Izin/Sakit/Cuti)
+- Tanggal Mulai/Selesai (start_date/end_date) · Alasan (reason) · Lampiran (attachment_url) · Status · Diminta/Diputuskan Oleh & Kapan
+
+> **Database Kehadiran Karyawan** (`employee_attendance`, sudah ada sejak Kelompok 2) DIPERLUAS gelombang ini: kolom baru ID Lokasi Pabrik, Menit Kerja/Terlambat/Lembur (dihitung otomatis dari kejadian di atas, bukan diketik), Jejak Kejadian Sumber, Status Area, Tanda Khusus (flags). Sekarang dihitung ULANG dari `attendance_events`, bukan diisi manual lagi.
+> **Database Lokasi Pabrik** (`production_plants`, Kelompok 2) dapat 3 kolom baru: Titik Tengah Lintang/Bujur & Radius Area (center_lat/center_lng/geofence_radius_meters) — 1 pabrik = 1 area, tanpa tabel terpisah.
+
+---
+
+## Kelompok 11: KPI (25 Agu 2026)
+
+> Catatan: 4 modul sebelumnya (Kamus, Dashboard Proyek AI, Kesiapan AI, Absensi) sempat
+> ditemukan belum pernah ditambahkan ke dokumen ini — sudah dilengkapi sebagai Kelompok
+> 7-10 di atas pada sesi yang sama (25 Agu 2026).
 
 **Database Daftar KPI** (`kpi_registry`)
 - ID KPI (kpi_registry_id) · ID Perusahaan (company_id) · Kunci Metrik di Kamus (metric_key)
@@ -317,4 +432,4 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 **Database Riwayat Perubahan KPI** (`kpi_registry_history`)
 - ID Riwayat (kpi_registry_history_id) · ID KPI (kpi_registry_id) · Diubah Oleh/Kapan (changed_by/changed_at) · Field yang Berubah (field_changed) · Nilai Lama/Baru (old_value/new_value)
 
-> 5 KPI awal sudah diisi (Margin Kontribusi, Biaya per Unit, Laba Operasional, Yield per Tahap, Nilai Persediaan) — semua nilai target masih kosong, termasuk margin (angka target 35% dari dokumen sumber ternyata dalam bentuk persen, sedangkan KPI ini dalam Rupiah — tidak dipaksakan, dilaporkan ke pemilik produk untuk klarifikasi).
+> 6 KPI awal sudah diisi (Margin Kontribusi, **Margin Kontribusi % — BARU 25 Agu 2026**, Biaya per Unit, Laba Operasional, Yield per Tahap, Nilai Persediaan) — semua nilai target masih kosong KECUALI Margin Kontribusi % (target 35%, kebijakan GPM finance, dgn catatan wajib: angka ini selalu lebih tinggi dari GPM riil karena belum dikurangi overhead pabrik — pertanyaan terbuka ke finance dicatat di HANDOFF).

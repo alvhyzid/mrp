@@ -9,6 +9,7 @@ import { formatCurrency } from '@/lib/currency';
 
 const DISPLAY_TITLES: Record<string, string> = {
   'metric.margin_kontribusi': 'Margin Kontribusi Bulanan',
+  'metric.margin_kontribusi_persen': 'Margin Kontribusi %',
   'metric.biaya_produksi_per_unit': 'Biaya Produksi per Unit',
   'metric.laba_operasional_bulanan': 'Laba Operasional Bulanan',
   'metric.yield_per_tahap_produk': 'Yield per Tahap',
@@ -17,7 +18,7 @@ const DISPLAY_TITLES: Record<string, string> = {
 
 function formatValueForMetric(metricKey: string, value: number | null): string {
   if (value === null) return 'belum bisa dihitung';
-  if (metricKey === 'metric.yield_per_tahap_produk') return `${value.toFixed(1)}%`;
+  if (metricKey === 'metric.yield_per_tahap_produk' || metricKey === 'metric.margin_kontribusi_persen') return `${value.toFixed(1)}%`;
   return formatCurrency(value, { maxDecimals: 0 });
 }
 

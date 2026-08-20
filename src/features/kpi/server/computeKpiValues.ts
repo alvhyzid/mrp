@@ -69,6 +69,97 @@ export function computeMarginKontribusiFromRpc(rpc: Awaited<ReturnType<typeof fe
   };
 }
 
+// Margin Kontribusi % (BARU, diminta pemilik produk 25 Agu 2026) -- DARI DATA YANG
+// SAMA dengan Margin Kontribusi Rupiah (realisasi pengiriman, periode SAMA dgn RPC
+// get_monthly_operating_profit), cuma dinyatakan sbg persentase = total margin ÷
+// total nilai jual × 100. RPC tidak mengembalikan total nilai jual (revenue) secara
+// terpisah, jadi dihitung ulang di sini dgn JOIN yang PERSIS SAMA (shipment_lines →
+// sales_order_lines → sales_orders → shipments, status terkirim/diterima, dalam
+// periode yang sama) -- supaya total margin hasil query ini SELALU cocok dgn
+// rpc.total_margin (bukti idempotensi/rekonsiliasi, bukan jalur hitung terpisah).
+export async function computeMarginKontribusiPersen(
+  adminClient: SupabaseClient,
+  companyId: number,
+  rpc: Awaited<ReturnType<typeof fetchOperatingProfitRpc>>
+): Promise<KpiComputeResult> {
+  if (!rpc) {
+    const { start, end } = calendarMonthBounds(new Date());
+    return { value: null, periodStart: start, periodEnd: end, complete: false, formula: '', inputs: [] };
+  }
+
+  const { data: shipments } = await adminClient
+    .from('shipments')
+    .select('shipment_id, sales_order_id')
+    .in('status', ['shipped', 'delivered'])
+    .gte('shipment_date', rpc.period_start)
+    .lte('shipment_date', rpc.period_end);
+  const shipmentIds = (shipments ?? []).map((s) => s.shipment_id);
+  const soIdOfShipment = new Map((shipments ?? []).map((s) => [s.shipment_id, s.sales_order_id]));
+
+  const { data: salesOrders } = shipmentIds.length
+    ? await adminClient.from('sales_orders').select('sales_order_id, company_id').in(
+        'sales_order_id',
+        Array.from(new Set(Array.from(soIdOfShipment.values())))
+      )
+    : { data: [] as { sales_order_id: number; company_id: number }[] };
+  const validSoIds = new Set((salesOrders ?? []).filter((so) => so.company_id === companyId).map((so) => so.sales_order_id));
+  const validShipmentIds = shipmentIds.filter((id) => validSoIds.has(soIdOfShipment.get(id)!));
+
+  const { data: shipmentLines } = validShipmentIds.length
+    ? await adminClient.from('shipment_lines').select('sales_order_line_id, qty_shipped, lot_id').in('shipment_id', validShipmentIds)
+    : { data: [] as { sales_order_line_id: number; qty_shipped: number; lot_id: number | null }[] };
+
+  const soLineIds = Array.from(new Set((shipmentLines ?? []).map((l) => l.sales_order_line_id)));
+  const { data: soLines } = soLineIds.length
+    ? await adminClient.from('sales_order_lines').select('sales_order_line_id, item_id, unit_price').in('sales_order_line_id', soLineIds)
+    : { data: [] as { sales_order_line_id: number; item_id: number; unit_price: number }[] };
+  const soLineById = new Map((soLines ?? []).map((l) => [l.sales_order_line_id, l]));
+
+  const lotIds = Array.from(new Set((shipmentLines ?? []).map((l) => l.lot_id).filter((id): id is number => !!id)));
+  const { data: lots } = lotIds.length ? await adminClient.from('lots').select('lot_id, unit_cost').in('lot_id', lotIds) : { data: [] as { lot_id: number; unit_cost: number | null }[] };
+  const costByLotId = new Map((lots ?? []).map((l) => [l.lot_id, l.unit_cost]));
+
+  const itemIds = Array.from(new Set((soLines ?? []).map((l) => l.item_id)));
+  const { data: items } = itemIds.length ? await adminClient.from('items').select('item_id, item_code').in('item_id', itemIds) : { data: [] as { item_id: number; item_code: string }[] };
+  const codeByItemId = new Map((items ?? []).map((i) => [i.item_id, i.item_code]));
+
+  let totalRevenue = 0;
+  let totalMarginCheck = 0;
+  const marginByItem = new Map<number, number>();
+  const revenueByItem = new Map<number, number>();
+  for (const line of shipmentLines ?? []) {
+    const soLine = soLineById.get(line.sales_order_line_id);
+    if (!soLine) continue;
+    const unitCost = line.lot_id !== null ? (costByLotId.get(line.lot_id) ?? 0) : 0;
+    const qty = Number(line.qty_shipped);
+    const revenue = qty * Number(soLine.unit_price);
+    const margin = qty * (Number(soLine.unit_price) - Number(unitCost ?? 0));
+    totalRevenue += revenue;
+    totalMarginCheck += margin;
+    marginByItem.set(soLine.item_id, (marginByItem.get(soLine.item_id) ?? 0) + margin);
+    revenueByItem.set(soLine.item_id, (revenueByItem.get(soLine.item_id) ?? 0) + revenue);
+  }
+
+  const percent = totalRevenue > 0 ? (totalMarginCheck / totalRevenue) * 100 : null;
+  const perItemInputs = Array.from(revenueByItem.entries())
+    .filter(([, revenue]) => revenue > 0)
+    .map(([itemId, revenue]) => ({
+      label: codeByItemId.get(itemId) ?? `item ${itemId}`,
+      value: `${(((marginByItem.get(itemId) ?? 0) / revenue) * 100).toFixed(1)}%`
+    }));
+
+  return {
+    value: percent,
+    periodStart: rpc.period_start,
+    periodEnd: rpc.period_end,
+    complete: true,
+    formula:
+      'Margin Kontribusi (Rupiah, periode sama) ÷ Total nilai jual (Σ qty_shipped × harga jual) × 100. Data yang SAMA dengan kartu "Margin Kontribusi" -- cuma dinyatakan persentase, bukan dihitung ulang jalur beda.',
+    inputs: [{ label: 'Total nilai jual periode ini', value: formatCurrency(totalRevenue, { maxDecimals: 0 }) }, { label: 'Total margin periode ini', value: formatCurrency(totalMarginCheck, { maxDecimals: 0 }) }, ...perItemInputs],
+    sourceDocument: 'get_monthly_operating_profit + shipment_lines (rincian per produk)'
+  };
+}
+
 export function computeLabaOperasionalFromRpc(rpc: Awaited<ReturnType<typeof fetchOperatingProfitRpc>>): KpiComputeResult {
   if (!rpc) {
     const { start, end } = calendarMonthBounds(new Date());

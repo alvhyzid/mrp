@@ -4,6 +4,7 @@ import { canViewKpi } from '@/lib/roles';
 import {
   fetchOperatingProfitRpc,
   computeMarginKontribusiFromRpc,
+  computeMarginKontribusiPersen,
   computeLabaOperasionalFromRpc,
   computeBiayaProduksiPerUnit,
   computeYieldPerTahapProduk,
@@ -39,9 +40,11 @@ async function computeByMetricKey(
   companyId: number,
   rpcCache: { value: Awaited<ReturnType<typeof fetchOperatingProfitRpc>> | undefined }
 ): Promise<KpiComputeResult> {
-  if (metricKey === 'metric.margin_kontribusi' || metricKey === 'metric.laba_operasional_bulanan') {
+  if (metricKey === 'metric.margin_kontribusi' || metricKey === 'metric.margin_kontribusi_persen' || metricKey === 'metric.laba_operasional_bulanan') {
     if (rpcCache.value === undefined) rpcCache.value = await fetchOperatingProfitRpc(request, companyId);
-    return metricKey === 'metric.margin_kontribusi' ? computeMarginKontribusiFromRpc(rpcCache.value) : computeLabaOperasionalFromRpc(rpcCache.value);
+    if (metricKey === 'metric.margin_kontribusi') return computeMarginKontribusiFromRpc(rpcCache.value);
+    if (metricKey === 'metric.margin_kontribusi_persen') return computeMarginKontribusiPersen(adminClient, companyId, rpcCache.value);
+    return computeLabaOperasionalFromRpc(rpcCache.value);
   }
   if (metricKey === 'metric.biaya_produksi_per_unit') return computeBiayaProduksiPerUnit(adminClient, companyId);
   if (metricKey === 'metric.yield_per_tahap_produk') return computeYieldPerTahapProduk(adminClient, companyId);

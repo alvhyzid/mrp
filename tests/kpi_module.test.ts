@@ -43,6 +43,9 @@ describe('Modul KPI (KPI-1) — registry, snapshot, kartu, KPI Saya', () => {
   let prodManagerToken: string;
   let staffAToken: string;
   let staffBToken: string;
+  let customerId: number;
+  let testGummyItemId: number;
+  let testDrinkmeItemId: number;
   let anonAuthClient: SupabaseClient;
   let userIdByEmail: Map<string, number>;
 
@@ -97,6 +100,26 @@ describe('Modul KPI (KPI-1) — registry, snapshot, kartu, KPI Saya', () => {
     prodManagerToken = (await loginToken('prodmgr.kpimoduletest@debug.mrp')).token;
     staffAToken = (await loginToken('staffa.kpimoduletest@debug.mrp')).token;
     staffBToken = (await loginToken('staffb.kpimoduletest@debug.mrp')).token;
+
+    // Fixture verifikasi Margin Kontribusi % (permintaan pemilik produk 25 Agu 2026):
+    // 2 produk dgn harga NYATA (Gummy Rp108.000, Drinkme Rp33.000, sama dgn item asli
+    // FG-GUMMY-ZALA-N200/PMBX001ITM) tapi unit_cost dipilih SENGAJA supaya margin%
+    // PERSIS 68.2% (Gummy) & 18.7% (Drinkme) -- literal acceptance-test number dari
+    // pemilik produk, pola sama sesi biaya v1.
+    const { data: customer } = await adminClient.from('customers').insert([{ company_id: companyId, name: 'Customer KpiModuleTest' }]).select('customer_id').single();
+    customerId = customer!.customer_id;
+    const { data: gummyItem } = await adminClient
+      .from('items')
+      .insert([{ company_id: companyId, item_code: 'TESTGUMMY-FG', name: 'Gummy Uji KPI', type: 'finished_good', base_uom: 'botol', purchase_uom: 'botol', uom_conversion_factor: 1 }])
+      .select('item_id')
+      .single();
+    testGummyItemId = gummyItem!.item_id;
+    const { data: drinkmeItem } = await adminClient
+      .from('items')
+      .insert([{ company_id: companyId, item_code: 'TESTDRINKME-FG', name: 'Drinkme Uji KPI', type: 'finished_good', base_uom: 'box', purchase_uom: 'box', uom_conversion_factor: 1 }])
+      .select('item_id')
+      .single();
+    testDrinkmeItemId = drinkmeItem!.item_id;
   });
 
   afterAll(async () => {
@@ -106,6 +129,16 @@ describe('Modul KPI (KPI-1) — registry, snapshot, kartu, KPI Saya', () => {
     await adminClient.from('kpi_snapshots').delete().eq('company_id', companyId);
     await adminClient.from('kpi_registry').delete().eq('company_id', companyId);
     await adminClient.from('kamus_terms').delete().eq('company_id', companyId);
+    const shipmentIds = (await adminClient.from('shipments').select('shipment_id').eq('company_id', companyId)).data?.map((s) => s.shipment_id) ?? [];
+    await adminClient.from('shipment_lines').delete().in('shipment_id', shipmentIds.length ? shipmentIds : [-1]);
+    await adminClient.from('shipments').delete().eq('company_id', companyId);
+    const soIds = (await adminClient.from('sales_orders').select('sales_order_id').eq('company_id', companyId)).data?.map((s) => s.sales_order_id) ?? [];
+    await adminClient.from('sales_order_lines').delete().in('sales_order_id', soIds.length ? soIds : [-1]);
+    await adminClient.from('sales_orders').delete().eq('company_id', companyId);
+    await adminClient.from('customer_purchase_orders').delete().eq('company_id', companyId);
+    await adminClient.from('lots').delete().eq('company_id', companyId);
+    await adminClient.from('customers').delete().eq('company_id', companyId);
+    await adminClient.from('items').delete().eq('company_id', companyId);
     await adminClient.from('employees').delete().eq('company_id', companyId);
     await adminClient.from('production_plants').delete().eq('company_id', companyId);
     const { data: users } = await adminClient.from('users').select('auth_uid').eq('company_id', companyId);
@@ -114,28 +147,32 @@ describe('Modul KPI (KPI-1) — registry, snapshot, kartu, KPI Saya', () => {
     await adminClient.from('companies').delete().eq('company_id', companyId);
   });
 
-  it('seed idempoten: 5 KPI kategori A + baris kamus METRIC terkait, dijalankan 2x tanpa duplikasi', async () => {
+  it('seed idempoten: 6 KPI (5 kategori A + Margin Kontribusi %) + baris kamus METRIC terkait, dijalankan 2x tanpa duplikasi', async () => {
     const res1 = await runKpiSeed(makeRequest('http://x/api/kpi/seed', adminToken, 'POST'));
     expect(res1.status).toBe(200);
-    expect((res1.body.registry as any).registryInserted).toBe(5);
+    expect((res1.body.registry as any).registryInserted).toBe(6);
 
     const res2 = await runKpiSeed(makeRequest('http://x/api/kpi/seed', adminToken, 'POST'));
     expect(res2.status).toBe(200);
     expect((res2.body.registry as any).registryInserted).toBe(0); // idempoten -- 0 baris baru run kedua
 
     const { data: registryRows } = await adminClient.from('kpi_registry').select('metric_key, target_value, kind').eq('company_id', companyId);
-    expect(registryRows?.length).toBe(5);
-    // Sanity: target GPM 35% SENGAJA TIDAK diterapkan (unit mismatch Rupiah vs %,
-    // dilaporkan HANDOFF, bukan dipaksakan) -- semua target_value masih null.
-    expect(registryRows?.every((r) => r.target_value === null)).toBe(true);
+    expect(registryRows?.length).toBe(6);
     expect(registryRows?.every((r) => r.kind === 'HASIL')).toBe(true);
+    // Sanity: target GPM 35% TIDAK dipaksakan ke KPI Rupiah (unit mismatch) --
+    // ditaruh di KPI "%" yang baru sebagai keputusan eksplisit pemilik produk.
+    const marginRupiah = registryRows?.find((r) => r.metric_key === 'metric.margin_kontribusi');
+    const marginPersen = registryRows?.find((r) => r.metric_key === 'metric.margin_kontribusi_persen');
+    expect(marginRupiah?.target_value).toBeNull();
+    expect(Number(marginPersen?.target_value)).toBe(35);
+    expect(registryRows?.filter((r) => r.metric_key !== 'metric.margin_kontribusi_persen').every((r) => r.target_value === null)).toBe(true);
   });
 
-  it('kartu KPI: company_admin melihat 5 kartu dgn provenance + definisi + tanggung jawab terisi', async () => {
+  it('kartu KPI: company_admin melihat 6 kartu dgn provenance + definisi + tanggung jawab terisi', async () => {
     const res = await listKpiCards(makeRequest('http://x/api/kpi', adminToken, 'GET'));
     expect(res.status).toBe(200);
     const cards = res.body.cards as any[];
-    expect(cards.length).toBe(5);
+    expect(cards.length).toBe(6);
     const margin = cards.find((c) => c.metric_key === 'metric.margin_kontribusi');
     expect(margin.provenance.formula).toBeTruthy();
     expect(margin.definition).toBeTruthy();
@@ -146,6 +183,10 @@ describe('Modul KPI (KPI-1) — registry, snapshot, kartu, KPI Saya', () => {
     const yieldCard = cards.find((c) => c.metric_key === 'metric.yield_per_tahap_produk');
     expect(yieldCard.frequency).toBe('MINGGUAN');
     expect(yieldCard.attribution_level).toBe('LINI'); // instruksi eksplisit: JANGAN individu
+
+    const marginPersen = cards.find((c) => c.metric_key === 'metric.margin_kontribusi_persen');
+    expect(Number(marginPersen.target_value)).toBe(35);
+    expect(String(marginPersen.definition.businessAnswer ?? marginPersen.definition.draft)).toContain('overhead');
   });
 
   it('kartu KPI: production_staff HANYA melihat KPI yg relevan (bukan KPI finansial)', async () => {
@@ -268,5 +309,50 @@ describe('Modul KPI (KPI-1) — registry, snapshot, kartu, KPI Saya', () => {
     // Bukan leadership -> ditolak, sekaligus membuktikan gerbang role tetap berlaku.
     const resDenied = await updateKpiVisibility(makeRequest('http://x/api/kpi/x/visibility', financeToken, 'PATCH', { attribution_level: 'INDIVIDU' }), yieldKpi!.kpi_registry_id);
     expect(resDenied.status).toBe(403);
+  });
+
+  it('VERIFIKASI Margin Kontribusi %: Gummy (harga 108rb, biaya 34.344) = 68,2% (di atas target 35%); Drinkme (harga 33rb, biaya 26.829) = 18,7% (di bawah target 35%)', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const futureDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    async function ship(itemId: number, unitPrice: number, unitCost: number, poSuffix: string) {
+      const { data: cpo } = await adminClient
+        .from('customer_purchase_orders')
+        .insert([{ company_id: companyId, customer_id: customerId, po_number: `KPITEST-PO-${poSuffix}-${Math.random().toString(36).slice(2, 8)}`, requested_ship_date: futureDate, status: 'processed' }])
+        .select('customer_purchase_order_id')
+        .single();
+      const { data: so } = await adminClient
+        .from('sales_orders')
+        .insert([{ company_id: companyId, customer_purchase_order_id: cpo!.customer_purchase_order_id, customer_id: customerId, production_plant_id: plantId, status: 'confirmed' }])
+        .select('sales_order_id')
+        .single();
+      const { data: line } = await adminClient.from('sales_order_lines').insert([{ sales_order_id: so!.sales_order_id, item_id: itemId, qty_ordered: 1, unit_price: unitPrice }]).select('sales_order_line_id').single();
+      const { data: lot } = await adminClient
+        .from('lots')
+        .insert([{ company_id: companyId, production_plant_id: plantId, item_id: itemId, lot_number: `LOT-KPITEST-${poSuffix}-${line!.sales_order_line_id}`, quantity_on_hand: 1, source_type: 'produced', status: 'available', unit_cost: unitCost }])
+        .select('lot_id')
+        .single();
+      const { data: shipment } = await adminClient
+        .from('shipments')
+        .insert([{ company_id: companyId, sales_order_id: so!.sales_order_id, shipment_date: today, status: 'delivered', delivery_address: 'Alamat Uji KPI' }])
+        .select('shipment_id')
+        .single();
+      await adminClient.from('shipment_lines').insert([{ shipment_id: shipment!.shipment_id, sales_order_line_id: line!.sales_order_line_id, item_id: itemId, qty_shipped: 1, lot_id: lot!.lot_id }]);
+    }
+
+    await ship(testGummyItemId, 108000, 34344, 'gummy'); // (108000-34344)/108000 = 68.2%
+    await ship(testDrinkmeItemId, 33000, 26829, 'drinkme'); // (33000-26829)/33000 = 18.7%
+
+    const res = await listKpiCards(makeRequest('http://x/api/kpi', adminToken, 'GET'));
+    expect(res.status).toBe(200);
+    const marginPersen = (res.body.cards as any[]).find((c) => c.metric_key === 'metric.margin_kontribusi_persen');
+    const gummyInput = marginPersen.provenance.inputs.find((i: any) => i.label === 'TESTGUMMY-FG');
+    const drinkmeInput = marginPersen.provenance.inputs.find((i: any) => i.label === 'TESTDRINKME-FG');
+    expect(gummyInput.value).toBe('68.2%');
+    expect(drinkmeInput.value).toBe('18.7%');
+
+    // Verifikasi literal pemilik produk: Drinkme menyala di bawah target 35%, Gummy tidak.
+    expect(parseFloat(drinkmeInput.value)).toBeLessThan(Number(marginPersen.target_value));
+    expect(parseFloat(gummyInput.value)).toBeGreaterThan(Number(marginPersen.target_value));
   });
 });

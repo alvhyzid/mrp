@@ -40,6 +40,7 @@ type KpiCardData = {
 // persediaan: terlalu tinggi = modal tertidur, terlalu rendah = risiko stock-out).
 const DISPLAY_CONFIG: Record<string, { title: string; format: (v: number) => string; higherIsBetter: boolean | null }> = {
   'metric.margin_kontribusi': { title: 'Margin Kontribusi Bulanan', format: (v) => formatCurrency(v, { maxDecimals: 0 }), higherIsBetter: true },
+  'metric.margin_kontribusi_persen': { title: 'Margin Kontribusi %', format: (v) => `${v.toFixed(1)}%`, higherIsBetter: true },
   'metric.biaya_produksi_per_unit': { title: 'Biaya Produksi per Unit (Rata-rata)', format: (v) => formatCurrency(v, { maxDecimals: 0 }), higherIsBetter: false },
   'metric.laba_operasional_bulanan': { title: 'Laba Operasional Bulanan', format: (v) => formatCurrency(v, { maxDecimals: 0 }), higherIsBetter: true },
   'metric.yield_per_tahap_produk': { title: 'Yield per Tahap (Rata-rata Mingguan)', format: (v) => `${v.toFixed(1)}%`, higherIsBetter: true },

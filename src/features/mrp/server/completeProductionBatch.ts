@@ -34,6 +34,7 @@ export async function completeProductionBatch(request: NextRequest): Promise<Api
     if (!productionBatchId) {
       return { status: 400, body: { error: 'production_batch_id wajib diisi.' } };
     }
+    const rework = Boolean(body.rework);
 
     const adminClient = getAdminClient();
 
@@ -49,7 +50,7 @@ export async function completeProductionBatch(request: NextRequest): Promise<Api
 
     const { error: updateError } = await adminClient
       .from('production_batches')
-      .update({ status: 'completed', completed_at: new Date().toISOString() })
+      .update({ status: 'completed', completed_at: new Date().toISOString(), rework })
       .eq('production_batch_id', productionBatchId);
     if (updateError) return { status: 400, body: { error: updateError.message } };
 

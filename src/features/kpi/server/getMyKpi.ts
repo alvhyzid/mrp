@@ -4,6 +4,7 @@ import { canViewKpi, isCompanyLeadership, canManageHr, getDepartmentForRole, get
 import {
   fetchOperatingProfitRpc,
   computeMarginKontribusiFromRpc,
+  computeMarginKontribusiPersen,
   computeLabaOperasionalFromRpc,
   computeBiayaProduksiPerUnit,
   computeYieldPerTahapProduk,
@@ -79,9 +80,11 @@ export async function getMyKpi(request: NextRequest): Promise<ApiResult> {
     for (const kpi of relevantKpis) {
       if (!canViewKpi(targetRole, kpi)) continue; // tetap hormati canViewKpi utk role target, bukan cuma "relevan"
       let result;
-      if (kpi.metric_key === 'metric.margin_kontribusi' || kpi.metric_key === 'metric.laba_operasional_bulanan') {
+      if (kpi.metric_key === 'metric.margin_kontribusi' || kpi.metric_key === 'metric.margin_kontribusi_persen' || kpi.metric_key === 'metric.laba_operasional_bulanan') {
         if (rpcCache.value === undefined) rpcCache.value = await fetchOperatingProfitRpc(request, appUser.company_id);
-        result = kpi.metric_key === 'metric.margin_kontribusi' ? computeMarginKontribusiFromRpc(rpcCache.value) : computeLabaOperasionalFromRpc(rpcCache.value);
+        if (kpi.metric_key === 'metric.margin_kontribusi') result = computeMarginKontribusiFromRpc(rpcCache.value);
+        else if (kpi.metric_key === 'metric.margin_kontribusi_persen') result = await computeMarginKontribusiPersen(adminClient, appUser.company_id, rpcCache.value);
+        else result = computeLabaOperasionalFromRpc(rpcCache.value);
       } else if (kpi.metric_key === 'metric.biaya_produksi_per_unit') {
         result = await computeBiayaProduksiPerUnit(adminClient, appUser.company_id);
       } else if (kpi.metric_key === 'metric.yield_per_tahap_produk') {

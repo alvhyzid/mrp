@@ -2,14 +2,15 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 // 5 KPI kategori A (docs/rencana-kerja-kpi.md §4 #1-5) -- semua sudah punya data,
 // tinggal kartu. target_value/benchmark_value SEMUA null (baseline dulu, target
-// kemudian, prinsip "baseline dulu" §4 dokumen). PENGECUALIAN yang DIPERIKSA sebelum
-// dilewatkan: dokumen §3 "penyerahan-opus-fitur-kpi.md" menyebut GPM/margin 35% =
+// kemudian, prinsip "baseline dulu" §4 dokumen) KECUALI KPI ke-6 di bawah.
+// RIWAYAT: dokumen §3 "penyerahan-opus-fitur-kpi.md" menyebut GPM/margin 35% =
 // target resmi perusahaan -- TAPI 35% adalah PERSENTASE (gross profit margin),
-// sedangkan KPI #1 di sini ("Margin kontribusi per order") berdenominasi RUPIAH
-// ABSOLUT (Harga jual - biaya variabel, rumus di kamus metric.margin_kontribusi).
-// Menaruh target_value=35 di baris berdenominasi Rupiah akan menghasilkan "delta vs
-// target" yang tidak masuk akal (35 dibanding puluhan juta Rupiah). TIDAK diterapkan
-// -- dilaporkan di HANDOFF untuk klarifikasi pemilik produk, bukan dipaksakan.
+// sedangkan KPI #1 ("Margin kontribusi per order") berdenominasi RUPIAH ABSOLUT.
+// Sesi 25 Agu 2026 (koreksi pemilik produk): TIDAK dipaksakan ke KPI #1, melainkan
+// ditambahkan KPI ke-6 BARU "Margin Kontribusi %" (persentase, data SAMA dgn #1,
+// cuma satuan beda) -- target 35% dipasang DI SANA, dgn catatan eksplisit GPM riil
+// (setelah overhead pabrik) vs Margin Kontribusi (belum, aturan K2) -- lihat kamus
+// metric.margin_kontribusi_persen utk kutipan lengkap catatannya.
 const KPI_DEFINITIONS = [
   {
     metric_key: 'metric.margin_kontribusi',
@@ -23,6 +24,25 @@ const KPI_DEFINITIONS = [
     visibility: ['ATASAN', 'DEPARTEMEN'],
     pemilik_role: 'finance_manager',
     kontributor_roles: ['ppic_manager']
+  },
+  {
+    metric_key: 'metric.margin_kontribusi_persen',
+    kind: 'HASIL' as const,
+    pillar: 'EFISIENSI' as const,
+    owner_role: 'finance_manager',
+    frequency: 'BULANAN' as const,
+    attribution_level: 'PERUSAHAAN' as const,
+    visibility: ['ATASAN', 'DEPARTEMEN'],
+    pemilik_role: 'finance_manager',
+    kontributor_roles: ['ppic_manager'],
+    // Target 35% = kebijakan GPM tim finance (permintaan pemilik produk 25 Agu 2026).
+    // target_set_by SENGAJA null -- ini keputusan kebijakan dari dokumen sumber, bukan
+    // hasil klik tombol "set target" oleh satu user tertentu (beda dari perubahan lewat
+    // updateKpiTarget.ts yang WAJIB terisi & tercatat kpi_registry_history).
+    target_value: 35,
+    benchmark_label: 'arah, bukan kontrak',
+    benchmark_source:
+      'Kebijakan GPM tim finance, Agu 2026. PERINGATAN: GPM sesungguhnya dihitung SETELAH overhead pabrik, Margin Kontribusi BELUM (aturan K2) -- angka ini SELALU LEBIH TINGGI dari GPM riil. Kalau sudah di bawah 35%, kondisi riil lebih buruk lagi.'
   },
   {
     metric_key: 'metric.biaya_produksi_per_unit',
@@ -84,7 +104,11 @@ export async function seedKpiRegistry(adminClient: SupabaseClient, companyId: nu
     frequency: k.frequency,
     attribution_level: k.attribution_level,
     visibility: k.visibility,
-    sort_order: idx
+    sort_order: idx,
+    target_value: 'target_value' in k ? k.target_value : null,
+    target_set_at: 'target_value' in k ? new Date().toISOString() : null,
+    benchmark_label: 'benchmark_label' in k ? k.benchmark_label : null,
+    benchmark_source: 'benchmark_source' in k ? k.benchmark_source : null
   }));
 
   const { data: inserted, error } = await adminClient.from('kpi_registry').upsert(registryRows, { onConflict: 'company_id,metric_key', ignoreDuplicates: true }).select('kpi_registry_id, metric_key');

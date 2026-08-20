@@ -7,7 +7,7 @@ interface ApiResult {
   body: Record<string, unknown>;
 }
 
-const disruptionTypes = ['equipment_breakdown', 'utility_outage', 'external_factor', 'reprioritized', 'other'];
+const disruptionTypes = ['equipment_breakdown', 'utility_outage', 'external_factor', 'reprioritized', 'changeover', 'other'];
 
 export async function createProductionDisruption(request: NextRequest): Promise<ApiResult> {
   try {

@@ -4,6 +4,53 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## KPI ke-6 "Margin Kontribusi %" + pelunasan utang dokumentasi skema — 25 Agu 2026
+
+Jawaban pemilik produk atas 2 temuan sesi KPI-1: (1) target 35% memang GPM, bukan sekadar
+kesalahan skala — perlu KPI persentase baru, bukan cuma dibiarkan null; (2) 4 modul yang
+ditemukan belum terdokumentasi di akhir sesi KPI-1 (Kamus, Dashboard Proyek AI, Kesiapan AI,
+Absensi) WAJIB dilunasi sebelum lanjut ke Bagian A/B/C/D/F, plus audit ulang modul lain.
+
+**KPI baru: `metric.margin_kontribusi_persen`** — data SAMA dengan `metric.margin_kontribusi`
+(Rupiah), cuma dinyatakan persen (bukan dihitung ulang jalur beda: total margin periode ÷
+total nilai jual periode × 100). `target_value = 35`. **Catatan wajib ditampilkan** (tab
+Definisi + `benchmark_source`): GPM finance dihitung SETELAH overhead pabrik, sedangkan
+Margin Kontribusi belum dikurangi overhead (aturan K2 — overhead baru masuk di Laba
+Operasional bulanan) — jadi angka KPI ini SELALU LEBIH TINGGI dari GPM sesungguhnya; kalau
+sudah di bawah 35% di sini, kondisi riil lebih buruk lagi. Dipasang sebagai peringatan dini
+konservatif, bukan pengukur GPM presisi. **Diverifikasi via fixture test** (belum ada
+shipment nyata untuk company_id=1 saat ini — tabel `shipments` kosong, dicek langsung):
+skenario Gummy (harga 108.000/biaya 34.344 → 68,2%) dan Drinkme (harga 33.000/biaya 26.829 →
+18,7%) di `tests/kpi_module.test.ts`, membuktikan formula benar dan Drinkme < target(35) <
+Gummy sesuai contoh pemilik produk. Seed 5→6 KPI, semua test 6/6 metrik lulus.
+**Pertanyaan terbuka ke finance** (belum terjawab): apakah GPM 35% memang dihitung setelah
+overhead pabrik? Kalau ya, KPI persentase ini tetap cuma proksi konservatif — perlu KPI GPM
+terpisah yang benar-benar sepadan (baru bisa dibangun kalau overhead sudah teralokasi per-SO,
+belum ada strukturnya sekarang).
+
+**Pelunasan utang dokumentasi** — audit ulang SELURUH tabel migration (`grep` semua
+`create table if not exists` di `supabase/migrations/*.sql`, cross-check ke kedua dokumen
+skema) menemukan, selain 4 modul yang sudah diketahui, **2 gap tambahan**:
+- `status_transition_rules`/`status_transition_log` — SUDAH ada di `daftar-database-sederhana.md`
+  (Kelompok 5) tapi TIDAK PERNAH masuk `rancangan-skema-database-mrp.md` — inkonsistensi
+  antar dokumen, bukan gap total. Diporting ke dokumen teknis (setelah `system_alerts`,
+  sebelum Kelompok 6 Billing).
+- `production_standards` + 3 tabel terkait (`production_standard_proposals`/`_samples`/
+  `_exclusions`) — gap LEBIH BESAR dari perkiraan awal: tabel INTI `production_standards`
+  sendiri (bukan cuma satelitnya) TIDAK PERNAH punya heading `###` sendiri di dokumen mana
+  pun, walau dirujuk puluhan kali di catatan tabel lain. Ditulis lengkap di kedua dokumen
+  (setelah `routing_steps`, sebelum `formula_templates`).
+
+Setelah kedua gap ini dilunasi, audit re-run (`comm` antara daftar tabel migration vs daftar
+tabel terdokumentasi) menghasilkan **NOL selisih** — semua tabel di database sekarang
+tercatat di `docs/rancangan-skema-database-mrp.md`. 4 modul yang diminta eksplisit (Kamus,
+Dashboard Proyek AI, Kesiapan AI, Absensi) + KPI-1 itu sendiri semuanya sudah masuk Kelompok
+7-11 di kedua dokumen (dikerjakan sesi KPI-1 sebelumnya, dikonfirmasi masih utuh).
+`npx tsc --noEmit` bersih, `npm test` dijalankan ulang setelah semua perubahan dokumentasi +
+KPI baru.
+
+---
+
 ## Modul KPI — KPI-1 (registry, snapshot, kartu 3-garis, panel bertab, KPI Saya) — 25 Agu 2026
 
 Instruksi "Bagian E (FINAL)" — MENGGANTIKAN rencana Bagian E lama, dari 3 dokumen dibaca

@@ -169,6 +169,10 @@ const NAV_SECTIONS: NavSection[] = [
     ]
   },
   {
+    title: 'Dokumen',
+    items: [{ label: 'Master Dokumen', href: '/documents', visible: () => true, icon: Document }]
+  },
+  {
     title: 'Settings',
     items: [
       { label: 'Apa yang Baru', href: '/whats-new', visible: () => true, icon: Star },

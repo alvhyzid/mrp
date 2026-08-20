@@ -434,4 +434,32 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 **Database Riwayat Perubahan KPI** (`kpi_registry_history`)
 - ID Riwayat (kpi_registry_history_id) · ID KPI (kpi_registry_id) · Diubah Oleh/Kapan (changed_by/changed_at) · Field yang Berubah (field_changed) · Nilai Lama/Baru (old_value/new_value)
 
+---
+
+## Kelompok 12: Master Dokumen (MD-1, 26 Agu 2026)
+
+Satu tempat untuk semua berkas masuk/keluar sistem — PO klien, POD, surat jalan, COA, sertifikat Halal, spesifikasi bahan, kontrak, SOP. Registry DI ATAS storage yang sudah ada, bukan sistem upload kedua.
+
+**Database Jenis Dokumen** (`document_types`) — konfigurasi per perusahaan
+- ID (document_type_id) · Kode (code) · Nama (name) · Departemen Disarankan (owner_role) · Sensitivitas Default (sensitivity_default) · Wajib Ada Tanggal Kedaluwarsa? (requires_expiry) · Retensi Bulan (retention_months) · Hari Pengingat Sebelum Kedaluwarsa (reminder_days_before)
+- Seed awal 9 jenis: PO Klien, POD, Surat Jalan, COA, Sertifikat Halal, Spesifikasi Bahan, Kontrak, SOP, Lainnya
+
+**Database Dokumen** (`documents`)
+- ID (document_id) · Jenis (doc_type) · Judul (title) · Nomor (doc_number) · Deskripsi (description)
+- Lokasi Berkas (storage_path) · Tipe File (mime_type) · Ukuran (size_bytes) · Checksum (checksum_sha256)
+- Penerbit (issued_by) · Tanggal Terbit/Berlaku/Kedaluwarsa (issued_date/effective_date/expiry_date)
+- Status: Aktif/Kedaluwarsa/Diarsip/Diganti (status)
+- Grup Versi (version_group_id) · Nomor Versi (version_no) · Digantikan Oleh (superseded_by)
+- Sensitivitas: Umum/Departemen/Terbatas (sensitivity) · Departemen (department) · Diunggah Oleh/Kapan (uploaded_by/uploaded_at)
+
+> Hapus = arsip. Dokumen bertaut entitas transaksi TIDAK PERNAH dihapus permanen. Hapus permanen HANYA untuk berkas yatim (tanpa tautan), HANYA oleh company_admin, dengan alasan wajib tercatat.
+> Visibilitas TERBATAS/DEPARTEMEN ditegakkan DUA LAPIS (database DAN aplikasi) supaya tidak bisa dilewati.
+
+**Database Tautan Dokumen** (`document_links`) — satu dokumen bisa menempel ke banyak entitas
+- ID (document_link_id) · ID Dokumen (document_id) · Jenis Entitas (entity_type) · ID Entitas (entity_id) · Peran Tautan (link_role, mis. COA/SUMBER/SERTIFIKAT)
+
+**Database Log Akses Dokumen** (`document_access_log`) — hanya leadership yang bisa baca
+- ID (document_access_log_id) · ID Dokumen (document_id, nullable) · Nama Dokumen Tersimpan (document_title_snapshot) · Diakses Oleh (accessed_by) · Aksi: Lihat/Unduh/Hapus (action) · Alasan (reason) · Waktu (accessed_at)
+- "Lihat" dicatat HANYA untuk dokumen Terbatas (supaya log tidak penuh tanpa nilai audit)
+
 > 6 KPI awal sudah diisi (Margin Kontribusi, **Margin Kontribusi % — BARU 25 Agu 2026**, Biaya per Unit, Laba Operasional, Yield per Tahap, Nilai Persediaan) — semua nilai target masih kosong KECUALI Margin Kontribusi % (target 35%, kebijakan GPM finance, dgn catatan wajib: angka ini selalu lebih tinggi dari GPM riil karena belum dikurangi overhead pabrik — pertanyaan terbuka ke finance dicatat di HANDOFF).

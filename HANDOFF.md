@@ -4,6 +4,67 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Master Dokumen MD-1 (Bagian C) — 26 Agu 2026
+
+Gerbang waktu "setelah SAS001 & SAS005 terkirim" DIBATALKAN eksplisit oleh pemilik produk
+("asumsikan sudah ada, kita bangun semuanya nanti diperbaiki sambil jalan") — berlaku
+untuk gerbang serupa di dokumen manapun. Dikerjakan SETELAH formula resmi (prioritas
+eksplisit pemilik produk: "Master Dokumen tidak mengubah angka apa pun; formula
+mengubah semuanya").
+
+**Skema baru**: `document_types` (konfigurasi per tenant, seed 9 jenis), `documents`
+(registry inti), `document_links` (satu dokumen -> banyak entitas), `document_access_log`
+(audit trail, hanya leadership baca). Detail lengkap + penyimpangan dari model data
+sumber: `docs/rancangan-skema-database-mrp.md` Kelompok 12.
+
+**6 pertanyaan wawancara §7** — 4 sudah dijawab eksplisit pemilik produk (retensi = arsip
+semua tanpa hard-delete v1; xlsx/docx unduh saja TANPA konversi; hard-delete berkas yatim
+HANYA company_admin; dokumen HRD/kontrak MASUK modul ini dgn sensitivity TERBATAS). **2
+masih pakai default sementara, PERLU DIKOREKSI pemilik produk**:
+1. Daftar 9 jenis dokumen & pemilik tiap jenis (seed di `seedDocumentTypes.ts`) — draf
+   dari dokumen rencana, belum divalidasi pemilik produk.
+2. Pengingat kedaluwarsa 90/60/30 hari sebelum, penerima = role pemilik jenis dokumen —
+   kolom `reminder_days_before` sudah terisi tapi MEKANISME PENGIRIMAN PENGINGAT belum
+   dibangun (itu scope MD-2, belum dikerjakan sesi ini).
+
+**Visibilitas TERBATAS/DEPARTEMEN — dua lapis, WAJIB tetap sinkron kalau ada perubahan
+nanti**: RLS `documents`+storage policy bucket `documents` (bucket PRIVAT PERTAMA di
+proyek ini — semua bucket sebelumnya public avatar/logo/signature/POD) DAN
+`canViewDocument()` di `src/lib/roles.ts` (dipakai `listDocuments.ts`/
+`getDocumentSignedUrl.ts` yang jalan lewat admin client, jadi RLS SENDIRIAN tidak cukup
+untuk endpoint aplikasi — hanya jaring pengaman akses PostgREST/storage langsung).
+Departemen efektif user diturunkan dari ROLE (strip akhiran `_manager`/`_staff`), BUKAN
+`employees.department` — kalau nanti role baru ditambahkan yang tidak ikut pola
+`xxx_manager`/`xxx_staff`, fungsi `jwt_document_department()` (SQL) dan
+`getDocumentDepartmentForRole()` (TypeScript) BERDUA harus diperbarui bersamaan.
+
+**5 skenario negatif §6 — SEMUA lulus** (`tests/master_dokumen_md1.test.ts`, 7 test):
+lintas-departemen dokumen TERBATAS ditolak (registry DAN storage langsung, dua uji
+terpisah); hard delete dokumen bertaut entitas ditolak; signed URL dengan token
+dirusak ditolak (proksi utk "kedaluwarsa" — menunggu 120 detik sungguhan tidak praktis
+di CI, didokumentasikan di komentar test); berkas .exe berganti nama .pdf ditolak
+magic-bytes; tenant lain mencari dokumen tenant ini nihil.
+
+**Diverifikasi browser** (`company.b@debug.mrp`, BUKAN company.a — sesuai keputusan
+tenant uji terpisah di bawah): seed jenis dokumen lewat tombol UI, unggah PDF asli,
+dokumen muncul di daftar dengan metadata benar, viewer inline PDF terbuka via signed
+URL, tidak ada error console. Dokumen uji dibersihkan setelah verifikasi.
+
+**BELUM dikerjakan** (scope MD-2/MD-3, bukan lupa): dashboard kedaluwarsa + pengiriman
+pengingat aktual, tautan wajib per jenis dokumen (COA utk goods receipt bahan kritis),
+KPI DISIPLIN dokumen, paket audit satu-klik per lot/batch, ekstraksi teks/pencarian isi
+dokumen (`ocr_text`, kolom sengaja belum ditambahkan), dokumen terkendali SOP dgn alur
+approval. Backfill dokumen LAMA (avatar/signature/logo/POD lama) ke registry ini juga
+BELUM dikerjakan (`uploadFileWithMetadata` yang sudah ada TIDAK diretrofit, sesuai aturan
+CLAUDE.md "hanya berlaku maju").
+
+`npx tsc --noEmit` bersih, `npm test` semua lulus (termasuk memperbaiki 1 test audit
+keamanan grants yang sempat merah karena `jwt_document_department()` belum masuk
+allowlist `ALLOWED_BROAD_GRANT` — fungsi ini aman, pola sama helper JWT lain, cuma lupa
+didaftarkan).
+
+---
+
 ## Formula resmi Gummy Zala V2 / Drinkme V1 diterapkan ke BOM + pembersihan test — 26 Agu 2026
 
 Lembar formula resmi (formulator Dhiska, 14 Agu 2026, status Production) menggantikan

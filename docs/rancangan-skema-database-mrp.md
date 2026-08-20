@@ -635,10 +635,59 @@ Rupiah (unit mismatch, lihat catatan sebelumnya). **Catatan wajib tampil di kart
 sesungguhnya dihitung SETELAH overhead pabrik, Margin Kontribusi BELUM (aturan K2) — angka
 ini SELALU LEBIH TINGGI dari GPM riil, dipasang sebagai peringatan dini konservatif.
 Diverifikasi via fixture test (`tests/kpi_module.test.ts`): harga+biaya nyata Gummy Zala
-(Rp108.000, biaya Rp34.344) → 68,2%; Drinkme (Rp33.000, biaya Rp26.829) → 18,7% — cocok
-dgn angka acuan pemilik produk. **PERTANYAAN TERBUKA ke tim finance** (dicatat HANDOFF):
-apakah GPM 35% sungguh dihitung setelah overhead pabrik? Kalau ya, KPI GPM yang benar-benar
-sepadan (bukan proksi konservatif ini) perlu dibangun terpisah nanti.
+(Rp108.000, biaya Rp34.307,23) → 68,2%; Drinkme (Rp33.000, biaya Rp26.817,29) → 18,7% —
+cocok dgn angka acuan pemilik produk (angka biaya DIPERBARUI 26 Agu 2026 setelah formula
+resmi Gummy Zala V2/Drinkme V1 diterapkan ke BOM — lihat Kelompok 12). **PERTANYAAN
+TERBUKA ke tim finance** (dicatat HANDOFF): apakah GPM 35% sungguh dihitung setelah
+overhead pabrik? Kalau ya, KPI GPM yang benar-benar sepadan (bukan proksi konservatif ini)
+perlu dibangun terpisah nanti.
+
+---
+
+## Kelompok 12: Master Dokumen — MD-1 (Bagian C, 26 Agu 2026)
+
+Fondasi registry berkas — SATU tempat untuk semua dokumen masuk/keluar sistem (PO klien,
+POD, surat jalan, COA, sertifikat Halal, spesifikasi bahan, kontrak, SOP). Registry di
+ATAS storage yang sudah ada, bukan silo baru — semua unggahan BARU (aturan CLAUDE.md
+"Aturan Unggah Berkas") lewat `uploadDocument.ts`, yang memanggil `uploadFileWithMetadata`
+(checksum) LALU menambah baris registry, bukan menggantikannya. Gerbang waktu "setelah
+SAS001 & SAS005 terkirim" di dokumen sumber DIBATALKAN eksplisit oleh pemilik produk 26
+Agu 2026 ("asumsikan sudah ada, kita bangun semuanya nanti diperbaiki sambil jalan") —
+berlaku untuk gerbang serupa di dokumen manapun.
+
+### `document_types`
+Konfigurasi PER TENANT — menambah/mengubah jenis dokumen tidak membongkar apa pun.
+- `document_type_id`, `company_id`, `code`, `name` (unik per company)
+- `owner_role` (nullable, departemen disarankan memiliki jenis ini — pola sama `kamus_terms.suggested_role`)
+- `sensitivity_default` (`UMUM`/`DEPARTEMEN`/`TERBATAS`), `requires_expiry`, `retention_months` (nullable), `reminder_days_before` (integer[], nullable)
+- Seed awal 9 jenis (§2 dokumen rencana, BELUM final — 2 dari 6 pertanyaan wawancara §7 masih pakai default sementara, ditandai HANDOFF): `PO_KLIEN`, `POD`, `SURAT_JALAN`, `COA`, `SERTIFIKAT_HALAL`, `SPEC_BAHAN`, `KONTRAK`, `SOP`, `LAINNYA`
+
+### `documents`
+- `document_id`, `company_id`, `doc_type` (merujuk `document_types.code`, bukan FK komposit — tetap valid dibaca meski baris jenisnya berubah)
+- `title`, `doc_number` (nullable), `description` (nullable)
+- `storage_path`, `mime_type`, `size_bytes`, `checksum_sha256`
+- `issued_by` (nullable, free text), `issued_date`/`effective_date`/`expiry_date` (nullable)
+- `status` (`AKTIF`/`KEDALUWARSA`/`DIARSIP`/`DIGANTI`)
+- `version_group_id` (nullable, `document_id` versi pertama di grup), `version_no`, `superseded_by` (nullable, → `documents`)
+- `sensitivity` (`UMUM`/`DEPARTEMEN`/`TERBATAS`) + `department` (nullable, wajib diisi kalau bukan UMUM — daftar nilai SAMA `employees.department`)
+- `uploaded_by` (→ `users`), `uploaded_at`
+
+> **Penyimpangan dari model data dokumen sumber** (diperiksa & didokumentasikan): `department_id`/`department_owner_role_id` → `department text`/`owner_role text` (proyek ini tidak punya tabel `roles`/`departments` terpisah). `ocr_text tsvector` SENGAJA TIDAK ditambahkan — itu scope MD-3 (pencarian isi dokumen), belum dipakai = kolom mati kalau ditambah sekarang.
+
+> **Aturan §3.1 tidak bisa ditawar — "Hapus = arsip".** Dokumen bertaut entitas transaksi (via `document_links`) TIDAK PERNAH hard-delete. Hard delete HANYA untuk berkas yatim (`document_links` kosong), HANYA `company_admin` (bukan `general_manager` — sengaja lebih sempit dari leadership biasa, tindakan destruktif ireversibel), dengan alasan WAJIB tercatat permanen di `document_access_log` (action `delete` + `reason`, `document_id` nullable `ON DELETE SET NULL` supaya baris log tetap hidup setelah dokumennya hilang, `document_title_snapshot` disalin sebelum hilang).
+
+> **Visibilitas sensitivity — ditegakkan DUA LAPIS, harus sinkron** (fungsi `jwt_document_department()`: departemen efektif dari ROLE, bukan `employees.department` — strip akhiran `_manager`/`_staff`; `company_admin`/`general_manager`/`admin_staff` tidak ter-map, lolos lewat `jwt_is_company_leadership()`). UMUM = semua orang di company; DEPARTEMEN = manager ATAU staff di departemen yang sama, atau leadership; TERBATAS = HANYA manager departemen yang sama, atau leadership (staff department sendiri TIDAK otomatis lihat TERBATAS departemennya — v1, relevan untuk kontrak kerja HRD). **Lapis 1**: RLS `documents`/storage policy bucket `documents` (bucket PRIVAT, PERTAMA di proyek ini — semua bucket sebelumnya public). **Lapis 2**: `listDocuments.ts`/`getDocumentSignedUrl.ts` pakai admin client (pola sama `listKamusTerms.ts` dkk), jadi filter yang SAMA PERSIS ditegakkan ULANG di TypeScript (`canViewDocument()` di `src/lib/roles.ts`) — RLS di sini cuma jaring pengaman untuk akses PostgREST/storage langsung, bukan satu-satunya gerbang endpoint aplikasi.
+
+### `document_links`
+Satu dokumen bisa menempel ke banyak entitas.
+- `document_link_id`, `company_id`, `document_id` (→ `documents`), `entity_type` (nama tabel, mis. `lots`/`sales_orders`), `entity_id`, `link_role` (mis. `COA`/`SUMBER`/`SERTIFIKAT`/`POD`)
+
+### `document_access_log`
+Audit trail — HANYA leadership yang bisa baca (beda dari `status_transition_log`/`document_signatures` yang company-wide select, karena isinya "siapa membuka dokumen sensitif apa").
+- `document_access_log_id`, `company_id`, `document_id` (nullable, `ON DELETE SET NULL`), `document_title_snapshot` (nullable), `accessed_by` (→ `users`), `action` (`view`/`download`/`delete`), `reason` (nullable, diisi untuk `delete`), `accessed_at`
+- **View** dicatat HANYA untuk dokumen TERBATAS (UMUM/DEPARTEMEN tidak, supaya log tidak dibanjiri tanpa nilai audit)
+
+> **"Lihat tanpa mengunduh" = signed URL berumur PENDEK (120 detik)** — viewer inline PDF/gambar langsung di halaman (pdf.js browser native lewat `<iframe>`), bukan URL permanen yang bisa disebar. Jenis office (xlsx/docx) v1 = unduh saja (keputusan eksplisit pemilik produk, "jangan bangun konversi dokumen"), validasi magic-bytes: PDF/gambar 100% dari byte; xlsx/docx dikonfirmasi kontainer ZIP asli + dipercaya dari ekstensi klaim (byte magic number TIDAK bisa membedakan xlsx/docx/pptx sendirian tanpa buka `[Content_Types].xml`, didokumentasikan sebagai keterbatasan v1 di `src/lib/imageUpload.ts`).
 
 ---
 

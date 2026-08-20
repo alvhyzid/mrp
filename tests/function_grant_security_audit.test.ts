@@ -40,6 +40,7 @@ const ALLOWED_BROAD_GRANT: Record<string, string> = {
   jwt_can_view_wages: 'RLS-policy helper, hanya baca klaim JWT pemanggil sendiri',
   jwt_is_company_leadership: 'RLS-policy helper, hanya baca klaim JWT pemanggil sendiri',
   jwt_managed_department: 'RLS-policy helper, hanya baca klaim JWT pemanggil sendiri',
+  jwt_document_department: 'RLS-policy helper (Master Dokumen MD-1, 26 Agu 2026), hanya baca klaim JWT pemanggil sendiri',
   employee_belongs_to_current_user: 'RLS-policy helper dengan pemeriksaan internal, dipakai di policy employee_attendance',
   employee_matches_managed_department: 'RLS-policy helper dengan pemeriksaan internal, dipakai di policy employee_attendance',
   // Bukan SECURITY DEFINER -- berjalan sebagai pemanggil, jadi RLS tabel yang

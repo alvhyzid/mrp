@@ -338,3 +338,32 @@ export function canViewKpi(role: string | undefined | null, kpi: { owner_role: s
 export function canManageKpiRegistry(role: string | undefined | null): boolean {
   return isCompanyLeadership(role);
 }
+
+// Master Dokumen MD-1 -- HARUS sinkron persis dengan jwt_document_department() di
+// supabase/migrations/20260826110000_master_dokumen_md1.sql (listDocuments.ts pakai
+// admin client + filter TypeScript ini, BUKAN RLS -- pola sama listKamusTerms.ts dkk --
+// jadi visibilitas dokumen TERBATAS/DEPARTEMEN wajib ditegakkan DI SINI juga, RLS cuma
+// jaring pengaman untuk akses PostgREST/storage langsung).
+export function getDocumentDepartmentForRole(role: string | undefined | null): string | null {
+  if (!role) return null;
+  if (role.endsWith('_manager')) return role.slice(0, -'_manager'.length);
+  if (role.endsWith('_staff')) return role.slice(0, -'_staff'.length);
+  return null;
+}
+
+export function canViewDocument(role: string | undefined | null, docSensitivity: string, docDepartment: string | null): boolean {
+  if (docSensitivity === 'UMUM') return true;
+  if (isCompanyLeadership(role)) return true;
+  const userDepartment = getDocumentDepartmentForRole(role);
+  if (!userDepartment || userDepartment !== docDepartment) return false;
+  if (docSensitivity === 'DEPARTEMEN') return true;
+  if (docSensitivity === 'TERBATAS') return !!role && role.endsWith('_manager');
+  return false;
+}
+
+// Hapus permanen berkas yatim (tanpa document_links) -- pemilik produk 26 Agu 2026:
+// "hanya company_admin" (BUKAN general_manager, beda dari isCompanyLeadership biasa --
+// tindakan destruktif ireversibel, sengaja lebih sempit daripada leadership umum).
+export function canHardDeleteOrphanDocument(role: string | undefined | null): boolean {
+  return role === 'company_admin';
+}

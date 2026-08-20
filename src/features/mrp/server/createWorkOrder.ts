@@ -30,12 +30,15 @@ export async function createWorkOrder(request: NextRequest): Promise<ApiResult> 
 
     const { data: plant, error: plantError } = await adminClient
       .from('production_plants')
-      .select('production_plant_id')
+      .select('production_plant_id, name, is_active')
       .eq('production_plant_id', input.production_plant_id)
       .eq('company_id', appUser.company_id)
       .maybeSingle();
     if (plantError) return { status: 500, body: { error: plantError.message } };
     if (!plant) return { status: 400, body: { error: 'Lokasi pabrik tidak ditemukan di perusahaan Anda.' } };
+    if (!plant.is_active) {
+      return { status: 400, body: { error: `Plant "${plant.name}" belum beroperasi (is_active=false). Work Order tidak bisa dibuat di lokasi ini.` } };
+    }
 
     const { data: bom, error: bomError } = await adminClient
       .from('boms')

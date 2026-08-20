@@ -74,7 +74,7 @@ type Bom = {
   buffer_percentage: number | null;
   lines: { component_item_id: number; component_item_code: string | null; component_item_name: string | null; qty_per_unit_output: number; uom: string }[];
 };
-type PlantOption = { production_plant_id: number; name: string };
+type PlantOption = { production_plant_id: number; name: string; is_active: boolean };
 type RoutingStep = { routing_step_id: number; sequence_no: number; step_name: string };
 type RoutingOption = { routing_id: number; item_id: number; version: number; steps: RoutingStep[] };
 type EmployeeOption = { employee_id: number; name: string; position: string | null; is_active: boolean };
@@ -208,7 +208,7 @@ export default function WorkOrdersPage() {
 
   const loadPlants = useCallback(async () => {
     const { ok, body } = await authedFetch('/api/production-plants');
-    if (ok) setPlants(body.plants || []);
+    if (ok) setPlants((body.plants || []).filter((p: PlantOption) => p.is_active));
   }, [authedFetch]);
 
   const loadEmployees = useCallback(async () => {

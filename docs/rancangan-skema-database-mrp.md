@@ -150,6 +150,7 @@ Semua "benda" yang dikenal sistem — bahan mentah, WIP, produk jadi, kemasan. P
 - `uom_conversion_factor` (berapa `base_uom` per 1 `purchase_uom` — mis. 1000 untuk kg→gram; kalau `purchase_uom` = `base_uom`, factor = 1, otomatis tanpa konversi)
 - `shelf_life_days`, `min_stock_level`, `reorder_point`, `reorder_qty`, `is_active`
 - `standard_cost` (nullable — nilai sensitif, lihat "Kontrol Akses Data Finansial")
+- `cost_unverified` (boolean, default false, 26 Agu 2026 — formula resmi Gummy Zala V2/Drinkme V1) — beda dari `standard_cost` null (harga TIDAK ADA): di sini harga ADA dan ikut dihitung ke biaya standar, cuma statusnya "belum dikonfirmasi purchasing". `cost_unverified_note` (nullable) — alasan singkatnya. Dipakai Margin Watch untuk peringatan terpisah dari `missing_cost_item_codes`.
 - `bpom_registration_number` (nullable — mis. "BPOM RI MD 023733999101561", khusus produk jadi yang sudah teregistrasi)
 
 > **Catatan MOQ:** sengaja TIDAK dimodelkan. Purchasing beli sesuai realita (termasuk MOQ dari supplier), lalu input hasil pembelian sesuai data invoice apa adanya — sistem tidak memvalidasi/membatasi jumlah beli.
@@ -309,6 +310,7 @@ Margin Watch Lapis 1 (20 Agu 2026) — baseline margin RENCANA per baris SO, pol
 - `standard_labor_cost_per_unit` (20 Agu 2026, Bagian B — SEKARANG SELALU ANGKA, dihitung dari `routing_step_standard_crew`, lihat tabel di bawah; SEBELUMNYA selalu NULL karena belum ada tabel kru — histori dipertahankan di komentar `computeStandardLaborCostPerUnit.ts`)
 - `labor_cost_complete` (boolean) + `labor_cost_notes` (text[]) — pola identik `cost_data_complete`/`missing_cost_item_codes` di bawah, tapi untuk SDM: kalau ADA level produksi (item top ATAU WIP bersarang) yang routing/kru/`production_standards`-nya belum lengkap, jumlah PARSIAL tetap ditampilkan (BUKAN disembunyikan jadi null/0) dan `labor_cost_notes` menjelaskan persis level mana yang dilewati dan kenapa
 - `cost_data_complete` (boolean) + `missing_cost_item_codes` (text[]) — eksplisit menandai kalau ADA bahan/kemasan leaf yang belum punya `items.standard_cost`, supaya baseline yang tidak lengkap TIDAK diam-diam dianggap benar 100%
+- `unverified_cost_item_codes` (text[], 26 Agu 2026) — beda dari `missing_cost_item_codes`: item DI SINI punya `standard_cost` dan IKUT dijumlah ke `standard_material_cost_per_unit`/`standard_packaging_cost_per_unit`, cuma `items.cost_unverified=true` (harga asumsi, belum dikonfirmasi purchasing) — ditampilkan sebagai peringatan terpisah, bukan alasan "belum lengkap"
 - `margin_floor_threshold` (nullable, numeric) — SATU-SATUNYA kolom yang BOLEH di-`UPDATE` dari app layer (preferensi pemilik order, kapan saja); kolom lain immutable sejak snapshot dibuat
 - `created_at`
 

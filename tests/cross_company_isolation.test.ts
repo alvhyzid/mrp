@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -161,16 +162,11 @@ describe('cross-company RLS isolation verification', () => {
       ['employees', () => adminClient.from('employees').delete().eq('company_id', companyXId)],
       ['users', () => adminClient.from('users').delete().in('company_id', [companyXId, companyYId])],
       ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyXId)],
-      ['companies', () => adminClient.from('companies').delete().in('company_id', [companyXId, companyYId])]
+      ['auth:user_x', () => adminClient.auth.admin.deleteUser(userXAuthUid)],
+      ['auth:user_y', () => adminClient.auth.admin.deleteUser(userYAuthUid)]
     ];
 
-    for (const [label, run] of cleanupSteps) {
-      const { error } = await run();
-      if (error) throw new Error(`Cleanup failed at ${label}: ${error.message}`);
-    }
-
-    await adminClient.auth.admin.deleteUser(userXAuthUid);
-    await adminClient.auth.admin.deleteUser(userYAuthUid);
+    await cleanupCompanyCascade(adminClient, [companyXId, companyYId], cleanupSteps);
   });
 
   it('user Company Y: SELECT items milik Company X -> 0 baris', async () => {

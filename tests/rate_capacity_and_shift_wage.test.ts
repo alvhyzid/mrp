@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 import { getEffectiveStepDurationMinutes } from '../src/features/mrp/server/stepDuration';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Routing serbuk nyata (20 Agu 2026) — 2 kemampuan generik baru dibutuhkan tahap
 // "Filling Sachet" (2 mesin, laju 15-20 pcs/menit/mesin): routing_steps.
@@ -125,13 +126,9 @@ describe('Fase Produksi Nyata — kapasitas Work Center sadar unit_count + laju'
       ['boms', () => adminClient.from('boms').delete().eq('company_id', companyId)],
       ['work_centers', () => adminClient.from('work_centers').delete().eq('company_id', companyId)],
       ['items', () => adminClient.from('items').delete().eq('company_id', companyId)],
-      ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)],
-      ['companies', () => adminClient.from('companies').delete().eq('company_id', companyId)]
+      ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)]
     ];
-    for (const [label, run] of cleanupSteps) {
-      const { error } = await run();
-      if (error) throw new Error(`Cleanup failed at ${label}: ${error.message}`);
-    }
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   it('total_capacity_hours = capacity_hours_per_day x unit_count x hari kerja/minggu (bukan cuma capacity_hours_per_day)', async () => {
@@ -242,13 +239,9 @@ describe('Fase Produksi Nyata — upah PHL sadar-shift (migration 20260820150000
       ['items', () => adminClient.from('items').delete().eq('company_id', companyId)],
       ['employees', () => adminClient.from('employees').delete().eq('company_id', companyId)],
       ['shifts', () => adminClient.from('shifts').delete().eq('company_id', companyId)],
-      ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)],
-      ['companies', () => adminClient.from('companies').delete().eq('company_id', companyId)]
+      ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)]
     ];
-    for (const [label, run] of cleanupSteps) {
-      const { error } = await run();
-      if (error) throw new Error(`Cleanup failed at ${label}: ${error.message}`);
-    }
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   it('PHL kerja shift 1 (7 jam) DAN shift 2 (6 jam) hari yang sama -> dihitung SEBAGAI 2 HARI KERJA TERPISAH (Rp50.000 + Rp50.000 = Rp100.000), bukan dibagi rata 13 jam / 7 jam', async () => {
@@ -332,13 +325,9 @@ describe('Saldo Awal — penolakan qty negatif (verifikasi, bukan fitur baru)', 
     const cleanupSteps: Array<[string, () => any]> = [
       ['lots', () => adminClient.from('lots').delete().eq('company_id', companyId)],
       ['items', () => adminClient.from('items').delete().eq('company_id', companyId)],
-      ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)],
-      ['companies', () => adminClient.from('companies').delete().eq('company_id', companyId)]
+      ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)]
     ];
-    for (const [label, run] of cleanupSteps) {
-      const { error } = await run();
-      if (error) throw new Error(`Cleanup failed at ${label}: ${error.message}`);
-    }
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   // Temuan data Ruko Dieng (7 item stok NEGATIF di sistem gudang lama, mis.

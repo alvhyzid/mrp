@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 import { computeStandardLaborCostPerUnit } from '../src/features/mrp/server/computeStandardLaborCostPerUnit';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Margin Watch Lapis 1 lanjutan — biaya SDM standar per unit dari
 // routing_step_standard_crew (basis kru HARIAN ÷ batches_per_day, BUKAN
@@ -125,13 +126,9 @@ describe('computeStandardLaborCostPerUnit — kru harian ÷ batches_per_day, ber
       ['routings', () => adminClient.from('routings').delete().eq('company_id', companyId)],
       ['employees', () => adminClient.from('employees').delete().eq('company_id', companyId)],
       ['items', () => adminClient.from('items').delete().eq('company_id', companyId)],
-      ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)],
-      ['companies', () => adminClient.from('companies').delete().eq('company_id', companyId)]
+      ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)]
     ];
-    for (const [label, run] of cleanupSteps) {
-      const { error } = await run();
-      if (error) throw new Error(`Cleanup failed at ${label}: ${error.message}`);
-    }
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   it('menjumlahkan biaya SDM 2 TINGKAT (top + WIP), rasio top level TEPAT 1.0 (regresi-guard dobel-hitung)', async () => {

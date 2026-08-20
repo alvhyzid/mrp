@@ -4,6 +4,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createBom } from '../src/features/mrp/server/createBom';
 import { updateBom } from '../src/features/mrp/server/updateBom';
 import { listBoms } from '../src/features/mrp/server/listBoms';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Perbaikan tampilan BOM (21 Agu 2026) -- pemilik produk bingung membaca
 // "FG-GUMMY-ZALA-N200 - v1 (56.6667 pcs)": satuan generik "pcs" tidak
@@ -87,13 +88,15 @@ describe('BOM yield display — satuan asli item + keterangan asal angka (bukan 
   afterAll(async () => {
     const { data: boms } = await adminClient.from('boms').select('bom_id').eq('company_id', companyId);
     const bomIds = (boms ?? []).map((b) => b.bom_id);
-    await adminClient.from('bom_lines').delete().in('bom_id', bomIds.length ? bomIds : [-1]);
-    await adminClient.from('boms').delete().eq('company_id', companyId);
-    await adminClient.from('items').delete().eq('company_id', companyId);
     const { data: users } = await adminClient.from('users').select('auth_uid').eq('company_id', companyId);
-    await adminClient.from('users').delete().eq('company_id', companyId);
-    for (const u of users ?? []) await adminClient.auth.admin.deleteUser(u.auth_uid);
-    await adminClient.from('companies').delete().eq('company_id', companyId);
+    const cleanupSteps: Array<[string, () => any]> = [
+      ['bom_lines', () => adminClient.from('bom_lines').delete().in('bom_id', bomIds.length ? bomIds : [-1])],
+      ['boms', () => adminClient.from('boms').delete().eq('company_id', companyId)],
+      ['items', () => adminClient.from('items').delete().eq('company_id', companyId)],
+      ['users', () => adminClient.from('users').delete().eq('company_id', companyId)],
+      ...(users ?? []).map((u): [string, () => any] => [`auth:${u.auth_uid}`, () => adminClient.auth.admin.deleteUser(u.auth_uid)])
+    ];
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   it('BOM dgn keterangan asal angka + sumber DIPELAJARI -- tersimpan & tampil PERSIS, bukan dikarang', async () => {

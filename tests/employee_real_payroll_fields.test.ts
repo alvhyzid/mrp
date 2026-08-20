@@ -4,6 +4,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createEmployee } from '../src/features/hr/server/createEmployee';
 import { updateEmployee } from '../src/features/hr/server/updateEmployee';
 import { listEmployees } from '../src/features/hr/server/listEmployees';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Perintah Gabungan A-F, Bagian C (21 Agu 2026) -- kolom payroll nyata baru di
 // employees (kode karyawan pabrik, status kepegawaian, PTKP, TER, tunjangan
@@ -82,13 +83,13 @@ describe('Employee real payroll fields (Bagian C) — validasi + privasi data fi
   });
 
   afterAll(async () => {
-    await adminClient.from('employees').delete().eq('company_id', companyId);
     const { data: users } = await adminClient.from('users').select('user_id, auth_uid').eq('company_id', companyId);
-    await adminClient.from('users').delete().eq('company_id', companyId);
-    for (const u of users ?? []) {
-      await adminClient.auth.admin.deleteUser(u.auth_uid);
-    }
-    await adminClient.from('companies').delete().eq('company_id', companyId);
+    const cleanupSteps: Array<[string, () => any]> = [
+      ['employees', () => adminClient.from('employees').delete().eq('company_id', companyId)],
+      ['users', () => adminClient.from('users').delete().eq('company_id', companyId)],
+      ...(users ?? []).map((u): [string, () => any] => [`auth:${u.auth_uid}`, () => adminClient.auth.admin.deleteUser(u.auth_uid)])
+    ];
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   it('HR manager membuat karyawan dgn field payroll nyata lengkap (kode pabrik, status kepegawaian, PTKP, TER, tunjangan, BPJS)', async () => {

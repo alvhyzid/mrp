@@ -11,6 +11,10 @@ export interface StandardCostResult {
   // 20 Agu 2026).
   complete: boolean;
   missingCostItemCodes: string[];
+  // Item YANG ADA harganya tapi ditandai items.cost_unverified=true (25 Agu 2026,
+  // formula resmi Gummy Zala V2/Drinkme V1) -- beda dari missingCostItemCodes:
+  // di sini harga ADA dan IKUT dihitung, cuma belum dikonfirmasi purchasing.
+  unverifiedCostItemCodes: string[];
 }
 
 // Margin Watch Lapis 1 (baseline) -- kebalikan dari explodeBomRequirements.ts
@@ -21,7 +25,7 @@ export interface StandardCostResult {
 // langsung -- direkursi ke bahan penyusunnya (biaya WIP = jumlah biaya
 // penyusunnya, konsisten dengan bagaimana BOM 2-tingkat Drinkme kini bekerja).
 export async function computeStandardCostPerUnit(adminClient: SupabaseClient, companyId: number, topItemId: number): Promise<StandardCostResult> {
-  const { data: items } = await adminClient.from('items').select('item_id, item_code, type, standard_cost').eq('company_id', companyId);
+  const { data: items } = await adminClient.from('items').select('item_id, item_code, type, standard_cost, cost_unverified').eq('company_id', companyId);
   const itemById = new Map((items ?? []).map((i) => [i.item_id, i]));
 
   const { data: activeBoms } = await adminClient.from('boms').select('bom_id, parent_item_id').eq('company_id', companyId).eq('status', 'active');
@@ -58,6 +62,7 @@ export async function computeStandardCostPerUnit(adminClient: SupabaseClient, co
   let materialCostPerUnit = 0;
   let packagingCostPerUnit = 0;
   const missingCostItemCodes: string[] = [];
+  const unverifiedCostItemCodes: string[] = [];
 
   for (const [itemId, qty] of leafNeeded) {
     const item = itemById.get(itemId);
@@ -66,6 +71,7 @@ export async function computeStandardCostPerUnit(adminClient: SupabaseClient, co
       missingCostItemCodes.push(item.item_code);
       continue;
     }
+    if (item.cost_unverified) unverifiedCostItemCodes.push(item.item_code);
     const cost = qty * Number(item.standard_cost);
     if (item.type === 'packaging') packagingCostPerUnit += cost;
     else materialCostPerUnit += cost;
@@ -75,6 +81,7 @@ export async function computeStandardCostPerUnit(adminClient: SupabaseClient, co
     materialCostPerUnit,
     packagingCostPerUnit,
     complete: missingCostItemCodes.length === 0,
-    missingCostItemCodes
+    missingCostItemCodes,
+    unverifiedCostItemCodes
   };
 }

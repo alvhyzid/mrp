@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -170,8 +171,9 @@ describe('role hierarchy & financial-access RLS verification', () => {
     // Urutan mengikuti arah foreign key (anak sebelum induk). stock_movements dibuat
     // otomatis oleh trigger saat work_order_consumption di-insert (lihat migration
     // 20260812155500) — sempat lupa dihapus di sini pada percobaan pertama, yang
-    // menyebabkan delete lots gagal diam-diam dan RoleTestCorp tertinggal. Setiap
-    // langkah sekarang mengecek error supaya kegagalan tidak lagi senyap.
+    // menyebabkan delete lots gagal diam-diam dan RoleTestCorp tertinggal. Sekarang
+    // cleanupCompanyCascade menjamin delete companies tetap dicoba apa pun hasil
+    // langkah lain, dan kegagalan tetap dilaporkan lewat throw di akhir.
     const cleanupSteps: Array<[string, () => any]> = [
       ['stock_movements', () => adminClient.from('stock_movements').delete().eq('company_id', companyId)],
       ['work_order_consumption', () => adminClient.from('work_order_consumption').delete().eq('work_order_id', workOrderId)],
@@ -184,18 +186,13 @@ describe('role hierarchy & financial-access RLS verification', () => {
       ['employees', () => adminClient.from('employees').delete().eq('company_id', companyId)],
       ['users', () => adminClient.from('users').delete().eq('company_id', companyId)],
       ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)],
-      ['companies', () => adminClient.from('companies').delete().eq('company_id', companyId)]
+      ['auth:finance', () => adminClient.auth.admin.deleteUser(financeAuthUid)],
+      ['auth:hr', () => adminClient.auth.admin.deleteUser(hrAuthUid)],
+      ['auth:prod_staff', () => adminClient.auth.admin.deleteUser(prodStaffAuthUid)],
+      ['auth:prod_manager', () => adminClient.auth.admin.deleteUser(prodManagerAuthUid)]
     ];
 
-    for (const [label, run] of cleanupSteps) {
-      const { error } = await run();
-      if (error) throw new Error(`Cleanup failed at ${label}: ${error.message}`);
-    }
-
-    await adminClient.auth.admin.deleteUser(financeAuthUid);
-    await adminClient.auth.admin.deleteUser(hrAuthUid);
-    await adminClient.auth.admin.deleteUser(prodStaffAuthUid);
-    await adminClient.auth.admin.deleteUser(prodManagerAuthUid);
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   it('pg_policies employees: hanya ada policy INSERT & UPDATE, TIDAK ADA policy SELECT (default-deny)', async () => {

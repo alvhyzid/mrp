@@ -6,6 +6,7 @@ import { listKamusTerms } from '../src/features/kamus/server/listKamusTerms';
 import { answerKamusTerm } from '../src/features/kamus/server/answerKamusTerm';
 import { confirmKamusTerm } from '../src/features/kamus/server/confirmKamusTerm';
 import { exportKamusMarkdown } from '../src/features/kamus/server/exportKamusMarkdown';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Modul Kamus (K1, docs/rencana-modul-kamus-paralel.md BAGIAN 2). PRINSIP
 // UTAMA yang diuji: (1) generator IDEMPOTEN (dijalankan 2x tidak menambah
@@ -81,13 +82,15 @@ describe('Modul Kamus (K1) — generator backlog, antrean jawab/konfirmasi, eksp
   afterAll(async () => {
     const { data: terms } = await adminClient.from('kamus_terms').select('kamus_term_id').eq('company_id', companyId);
     const termIds = (terms ?? []).map((t) => t.kamus_term_id);
-    if (termIds.length) await adminClient.from('kamus_term_history').delete().in('kamus_term_id', termIds);
-    await adminClient.from('kamus_terms').delete().eq('company_id', companyId);
-    await adminClient.from('kamus_routing_rules').delete().eq('company_id', companyId);
     const { data: users } = await adminClient.from('users').select('auth_uid').eq('company_id', companyId);
-    await adminClient.from('users').delete().eq('company_id', companyId);
-    for (const u of users ?? []) await adminClient.auth.admin.deleteUser(u.auth_uid);
-    await adminClient.from('companies').delete().eq('company_id', companyId);
+    const cleanupSteps: Array<[string, () => any]> = [
+      ['kamus_term_history', () => (termIds.length ? adminClient.from('kamus_term_history').delete().in('kamus_term_id', termIds) : Promise.resolve({ error: null }))],
+      ['kamus_terms', () => adminClient.from('kamus_terms').delete().eq('company_id', companyId)],
+      ['kamus_routing_rules', () => adminClient.from('kamus_routing_rules').delete().eq('company_id', companyId)],
+      ['users', () => adminClient.from('users').delete().eq('company_id', companyId)],
+      ...(users ?? []).map((u): [string, () => any] => [`auth:${u.auth_uid}`, () => adminClient.auth.admin.deleteUser(u.auth_uid)])
+    ];
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   it('generator menghasilkan backlog dari skema NYATA, prioritas 1 berisi kolom uang (bukan kosong/acak)', async () => {

@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getMarginWatch } from '../src/features/mrp/server/getMarginWatch';
 import { updateMarginFloorThreshold } from '../src/features/mrp/server/updateMarginFloorThreshold';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Margin Watch Lapis 1 (baseline margin per order, dikunci sekali) + Lapis 2
 // (pembongkaran selisih margin AKTUAL jadi 5 kategori). PRINSIP UTAMA yang
@@ -191,13 +192,9 @@ describe('Margin Watch — baseline (Lapis 1) + selisih 5 kategori (Lapis 2)', (
       ['items', () => adminClient.from('items').delete().eq('company_id', companyId)],
       ['users', () => adminClient.from('users').delete().eq('company_id', companyId)],
       ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)],
-      ['companies', () => adminClient.from('companies').delete().eq('company_id', companyId)]
+      ['auth:finance_manager', () => adminClient.auth.admin.deleteUser(financeManagerAuthUid)]
     ];
-    for (const [label, run] of cleanupSteps) {
-      const { error } = await run();
-      if (error) throw new Error(`Cleanup failed at ${label}: ${error.message}`);
-    }
-    await adminClient.auth.admin.deleteUser(financeManagerAuthUid);
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   it('Lapis 1 — baseline dikunci, ditandai TIDAK LENGKAP karena 1 bahan belum punya harga master (bukan diam-diam dianggap 0)', async () => {

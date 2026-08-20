@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -46,13 +47,9 @@ describe('shipments physical stage — trigger stok & state machine', () => {
       ['lots', () => adminClient.from('lots').delete().eq('company_id', companyId)],
       ['items', () => adminClient.from('items').delete().eq('company_id', companyId)],
       ['customers', () => adminClient.from('customers').delete().eq('company_id', companyId)],
-      ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)],
-      ['companies', () => adminClient.from('companies').delete().eq('company_id', companyId)]
+      ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)]
     ];
-    for (const [label, run] of cleanupSteps) {
-      const { error } = await run();
-      if (error) throw new Error(`Cleanup failed at ${label}: ${error.message}`);
-    }
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   beforeAll(async () => {

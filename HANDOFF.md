@@ -4,6 +4,129 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Formula resmi Gummy Zala V2 / Drinkme V1 diterapkan ke BOM + pembersihan test — 26 Agu 2026
+
+Lembar formula resmi (formulator Dhiska, 14 Agu 2026, status Production) menggantikan
+formula simulasi lama — **seluruh angka margin/BOM di sistem SEBELUM tanggal ini
+menggunakan resep yang SALAH**, ini prioritas di atas semua pekerjaan lain sesi ini.
+Kutipan lengkap formula: `docs/formula-gummy-zala-v2.md` (termasuk catatan kaki koreksi
+"Premix Powder" → "Premix Gummy" yang salah tulis di lembar asli).
+
+**Perubahan data** (langsung ke `items`/`bom_lines`/`boms` company_id=1, BUKAN migrasi
+skema — data produksi nyata): 14 baris `bom_lines` Gummy Zala (bom_id 227) & 3 baris
+Premix Gelatin (bom_id 226) diperbarui kuantitasnya ke rasio baru; 2 baris baru
+ditambahkan ke tiap BOM (Pewarna Merah Derasi + Konsentrat Stroberi Delifru di Gummy;
+Potassium Sorbate + Sodium Benzoate di Premix Gelatin). Drinkme (bom_id 534): 13 baris
+diperbarui, **Papain & Bromalin DIHAPUS** (dikonfirmasi tidak dipakai, tertinggal dari
+formula lain — ini mengubah margin Drinkme signifikan, menurunkan biaya bahan).
+
+**Item baru**: `PTS-01` (Potassium Sorbate, belum ada harga), `SOD-01` (Sodium
+Benzoate, belum ada harga), `FLA-DELIFRU-STRAWFRU-01` (Konsentrat Stroberi, Rp99.900/kg).
+**Item lama DIGABUNG, bukan diduplikasi**: `RM-DERASI-STRAWBERRY` (item_id 42, sudah ada
+di database dari saldo awal gudang, belum pernah dipakai di BOM manapun) dipakai untuk
+"Pewarna Merah (Derasi)" alih-alih membuat item baru — harganya diperbarui Rp1.501.230/kg
+→ Rp1.470.000/kg sesuai formula resmi; lot gudang yang sudah ada TIDAK disentuh
+(`lots.unit_cost` = fakta historis pembelian, beda konsep dari `items.standard_cost`).
+
+**Kolom baru `items.cost_unverified`/`cost_unverified_note`** (migrasi `20260826090000`)
++ `sales_order_line_margin_snapshots.unverified_cost_item_codes` (migrasi `20260826091500`)
+— beda dari "harga kosong" (`missing_cost_item_codes`, sudah ada): di sini harga ADA dan
+IKUT dihitung, cuma belum dikonfirmasi purchasing. Ditandai pada: Polysorb maltitol syrup,
+Modified Starch 928, Modified Starch MB, Gellan Gum High Acyl, PTS-01, SOD-01. Tampil
+sebagai peringatan terpisah (bukan "belum lengkap") di Margin Watch (`SalesOrdersPage.tsx`).
+`computeStandardCostPerUnit.ts` diperluas mengembalikan `unverifiedCostItemCodes` (aditif,
+tidak breaking — 2 caller lama, `getMarginWatch.ts` & `computeKpiValues.ts`, tidak berubah
+perilakunya). 2 snapshot Margin Watch lama untuk SAS001/SAS005 (baris 45 & 46, dari BOM
+lama) DIHAPUS supaya baseline dihitung ULANG dari BOM baru saat Margin Watch dibuka lagi.
+
+**Rekonsiliasi angka acceptance resmi — DIVERIFIKASI lewat fungsi sistem SUNGGUHAN**
+(`computeStandardCostPerUnit`/`computeStandardLaborCostPerUnit` dipanggil langsung via test
+sementara, bukan dihitung ulang manual) — hasil JUJUR, ada gap yang dilaporkan bukan
+dipaksakan cocok:
+- **Kemasan Gummy**: Rp8.829,63/botol — **PERSIS SAMA** dengan target resmi.
+- **Polysorb (kontributor bahan terbesar Gummy)**: Rp451.710,77/batch dari sistem —
+  **PERSIS SAMA** dengan angka yang disebut pemilik produk (~Rp451.710/batch) — bukti
+  metodologi skala basis→batch 10kg benar.
+- **Produksi Gummy (bahan+SDM) sistem**: Rp28.939,29/botol vs target resmi Rp25.477,62 —
+  **gap ~Rp3.461,67/botol, PENYEBAB DIKETAHUI**: (a) harga PTS-01/SOD-01 belum ada (kecil),
+  (b) **kru standar Premix Gelatin (Zala) di `production_standards` BELUM DIISI SAMA
+  SEKALI** — SDM level premix kontribusi NOL di sistem sekarang, padahal angka target resmi
+  tampaknya mengasumsikan SDM premix ada (mirip urutan besaran Rp3.846,15 dari dokumen
+  referensi lama). **Ini bukan bug formula — perlu kru standar Premix Gelatin diisi PPIC**.
+- **Bahan Drinkme sistem**: Rp21.011,51/box (LENGKAP, tidak ada lagi item hilang setelah
+  Papain/Bromalin dihapus) — produksi (bahan+SDM) Rp21.792,57/box vs target Rp21.403,14,
+  gap kecil ~Rp389/box (SDM 5 premix Drinkme juga belum diisi kru standarnya).
+- **Kemasan Drinkme**: sistem Rp3.989,15/box vs target resmi Rp5.414,14/box — **gap
+  ~Rp1.425/box, KEMUNGKINAN BESAR = Silica Gel** (`PKG-SILICA-GEL-2G`, item_id 1041) yang
+  sudah lama diketahui BELUM ditambahkan ke `bom_lines` box Drinkme (bom_id 535) — gap
+  pra-ada, TIDAK terkait perubahan formula sesi ini, dicatat ulang di sini supaya tidak
+  hilang.
+- **Harga jual implisit** dari target resmi: Gummy Rp108.000,02 (≈Rp108.000 ✓), Drinkme
+  Rp33.000,00 (✓) — cocok persis harga SO nyata, memvalidasi struktur perhitungan target.
+
+**Test `tests/kpi_module.test.ts` diperbarui** — `unit_cost` fixture verifikasi Margin
+Kontribusi % diganti dari angka lama (34344/26829, hasil kalkulasi manual sebelum BOM
+diperbaiki) ke angka resmi baru (34307,23/26817,29, dari margin resmi Rp73.692,77/
+Rp6.182,71) — **masih manual, BUKAN dari `computeStandardCostPerUnit` live**, karena 2
+gerbang data di atas (harga PTS-01/SOD-01, kru standar premix) belum terisi. Komentar di
+test menjelaskan ini eksplisit, dan menandai wajib diganti begitu 2 gerbang itu terisi.
+
+**Kamus**: 2 baris scope RULE baru (`rule.kode_pmgm_premix_gummy`/`rule.kode_pmpw_premix_powder`,
+prioritas 1) via fungsi baru `seedKamusIngredientRules.ts`, dipanggil dari
+`runKamusGenerator.ts` — PMGM (Maltitol, lini Gummy) vs PMPW (Sorbitol Powder, lini
+Serbuk) rawan tertukar, harga beda 5,4×.
+
+**Pertanyaan terbuka untuk PPIC/produksi** (bukan bug, butuh input manusia): isi kru
+standar (`production_standards`/`routing_step_standard_crew`) untuk routing step Premix
+Gelatin (Zala) dan 5 premix Drinkme (PMSW/PMAC/PMFLV/PMVITC/PMSRH) — SDM level-level ini
+sekarang kontribusi 0 ke biaya standar karena datanya belum ada, bukan karena memang gratis.
+
+`npx tsc --noEmit` bersih, `npm test` 185/185 lulus (dijalankan ulang setelah semua
+perubahan data+kode).
+
+## Bagian B — Aturan unggah terpusat (`uploadFileWithMetadata`) — 26 Agu 2026
+Satu fungsi baru `src/lib/fileUpload.ts` (checksum SHA-256 + metadata minimum: uploader,
+entitas, mime, ukuran) + satu aturan baru di CLAUDE.md mewajibkan titik unggah file BARU
+memakainya mulai sekarang — titik lama (`uploadAvatar` dkk) TIDAK diretrofit. "Tumpangan
+kecil §5" dari `rencana-kerja-master-dokumen.md`, persis seperti yang diminta dokumen itu
+(bukan pembangunan fitur Master Dokumen itu sendiri, MD-1 masih menyusul).
+
+## Bagian F — CHANGEOVER + rework + cicilan KPI ke Kamus — 26 Agu 2026
+`production_disruptions.disruption_type` kini punya nilai `changeover` (dipasang juga di
+UI Dashboard Produksi — dropdown & label). `production_batches.rework` (boolean) BARU,
+diisi lewat checklist "Rework" di tombol Selesaikan Batch (2 titik UI). 7 definisi KPI
+kategori B sisa (OTD, production attainment, downtime%+Pareto, rejection%, cycle time,
+stock-out events, supplier OTD) dicicil sebagai baris DRAF_AI di Kamus lewat
+`seedKamusMetricTerms.ts` — BACKLOG saja, bukan KPI hidup (KPI-2/3 masih digerbang
+SAS001/SAS005 terkirim, TIDAK dilangkahi kali ini karena bukan itu yang diminta).
+
+## Pembersihan sisa test otomatis + perbaikan akar (self-cleaning) — 26 Agu 2026
+**182 baris `companies` sisa test** (company_id bukan 1/2, pola nama `*TestCorp`/E2E)
+ditemukan menumpuk di database nyata — dihapus lewat migrasi sekali-jalan
+`20260826100000_cleanup_orphaned_test_companies.sql` (pakai `session_replication_role
+= replica` di dalam transaksi migrasi supaya urutan hapus tabel anak lintas ~90 tabel
+tidak perlu ditelusuri manual satu-satu — HANYA menyentuh company_id di luar 1 dan 2,
+diverifikasi dulu tidak ada nama mencurigakan sebelum jalan). 1 akun Supabase Auth yatim
+(`mrp.e2e.owner2...@gmail.com`, sisa E2E test lama) ikut dihapus. Setelah pembersihan:
+HANYA 2 baris tersisa di `companies` (PT ITM, Company B) — keduanya nyata/sengaja.
+
+**Akar masalah DIPERBAIKI, bukan cuma dibersihkan sekali**: audit ke-27 blok `afterAll`
+di `tests/*.test.ts` menemukan 2 pola cacat — (a) "throw-and-abort": array langkah
+cleanup diakhiri `['companies', ...]`, tapi loop-nya `throw` begitu SATU langkah gagal,
+jadi delete `companies` (selalu di ujung) tidak pernah tercapai kalau ada langkah lain
+gagal duluan; (b) "sequential unchecked-await": delete `companies` di akhir tidak pernah
+dicek errornya, gagal diam-diam. Diperbaiki dengan helper baru `tests/testCompanyCleanup.ts`
+(`cleanupCompanyCascade`) — menjamin delete `companies` SELALU dicoba di akhir apa pun
+hasil langkah sebelumnya, kegagalan tetap dilaporkan (bukan ditelan diam-diam). Semua 27
+blok (16 file pola A, 13 blok pola B lintas ~11 file, termasuk 2 file dgn banyak
+`describe` terpisah) dikonversi memakainya. Proses ini SEKALIAN menemukan & memperbaiki
+5 bug cleanup lain yang sebelumnya tertutup pola lama (kekurangan delete
+`kamus_term_history`/`customer_po_approvals`/`system_alerts` sebelum induknya). `npx tsc
+--noEmit` bersih, `npm test` 185/185 lulus (jumlah sama, tidak ada regresi), 0 baris
+`companies` bocor setelah dijalankan ulang beberapa kali untuk verifikasi.
+
+---
+
 ## KPI ke-6 "Margin Kontribusi %" + pelunasan utang dokumentasi skema — 25 Agu 2026
 
 Jawaban pemilik produk atas 2 temuan sesi KPI-1: (1) target 35% memang GPM, bukan sekadar

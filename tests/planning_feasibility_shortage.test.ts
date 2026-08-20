@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 import { explodeBomRequirements } from '../src/features/mrp/server/explodeBomRequirements';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Fase Produksi Nyata, P2 — sebelum ini, kekurangan bahan HANYA dicek 1 level di
 // getPlanningFeasibility.ts, yang melewatkan kasus nyata SAS005: Maltodextrin
@@ -100,13 +101,9 @@ describe('Fase Produksi Nyata P2 — eksplosi BOM berjenjang untuk deteksi kekur
       ['lots', () => adminClient.from('lots').delete().eq('company_id', companyId)],
       ['boms', () => adminClient.from('boms').delete().eq('company_id', companyId)],
       ['items', () => adminClient.from('items').delete().eq('company_id', companyId)],
-      ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)],
-      ['companies', () => adminClient.from('companies').delete().eq('company_id', companyId)]
+      ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)]
     ];
-    for (const [label, run] of cleanupSteps) {
-      const { error } = await run();
-      if (error) throw new Error(`Cleanup failed at ${label}: ${error.message}`);
-    }
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   it('menjumlahkan pemakaian LANGSUNG + pemakaian sebagai carrier di premix, bukan cuma level teratas', async () => {

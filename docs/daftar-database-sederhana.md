@@ -77,6 +77,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 - Faktor Konversi Satuan Beli→Dasar (uom_conversion_factor)
 - Umur Simpan Hari (shelf_life_days) · Stok Minimum (min_stock_level) · Titik Pesan Ulang (reorder_point) · Jumlah Pesan Ulang (reorder_qty) · Status Aktif (is_active)
 - Biaya Standar — SENSITIF (standard_cost)
+- Harga Belum Terverifikasi? — BARU 26 Agu 2026, beda dari "harga kosong": di sini harga ADA tapi belum dikonfirmasi purchasing (cost_unverified) · Catatan (cost_unverified_note)
 - Nomor Registrasi BPOM — nullable (bpom_registration_number)
 
 > Catatan: MOQ (minimum order quantity) sengaja tidak dimodelkan — Purchasing input sesuai realita pembelian.
@@ -208,6 +209,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 - Biaya SDM Standar per Unit (standard_labor_cost_per_unit) — 20 Agu 2026: SEKARANG SUDAH dihitung dari data kru nyata (lihat tabel Kru Standar Lini Produksi di bawah), sebelumnya selalu kosong
 - SDM Sudah Lengkap? (labor_cost_complete) · Catatan Bagian Mana Belum Terhitung (labor_cost_notes) — kalau ada tahap produksi yang kru-nya belum diisi datanya, angka yang tampil tetap dihitung dari bagian yang SUDAH ada datanya (bukan disembunyikan jadi kosong), tapi ditandai belum 100% lengkap
 - Data Biaya Lengkap? (cost_data_complete) · Kode Item yang Belum Punya Harga Master (missing_cost_item_codes)
+- Kode Item Harganya Belum Terverifikasi — BARU 26 Agu 2026, beda dari di atas: harga ADA dan ikut dihitung, cuma belum dikonfirmasi purchasing (unverified_cost_item_codes)
 - Ambang Margin Minimum — satu-satunya yang boleh diubah kapan saja, kirim peringatan kalau proyeksi margin turun di bawahnya (margin_floor_threshold)
 - Dikunci sekali saat pertama kali panel Margin Watch dibuka untuk baris SO itu — tidak berubah lagi meski harga master berubah belakangan (sama seperti standar K8/kelayakan jadwal)
 

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { NextRequest } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createProductionBatch } from '../src/features/mrp/server/createProductionBatch';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Nomor batch -- pola "rekomendasi + bisa diubah" (keputusan pemilik produk, 20
 // Agu 2026, mengikuti format pabrik "3TM13082601"): staf boleh menimpa nomor
@@ -111,13 +112,9 @@ describe('Nomor batch produksi — rekomendasi otomatis + boleh ditimpa manual',
       ['items', () => adminClient.from('items').delete().eq('company_id', companyId)],
       ['users', () => adminClient.from('users').delete().eq('company_id', companyId)],
       ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)],
-      ['companies', () => adminClient.from('companies').delete().eq('company_id', companyId)]
+      ['auth:ppic_manager', () => adminClient.auth.admin.deleteUser(ppicManagerAuthUid)]
     ];
-    for (const [label, run] of cleanupSteps) {
-      const { error } = await run();
-      if (error) throw new Error(`Cleanup failed at ${label}: ${error.message}`);
-    }
-    await adminClient.auth.admin.deleteUser(ppicManagerAuthUid);
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   it('kosongkan nomor batch -> tetap dapat rekomendasi otomatis format lama (WO-xxxx-Bxxx)', async () => {

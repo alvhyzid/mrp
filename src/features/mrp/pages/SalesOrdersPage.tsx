@@ -105,6 +105,7 @@ type MarginWatchResult = {
   labor_cost_notes: string[];
   cost_data_complete: boolean;
   missing_cost_item_codes: string[];
+  unverified_cost_item_codes: string[];
   standard_margin_per_unit: number;
   standard_margin_total: number;
   margin_floor_threshold: number | null;
@@ -490,6 +491,11 @@ export default function SalesOrdersPage() {
                       {!marginResult.cost_data_complete ? (
                         <p className="rounded-md border border-warning/40 bg-warning-subtle p-2 text-xs text-warning-subtle-foreground">
                           Baseline BELUM LENGKAP — bahan berikut belum punya harga master (standard_cost), tidak ikut dijumlah: {marginResult.missing_cost_item_codes.join(', ')}.
+                        </p>
+                      ) : null}
+                      {marginResult.unverified_cost_item_codes.length > 0 ? (
+                        <p className="rounded-md border border-warning/40 bg-warning-subtle p-2 text-xs text-warning-subtle-foreground">
+                          Harga BELUM TERVERIFIKASI (ikut dihitung, tapi belum dikonfirmasi purchasing): {marginResult.unverified_cost_item_codes.join(', ')}.
                         </p>
                       ) : null}
                       <div className="grid gap-1 sm:grid-cols-2">

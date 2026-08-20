@@ -4,6 +4,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { recomputeAiReadiness, isCapabilityUnlocked } from '../src/features/ai-readiness/server/recomputeAiReadiness';
 import { createAiCapabilityOverride } from '../src/features/ai-readiness/server/createAiCapabilityOverride';
 import { getAiReadinessDashboard } from '../src/features/ai-readiness/server/getAiReadinessDashboard';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Kesiapan AI (Tenant-Facing) -- docs/spesifikasi-kesiapan-ai-tenant.md BAGIAN 2.
 // PRINSIP UTAMA yang diuji: (1) TIDAK ADA angka kesiapan yang diketik manual --
@@ -78,16 +79,22 @@ describe('Kesiapan AI (Tenant-Facing) — gerbang per kemampuan dari data nyata'
   });
 
   afterAll(async () => {
-    await adminClient.from('production_disruptions').delete().in('company_id', [companyAId, companyBId]);
-    await adminClient.from('production_plants').delete().in('company_id', [companyAId, companyBId]);
-    await adminClient.from('ai_answer_feedback').delete().in('company_id', [companyAId, companyBId]);
-    await adminClient.from('ai_capability_overrides').delete().in('company_id', [companyAId, companyBId]);
-    await adminClient.from('ai_capability_status').delete().in('company_id', [companyAId, companyBId]);
-    await adminClient.from('kamus_terms').delete().eq('company_id', companyAId);
     const { data: users } = await adminClient.from('users').select('auth_uid').eq('company_id', companyAId);
-    await adminClient.from('users').delete().in('company_id', [companyAId, companyBId]);
-    for (const u of users ?? []) await adminClient.auth.admin.deleteUser(u.auth_uid);
-    await adminClient.from('companies').delete().in('company_id', [companyAId, companyBId]);
+    const cleanupSteps: Array<[string, () => any]> = [
+      ['production_disruptions', () => adminClient.from('production_disruptions').delete().in('company_id', [companyAId, companyBId])],
+      ['production_plants', () => adminClient.from('production_plants').delete().in('company_id', [companyAId, companyBId])],
+      ['ai_answer_feedback', () => adminClient.from('ai_answer_feedback').delete().in('company_id', [companyAId, companyBId])],
+      ['ai_capability_overrides', () => adminClient.from('ai_capability_overrides').delete().in('company_id', [companyAId, companyBId])],
+      ['ai_capability_status', () => adminClient.from('ai_capability_status').delete().in('company_id', [companyAId, companyBId])],
+      ['kamus_term_history', async () => adminClient.from('kamus_term_history').delete().in(
+        'kamus_term_id',
+        (await adminClient.from('kamus_terms').select('kamus_term_id').eq('company_id', companyAId)).data?.map((t) => t.kamus_term_id) ?? [-1]
+      )],
+      ['kamus_terms', () => adminClient.from('kamus_terms').delete().eq('company_id', companyAId)],
+      ['users', () => adminClient.from('users').delete().in('company_id', [companyAId, companyBId])],
+      ...(users ?? []).map((u): [string, () => any] => [`auth:${u.auth_uid}`, () => adminClient.auth.admin.deleteUser(u.auth_uid)])
+    ];
+    await cleanupCompanyCascade(adminClient, [companyAId, companyBId], cleanupSteps);
   });
 
   it('TANPA data sama sekali -> Panel Asal-Usul terbuka 100%, semua kemampuan lain TERKUNCI dgn alasan jelas', async () => {

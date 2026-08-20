@@ -3,6 +3,7 @@ import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
 import { isCompanyLeadership } from '@/lib/roles';
 import { generateKamusBacklog } from './generateKamusBacklog';
 import { seedKamusMetricTerms } from './seedKamusMetricTerms';
+import { seedKamusIngredientRules } from './seedKamusIngredientRules';
 
 interface ApiResult {
   status: number;
@@ -25,15 +26,16 @@ export async function runKamusGenerator(request: NextRequest): Promise<ApiResult
     const adminClient = getAdminClient();
     const fieldResult = await generateKamusBacklog(adminClient, appUser.company_id);
     const metricResult = await seedKamusMetricTerms(adminClient, appUser.company_id);
+    const ruleResult = await seedKamusIngredientRules(adminClient, appUser.company_id);
 
-    const priority12 = (fieldResult.countsByPriority[1] ?? 0) + (fieldResult.countsByPriority[2] ?? 0) + metricResult.inserted;
+    const priority12 = (fieldResult.countsByPriority[1] ?? 0) + (fieldResult.countsByPriority[2] ?? 0) + metricResult.inserted + ruleResult.inserted;
     // STOP CONDITION (§7 dokumen): >200 baris prioritas 1-2 -> laporkan, jangan
     // paksa dipakai (bukan error keras, cuma penanda eksplisit di respons).
     const stopConditionTriggered = priority12 > 200;
 
     return {
       status: 200,
-      body: { field: fieldResult, metric: metricResult, priority1And2Total: priority12, stopConditionTriggered }
+      body: { field: fieldResult, metric: metricResult, rule: ruleResult, priority1And2Total: priority12, stopConditionTriggered }
     };
   } catch (error) {
     return { status: 401, body: { error: error instanceof Error ? error.message : String(error) } };

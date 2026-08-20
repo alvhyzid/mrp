@@ -7,6 +7,7 @@ import { listEmployees } from '../src/features/hr/server/listEmployees';
 import { learnFromBatch } from '../src/features/mrp/server/learnFromBatch';
 import { decideProductionStandardProposal } from '../src/features/mrp/server/decideProductionStandardProposal';
 import { getPlanningFeasibility } from '../src/features/mrp/server/getPlanningFeasibility';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Fase Produksi Nyata (19 Agu 2026), PEKERJAAN 1 (create/edit Karyawan lewat UI)
 // + PEKERJAAN 2 (pengerasan K8: proposal-approval, median, gerbang kelengkapan,
@@ -356,16 +357,12 @@ describe('Fase Produksi Nyata — Employee CRUD (B-1) & K8 standard proposal wor
       ['employees', () => adminClient.from('employees').delete().eq('company_id', companyId)],
       ['users', () => adminClient.from('users').delete().eq('company_id', companyId)],
       ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)],
-      ['companies', () => adminClient.from('companies').delete().eq('company_id', companyId)]
+      ['auth:hr_manager', () => adminClient.auth.admin.deleteUser(hrManagerAuthUid)],
+      ['auth:general_manager', () => adminClient.auth.admin.deleteUser(generalManagerAuthUid)],
+      ['auth:prod_staff', () => adminClient.auth.admin.deleteUser(prodStaffAuthUid)],
+      ['auth:ppic_manager', () => adminClient.auth.admin.deleteUser(ppicManagerAuthUid)]
     ];
-    for (const [label, run] of cleanupSteps) {
-      const { error } = await run();
-      if (error) throw new Error(`Cleanup failed at ${label}: ${error.message}`);
-    }
-    await adminClient.auth.admin.deleteUser(hrManagerAuthUid);
-    await adminClient.auth.admin.deleteUser(generalManagerAuthUid);
-    await adminClient.auth.admin.deleteUser(prodStaffAuthUid);
-    await adminClient.auth.admin.deleteUser(ppicManagerAuthUid);
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   // ============================================================

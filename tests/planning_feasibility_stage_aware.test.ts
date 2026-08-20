@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { explodeBomRequirements } from '../src/features/mrp/server/explodeBomRequirements';
 import { getPlanningFeasibility } from '../src/features/mrp/server/getPlanningFeasibility';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Fase Produksi Nyata — perbaikan model kelayakan SADAR-TAHAP (20 Agu 2026).
 // Sebelum ini SEMUA komponen BOM (termasuk kemasan yang baru dipakai di tahap
@@ -301,13 +302,9 @@ describe('Fase Produksi Nyata — kelayakan sadar-tahap (bom_lines.routing_step_
       ['items', () => adminClient.from('items').delete().eq('company_id', companyId)],
       ['users', () => adminClient.from('users').delete().eq('company_id', companyId)],
       ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)],
-      ['companies', () => adminClient.from('companies').delete().eq('company_id', companyId)]
+      ['auth:ppic_manager', () => adminClient.auth.admin.deleteUser(ppicManagerAuthUid)]
     ];
-    for (const [label, run] of cleanupSteps) {
-      const { error } = await run();
-      if (error) throw new Error(`Cleanup failed at ${label}: ${error.message}`);
-    }
-    await adminClient.auth.admin.deleteUser(ppicManagerAuthUid);
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   it('explodeBomRequirements menandai blocking_stage sesuai routing_step_id bom_line (NULL = tahap pertama)', async () => {

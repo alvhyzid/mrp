@@ -6,6 +6,7 @@ import { getAttendanceDashboard } from '../src/features/attendance/server/getAtt
 import { requestAttendanceCorrection, decideAttendanceCorrection } from '../src/features/attendance/server/attendanceCorrections';
 import { createLeaveRequest, decideLeaveRequest } from '../src/features/attendance/server/leaveRequests';
 import { closeStaleOpenAttendanceDays } from '../src/features/attendance/server/closeStaleOpenAttendanceDays';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Absensi Geo-QR — GELOMBANG 1 (docs/rancangan-absensi-geo-qr.md). PRINSIP
 // UTAMA yang diuji sesuai §8 kriteria selesai: (1) client_event_id sama 2x ->
@@ -107,19 +108,21 @@ describe('Absensi Geo-QR — Gelombang 1 (skema, RLS, state machine, geofence, l
   });
 
   afterAll(async () => {
-    await adminClient.from('attendance_corrections').delete().eq('company_id', companyId);
-    await adminClient.from('leave_requests').delete().eq('company_id', companyId);
-    await adminClient.from('attendance_devices').delete().eq('company_id', companyId);
+    const { data: users } = await adminClient.from('users').select('auth_uid').eq('company_id', companyId);
     // Append-only murni disiplin aplikasi (bukan trigger keras, lihat catatan
     // migration 20260823100000) -- service role tetap bisa membersihkan data test.
-    await adminClient.from('attendance_events').delete().eq('company_id', companyId);
-    await adminClient.from('employee_attendance').delete().eq('company_id', companyId);
-    await adminClient.from('employees').delete().eq('company_id', companyId);
-    const { data: users } = await adminClient.from('users').select('auth_uid').eq('company_id', companyId);
-    await adminClient.from('users').delete().eq('company_id', companyId);
-    for (const u of users ?? []) await adminClient.auth.admin.deleteUser(u.auth_uid);
-    await adminClient.from('production_plants').delete().eq('company_id', companyId);
-    await adminClient.from('companies').delete().eq('company_id', companyId);
+    const cleanupSteps: Array<[string, () => any]> = [
+      ['attendance_corrections', () => adminClient.from('attendance_corrections').delete().eq('company_id', companyId)],
+      ['leave_requests', () => adminClient.from('leave_requests').delete().eq('company_id', companyId)],
+      ['attendance_devices', () => adminClient.from('attendance_devices').delete().eq('company_id', companyId)],
+      ['attendance_events', () => adminClient.from('attendance_events').delete().eq('company_id', companyId)],
+      ['employee_attendance', () => adminClient.from('employee_attendance').delete().eq('company_id', companyId)],
+      ['employees', () => adminClient.from('employees').delete().eq('company_id', companyId)],
+      ['users', () => adminClient.from('users').delete().eq('company_id', companyId)],
+      ...(users ?? []).map((u): [string, () => any] => [`auth:${u.auth_uid}`, () => adminClient.auth.admin.deleteUser(u.auth_uid)]),
+      ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)]
+    ];
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   it('scan DALAM geofence -> tercatat DALAM, status HADIR setelah clock-in', async () => {

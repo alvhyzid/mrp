@@ -84,6 +84,7 @@ export async function getMarginWatch(request: NextRequest, salesOrderLineId: num
             standard_labor_cost_per_unit: labor.costPerUnit,
             cost_data_complete: cost.complete,
             missing_cost_item_codes: cost.missingCostItemCodes,
+            unverified_cost_item_codes: cost.unverifiedCostItemCodes,
             labor_cost_complete: labor.complete,
             labor_cost_notes: labor.notes
           }
@@ -182,6 +183,7 @@ export async function getMarginWatch(request: NextRequest, salesOrderLineId: num
         labor_cost_notes: snapshot.labor_cost_notes ?? [],
         cost_data_complete: snapshot.cost_data_complete,
         missing_cost_item_codes: snapshot.missing_cost_item_codes ?? [],
+        unverified_cost_item_codes: snapshot.unverified_cost_item_codes ?? [],
         standard_margin_per_unit: standardMarginPerUnit,
         standard_margin_total: standardMarginTotal,
         margin_floor_threshold: snapshot.margin_floor_threshold !== null ? Number(snapshot.margin_floor_threshold) : null,

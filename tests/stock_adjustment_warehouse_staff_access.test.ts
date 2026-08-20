@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { recordStockAdjustment } from '../src/features/mrp/server/recordStockAdjustment';
 import { recordOpeningBalance } from '../src/features/mrp/server/recordOpeningBalance';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Keputusan pemilik produk (temuan #4 audit jalan kaki, 19 Agu 2026): opname
 // harian di lapangan dilakukan staf gudang biasa, bukan manager --
@@ -119,14 +120,10 @@ describe('Perluasan akses opname ke warehouse_staff (temuan #4, 19 Agu 2026)', (
       ['items', () => adminClient.from('items').delete().eq('company_id', companyId)],
       ['users', () => adminClient.from('users').delete().eq('company_id', companyId)],
       ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)],
-      ['companies', () => adminClient.from('companies').delete().eq('company_id', companyId)]
+      ['auth:warehouse_staff', () => adminClient.auth.admin.deleteUser(warehouseStaffAuthUid)],
+      ['auth:prod_staff', () => adminClient.auth.admin.deleteUser(prodStaffAuthUid)]
     ];
-    for (const [label, run] of cleanupSteps) {
-      const { error } = await run();
-      if (error) throw new Error(`Cleanup failed at ${label}: ${error.message}`);
-    }
-    await adminClient.auth.admin.deleteUser(warehouseStaffAuthUid);
-    await adminClient.auth.admin.deleteUser(prodStaffAuthUid);
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   it('(positif) warehouse_staff BISA mencatat penyesuaian stok manual', async () => {

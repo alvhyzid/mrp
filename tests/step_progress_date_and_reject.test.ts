@@ -4,6 +4,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { recordWorkOrderStepProgress } from '../src/features/mrp/server/recordWorkOrderStepProgress';
 import { getBatchYieldSummary } from '../src/features/mrp/server/getBatchYieldSummary';
 import { learnFromBatchCore } from '../src/features/mrp/server/learnFromBatchCore';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Investigasi laporan produksi harian nyata (20 Agu 2026) menemukan 2 gap
 // blocker pemakaian harian:
@@ -163,13 +164,9 @@ describe('Progres Tahap — tanggal kejadian bisa dipilih (gap a) + reject per t
       ['items', () => adminClient.from('items').delete().eq('company_id', companyId)],
       ['users', () => adminClient.from('users').delete().eq('company_id', companyId)],
       ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)],
-      ['companies', () => adminClient.from('companies').delete().eq('company_id', companyId)]
+      ['auth:ppic_manager', () => adminClient.auth.admin.deleteUser(ppicManagerAuthUid)]
     ];
-    for (const [label, run] of cleanupSteps) {
-      const { error } = await run();
-      if (error) throw new Error(`Cleanup failed at ${label}: ${error.message}`);
-    }
-    await adminClient.auth.admin.deleteUser(ppicManagerAuthUid);
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   it('tanggal kejadian bisa dipilih mundur (kemarin) — tersimpan, tidak ada peringatan', async () => {

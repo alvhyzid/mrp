@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { NextRequest } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { listTodaysProductionBatches } from '../src/features/mrp/server/listTodaysProductionBatches';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Fase Produksi Nyata, P3 — "Jadwal Hari Ini" untuk role Produksi, dengan isolasi
 // plant: operator satu plant tidak boleh melihat batch plant lain. Fixture 2
@@ -176,15 +177,11 @@ describe('Fase Produksi Nyata P3 — Jadwal Hari Ini dengan isolasi plant', () =
       ['employees', () => adminClient.from('employees').delete().eq('company_id', companyId)],
       ['users', () => adminClient.from('users').delete().eq('company_id', companyId)],
       ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)],
-      ['companies', () => adminClient.from('companies').delete().eq('company_id', companyId)]
+      ['auth:operator_a', () => adminClient.auth.admin.deleteUser(operatorAAuthUid)],
+      ['auth:operator_b', () => adminClient.auth.admin.deleteUser(operatorBAuthUid)],
+      ['auth:unlinked_manager', () => adminClient.auth.admin.deleteUser(unlinkedManagerAuthUid)]
     ];
-    for (const [label, run] of cleanupSteps) {
-      const { error } = await run();
-      if (error) throw new Error(`Cleanup failed at ${label}: ${error.message}`);
-    }
-    await adminClient.auth.admin.deleteUser(operatorAAuthUid);
-    await adminClient.auth.admin.deleteUser(operatorBAuthUid);
-    await adminClient.auth.admin.deleteUser(unlinkedManagerAuthUid);
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   it('operator Plant A HANYA melihat batch Plant A (termasuk batch kemarin yang masih berjalan), TIDAK melihat batch Plant B', async () => {

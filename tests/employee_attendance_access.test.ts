@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -125,15 +126,11 @@ describe('employee department scoping & attendance RLS verification', () => {
       ['employees', () => adminClient.from('employees').delete().eq('company_id', companyId)],
       ['users', () => adminClient.from('users').delete().eq('company_id', companyId)],
       ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)],
-      ['companies', () => adminClient.from('companies').delete().eq('company_id', companyId)]
+      ['auth:production_manager', () => adminClient.auth.admin.deleteUser(productionManagerAuthUid)],
+      ['auth:hr_manager', () => adminClient.auth.admin.deleteUser(hrManagerAuthUid)],
+      ['auth:prod_employee_user', () => adminClient.auth.admin.deleteUser(prodEmployeeUserAuthUid)]
     ];
-    for (const [label, run] of steps) {
-      const { error } = await run();
-      if (error) throw new Error(`Cleanup failed at ${label}: ${error.message}`);
-    }
-    await adminClient.auth.admin.deleteUser(productionManagerAuthUid);
-    await adminClient.auth.admin.deleteUser(hrManagerAuthUid);
-    await adminClient.auth.admin.deleteUser(prodEmployeeUserAuthUid);
+    await cleanupCompanyCascade(adminClient, companyId, steps);
   });
 
   it('production_manager: SELECT employee_attendance -> hanya lihat baris karyawan department production, TIDAK lihat department finance', async () => {

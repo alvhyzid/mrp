@@ -6,6 +6,7 @@ import { getAiProjectDashboard } from '../src/features/ai-project/server/getAiPr
 import { toggleAiProjectChecklistItem } from '../src/features/ai-project/server/toggleAiProjectChecklistItem';
 import { setAiProjectTaskManualPercent } from '../src/features/ai-project/server/setAiProjectTaskManualPercent';
 import { takeAiProjectSnapshot } from '../src/features/ai-project/server/takeAiProjectSnapshot';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Dashboard Proyek AI (K1b, docs/instruksi-dashboard-proyek-ai.md). PRINSIP
 // UTAMA yang diuji: (1) progres AUTO_QUERY dihitung dari data NYATA (kamus_terms),
@@ -88,18 +89,24 @@ describe('Dashboard Proyek AI (K1b) — seed, progres AUTO_QUERY dari data nyata
   });
 
   afterAll(async () => {
-    await adminClient.from('ai_project_checklist_items').delete().in(
-      'ai_project_task_id',
-      (await adminClient.from('ai_project_tasks').select('ai_project_task_id').eq('company_id', companyId)).data?.map((t) => t.ai_project_task_id) ?? [-1]
-    );
-    await adminClient.from('ai_project_tasks').delete().eq('company_id', companyId);
-    await adminClient.from('ai_project_phases').delete().eq('company_id', companyId);
-    await adminClient.from('ai_project_progress_snapshots').delete().eq('company_id', companyId);
-    await adminClient.from('kamus_terms').delete().eq('company_id', companyId);
     const { data: users } = await adminClient.from('users').select('auth_uid').eq('company_id', companyId);
-    await adminClient.from('users').delete().eq('company_id', companyId);
-    for (const u of users ?? []) await adminClient.auth.admin.deleteUser(u.auth_uid);
-    await adminClient.from('companies').delete().eq('company_id', companyId);
+    const cleanupSteps: Array<[string, () => any]> = [
+      ['ai_project_checklist_items', async () => adminClient.from('ai_project_checklist_items').delete().in(
+        'ai_project_task_id',
+        (await adminClient.from('ai_project_tasks').select('ai_project_task_id').eq('company_id', companyId)).data?.map((t) => t.ai_project_task_id) ?? [-1]
+      )],
+      ['ai_project_tasks', () => adminClient.from('ai_project_tasks').delete().eq('company_id', companyId)],
+      ['ai_project_phases', () => adminClient.from('ai_project_phases').delete().eq('company_id', companyId)],
+      ['ai_project_progress_snapshots', () => adminClient.from('ai_project_progress_snapshots').delete().eq('company_id', companyId)],
+      ['kamus_term_history', async () => adminClient.from('kamus_term_history').delete().in(
+        'kamus_term_id',
+        (await adminClient.from('kamus_terms').select('kamus_term_id').eq('company_id', companyId)).data?.map((t) => t.kamus_term_id) ?? [-1]
+      )],
+      ['kamus_terms', () => adminClient.from('kamus_terms').delete().eq('company_id', companyId)],
+      ['users', () => adminClient.from('users').delete().eq('company_id', companyId)],
+      ...(users ?? []).map((u): [string, () => any] => [`auth:${u.auth_uid}`, () => adminClient.auth.admin.deleteUser(u.auth_uid)])
+    ];
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   it('(NEGATIF) role produksi membuka dashboard -> ditolak total', async () => {

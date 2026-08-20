@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 import { getEmployerCostConfig, computeMonthlyEmployerUplift } from '../src/features/mrp/server/computeEmployerCostUplift';
 import { computeStandardLaborCostPerUnit } from '../src/features/mrp/server/computeStandardLaborCostPerUnit';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Perintah Gabungan A-F, Bagian D (21 Agu 2026) -- model biaya pemberi kerja
 // (BPJS Kesehatan+JKK+JKM+JHT) di atas gaji pokok, basis di-clamp ke
@@ -123,15 +124,17 @@ describe('computeStandardLaborCostPerUnit — kru wage_type=monthly ikut biaya p
   afterAll(async () => {
     const { data: boms } = await adminClient.from('boms').select('bom_id').eq('company_id', companyId);
     const bomIds = (boms ?? []).map((b) => b.bom_id);
-    await adminClient.from('routing_step_standard_crew').delete().eq('company_id', companyId);
-    await adminClient.from('production_standards').delete().eq('company_id', companyId);
-    await adminClient.from('bom_lines').delete().in('bom_id', bomIds.length ? bomIds : [-1]);
-    await adminClient.from('boms').delete().eq('company_id', companyId);
-    await adminClient.from('routings').delete().eq('company_id', companyId);
-    await adminClient.from('employees').delete().eq('company_id', companyId);
-    await adminClient.from('items').delete().eq('company_id', companyId);
-    await adminClient.from('production_plants').delete().eq('company_id', companyId);
-    await adminClient.from('companies').delete().eq('company_id', companyId);
+    const cleanupSteps: Array<[string, () => any]> = [
+      ['routing_step_standard_crew', () => adminClient.from('routing_step_standard_crew').delete().eq('company_id', companyId)],
+      ['production_standards', () => adminClient.from('production_standards').delete().eq('company_id', companyId)],
+      ['bom_lines', () => adminClient.from('bom_lines').delete().in('bom_id', bomIds.length ? bomIds : [-1])],
+      ['boms', () => adminClient.from('boms').delete().eq('company_id', companyId)],
+      ['routings', () => adminClient.from('routings').delete().eq('company_id', companyId)],
+      ['employees', () => adminClient.from('employees').delete().eq('company_id', companyId)],
+      ['items', () => adminClient.from('items').delete().eq('company_id', companyId)],
+      ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)]
+    ];
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   it('(NEGATIF) company BELUM punya konfigurasi BPJS di company_settings -> FALLBACK ke gaji pokok saja, TIDAK error, catatan eksplisit muncul', async () => {
@@ -229,15 +232,20 @@ describe('compute_production_batch_labor_cost (SQL, sisi biaya SDM AKTUAL) — k
   });
 
   afterAll(async () => {
-    await adminClient.from('work_order_assignments').delete().eq('production_batch_id', batchId);
-    await adminClient.from('production_batches').delete().eq('company_id', companyId);
-    await adminClient.from('work_orders').delete().eq('company_id', companyId);
-    await adminClient.from('boms').delete().eq('company_id', companyId);
-    await adminClient.from('employees').delete().eq('company_id', companyId);
-    await adminClient.from('items').delete().eq('company_id', companyId);
-    await adminClient.from('production_plants').delete().eq('company_id', companyId);
-    await adminClient.from('company_settings').delete().eq('company_id', companyId);
-    await adminClient.from('companies').delete().eq('company_id', companyId);
+    const cleanupSteps: Array<[string, () => any]> = [
+      ['work_order_assignments', () => adminClient.from('work_order_assignments').delete().eq('production_batch_id', batchId)],
+      ['production_batches', () => adminClient.from('production_batches').delete().eq('company_id', companyId)],
+      // Trigger readiness (worker_absence dkk) bisa membuat system_alerts baru begitu
+      // work_orders/batches disentuh -- harus dibersihkan SEBELUM hapus work_orders.
+      ['system_alerts', () => adminClient.from('system_alerts').delete().eq('company_id', companyId)],
+      ['work_orders', () => adminClient.from('work_orders').delete().eq('company_id', companyId)],
+      ['boms', () => adminClient.from('boms').delete().eq('company_id', companyId)],
+      ['employees', () => adminClient.from('employees').delete().eq('company_id', companyId)],
+      ['items', () => adminClient.from('items').delete().eq('company_id', companyId)],
+      ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)],
+      ['company_settings', () => adminClient.from('company_settings').delete().eq('company_id', companyId)]
+    ];
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   it('TANPA konfigurasi BPJS -> biaya SDM aktual = gaji pokok saja (fallback lama, TIDAK error)', async () => {
@@ -325,15 +333,17 @@ describe('computeStandardLaborCostPerUnit — kru wage_type=daily (PHL) ikut tun
   afterAll(async () => {
     const { data: boms } = await adminClient.from('boms').select('bom_id').eq('company_id', companyId);
     const bomIds = (boms ?? []).map((b) => b.bom_id);
-    await adminClient.from('routing_step_standard_crew').delete().eq('company_id', companyId);
-    await adminClient.from('production_standards').delete().eq('company_id', companyId);
-    await adminClient.from('bom_lines').delete().in('bom_id', bomIds.length ? bomIds : [-1]);
-    await adminClient.from('boms').delete().eq('company_id', companyId);
-    await adminClient.from('routings').delete().eq('company_id', companyId);
-    await adminClient.from('employees').delete().eq('company_id', companyId);
-    await adminClient.from('items').delete().eq('company_id', companyId);
-    await adminClient.from('production_plants').delete().eq('company_id', companyId);
-    await adminClient.from('companies').delete().eq('company_id', companyId);
+    const cleanupSteps: Array<[string, () => any]> = [
+      ['routing_step_standard_crew', () => adminClient.from('routing_step_standard_crew').delete().eq('company_id', companyId)],
+      ['production_standards', () => adminClient.from('production_standards').delete().eq('company_id', companyId)],
+      ['bom_lines', () => adminClient.from('bom_lines').delete().in('bom_id', bomIds.length ? bomIds : [-1])],
+      ['boms', () => adminClient.from('boms').delete().eq('company_id', companyId)],
+      ['routings', () => adminClient.from('routings').delete().eq('company_id', companyId)],
+      ['employees', () => adminClient.from('employees').delete().eq('company_id', companyId)],
+      ['items', () => adminClient.from('items').delete().eq('company_id', companyId)],
+      ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)]
+    ];
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   it('tunjangan transport PHL (parkir) IKUT dijumlah ke biaya SDM standar -- sebelumnya diam-diam diabaikan utk wage_type=daily', async () => {

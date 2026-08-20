@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -103,11 +104,13 @@ describe('super_admin verification', () => {
   });
 
   afterAll(async () => {
-    await adminClient.from('users').delete().eq('company_id', fixtureCompanyId);
-    await adminClient.from('users').delete().eq('auth_uid', superAdminAuthUid);
-    await adminClient.from('companies').delete().eq('company_id', fixtureCompanyId);
-    await adminClient.auth.admin.deleteUser(superAdminAuthUid);
-    await adminClient.auth.admin.deleteUser(regularCompanyAuthUid);
+    const cleanupSteps: Array<[string, () => any]> = [
+      ['users (company)', () => adminClient.from('users').delete().eq('company_id', fixtureCompanyId)],
+      ['users (super_admin)', () => adminClient.from('users').delete().eq('auth_uid', superAdminAuthUid)],
+      ['auth:super_admin', () => adminClient.auth.admin.deleteUser(superAdminAuthUid)],
+      ['auth:regular_company', () => adminClient.auth.admin.deleteUser(regularCompanyAuthUid)]
+    ];
+    await cleanupCompanyCascade(adminClient, fixtureCompanyId, cleanupSteps);
   });
 
   it('should verify super_admin can be identified from users table', async () => {

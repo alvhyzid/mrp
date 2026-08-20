@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -67,61 +68,57 @@ describe('Margin v1 — acceptance test literal spesifikasi-aturan-biaya-v1.md �
 
   afterAll(async () => {
     if (!companyId) return; // beforeAll gagal sebelum company dibuat — tidak ada yang perlu dibersihkan.
-    const cleanupSteps: Array<[string, () => Promise<{ error: unknown }>]> = [
-      ['work_order_assignments', async () => adminClient.from('work_order_assignments').delete().eq('work_order_id', premixWorkOrderId ?? -1) as unknown as Promise<{ error: unknown }>],
+    const cleanupSteps: Array<[string, () => any]> = [
+      ['work_order_assignments', async () => adminClient.from('work_order_assignments').delete().eq('work_order_id', premixWorkOrderId ?? -1)],
       [
         'work_order_assignments (gummy)',
-        async () => adminClient.from('work_order_assignments').delete().eq('work_order_id', gummyWorkOrderId ?? -1) as unknown as Promise<{ error: unknown }>
+        async () => adminClient.from('work_order_assignments').delete().eq('work_order_id', gummyWorkOrderId ?? -1)
       ],
-      ['work_order_consumption', async () => adminClient.from('work_order_consumption').delete().eq('work_order_id', premixWorkOrderId ?? -1) as unknown as Promise<{ error: unknown }>],
+      ['work_order_consumption', async () => adminClient.from('work_order_consumption').delete().eq('work_order_id', premixWorkOrderId ?? -1)],
       [
         'work_order_consumption (gummy)',
-        async () => adminClient.from('work_order_consumption').delete().eq('work_order_id', gummyWorkOrderId ?? -1) as unknown as Promise<{ error: unknown }>
+        async () => adminClient.from('work_order_consumption').delete().eq('work_order_id', gummyWorkOrderId ?? -1)
       ],
-      ['work_order_outputs', async () => adminClient.from('work_order_outputs').delete().eq('work_order_id', premixWorkOrderId ?? -1) as unknown as Promise<{ error: unknown }>],
+      ['work_order_outputs', async () => adminClient.from('work_order_outputs').delete().eq('work_order_id', premixWorkOrderId ?? -1)],
       [
         'work_order_outputs (gummy)',
-        async () => adminClient.from('work_order_outputs').delete().eq('work_order_id', gummyWorkOrderId ?? -1) as unknown as Promise<{ error: unknown }>
+        async () => adminClient.from('work_order_outputs').delete().eq('work_order_id', gummyWorkOrderId ?? -1)
       ],
-      ['production_batches', async () => adminClient.from('production_batches').delete().eq('company_id', companyId) as unknown as Promise<{ error: unknown }>],
+      ['production_batches', async () => adminClient.from('production_batches').delete().eq('company_id', companyId)],
       ['system_alerts', async () => {
         const { data: wos } = await adminClient.from('work_orders').select('work_order_id').eq('company_id', companyId);
         const ids = (wos ?? []).map((w: { work_order_id: number }) => w.work_order_id);
         if (ids.length === 0) return { error: null };
-        return adminClient.from('system_alerts').delete().in('related_work_order_id', ids) as unknown as Promise<{ error: unknown }>;
+        return adminClient.from('system_alerts').delete().in('related_work_order_id', ids);
       }],
-      ['work_orders', async () => adminClient.from('work_orders').delete().eq('company_id', companyId) as unknown as Promise<{ error: unknown }>],
+      ['work_orders', async () => adminClient.from('work_orders').delete().eq('company_id', companyId)],
       ['lot_genealogy', async () => {
         const { data: lots } = await adminClient.from('lots').select('lot_id').eq('company_id', companyId);
         const ids = (lots ?? []).map((l: { lot_id: number }) => l.lot_id);
         if (ids.length === 0) return { error: null };
-        return adminClient.from('lot_genealogy').delete().in('output_lot_id', ids) as unknown as Promise<{ error: unknown }>;
+        return adminClient.from('lot_genealogy').delete().in('output_lot_id', ids);
       }],
-      ['stock_movements', async () => adminClient.from('stock_movements').delete().eq('company_id', companyId) as unknown as Promise<{ error: unknown }>],
-      ['lots', async () => adminClient.from('lots').delete().eq('company_id', companyId) as unknown as Promise<{ error: unknown }>],
+      ['stock_movements', async () => adminClient.from('stock_movements').delete().eq('company_id', companyId)],
+      ['lots', async () => adminClient.from('lots').delete().eq('company_id', companyId)],
       ['bom_lines', async () => {
         const { data: boms } = await adminClient.from('boms').select('bom_id').eq('company_id', companyId);
         const ids = (boms ?? []).map((b: { bom_id: number }) => b.bom_id);
         if (ids.length === 0) return { error: null };
-        return adminClient.from('bom_lines').delete().in('bom_id', ids) as unknown as Promise<{ error: unknown }>;
+        return adminClient.from('bom_lines').delete().in('bom_id', ids);
       }],
-      ['boms', async () => adminClient.from('boms').delete().eq('company_id', companyId) as unknown as Promise<{ error: unknown }>],
-      ['employees', async () => adminClient.from('employees').delete().eq('company_id', companyId) as unknown as Promise<{ error: unknown }>],
+      ['boms', async () => adminClient.from('boms').delete().eq('company_id', companyId)],
+      ['employees', async () => adminClient.from('employees').delete().eq('company_id', companyId)],
       ['system_alerts (by item)', async () => {
         const { data: items } = await adminClient.from('items').select('item_id').eq('company_id', companyId);
         const ids = (items ?? []).map((i: { item_id: number }) => i.item_id);
         if (ids.length === 0) return { error: null };
-        return adminClient.from('system_alerts').delete().in('related_item_id', ids) as unknown as Promise<{ error: unknown }>;
+        return adminClient.from('system_alerts').delete().in('related_item_id', ids);
       }],
-      ['items', async () => adminClient.from('items').delete().eq('company_id', companyId) as unknown as Promise<{ error: unknown }>],
-      ['company_settings', async () => adminClient.from('company_settings').delete().eq('company_id', companyId) as unknown as Promise<{ error: unknown }>],
-      ['production_plants', async () => adminClient.from('production_plants').delete().eq('company_id', companyId) as unknown as Promise<{ error: unknown }>],
-      ['companies', async () => adminClient.from('companies').delete().eq('company_id', companyId) as unknown as Promise<{ error: unknown }>]
+      ['items', async () => adminClient.from('items').delete().eq('company_id', companyId)],
+      ['company_settings', async () => adminClient.from('company_settings').delete().eq('company_id', companyId)],
+      ['production_plants', async () => adminClient.from('production_plants').delete().eq('company_id', companyId)]
     ];
-    for (const [label, run] of cleanupSteps) {
-      const { error } = await run();
-      if (error) throw new Error(`Cleanup failed at ${label}: ${JSON.stringify(error)}`);
-    }
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   beforeAll(async () => {

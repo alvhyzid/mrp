@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { computeProcessMiningInsights } from '../src/features/process-mining/server/computeProcessMiningInsights';
 import { getProcessMiningDashboard } from '../src/features/process-mining/server/getProcessMiningDashboard';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Process Mining (Fase 0.4, docs/langkah-membangun-fitur-ai.md) -- TANPA LLM,
 // query & agregasi atas status_transition_log yang SUDAH ADA. PRINSIP UTAMA
@@ -70,11 +71,13 @@ describe('Process Mining — insight dari status_transition_log nyata, jujur soa
   });
 
   afterAll(async () => {
-    await adminClient.from('status_transition_log').delete().eq('company_id', companyId);
     const { data: users } = await adminClient.from('users').select('auth_uid').eq('company_id', companyId);
-    await adminClient.from('users').delete().eq('company_id', companyId);
-    for (const u of users ?? []) await adminClient.auth.admin.deleteUser(u.auth_uid);
-    await adminClient.from('companies').delete().eq('company_id', companyId);
+    const cleanupSteps: Array<[string, () => any]> = [
+      ['status_transition_log', () => adminClient.from('status_transition_log').delete().eq('company_id', companyId)],
+      ['users', () => adminClient.from('users').delete().eq('company_id', companyId)],
+      ...(users ?? []).map((u): [string, () => any] => [`auth:${u.auth_uid}`, () => adminClient.auth.admin.deleteUser(u.auth_uid)])
+    ];
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   it('(NEGATIF) TANPA data transisi sama sekali -> "belum ada" eksplisit, BUKAN angka kosong yang menyesatkan', async () => {

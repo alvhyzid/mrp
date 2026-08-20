@@ -6,6 +6,7 @@ import { listKpiCards } from '../src/features/kpi/server/listKpiCards';
 import { updateKpiTarget } from '../src/features/kpi/server/updateKpiTarget';
 import { updateKpiVisibility } from '../src/features/kpi/server/updateKpiVisibility';
 import { getMyKpi } from '../src/features/kpi/server/getMyKpi';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Modul KPI (KPI-1) -- docs/rencana-kerja-kpi.md + penyerahan-opus-fitur-kpi.md +
 // revisi-kpi-visibilitas-tanggung-jawab.md. PRINSIP UTAMA yang diuji: (a) nilai
@@ -101,11 +102,19 @@ describe('Modul KPI (KPI-1) — registry, snapshot, kartu, KPI Saya', () => {
     staffAToken = (await loginToken('staffa.kpimoduletest@debug.mrp')).token;
     staffBToken = (await loginToken('staffb.kpimoduletest@debug.mrp')).token;
 
-    // Fixture verifikasi Margin Kontribusi % (permintaan pemilik produk 25 Agu 2026):
+    // Fixture verifikasi Margin Kontribusi % (permintaan pemilik produk 25 Agu 2026,
+    // ANGKA DIPERBARUI 26 Agu 2026 setelah formula resmi Gummy Zala V2/Drinkme V1
+    // diterapkan ke BOM -- rev.4 lama SUDAH KADALUARSA, jangan pakai lagi):
     // 2 produk dgn harga NYATA (Gummy Rp108.000, Drinkme Rp33.000, sama dgn item asli
     // FG-GUMMY-ZALA-N200/PMBX001ITM) tapi unit_cost dipilih SENGAJA supaya margin%
-    // PERSIS 68.2% (Gummy) & 18.7% (Drinkme) -- literal acceptance-test number dari
-    // pemilik produk, pola sama sesi biaya v1.
+    // PERSIS 68.2% (Gummy) & 18.7% (Drinkme) -- literal acceptance-test number resmi
+    // (biaya bahan/produksi/kemasan diverifikasi pemilik produk 26 Agu 2026). CATATAN
+    // JUJUR: unit_cost di sini MASIH manual (bukan hasil computeStandardCostPerUnit
+    // live), karena standar biaya sistem untuk kedua produk ini MASIH tidak lengkap --
+    // Gummy: harga PTS-01 (Potassium Sorbate) & SOD-01 (Sodium Benzoate) belum ada;
+    // kedua produk: kru standar Premix Gelatin (Zala) & 5 premix Drinkme belum diisi
+    // di production_standards, jadi computeStandardLaborCostPerUnit masih "incomplete".
+    // Begitu 2 gerbang data itu terisi, angka test ini WAJIB diganti hasil live sistem.
     const { data: customer } = await adminClient.from('customers').insert([{ company_id: companyId, name: 'Customer KpiModuleTest' }]).select('customer_id').single();
     customerId = customer!.customer_id;
     const { data: gummyItem } = await adminClient
@@ -123,28 +132,42 @@ describe('Modul KPI (KPI-1) — registry, snapshot, kartu, KPI Saya', () => {
   });
 
   afterAll(async () => {
-    await adminClient.from('kpi_registry_history').delete().in('kpi_registry_id', (await adminClient.from('kpi_registry').select('kpi_registry_id').eq('company_id', companyId)).data?.map((r) => r.kpi_registry_id) ?? []);
-    await adminClient.from('kpi_actions').delete().eq('company_id', companyId);
-    await adminClient.from('kpi_responsibilities').delete().eq('company_id', companyId);
-    await adminClient.from('kpi_snapshots').delete().eq('company_id', companyId);
-    await adminClient.from('kpi_registry').delete().eq('company_id', companyId);
-    await adminClient.from('kamus_terms').delete().eq('company_id', companyId);
-    const shipmentIds = (await adminClient.from('shipments').select('shipment_id').eq('company_id', companyId)).data?.map((s) => s.shipment_id) ?? [];
-    await adminClient.from('shipment_lines').delete().in('shipment_id', shipmentIds.length ? shipmentIds : [-1]);
-    await adminClient.from('shipments').delete().eq('company_id', companyId);
-    const soIds = (await adminClient.from('sales_orders').select('sales_order_id').eq('company_id', companyId)).data?.map((s) => s.sales_order_id) ?? [];
-    await adminClient.from('sales_order_lines').delete().in('sales_order_id', soIds.length ? soIds : [-1]);
-    await adminClient.from('sales_orders').delete().eq('company_id', companyId);
-    await adminClient.from('customer_purchase_orders').delete().eq('company_id', companyId);
-    await adminClient.from('lots').delete().eq('company_id', companyId);
-    await adminClient.from('customers').delete().eq('company_id', companyId);
-    await adminClient.from('items').delete().eq('company_id', companyId);
-    await adminClient.from('employees').delete().eq('company_id', companyId);
-    await adminClient.from('production_plants').delete().eq('company_id', companyId);
     const { data: users } = await adminClient.from('users').select('auth_uid').eq('company_id', companyId);
-    await adminClient.from('users').delete().eq('company_id', companyId);
-    for (const u of users ?? []) await adminClient.auth.admin.deleteUser(u.auth_uid);
-    await adminClient.from('companies').delete().eq('company_id', companyId);
+    const cleanupSteps: Array<[string, () => any]> = [
+      ['kpi_registry_history', async () => adminClient.from('kpi_registry_history').delete().in('kpi_registry_id', (await adminClient.from('kpi_registry').select('kpi_registry_id').eq('company_id', companyId)).data?.map((r) => r.kpi_registry_id) ?? [])],
+      ['kpi_actions', () => adminClient.from('kpi_actions').delete().eq('company_id', companyId)],
+      ['kpi_responsibilities', () => adminClient.from('kpi_responsibilities').delete().eq('company_id', companyId)],
+      ['kpi_snapshots', () => adminClient.from('kpi_snapshots').delete().eq('company_id', companyId)],
+      ['kpi_registry', () => adminClient.from('kpi_registry').delete().eq('company_id', companyId)],
+      ['kamus_term_history', async () => adminClient.from('kamus_term_history').delete().in(
+        'kamus_term_id',
+        (await adminClient.from('kamus_terms').select('kamus_term_id').eq('company_id', companyId)).data?.map((t) => t.kamus_term_id) ?? [-1]
+      )],
+      ['kamus_terms', () => adminClient.from('kamus_terms').delete().eq('company_id', companyId)],
+      ['shipment_lines', async () => {
+        const shipmentIds = (await adminClient.from('shipments').select('shipment_id').eq('company_id', companyId)).data?.map((s) => s.shipment_id) ?? [];
+        return adminClient.from('shipment_lines').delete().in('shipment_id', shipmentIds.length ? shipmentIds : [-1]);
+      }],
+      ['shipments', () => adminClient.from('shipments').delete().eq('company_id', companyId)],
+      ['sales_order_lines', async () => {
+        const soIds = (await adminClient.from('sales_orders').select('sales_order_id').eq('company_id', companyId)).data?.map((s) => s.sales_order_id) ?? [];
+        return adminClient.from('sales_order_lines').delete().in('sales_order_id', soIds.length ? soIds : [-1]);
+      }],
+      ['sales_orders', () => adminClient.from('sales_orders').delete().eq('company_id', companyId)],
+      ['customer_po_approvals', async () => adminClient.from('customer_po_approvals').delete().in(
+        'customer_purchase_order_id',
+        (await adminClient.from('customer_purchase_orders').select('customer_purchase_order_id').eq('company_id', companyId)).data?.map((c) => c.customer_purchase_order_id) ?? [-1]
+      )],
+      ['customer_purchase_orders', () => adminClient.from('customer_purchase_orders').delete().eq('company_id', companyId)],
+      ['lots', () => adminClient.from('lots').delete().eq('company_id', companyId)],
+      ['customers', () => adminClient.from('customers').delete().eq('company_id', companyId)],
+      ['items', () => adminClient.from('items').delete().eq('company_id', companyId)],
+      ['employees', () => adminClient.from('employees').delete().eq('company_id', companyId)],
+      ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)],
+      ['users', () => adminClient.from('users').delete().eq('company_id', companyId)],
+      ...(users ?? []).map((u): [string, () => any] => [`auth:${u.auth_uid}`, () => adminClient.auth.admin.deleteUser(u.auth_uid)])
+    ];
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   it('seed idempoten: 6 KPI (5 kategori A + Margin Kontribusi %) + baris kamus METRIC terkait, dijalankan 2x tanpa duplikasi', async () => {
@@ -340,8 +363,8 @@ describe('Modul KPI (KPI-1) — registry, snapshot, kartu, KPI Saya', () => {
       await adminClient.from('shipment_lines').insert([{ shipment_id: shipment!.shipment_id, sales_order_line_id: line!.sales_order_line_id, item_id: itemId, qty_shipped: 1, lot_id: lot!.lot_id }]);
     }
 
-    await ship(testGummyItemId, 108000, 34344, 'gummy'); // (108000-34344)/108000 = 68.2%
-    await ship(testDrinkmeItemId, 33000, 26829, 'drinkme'); // (33000-26829)/33000 = 18.7%
+    await ship(testGummyItemId, 108000, 34307.23, 'gummy'); // formula resmi 26 Agu 2026: margin Rp73.692,77 -> (108000-34307.23)/108000 = 68.2%
+    await ship(testDrinkmeItemId, 33000, 26817.29, 'drinkme'); // formula resmi 26 Agu 2026: margin Rp6.182,71 -> (33000-26817.29)/33000 = 18.7%
 
     const res = await listKpiCards(makeRequest('http://x/api/kpi', adminToken, 'GET'));
     expect(res.status).toBe(200);

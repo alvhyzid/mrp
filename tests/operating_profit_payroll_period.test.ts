@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { NextRequest } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getMonthlyOperatingProfit } from '../src/features/mrp/server/getMonthlyOperatingProfit';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Perintah Gabungan A-F, Bagian E (21 Agu 2026) -- keputusan pemilik produk:
 // Laba Operasional bulanan IKUT periode gajian (26 bulan sebelumnya s/d 25
@@ -123,19 +124,25 @@ describe('get_monthly_operating_profit — periode gajian (payroll_period_start_
   });
 
   afterAll(async () => {
-    await adminClient.from('shipment_lines').delete().in('shipment_id', (await adminClient.from('shipments').select('shipment_id').eq('company_id', companyId)).data?.map((s) => s.shipment_id) ?? [-1]);
-    await adminClient.from('shipments').delete().eq('company_id', companyId);
-    await adminClient.from('sales_order_lines').delete().in('sales_order_id', (await adminClient.from('sales_orders').select('sales_order_id').eq('company_id', companyId)).data?.map((s) => s.sales_order_id) ?? [-1]);
-    await adminClient.from('sales_orders').delete().eq('company_id', companyId);
-    await adminClient.from('customer_purchase_orders').delete().eq('company_id', companyId);
-    await adminClient.from('lots').delete().eq('company_id', companyId);
-    await adminClient.from('customers').delete().eq('company_id', companyId);
-    await adminClient.from('items').delete().eq('company_id', companyId);
-    await adminClient.from('production_plants').delete().eq('company_id', companyId);
-    await adminClient.from('company_settings').delete().eq('company_id', companyId);
-    await adminClient.from('users').delete().eq('company_id', companyId);
-    await adminClient.auth.admin.deleteUser(adminAuthUid);
-    await adminClient.from('companies').delete().eq('company_id', companyId);
+    const cleanupSteps: Array<[string, () => any]> = [
+      ['shipment_lines', async () => adminClient.from('shipment_lines').delete().in('shipment_id', (await adminClient.from('shipments').select('shipment_id').eq('company_id', companyId)).data?.map((s) => s.shipment_id) ?? [-1])],
+      ['shipments', () => adminClient.from('shipments').delete().eq('company_id', companyId)],
+      ['sales_order_lines', async () => adminClient.from('sales_order_lines').delete().in('sales_order_id', (await adminClient.from('sales_orders').select('sales_order_id').eq('company_id', companyId)).data?.map((s) => s.sales_order_id) ?? [-1])],
+      ['sales_orders', () => adminClient.from('sales_orders').delete().eq('company_id', companyId)],
+      ['customer_po_approvals', async () => adminClient.from('customer_po_approvals').delete().in(
+        'customer_purchase_order_id',
+        (await adminClient.from('customer_purchase_orders').select('customer_purchase_order_id').eq('company_id', companyId)).data?.map((c) => c.customer_purchase_order_id) ?? [-1]
+      )],
+      ['customer_purchase_orders', () => adminClient.from('customer_purchase_orders').delete().eq('company_id', companyId)],
+      ['lots', () => adminClient.from('lots').delete().eq('company_id', companyId)],
+      ['customers', () => adminClient.from('customers').delete().eq('company_id', companyId)],
+      ['items', () => adminClient.from('items').delete().eq('company_id', companyId)],
+      ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)],
+      ['company_settings', () => adminClient.from('company_settings').delete().eq('company_id', companyId)],
+      ['users', () => adminClient.from('users').delete().eq('company_id', companyId)],
+      ['auth:admin', () => adminClient.auth.admin.deleteUser(adminAuthUid)]
+    ];
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   it('(NEGATIF/FALLBACK) company TANPA payroll_period_start_day -> tetap bulan KALENDER (perilaku lama, zero regresi)', async () => {

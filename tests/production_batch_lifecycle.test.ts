@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { startProductionBatch } from '../src/features/mrp/server/startProductionBatch';
 import { completeProductionBatch } from '../src/features/mrp/server/completeProductionBatch';
+import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Fase Produksi Nyata, P1 — "Selesaikan Batch" lewat state machine yang SUDAH ADA
 // (status_transition_rules + trigger enforce_status_transition, migration
@@ -195,14 +196,10 @@ describe('Fase Produksi Nyata P1 — Mulai/Selesaikan Batch (state machine + K8 
       ['items', () => adminClient.from('items').delete().eq('company_id', companyId)],
       ['users', () => adminClient.from('users').delete().eq('company_id', companyId)],
       ['production_plants', () => adminClient.from('production_plants').delete().eq('company_id', companyId)],
-      ['companies', () => adminClient.from('companies').delete().eq('company_id', companyId)]
+      ['auth:prod_staff', () => adminClient.auth.admin.deleteUser(prodStaffAuthUid)],
+      ['auth:warehouse_staff', () => adminClient.auth.admin.deleteUser(warehouseStaffAuthUid)]
     ];
-    for (const [label, run] of cleanupSteps) {
-      const { error } = await run();
-      if (error) throw new Error(`Cleanup failed at ${label}: ${error.message}`);
-    }
-    await adminClient.auth.admin.deleteUser(prodStaffAuthUid);
-    await adminClient.auth.admin.deleteUser(warehouseStaffAuthUid);
+    await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
   it('(c, negatif) warehouse_staff (bukan operator/SPV produksi): coba mulai & selesaikan batch -> 403 keduanya', async () => {

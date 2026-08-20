@@ -11,13 +11,57 @@ const standardStatusLabels: Record<string, string> = {
   DIPELAJARI: 'Dipelajari dari Data Nyata'
 };
 
-// Panel Asal-Usul (docs/langkah-membangun-fitur-ai.md Langkah 0.3, D1) --
-// "klik angka -> lihat rumus, nilai input, dokumen sumber, riwayat perubahan,
-// status K8". Ikon kecil di sebelah angka manapun yang punya ProvenanceEnvelope
-// -- SATU komponen generik dipakai lintas modul (BOM, Margin Watch, dst),
-// bukan diimplementasikan ulang tiap tempat.
-export function ProvenanceInfoButton({ envelope, label }: { envelope: ProvenanceEnvelope; label?: string }) {
+// Tab "Definisi" (opsional -- revisi-kpi-visibilitas-tanggung-jawab.md §3) --
+// arti bisnis dari kamus (K1). Cuma ditampilkan kalau baris kamus_terms-nya
+// dikirim si pemanggil.
+export interface DefinitionTabData {
+  termKey: string;
+  businessAnswer: string | null; // kamus_terms.answer_plain -- null kalau belum dijawab
+  draft: string | null; // kamus_terms.ai_draft -- fallback kalau belum ada jawaban resmi
+  status: string;
+}
+
+// Tab "KPI & Tanggung Jawab" (opsional, §3) -- HANYA muncul bila angka ini
+// terdaftar sebagai KPI (kpi_registry). Nilai/target/benchmark/tren SUDAH
+// dihitung pemanggil (KpiCard) -- komponen ini murni presentasional.
+export interface KpiTabData {
+  valueLabel: string;
+  targetLabel: string | null;
+  benchmarkLabel: string | null;
+  deltaLabel: string | null;
+  attributionLevel: string;
+  responsibilities: { role: string | null; responsibility: string; note: string | null }[];
+  improvementLevers: string[];
+  openActions: { finding: string; actionText: string; dueDate: string | null }[];
+}
+
+// Panel Asal-Usul (docs/langkah-membangun-fitur-ai.md Langkah 0.3, D1) -- "klik
+// angka -> lihat rumus, nilai input, dokumen sumber, riwayat perubahan, status K8".
+// SATU affordance per angka (revisi §3: "jangan tiga ikon kecil berjejer") --
+// diperluas jadi panel BERTAB opsional (Definisi / Asal-usul / KPI & Tanggung
+// Jawab) alih-alih komponen ketiga berdiri sendiri. Tab bar HANYA muncul kalau
+// lebih dari satu tab punya data -- ~50 pemanggil lama yang cuma kirim `envelope`
+// tetap tampil PERSIS seperti sebelumnya (satu panel, tanpa tab), zero regresi.
+export function ProvenanceInfoButton({
+  envelope,
+  label,
+  definition,
+  kpi
+}: {
+  envelope: ProvenanceEnvelope;
+  label?: string;
+  definition?: DefinitionTabData | null;
+  kpi?: KpiTabData | null;
+}) {
   const [open, setOpen] = useState(false);
+  const tabs = [
+    { key: 'definisi' as const, title: 'Definisi', available: !!definition },
+    { key: 'asal-usul' as const, title: 'Asal-usul', available: true },
+    { key: 'kpi' as const, title: 'KPI & Tanggung Jawab', available: !!kpi }
+  ].filter((t) => t.available);
+  const [activeTab, setActiveTab] = useState<'definisi' | 'asal-usul' | 'kpi'>(definition ? 'definisi' : 'asal-usul');
+  const showTabBar = tabs.length > 1;
+
   return (
     <>
       <button
@@ -33,44 +77,139 @@ export function ProvenanceInfoButton({ envelope, label }: { envelope: Provenance
           <DialogHeader>
             <DialogTitle>{label ?? 'Asal Angka Ini'}</DialogTitle>
           </DialogHeader>
-          <div className="flex flex-col gap-3 text-sm">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Rumus</p>
-              <p>{envelope.formula}</p>
+          {showTabBar ? (
+            <div className="-mt-2 flex gap-1 border-b">
+              {tabs.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setActiveTab(t.key)}
+                  className={`px-3 py-1.5 text-xs font-medium uppercase tracking-wide ${
+                    activeTab === t.key ? 'border-b-2 border-primary text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {t.title}
+                </button>
+              ))}
             </div>
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Nilai Input</p>
-              <ul className="flex flex-col gap-0.5">
-                {envelope.inputs.map((input, idx) => (
-                  <li key={idx} className="flex justify-between gap-2">
-                    <span className="text-muted-foreground">{input.label}</span>
-                    <span className="font-medium">{input.value}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            {envelope.sourceDocument ? (
+          ) : null}
+
+          {definition && (!showTabBar || activeTab === 'definisi') ? (
+            <div className="flex flex-col gap-3 text-sm">
               <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Dokumen Sumber</p>
-                <p className="font-mono text-xs">{envelope.sourceDocument}</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Arti Bisnis</p>
+                <p>{definition.businessAnswer ?? definition.draft ?? 'Belum ada penjelasan tersimpan.'}</p>
+                {!definition.businessAnswer && definition.draft ? <p className="mt-1 text-xs italic text-muted-foreground">Draf awal, belum dikonfirmasi manusia.</p> : null}
               </div>
-            ) : null}
-            {envelope.standardStatus ? <Badge variant="secondary">{standardStatusLabels[envelope.standardStatus] ?? envelope.standardStatus}</Badge> : null}
-            {envelope.history && envelope.history.length > 0 ? (
+              <p className="font-mono text-xs text-muted-foreground">Kamus: {definition.termKey}</p>
+            </div>
+          ) : null}
+
+          {!showTabBar || activeTab === 'asal-usul' ? (
+            <div className="flex flex-col gap-3 text-sm">
               <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Riwayat</p>
-                <ul className="flex flex-col gap-0.5 text-xs">
-                  {envelope.history.map((h, idx) => (
-                    <li key={idx}>
-                      {h.changedAt}: {h.note}
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Rumus</p>
+                <p>{envelope.formula}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Nilai Input</p>
+                <ul className="flex flex-col gap-0.5">
+                  {envelope.inputs.map((input, idx) => (
+                    <li key={idx} className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">{input.label}</span>
+                      <span className="font-medium">{input.value}</span>
                     </li>
                   ))}
                 </ul>
               </div>
-            ) : (
-              <p className="text-xs italic text-muted-foreground">Riwayat perubahan belum terlacak untuk angka ini.</p>
-            )}
-          </div>
+              {envelope.sourceDocument ? (
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Dokumen Sumber</p>
+                  <p className="font-mono text-xs">{envelope.sourceDocument}</p>
+                </div>
+              ) : null}
+              {envelope.standardStatus ? <Badge variant="secondary">{standardStatusLabels[envelope.standardStatus] ?? envelope.standardStatus}</Badge> : null}
+              {envelope.history && envelope.history.length > 0 ? (
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Riwayat</p>
+                  <ul className="flex flex-col gap-0.5 text-xs">
+                    {envelope.history.map((h, idx) => (
+                      <li key={idx}>
+                        {h.changedAt}: {h.note}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <p className="text-xs italic text-muted-foreground">Riwayat perubahan belum terlacak untuk angka ini.</p>
+              )}
+            </div>
+          ) : null}
+
+          {activeTab === 'kpi' && kpi ? (
+            <div className="flex flex-col gap-3 text-sm">
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <p className="text-muted-foreground">Nilai kini</p>
+                  <p className="font-medium text-foreground">{kpi.valueLabel}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Target</p>
+                  <p className="font-medium text-foreground">{kpi.targetLabel ?? 'belum ditetapkan, baseline berjalan'}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Benchmark industri</p>
+                  <p className="font-medium text-foreground">{kpi.benchmarkLabel ?? '-'}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Delta vs periode lalu</p>
+                  <p className="font-medium text-foreground">{kpi.deltaLabel ?? '-'}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tingkat Atribusi</p>
+                <p className="text-xs">{kpi.attributionLevel}</p>
+              </div>
+              {kpi.responsibilities.length > 0 ? (
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Pemilik &amp; Kontributor</p>
+                  <ul className="flex flex-col gap-0.5 text-xs">
+                    {kpi.responsibilities.map((r, idx) => (
+                      <li key={idx}>
+                        {r.responsibility}: {r.role ?? '-'}
+                        {r.note ? ` — ${r.note}` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {kpi.improvementLevers.length > 0 ? (
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Cara Menaikkan KPI Ini</p>
+                  <ul className="list-disc pl-4 text-xs">
+                    {kpi.improvementLevers.map((lever, idx) => (
+                      <li key={idx}>{lever}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {kpi.openActions.length > 0 ? (
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tindakan Terbuka</p>
+                  <ul className="flex flex-col gap-0.5 text-xs">
+                    {kpi.openActions.map((a, idx) => (
+                      <li key={idx}>
+                        {a.finding} — {a.actionText}
+                        {a.dueDate ? ` (tenggat ${a.dueDate})` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <p className="text-xs italic text-muted-foreground">Tidak ada tindakan terbuka terkait KPI ini.</p>
+              )}
+            </div>
+          ) : null}
         </DialogContent>
       </Dialog>
     </>

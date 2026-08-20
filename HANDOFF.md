@@ -4,6 +4,134 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Modul KPI — KPI-1 (registry, snapshot, kartu 3-garis, panel bertab, KPI Saya) — 25 Agu 2026
+
+Instruksi "Bagian E (FINAL)" — MENGGANTIKAN rencana Bagian E lama, dari 3 dokumen dibaca
+bersama: `docs/rencana-kerja-kpi.md` (katalog & aturan visual, disalin ke repo sesuai
+instruksi eksplisit), `docs/penyerahan-opus-fitur-kpi.md`, `docs/revisi-kpi-visibilitas-tanggung-jawab.md`
+(MENGGANTIKAN §1.3 dokumen kedua — visibilitas individu diperbolehkan sesuai konfigurasi).
+**Ketiga dokumen disalin ke `docs/`** (bukan cuma yang diminta eksplisit) — dua lainnya
+adalah spesifikasi WAJIB dibaca bersama, sesi berikutnya butuh ketiganya, bukan cuma satu.
+
+**KPI-2/3/4 SENGAJA DITUNDA** (instruksi eksplisit) — hanya KPI-1 (5 KPI kategori A,
+semuanya sudah punya data) dikerjakan. Alasan gerbang: rumus kategori B (KPI-2) wajib
+punya contoh hitung manual tervalidasi pemilik KPI sebagai acceptance test literal, dan
+belum ada satu pun produksi nyata untuk dijadikan contoh itu.
+
+### E1-E6 — status per bagian
+- **E1 (skema)** — SELESAI. 5 tabel baru: `kpi_registry`, `kpi_snapshots`, `kpi_actions`,
+  `kpi_responsibilities`, `kpi_registry_history` (audit trail, pola SAMA `kamus_term_history`).
+  **Penyimpangan DIPERIKSA & didokumentasikan di kepala migration `20260825090000`**: (1)
+  "kpi_snapshots MENYATU snapshot Fase 0.5/dashboard AI yang sudah ada" — DICEK, TIDAK ADA
+  tabel snapshot Fase 0.5 sama sekali, dan 3 tabel "snapshot" yang ada semua berbentuk tetap
+  milik satu baris pemilik, bukan time-series generik — `kpi_snapshots` jadi tabel time-series
+  metrik generik PERTAMA di proyek ini (kalau Fase 0.5 dibangun kelak, HARUS pakai tabel ini).
+  (2) `owner_role_id`/`role_id` di dokumen sumber diterjemahkan jadi `owner_role text`/`role text`
+  — proyek ini tidak punya tabel `roles` terpisah (pola sama `kamus_terms.suggested_role`).
+  `metric_key` di `kpi_registry`/`kpi_snapshots` FK KOMPOSIT ke `kamus_terms(company_id, term_key)`
+  — menegakkan "rumus KPI cuma hidup di kamus" di level database, bukan cuma konvensi.
+- **E2 (seed 5 KPI kategori A)** — SELESAI, idempoten (`seedKpiRegistry.ts`). 3 baris METRIC
+  kamus BARU dibuat (`metric.biaya_produksi_per_unit`, `metric.yield_per_tahap_produk`,
+  `metric.nilai_persediaan`) — 2 sebelumnya (margin, laba operasional) sudah ada. Keputusan
+  `attribution_level` dgn alasan: margin/laba/nilai-persediaan = PERUSAHAAN (angka holistik
+  satu perusahaan/periode, tidak jujur dipecah tanpa konteks order/lini); biaya-per-unit =
+  LINI (inherently per-produk, rata-rata lintas produk kurang jujur kalau diklaim
+  PERUSAHAAN); yield = LINI (instruksi eksplisit: JANGAN individu — dipengaruhi lot
+  bahan/mesin/tahap sebelumnya, bukan kendali satu operator).
+- **E3 (target & benchmark)** — SEBAGIAN, dgn TEMUAN PENTING dilaporkan bukan dipaksakan:
+  dokumen bilang "GPM/margin 35% = target resmi perusahaan, set sebagai target_value KPI
+  margin" — TAPI 35% adalah PERSENTASE (gross profit margin), sedangkan KPI "Margin
+  Kontribusi per Order" di katalog eksplisit didefinisikan sbg Rupiah ABSOLUT (harga jual −
+  biaya variabel). Menaruh 35 di kolom berdenominasi puluhan-juta-Rupiah akan menghasilkan
+  "delta vs target" yang tidak masuk akal. **TIDAK diterapkan** — `target_value` KPI margin
+  tetap null sama seperti 4 KPI HASIL lainnya (semua "baseline dulu, target kemudian").
+  4 benchmark lain di dokumen (OTD/inventory accuracy/downtime/FPY) semuanya untuk KPI
+  kategori B yang DITUNDA — tidak ada yang diterapkan sesi ini (bukan lupa, memang belum
+  relevan). OEE tetap TIDAK ditampilkan sama sekali (gerbangnya belum terpenuhi, sesuai §5).
+- **E4 (KpiCard + panel bertab)** — SELESAI. `ProvenanceInfoButton` (Bagian D0/D1) DIPERLUAS
+  jadi panel BERTAB opsional (Definisi dari Kamus / Asal-usul yang sudah ada / KPI &
+  Tanggung Jawab BARU) — bukan komponen ketiga berdiri sendiri, sesuai instruksi eksplisit
+  revisi §3. **Backward-compat penuh**: tab bar HANYA muncul kalau >1 tab punya data — ~50+
+  pemanggil lama yang cuma kirim `envelope` tampil PERSIS seperti sebelumnya (diverifikasi:
+  seluruh test suite 184/184 tetap hijau, termasuk semua test yang menyentuh halaman ber-
+  provenance lama). `KpiCard` (`src/components/ui/kpi-card.tsx`): nilai+target+benchmark+
+  delta+sparkline (SVG polos hand-rolled, TIDAK nambah dependency chart baru) — aturan
+  visual Zebra BI ditegakkan di kode (tidak ada opsi pie/3D sama sekali di komponen).
+- **E5 (halaman "KPI Saya")** — SELESAI, dgn catatan jujur: kelima KPI kategori A SEMUA
+  attribution_level TIM/LINI/PERUSAHAAN (nol yang INDIVIDU), jadi "nilai dirinya vs
+  rata-rata tim" yang diminta dokumen BELUM bisa literal per-individu untuk KPI manapun
+  saat ini — angka yang tampil di "KPI Saya" adalah agregat departemen/perusahaan yang
+  SAMA untuk siapa pun di role/departemen itu, dgn catatan eksplisit di UI kenapa. Yang
+  betul-betul personal & bergerbang akses: `kpi_actions` yang ditugaskan eksplisit ke user
+  itu (`owner_user_id`) — kosong sesi ini (belum ada UI pembuatan aksi, itu KPI-3).
+- **E6 (job snapshot terjadwal)** — TIDAK ada cron sungguhan (Vercel Cron belum ada di
+  proyek ini, sama seperti Bagian C/F/G sebelumnya) — dihitung LIVE tiap `/api/kpi` dibuka
+  lalu di-upsert ke `kpi_snapshots` (pola sama `ai_capability_status`), plus tersimpan
+  historis per periode untuk sparkline/delta. Kalau Vercel Cron dibangun kelak, tinggal
+  panggil `listKpiCards` terjadwal — logikanya sudah generik.
+
+### Bukti (skenario negatif WAJIB, semua di `tests/kpi_module.test.ts`, 10 test)
+1. **(a)** Set nilai KPI langsung lewat client authenticated biasa (bukan admin client,
+   bukan lewat server function) → INSERT & UPDATE `kpi_snapshots` sama-sama 0 baris (RLS
+   default-deny total untuk `authenticated`, sama pola Kamus/AI-Project/AI-Readiness).
+2. **(b)** Target KPI DISIPLIN (baris uji khusus dibuat test, krn 5 KPI kategori A semua
+   HASIL) → `updateKpiTarget` menolak 400 SEBELUM cek role (bukan "Anda tidak berwenang",
+   tapi "ini memang tidak bisa diubah"), target tetap 100 tidak berubah.
+3. **(c1)** KPI attribution_level=LINI (yield) → dibuktikan STRUKTURAL tidak ada jalur per
+   individu: `production_manager` (pemilik KPI) melihat SATU angka agregat (`value: number|null`,
+   bukan object/array per-karyawan), `production_staff` biasa tidak melihat yield sama
+   sekali lewat "KPI Saya"-nya sendiri (bukan pemilik/kontributor terdaftar).
+4. **(c2)** Staff A minta "KPI Saya" milik Staff B (`?user_id=`) → 403 ditolak (bukan
+   manager/HR/leadership). Kontrol positif: `production_manager` (manager departemen
+   production) BOLEH lihat "KPI Saya" staff production → 200, membuktikan gerbangnya
+   memang berdasar hubungan manager-staf, bukan diblokir semua.
+5. **(c3)** Ubah `visibility` KPI yield sbg leadership → tercatat `kpi_registry_history`
+   (`field_changed='visibility'`, old/new value benar); percobaan sama oleh `finance_manager`
+   (bukan leadership) → 403 ditolak, membuktikan gerbang role tetap berlaku berdampingan
+   dgn audit trail.
+
+Plus 5 test positif: seed idempoten (run 2× → 0 baris baru run kedua, `target_value` semua
+null termasuk margin — sanity check keputusan E3), kartu company_admin (5 kartu, provenance+
+definisi+tanggung jawab terisi, frekuensi per-KPI benar), kartu production_staff (0 kartu —
+bukan pemilik/finance KPI manapun), kartu production_manager (lihat yield, TIDAK lihat laba
+operasional murni finance).
+
+### Diverifikasi browser (bukan cuma test otomatis)
+Login nyata `company.a@debug.mrp` (= data PT ITM asli, lihat catatan session sebelumnya),
+klik "Seed 5 KPI Awal", 5 kartu muncul dgn DATA NYATA: Margin Rp0, Biaya/unit "belum bisa
+dihitung" (jujur, bukan dipalsukan), **Laba Operasional Rp-73.352.547 — PERSIS SAMA dgn
+angka yang sudah tampil di halaman Laba Operasional terpisah** (rekonsiliasi terbukti,
+karena literal RPC yang sama dipanggil, bukan dihitung ulang jalur beda), Yield "belum
+bisa dihitung", Nilai Persediaan Rp270.766.422 (BARU, sebelumnya tidak ada fungsi yang
+menghitung ini). Panel bertab dibuka & diklik semua tab (Definisi/Asal-usul/KPI &
+Tanggung Jawab) — isinya benar. Halaman "KPI Saya" dibuka sbg company_admin — menampilkan
+Laba Operasional dgn catatan jujur "belum ada pemecahan per individu". Console bersih dari
+error di semua halaman. `npx tsc --noEmit` bersih, `npm test` 184/184 lulus (174 lama +
+10 KPI baru, zero regresi).
+
+### Dokumentasi skema diperbarui
+`docs/rancangan-skema-database-mrp.md` (Kelompok 7 baru) + `docs/daftar-database-sederhana.md`
+(Kelompok 7 baru) — **ditemukan sekaligus dicatat**: 4 modul sebelumnya (Kamus, Dashboard
+Proyek AI, Kesiapan AI, Absensi) TIDAK PERNAH didokumentasikan di kedua file ini walau
+memory proyek mewajibkan itu — bukan dirapikan sesi ini (di luar cakupan KPI-1, beban kerja
+tersendiri), dicatat sebagai UTANG DOKUMENTASI untuk sesi mendatang.
+
+### Menunggu pemilik produk (pakai default aman, jangan asumsi final)
+1. **Klarifikasi GPM 35%** (lihat E3) — apakah perlu KPI persentase margin BARU terpisah,
+   atau 35% dimaksudkan utk sesuatu yang lain.
+2. **Nav**: KPI Perusahaan & KPI Saya SEKARANG terlihat semua role login (`visible: () =>
+   true`) — akses SEBENARNYA tetap digerbang per-KPI di server (`canViewKpi`), tapi kalau
+   pemilik produk mau menu itu sendiri disembunyikan utk role yang pasti kosong (mis.
+   warehouse_staff biasa), itu keputusan produk, belum diputuskan sepihak sesi ini.
+3. **improvement_levers** kosong utk semua 5 KPI (kolom siap, kurasi manual belum dikerjakan
+   — "boleh" bukan "wajib" per dokumen, sengaja ditunda daripada mengarang saran generik).
+4. Prasyarat gerbang waktu dokumen ("KPI-1..4 berjalan SETELAH SAS001 & SAS005 terkirim")
+   SECARA TEKNIS sudah dilangkahi (dikerjakan sekarang atas instruksi eksplisit pemilik
+   produk) — dicatat di sini supaya jelas ini bukan kelalaian mengikuti gerbang, tapi
+   instruksi baru yang menggantikannya.
+
+---
+
 ## Panel Asal-Usul — perluasan ke ±30 titik lain + housekeeping — 25 Agu 2026
 
 Lanjutan sesi Bagian D (20/20) di hari yang sama. Pemilik produk minta 4 hal berurutan: (1) commit+push kerja 20/20, (2) bersihkan artefak uji `BROWSER-VERIFY-TEMP`, (3) baca & laporkan `docs/instruksi-d0-provenance.md` (dokumen dari konsultan lain, belum pernah dilihat pemilik produk), (4) kerjakan bagian dokumen itu yang tidak bertabrakan dengan yang sudah dibangun.

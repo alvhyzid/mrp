@@ -5,11 +5,32 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 // DITEBAK (instruksi eksplisit §3.4 dokumen kamus: "Dilarang menebak untuk
 // scope METRIC yang sudah didefinisikan di spesifikasi biaya -- kutip
 // definisi resminya").
-const METRIC_TERMS = [
+const METRIC_TERMS: { term_key: string; ai_draft: string; domain?: string; suggested_role?: string }[] = [
   {
     term_key: 'metric.biaya_bahan_batch',
     ai_draft:
       'Kutipan resmi (docs/spesifikasi-aturan-biaya-v1.md §3): "Biaya bahan batch = Σ (qty bahan aktual terpakai × harga per unit LOT yang dipakai) + Σ (qty premix aktual × biaya per unit LOT premix). Bahan milik client: qty tercatat, biaya = 0."'
+  },
+  {
+    term_key: 'metric.biaya_produksi_per_unit',
+    domain: 'uang',
+    suggested_role: 'finance',
+    ai_draft:
+      'KPI (docs/rencana-kerja-kpi.md §3.1 & §4 #2): biaya produksi per unit per produk = (biaya bahan standar/unit + biaya kemasan standar/unit + biaya SDM standar/unit) untuk item finished_good tsb, dari computeStandardCostPerUnit.ts + computeStandardLaborCostPerUnit.ts (rumus SAMA dgn Margin Watch "Biaya standar"). Dasar quotation & deteksi kenaikan biaya diam-diam. Kartu KPI menampilkan rata-rata lintas produk aktif + rincian per produk.'
+  },
+  {
+    term_key: 'metric.yield_per_tahap_produk',
+    domain: 'kuantitas',
+    suggested_role: 'produksi',
+    ai_draft:
+      'KPI (docs/rencana-kerja-kpi.md §3.2 & §4 #4): yield = output tahap TERAKHIR (baik, sudah dikurangi reject) ÷ input tahap PERTAMA × 100%, PERSIS rumus getBatchYieldSummary.ts, dirata-rata lintas batch SELESAI dalam periode. attribution_level = LINI/PROSES (BUKAN individu operator -- dipengaruhi lot bahan, mesin, tahap sebelumnya, bukan kendali satu orang).'
+  },
+  {
+    term_key: 'metric.nilai_persediaan',
+    domain: 'uang',
+    suggested_role: 'finance',
+    ai_draft:
+      'KPI (docs/rencana-kerja-kpi.md §3.1 & §4 #5): nilai persediaan = Σ (quantity_on_hand × unit_cost) seluruh lot berstatus available, company ini, SEMUA lokasi. "Uang yang tidur di gudang." Dihitung HARIAN (prasyarat inventory turnover/DIO nanti).'
   },
   {
     term_key: 'metric.biaya_sdm_batch',
@@ -50,8 +71,8 @@ export async function seedKamusMetricTerms(adminClient: SupabaseClient, companyI
     field: null,
     term_key: m.term_key,
     priority: 1,
-    domain: 'uang',
-    suggested_role: 'finance',
+    domain: m.domain ?? 'uang',
+    suggested_role: m.suggested_role ?? 'finance',
     status: 'DRAF_AI',
     ai_draft: m.ai_draft
   }));

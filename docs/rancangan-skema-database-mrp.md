@@ -395,6 +395,70 @@ Peringatan otomatis dari sistem.
 
 ---
 
+## Kelompok 7: KPI (KPI-1, 25 Agu 2026)
+
+docs/rencana-kerja-kpi.md + docs/penyerahan-opus-fitur-kpi.md + docs/revisi-kpi-visibilitas-tanggung-jawab.md.
+**Catatan cakupan**: 3 modul sebelumnya (Kamus/kamus_terms, Dashboard Proyek AI/ai_project_*,
+Kesiapan AI/ai_capabilities & ai_capability_*, Absensi/attendance_*) DITEMUKAN belum pernah
+didokumentasikan di sini walau memory proyek mewajibkan itu — bukan dirapikan sesi ini (di
+luar cakupan KPI-1), dicatat sebagai utang di HANDOFF.
+
+### `kpi_registry`
+Satu baris per KPI aktif per tenant. `metric_key` WAJIB merujuk `kamus_terms.term_key` scope
+METRIC (FK komposit `(company_id, metric_key)` → `kamus_terms(company_id, term_key)`) — rumus
+KPI TIDAK PERNAH ditulis ulang di sini, kamus adalah satu-satunya sumber kebenaran rumus.
+- `kpi_registry_id`, `company_id`, `metric_key`
+- `kind` (`DISIPLIN`/`HASIL`) — DISIPLIN: target terkunci ideal, TIDAK bisa diedit tenant (gerbang di `updateKpiTarget.ts`, cek KIND sebelum cek role). HASIL: `target_value` null sampai baseline ≥2 bulan, lalu diisi manual lewat alur tercatat.
+- `pillar` (`EFISIENSI`/`OPTIMASI`/`TRANSPARANSI`/`IMPROVEMENT`/`RECORD`)
+- `owner_role` (text bebas, BUKAN FK — proyek ini tidak punya tabel `roles` terpisah, pola sama `kamus_terms.suggested_role`), `frequency` (`HARIAN`/`MINGGUAN`/`BULANAN`/`PER_KEJADIAN`)
+- `target_value`, `target_set_at`, `target_set_by` — `benchmark_value`, `benchmark_label`, `benchmark_source` (arah industri, bukan kontrak) — `warn_threshold`, `alert_threshold`
+- `attribution_level` (`INDIVIDU`/`TIM`/`LINI`/`PROSES`/`PERUSAHAAN`) — tingkat PALING RENDAH yang adil untuk KPI ini; yield SENGAJA LINI bukan INDIVIDU (dipengaruhi lot bahan/mesin/tahap sebelumnya, bukan kendali satu operator)
+- `visibility` (jsonb array `DIRI`/`ATASAN`/`DEPARTEMEN`/`PUBLIK_AGREGAT`) — disimpan sesuai spek untuk KPI-4; enforcement AKTUAL KPI-1 pakai aturan lebih sederhana di `canViewKpi()` (leadership selalu boleh, role pemilik KPI boleh, role finance boleh untuk KPI berdomain uang)
+- `improvement_levers` (text[], kurasi manual, belum diisi sesi ini) — `is_active`, `sort_order`
+
+### `kpi_snapshots`
+Time-series generik PERTAMA di proyek ini (dicek sebelum dibangun: tidak ada tabel snapshot
+Fase 0.5/KPI-baseline yang bisa dipakai ulang — 3 tabel "snapshot" lain semuanya berbentuk
+tetap milik satu baris pemilik, bukan time-series metric_key/period). Dihitung LIVE tiap
+`/api/kpi` dibuka lalu di-upsert (belum ada cron/Vercel Cron di proyek ini, pola sama
+`ai_capability_status`/`computeAiProjectProgress`) — KALAU Fase 0.5 KPI-baseline dibangun
+kelak, HARUS memakai tabel ini, bukan tabel snapshot keempat.
+- `kpi_snapshot_id`, `company_id`, `metric_key`, `period_start`, `period_end`
+- `value` (nullable — null = belum bisa dihitung, BUKAN 0), `computed_at`, `inputs_hash`
+- unik `(company_id, metric_key, period_start, period_end)`
+
+### `kpi_actions`
+"Setiap KPI merah pulang dengan tindakan tertulis" — skema disiapkan KPI-1, UI/alur
+pembuatannya KPI-3 (belum dibangun, tabel kosong sesi ini).
+- `kpi_action_id`, `company_id`, `kpi_registry_id`, `period` (label bebas), `finding`, `action_text`
+- `owner_role` / `owner_user_id` (salah satu wajib), `due_date`, `status` (`TERBUKA`/`BERJALAN`/`SELESAI`/`BATAL`), `created_by`, `closed_at`
+
+### `kpi_responsibilities`
+Many-to-many KPI ↔ role/user, menjawab "KPI ini siapa yang bertanggung jawab?" secara
+eksplisit di UI + mengisi kandidat penanggung jawab `kpi_actions`.
+- `kpi_responsibility_id`, `company_id`, `kpi_registry_id`, `role` / `user_id` (salah satu wajib), `responsibility` (`PEMILIK`/`KONTRIBUTOR`/`PENDUKUNG`), `note`
+
+### `kpi_registry_history`
+Audit trail perubahan `target_value`/`visibility`/`attribution_level` — pola SAMA PERSIS
+`kamus_term_history` (satu-satunya preseden audit-trail di proyek ini): satu baris per field
+yang berubah, old/new value sebagai text.
+- `kpi_registry_history_id`, `kpi_registry_id`, `changed_by`, `changed_at`, `field_changed`, `old_value`, `new_value`
+
+**5 KPI kategori A diseed** (`seedKpiRegistry.ts`, idempoten): margin kontribusi bulanan
+(`metric.margin_kontribusi`, dari RPC `get_monthly_operating_profit` yang sama dgn halaman
+Laba Operasional — satu sumber kebenaran, bukan dihitung ulang beda jalur), biaya produksi
+per unit (`metric.biaya_produksi_per_unit`, rata-rata sederhana lintas produk aktif dari
+`computeStandardCostPerUnit`+`computeStandardLaborCostPerUnit`), laba operasional bulanan
+(`metric.laba_operasional_bulanan`, RPC sama), yield per tahap (`metric.yield_per_tahap_produk`,
+rata-rata `total_yield_pct` lintas batch selesai minggu berjalan — rumus PERSIS
+`getBatchYieldSummary.ts`), nilai persediaan (`metric.nilai_persediaan`, Σ
+`quantity_on_hand`×`unit_cost` lot available, BARU — sebelumnya tidak ada fungsi yang
+menghitung ini). **Semua `target_value` null** — termasuk margin (dokumen sumber menyebut
+"GPM 35% = target resmi", TAPI itu PERSENTASE sedangkan KPI margin di sini Rupiah absolut;
+menerapkannya akan jadi unit mismatch, jadi TIDAK diterapkan, dilaporkan ke pemilik produk).
+
+---
+
 ## Relasi Kunci (Ringkasan)
 
 ```
@@ -417,4 +481,5 @@ production_batches ──< work_order_assignments ──> employees (siapa terli
 production_batches ──< work_order_step_progress (progres per batch, karena bisa beda tahap bersamaan)
 work_orders ──< system_alerts (dipantau untuk status "Ready to Start"/"Blocked")
 companies ──< invoices ──> subscription_plans
+kamus_terms ──< kpi_registry (metric_key, FK komposit) ──< kpi_snapshots, kpi_actions, kpi_responsibilities, kpi_registry_history
 ```

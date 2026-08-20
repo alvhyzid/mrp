@@ -315,3 +315,26 @@ export const PRODUCTION_DISRUPTION_MANAGE_ROLES = [...LEADERSHIP_ROLES, 'product
 export function canManageProductionDisruptions(role: string | undefined | null): boolean {
   return !!role && PRODUCTION_DISRUPTION_MANAGE_ROLES.includes(role);
 }
+
+// Modul KPI (KPI-1) -- akses per-KPI (bukan satu daftar tetap) karena tiap KPI
+// punya owner_role & domain sendiri (revisi-kpi-visibilitas-tanggung-jawab.md §1.1
+// mendefinisikan visibility jsonb DIRI/ATASAN/DEPARTEMEN/PUBLIK_AGREGAT per KPI --
+// disimpan untuk KPI-4, tapi ENFORCEMENT sesi ini pakai aturan lebih sederhana:
+// leadership selalu boleh; role pemilik KPI (owner_role) boleh; role finance boleh
+// untuk KPI berdomain uang (karena "Kontrol Akses Data Finansial" berlaku lintas
+// modul, bukan cuma Margin Watch/BOM/Item yang sudah digerbang begitu).
+const KPI_MONEY_METRIC_KEYS = ['metric.margin_kontribusi', 'metric.biaya_produksi_per_unit', 'metric.laba_operasional_bulanan', 'metric.nilai_persediaan'];
+
+export function canViewKpi(role: string | undefined | null, kpi: { owner_role: string; metric_key: string }): boolean {
+  if (!role) return false;
+  if (isCompanyLeadership(role)) return true;
+  if (role === kpi.owner_role) return true;
+  if (KPI_MONEY_METRIC_KEYS.includes(kpi.metric_key) && canViewFinancialData(role)) return true;
+  return false;
+}
+
+// Ubah target/visibility/attribution_level -- leadership-only (perubahan
+// kebijakan tenant, bukan operasional harian), tercatat kpi_registry_history.
+export function canManageKpiRegistry(role: string | undefined | null): boolean {
+  return isCompanyLeadership(role);
+}

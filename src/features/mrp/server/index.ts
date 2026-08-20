@@ -77,3 +77,5 @@ export * from './processShipmentDispatch';
 export * from './getShipmentByPodToken';
 export * from './confirmDelivery';
 export * from './computeEmployerCostUplift';
+export * from './computeStandardCostPerUnit';
+export * from './computeStandardLaborCostPerUnit';

@@ -278,3 +278,43 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 
 **Database Tagihan** (`invoices`)
 - ID Tagihan (invoice_id) · ID Perusahaan (company_id) · ID Paket Langganan (subscription_plan_id) · Jumlah (amount) · Status (status) · Referensi Payment Gateway (payment_gateway_ref) · Periode Mulai (period_start) · Periode Selesai (period_end)
+
+---
+
+## Kelompok 7: KPI (25 Agu 2026)
+
+> Catatan: 4 modul sebelumnya (Kamus, Dashboard Proyek AI, Kesiapan AI, Absensi) belum
+> pernah ditambahkan ke dokumen ini walau seharusnya — bukan dirapikan di sesi ini,
+> dicatat sebagai utang dokumentasi di HANDOFF.md.
+
+**Database Daftar KPI** (`kpi_registry`)
+- ID KPI (kpi_registry_id) · ID Perusahaan (company_id) · Kunci Metrik di Kamus (metric_key)
+- Jenis: Disiplin atau Hasil (kind) · Pilar (pillar: Efisiensi/Optimasi/Transparansi/Improvement/Record)
+- Peran Pemilik (owner_role) · Frekuensi (frequency: Harian/Mingguan/Bulanan/Per Kejadian)
+- Target (target_value) — nullable, kosong = "baseline dulu, target kemudian" · Kapan/Siapa Set Target (target_set_at/target_set_by)
+- Benchmark Industri (benchmark_value/benchmark_label/benchmark_source) — arah, bukan kontrak
+- Ambang Peringatan/Bahaya (warn_threshold/alert_threshold)
+- Tingkat Keadilan Atribusi (attribution_level: Individu/Tim/Lini/Proses/Perusahaan) · Siapa Boleh Lihat (visibility)
+- Cara Menaikkan KPI Ini (improvement_levers) — belum diisi
+
+> "Disiplin" = target ideal terkunci sejak hari pertama, tidak bisa diubah tenant. "Hasil" =
+> nilai dibiarkan terekam dulu (baseline), target diisi belakangan oleh pemilik KPI.
+
+**Database Riwayat Nilai KPI** (`kpi_snapshots`)
+- ID Snapshot (kpi_snapshot_id) · ID Perusahaan (company_id) · Kunci Metrik (metric_key)
+- Periode Mulai/Selesai (period_start/period_end) · Nilai (value) — nullable kalau belum bisa dihitung
+- Kapan Dihitung (computed_at) · Jejak Data Sumber (inputs_hash)
+
+> Dihitung otomatis tiap halaman KPI dibuka (belum ada penjadwal/cron di proyek ini).
+
+**Database Tindakan KPI** (`kpi_actions`) — skema siap, belum ada halaman untuk membuatnya
+- ID Tindakan (kpi_action_id) · ID KPI (kpi_registry_id) · Periode (period) · Temuan (finding) · Tindakan (action_text)
+- Penanggung Jawab: Peran atau Orang (owner_role/owner_user_id) · Tenggat (due_date) · Status (status: Terbuka/Berjalan/Selesai/Batal)
+
+**Database Penanggung Jawab KPI** (`kpi_responsibilities`)
+- ID (kpi_responsibility_id) · ID KPI (kpi_registry_id) · Peran atau Orang (role/user_id) · Peran Tanggung Jawab (responsibility: Pemilik/Kontributor/Pendukung) · Catatan (note)
+
+**Database Riwayat Perubahan KPI** (`kpi_registry_history`)
+- ID Riwayat (kpi_registry_history_id) · ID KPI (kpi_registry_id) · Diubah Oleh/Kapan (changed_by/changed_at) · Field yang Berubah (field_changed) · Nilai Lama/Baru (old_value/new_value)
+
+> 5 KPI awal sudah diisi (Margin Kontribusi, Biaya per Unit, Laba Operasional, Yield per Tahap, Nilai Persediaan) — semua nilai target masih kosong, termasuk margin (angka target 35% dari dokumen sumber ternyata dalam bentuk persen, sedangkan KPI ini dalam Rupiah — tidak dipaksakan, dilaporkan ke pemilik produk untuk klarifikasi).

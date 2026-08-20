@@ -13,6 +13,12 @@ import { Badge } from '@/components/ui/badge';
 // yang terlihat pengguna selesai dibangun -- item PALING BARU di paling atas.
 const items: { title: string; date: string; href: string; description: string }[] = [
   {
+    title: 'KPI Perusahaan',
+    date: '25 Agu 2026',
+    href: '/kpi',
+    description: '5 KPI awal (Margin Kontribusi, Biaya/Unit, Laba Operasional, Yield, Nilai Persediaan) dalam bentuk kartu -- nilai kini, target, benchmark industri, dan tren, semuanya dihitung otomatis dari data nyata. Ada juga halaman "KPI Saya" -- KPI yang relevan dengan peran Anda, bukan papan peringkat.'
+  },
+  {
     title: 'Yield Aktual vs Rencana',
     date: '25 Agu 2026',
     href: '/production',

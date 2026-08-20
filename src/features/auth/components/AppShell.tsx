@@ -24,7 +24,8 @@ import {
   Book,
   Analytics,
   Meter,
-  Time
+  Time,
+  ChartBarTarget
 } from '@carbon/icons-react';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import {
@@ -159,6 +160,13 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Finance',
     items: [{ label: 'Laba Operasional', href: '/operating-profit', visible: canViewFinancialData, icon: Money }]
+  },
+  {
+    title: 'KPI',
+    items: [
+      { label: 'KPI Perusahaan', href: '/kpi', visible: () => true, icon: ChartBarTarget },
+      { label: 'KPI Saya', href: '/kpi/saya', visible: () => true, icon: ChartBarTarget }
+    ]
   },
   {
     title: 'Settings',

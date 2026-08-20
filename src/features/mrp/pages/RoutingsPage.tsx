@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { canManageBom } from '@/lib/roles';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
+import { formatNumberId } from '@/lib/currency';
 
 type RoutingStep = {
   routing_step_id: number;
@@ -408,13 +409,13 @@ export default function RoutingsPage() {
                         <td className="px-3 py-1.5">
                           {step.duration_per_unit_minutes !== null ? (
                             <span>
-                              {step.duration_per_unit_minutes} mnt/unit <span className="text-xs text-muted-foreground">(laju)</span>
+                              {formatNumberId(step.duration_per_unit_minutes, 6)} mnt/unit <span className="text-xs text-muted-foreground">(laju)</span>
                             </span>
                           ) : (
-                            `${step.active_duration_minutes} mnt`
+                            `${formatNumberId(step.active_duration_minutes, 2)} mnt`
                           )}
                         </td>
-                        <td className="px-3 py-1.5">{step.wait_duration_minutes} mnt</td>
+                        <td className="px-3 py-1.5">{formatNumberId(step.wait_duration_minutes, 2)} mnt</td>
                       </tr>
                     ))}
                   </tbody>

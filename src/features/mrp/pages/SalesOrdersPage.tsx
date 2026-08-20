@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { canViewPlanningFeasibility, canViewFinancialData } from '@/lib/roles';
-import { formatCurrency } from '@/lib/currency';
+import { formatCurrency, formatNumberId } from '@/lib/currency';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 
 const statusLabels: Record<string, string> = { confirmed: 'Dikonfirmasi', in_production: 'Sedang Produksi', completed: 'Selesai', cancelled: 'Batal' };
@@ -439,16 +439,16 @@ export default function SalesOrdersPage() {
                           {line.item_code} — {line.item_name}
                         </td>
                         <td className="px-3 py-1.5">
-                          {line.qty_ordered} {line.item_base_uom}
+                          {formatNumberId(line.qty_ordered, 2)} {line.item_base_uom}
                         </td>
                         <td className="px-3 py-1.5">
-                          {line.qty_already_planned_in_wo} {line.item_base_uom}
+                          {formatNumberId(line.qty_already_planned_in_wo, 2)} {line.item_base_uom}
                         </td>
                         <td className="px-3 py-1.5">
-                          {line.qty_shipped} {line.item_base_uom}
+                          {formatNumberId(line.qty_shipped, 2)} {line.item_base_uom}
                         </td>
                         <td className="px-3 py-1.5">
-                          {line.qty_remaining_to_ship > 0 ? <span className="font-medium text-foreground">{line.qty_remaining_to_ship}</span> : <span className="text-muted-foreground">0</span>} {line.item_base_uom}
+                          {line.qty_remaining_to_ship > 0 ? <span className="font-medium text-foreground">{formatNumberId(line.qty_remaining_to_ship, 2)}</span> : <span className="text-muted-foreground">0</span>} {line.item_base_uom}
                         </td>
                         {showPriceColumn ? <td className="px-3 py-1.5">{line.unit_price === null ? <span className="text-muted-foreground">-</span> : formatCurrency(line.unit_price, { maxDecimals: 0 })}</td> : null}
                         {canViewPlanningFeasibility(role) ? (
@@ -646,19 +646,19 @@ export default function SalesOrdersPage() {
                         <div className="flex flex-wrap items-center gap-3">
                           <Badge variant={feasibilityResult.feasible ? 'success' : 'critical'}>{feasibilityResult.feasible ? 'FEASIBLE' : 'TIDAK FEASIBLE'}</Badge>
                           <span>
-                            Butuh <span className="font-medium text-foreground">{feasibilityResult.batches_needed}</span> batch ({feasibilityResult.days_needed} hari produksi) — kapasitas{' '}
-                            {feasibilityResult.batches_per_day} batch/hari
+                            Butuh <span className="font-medium text-foreground">{formatNumberId(feasibilityResult.batches_needed, 2)}</span> batch ({formatNumberId(feasibilityResult.days_needed, 2)} hari produksi) — kapasitas{' '}
+                            {formatNumberId(feasibilityResult.batches_per_day, 2)} batch/hari
                             <ProvenanceInfoButton
                               label="Kebutuhan Batch & Kapasitas"
                               envelope={{
                                 formula:
                                   'Kebutuhan batch = ROUNDUP(qty dipesan ÷ unit/batch). Hari produksi = ROUNDUP(kebutuhan batch ÷ batch/hari). unit/batch & batch/hari adalah standar K8 (production_standards), DIKUNCI (snapshot) sekali per baris SO saat pertama dihitung — perubahan standar setelahnya TIDAK mengubah rencana yang sudah ada (lihat peringatan "standar berubah" bila muncul).',
                                 inputs: [
-                                  { label: 'Qty dipesan', value: String(feasibilityResult.qty_ordered) },
-                                  { label: 'Unit/batch (K8)', value: String(feasibilityResult.unit_per_batch) },
-                                  { label: 'Batch/hari (K8)', value: String(feasibilityResult.batches_per_day) },
-                                  { label: 'Kebutuhan batch', value: String(feasibilityResult.batches_needed) },
-                                  { label: 'Hari produksi', value: String(feasibilityResult.days_needed) }
+                                  { label: 'Qty dipesan', value: formatNumberId(feasibilityResult.qty_ordered, 2) },
+                                  { label: 'Unit/batch (K8)', value: formatNumberId(feasibilityResult.unit_per_batch, 2) },
+                                  { label: 'Batch/hari (K8)', value: formatNumberId(feasibilityResult.batches_per_day, 2) },
+                                  { label: 'Kebutuhan batch', value: formatNumberId(feasibilityResult.batches_needed, 2) },
+                                  { label: 'Hari produksi', value: formatNumberId(feasibilityResult.days_needed, 2) }
                                 ],
                                 standardStatus: feasibilityResult.standard_drift ? 'ESTIMASI_MANUAL' : null
                               }}
@@ -673,7 +673,7 @@ export default function SalesOrdersPage() {
 
                         <div className="grid gap-1 sm:grid-cols-2">
                           <span className="flex items-center gap-1 text-muted-foreground">
-                            Hari kerja tersedia s/d {feasibilityResult.requested_ship_date}: <span className="text-foreground">{feasibilityResult.total_working_days_to_deadline} hari</span>
+                            Hari kerja tersedia s/d {feasibilityResult.requested_ship_date}: <span className="text-foreground">{formatNumberId(feasibilityResult.total_working_days_to_deadline, 2)} hari</span>
                             <ProvenanceInfoButton
                               label="Hari Kerja Tersedia s/d Deadline"
                               envelope={{
@@ -681,13 +681,13 @@ export default function SalesOrdersPage() {
                                 inputs: [
                                   { label: 'Dari', value: feasibilityResult.today ?? '-' },
                                   { label: 'Sampai (diminta)', value: feasibilityResult.requested_ship_date ?? '-' },
-                                  { label: 'Hasil', value: `${feasibilityResult.total_working_days_to_deadline} hari` }
+                                  { label: 'Hasil', value: `${formatNumberId(feasibilityResult.total_working_days_to_deadline, 2)} hari` }
                                 ]
                               }}
                             />
                           </span>
                           <span className="flex items-center gap-1 text-muted-foreground">
-                            Efektif (setelah bahan mulai tersedia): <span className="text-foreground">{feasibilityResult.effective_working_days_after_material_block} hari</span>
+                            Efektif (setelah bahan mulai tersedia): <span className="text-foreground">{formatNumberId(feasibilityResult.effective_working_days_after_material_block, 2)} hari</span>
                             <ProvenanceInfoButton
                               label="Hari Kerja Efektif Setelah Bahan Tersedia"
                               envelope={{
@@ -695,7 +695,7 @@ export default function SalesOrdersPage() {
                                 inputs: [
                                   { label: 'Dari (produksi bisa mulai)', value: feasibilityResult.production_start_blocked_until ?? (feasibilityResult.today ?? 'hari ini') },
                                   { label: 'Sampai (diminta)', value: feasibilityResult.requested_ship_date ?? '-' },
-                                  { label: 'Hasil', value: `${feasibilityResult.effective_working_days_after_material_block} hari` }
+                                  { label: 'Hasil', value: `${formatNumberId(feasibilityResult.effective_working_days_after_material_block, 2)} hari` }
                                 ]
                               }}
                             />
@@ -718,8 +718,8 @@ export default function SalesOrdersPage() {
                                     'Tanggal produksi bisa MULAI (menunggu bahan tahap pertama datang) + hari kerja produksi (kebutuhan batch ÷ batch/hari) + hari tunggu tambahan kalau ada bahan tahap belakangan yang datang lebih lambat dari kebutuhannya (late_stage_material_blocks). Bukan sekadar mulai + durasi produksi — memperhitungkan bahan yang datang di tengah proses.',
                                   inputs: [
                                     { label: 'Produksi mulai', value: feasibilityResult.production_start_blocked_until ?? 'segera (bahan tahap awal tersedia)' },
-                                    { label: 'Hari produksi', value: String(feasibilityResult.days_needed ?? '-') },
-                                    { label: 'Bahan tahap belakangan terlambat', value: String(feasibilityResult.late_stage_material_blocks?.length ?? 0) },
+                                    { label: 'Hari produksi', value: feasibilityResult.days_needed !== null && feasibilityResult.days_needed !== undefined ? formatNumberId(feasibilityResult.days_needed, 2) : '-' },
+                                    { label: 'Bahan tahap belakangan terlambat', value: formatNumberId(feasibilityResult.late_stage_material_blocks?.length ?? 0, 0) },
                                     { label: 'Estimasi selesai', value: feasibilityResult.order_ship_ready_date }
                                   ],
                                   sourceDocument: 'getPlanningFeasibility.ts'
@@ -729,17 +729,17 @@ export default function SalesOrdersPage() {
                           ) : null}
                           {!feasibilityResult.feasible ? (
                             <span className="flex items-center gap-1 text-muted-foreground sm:col-span-2">
-                              Realistis terkirim tepat waktu: <span className="text-foreground">{feasibilityResult.realistic_qty_deliverable_on_time}</span> dari {feasibilityResult.qty_ordered} yang dipesan
+                              Realistis terkirim tepat waktu: <span className="text-foreground">{formatNumberId(feasibilityResult.realistic_qty_deliverable_on_time, 2)}</span> dari {formatNumberId(feasibilityResult.qty_ordered, 2)} yang dipesan
                               <ProvenanceInfoButton
                                 label="Realistis Terkirim Tepat Waktu"
                                 envelope={{
                                   formula:
                                     'MIN antara qty dipesan dan (hari kerja efektif × batch/hari × unit/batch) — dibatasi lebih lanjut kalau ada bahan tahap belakangan yang datang terlambat (pakai jendela hari kerja sejak bahan ITU siap, bukan sejak mulai produksi). Angka paling KONSERVATIF dari semua batasan dipakai, dibulatkan ke bawah. Sengaja melebih-lebihkan risiko keterlambatan, bukan optimistis.',
                                   inputs: [
-                                    { label: 'Qty dipesan', value: String(feasibilityResult.qty_ordered) },
-                                    { label: 'Hari kerja efektif', value: `${feasibilityResult.effective_working_days_after_material_block} hari` },
-                                    { label: 'Batch/hari × unit/batch', value: `${feasibilityResult.batches_per_day} × ${feasibilityResult.unit_per_batch}` },
-                                    { label: 'Hasil realistis', value: String(feasibilityResult.realistic_qty_deliverable_on_time) }
+                                    { label: 'Qty dipesan', value: formatNumberId(feasibilityResult.qty_ordered, 2) },
+                                    { label: 'Hari kerja efektif', value: `${formatNumberId(feasibilityResult.effective_working_days_after_material_block, 2)} hari` },
+                                    { label: 'Batch/hari × unit/batch', value: `${formatNumberId(feasibilityResult.batches_per_day, 2)} × ${formatNumberId(feasibilityResult.unit_per_batch, 2)}` },
+                                    { label: 'Hasil realistis', value: formatNumberId(feasibilityResult.realistic_qty_deliverable_on_time, 2) }
                                   ],
                                   sourceDocument: 'getPlanningFeasibility.ts'
                                 }}
@@ -789,7 +789,7 @@ export default function SalesOrdersPage() {
                             <ul className="flex flex-col gap-0.5 text-xs">
                               {feasibilityResult.components_to_produce.map((c) => (
                                 <li key={c.item_id}>
-                                  {c.item_code} — {c.name}: <span className="text-data font-medium text-foreground">{Math.round(c.qty_needed * 100) / 100}</span>
+                                  {c.item_code} — {c.name}: <span className="text-data font-medium text-foreground">{formatNumberId(c.qty_needed, 2)}</span>
                                   {c.blocking_stage ? <span className="text-muted-foreground"> (tahap {c.blocking_stage.sequence_no}. {c.blocking_stage.step_name})</span> : null}
                                 </li>
                               ))}
@@ -800,7 +800,7 @@ export default function SalesOrdersPage() {
                         {feasibilityResult.material_shortages && feasibilityResult.material_shortages.length > 0 ? (
                           <div>
                             <p className="mb-1 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-destructive">
-                              Kekurangan Bahan ({feasibilityResult.material_shortages.length} item)
+                              Kekurangan Bahan ({formatNumberId(feasibilityResult.material_shortages.length, 0)} item)
                               <ProvenanceInfoButton
                                 label="Kekurangan Bahan"
                                 envelope={{
@@ -829,9 +829,9 @@ export default function SalesOrdersPage() {
                                         {s.item_code} — {s.name}
                                       </td>
                                       <td className="px-2 py-1 text-muted-foreground">{s.blocking_stage ? `${s.blocking_stage.sequence_no}. ${s.blocking_stage.step_name}` : 'Sejak tahap 1'}</td>
-                                      <td className="px-2 py-1">{Math.round(s.needed * 100) / 100}</td>
-                                      <td className="px-2 py-1">{Math.round(s.available * 100) / 100}</td>
-                                      <td className="px-2 py-1 font-medium text-destructive">{Math.round(s.short * 100) / 100}</td>
+                                      <td className="px-2 py-1">{formatNumberId(s.needed, 2)}</td>
+                                      <td className="px-2 py-1">{formatNumberId(s.available, 2)}</td>
+                                      <td className="px-2 py-1 font-medium text-destructive">{formatNumberId(s.short, 2)}</td>
                                     </tr>
                                   ))}
                                 </tbody>

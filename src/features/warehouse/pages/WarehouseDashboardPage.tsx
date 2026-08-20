@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { canAccessWarehouseDashboard, canAdjustStock } from '@/lib/roles';
 import { typeLabels, typeBadgeVariant } from '@/features/mrp';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
+import { formatNumberId } from '@/lib/currency';
 
 const STOCK_ALERT_TYPES = ['stock_depletion_forecast', 'expiry_risk_low_usage', 'low_stock', 'material_shortage'];
 
@@ -238,7 +239,7 @@ export default function WarehouseDashboardPage() {
       return;
     }
     setAdjustmentStatus('success');
-    setAdjustmentMessage(`Penyesuaian tercatat — stok lot ini sekarang ${body.quantity_on_hand}.`);
+    setAdjustmentMessage(`Penyesuaian tercatat — stok lot ini sekarang ${formatNumberId(body.quantity_on_hand, 2)}.`);
     setAdjustmentForm({ lot_id: '', qty_delta: '', reason_code: '', notes: '' });
     await Promise.all([loadStock(), loadLots()]);
   };
@@ -281,7 +282,7 @@ export default function WarehouseDashboardPage() {
       return;
     }
     setOpeningBalanceStatus('success');
-    setOpeningBalanceMessage(`Saldo awal tercatat — lot baru "${body.lot_number}" dengan stok ${qty}.`);
+    setOpeningBalanceMessage(`Saldo awal tercatat — lot baru "${body.lot_number}" dengan stok ${formatNumberId(qty, 2)}.`);
     setOpeningBalanceForm({ item_id: '', production_plant_id: '', qty: '', unit_cost: '', lot_number: '', expiry_date: '', notes: '' });
     await Promise.all([loadStock(), loadLots()]);
   };
@@ -381,7 +382,7 @@ export default function WarehouseDashboardPage() {
         ),
         cell: ({ row }) => (
           <span className="text-data">
-            {row.original.total_qty} {row.original.base_uom} ({row.original.lot_count} lot)
+            {formatNumberId(row.original.total_qty, 2)} {row.original.base_uom} ({formatNumberId(row.original.lot_count, 0)} lot)
           </span>
         )
       },
@@ -544,10 +545,10 @@ export default function WarehouseDashboardPage() {
                                 <span className="font-medium text-foreground">{line.item_code}</span> <span className="text-muted-foreground">{line.item_name}</span>
                               </div>
                               <div className="text-xs text-muted-foreground">
-                                Dipesan: {line.qty_ordered} {line.purchase_uom}
+                                Dipesan: {formatNumberId(line.qty_ordered, 2)} {line.purchase_uom}
                               </div>
                               <div className="text-xs text-muted-foreground">
-                                Sudah diterima: {line.qty_received} {line.purchase_uom}
+                                Sudah diterima: {formatNumberId(line.qty_received, 2)} {line.purchase_uom}
                               </div>
                               <div>
                                 <label className="mb-1 block text-xs text-muted-foreground">Diterima Sekarang ({line.purchase_uom})</label>
@@ -613,7 +614,7 @@ export default function WarehouseDashboardPage() {
                         <SelectContent>
                           {lots.map((lot) => (
                             <SelectItem key={lot.lot_id} value={String(lot.lot_id)}>
-                              {lot.item_code} — {lot.item_name} — {lot.lot_number} (stok: {lot.quantity_on_hand} {lot.item_base_uom})
+                              {lot.item_code} — {lot.item_name} — {lot.lot_number} (stok: {formatNumberId(lot.quantity_on_hand, 2)} {lot.item_base_uom})
                             </SelectItem>
                           ))}
                         </SelectContent>

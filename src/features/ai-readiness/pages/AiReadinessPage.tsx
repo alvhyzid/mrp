@@ -7,6 +7,7 @@ import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
+import { formatNumberId } from '@/lib/currency';
 
 type RequirementResult = {
   code: string;
@@ -61,9 +62,9 @@ function metricGuidance(metricKey: string): string | null {
 }
 
 function formatMetricValue(metricKey: string, value: number): string {
-  if (metricKey.endsWith('_ratio')) return `${value.toFixed(1)}%`;
-  if (metricKey === 'data.days_of_history') return `${value.toFixed(0)} hari`;
-  return value.toFixed(0);
+  if (metricKey.endsWith('_ratio')) return `${formatNumberId(value, 1)}%`;
+  if (metricKey === 'data.days_of_history') return `${formatNumberId(value, 0)} hari`;
+  return formatNumberId(value, 0);
 }
 
 export default function AiReadinessPage() {
@@ -138,11 +139,11 @@ export default function AiReadinessPage() {
                       label="Kesiapan Keseluruhan"
                       envelope={{
                         formula: 'Rata-rata sederhana dari readiness_percent semua kemampuan AI (bukan tertimbang) — tiap kemampuan bobotnya sama di angka ini, walau prasyarat DI DALAM tiap kemampuan sendiri tertimbang.',
-                        inputs: [{ label: 'Jumlah kemampuan dirata-rata', value: String(data.total_count) }]
+                        inputs: [{ label: 'Jumlah kemampuan dirata-rata', value: formatNumberId(data.total_count, 0) }]
                       }}
                     />
                   </span>
-                  <p className="text-2xl font-semibold text-foreground">{data.overall_readiness_percent.toFixed(1)}%</p>
+                  <p className="text-2xl font-semibold text-foreground">{formatNumberId(data.overall_readiness_percent, 1)}%</p>
                 </div>
                 <div>
                   <span className="flex items-center gap-1 text-xs uppercase tracking-wide text-muted-foreground">
@@ -152,14 +153,14 @@ export default function AiReadinessPage() {
                       envelope={{
                         formula: 'Jumlah kemampuan yang SEMUA prasyarat is_blocking=true-nya terpenuhi (gerbang keras, bukan skor) dibagi total kemampuan. Kemampuan tanpa prasyarat blocking selalu terbuka.',
                         inputs: [
-                          { label: 'Terbuka', value: String(data.unlocked_count) },
-                          { label: 'Total', value: String(data.total_count) }
+                          { label: 'Terbuka', value: formatNumberId(data.unlocked_count, 0) },
+                          { label: 'Total', value: formatNumberId(data.total_count, 0) }
                         ]
                       }}
                     />
                   </span>
                   <p className="text-2xl font-semibold text-foreground">
-                    {data.unlocked_count} / {data.total_count}
+                    {formatNumberId(data.unlocked_count, 0)} / {formatNumberId(data.total_count, 0)}
                   </p>
                 </div>
               </CardContent>
@@ -211,12 +212,12 @@ export default function AiReadinessPage() {
                       <div className="flex items-center gap-2">
                         <Badge variant={c.is_unlocked ? 'success' : 'secondary'}>{c.is_unlocked ? 'Terbuka' : 'Terkunci'}</Badge>
                         <span className="flex items-center gap-1 text-sm font-medium text-foreground">
-                          {c.readiness_percent.toFixed(1)}%
+                          {formatNumberId(c.readiness_percent, 1)}%
                           <ProvenanceInfoButton
                             label={`Kesiapan — ${c.name}`}
                             envelope={{
                               formula: 'Rata-rata TERTIMBANG persen tiap prasyarat kemampuan ini (Σ persen×bobot ÷ Σ bobot). Terbuka HANYA kalau semua prasyarat is_blocking=true terpenuhi — skor tinggi TIDAK otomatis membuka kalau ada 1 prasyarat blocking yang belum tercapai.',
-                              inputs: c.requirements.map((r) => ({ label: r.label, value: `${r.percent.toFixed(1)}% (bobot dari admin platform)` }))
+                              inputs: c.requirements.map((r) => ({ label: r.label, value: `${formatNumberId(r.percent, 1)}% (bobot dari admin platform)` }))
                             }}
                           />
                         </span>
@@ -240,7 +241,7 @@ export default function AiReadinessPage() {
                                     inputs: [
                                       { label: 'Aktual', value: formatMetricValue(r.metric_key, r.actual) },
                                       { label: 'Ambang', value: formatMetricValue(r.metric_key, r.threshold) },
-                                      { label: 'Persen', value: `${r.percent.toFixed(1)}%` }
+                                      { label: 'Persen', value: `${formatNumberId(r.percent, 1)}%` }
                                     ],
                                     sourceDocument: 'recomputeAiReadiness.ts'
                                   }}

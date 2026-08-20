@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
+import { formatNumberId } from '@/lib/currency';
 
 type AttendanceRow = {
   employee_attendance_id: number;
@@ -249,8 +250,8 @@ export default function AttendancePage() {
                       {row.check_in_at ? new Date(row.check_in_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'} —{' '}
                       {row.check_out_at ? new Date(row.check_out_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}
                       {row.work_minutes != null ? ` · ${Math.round(row.work_minutes)} menit kerja` : ''}
-                      {row.late_minutes ? ` · terlambat ${row.late_minutes} menit` : ''}
-                      {row.overtime_minutes ? ` · lembur ${row.overtime_minutes} menit` : ''}
+                      {row.late_minutes ? ` · terlambat ${formatNumberId(row.late_minutes, 0)} menit` : ''}
+                      {row.overtime_minutes ? ` · lembur ${formatNumberId(row.overtime_minutes, 0)} menit` : ''}
                       <ProvenanceInfoButton
                         label="Jam Kerja/Terlambat/Lembur"
                         envelope={{
@@ -258,8 +259,8 @@ export default function AttendancePage() {
                             'Terlambat = jam masuk − jam mulai shift (Senin-Jumat/Sabtu dari Pengaturan Perusahaan) − toleransi keterlambatan. Jam kerja = (jam pulang − jam masuk) − menit istirahat (dari koreksi eksplisit kalau ada, kalau tidak dari jadwal istirahat standar). Lembur = jam kerja − standar jam shift. Dihitung ULANG dari event scan (IN/OUT), tidak pernah diedit manual.',
                           inputs: [
                             { label: 'Jam kerja', value: row.work_minutes != null ? `${Math.round(row.work_minutes)} menit` : '-' },
-                            { label: 'Terlambat', value: row.late_minutes ? `${row.late_minutes} menit` : '0 menit' },
-                            { label: 'Lembur', value: row.overtime_minutes ? `${row.overtime_minutes} menit` : '0 menit' }
+                            { label: 'Terlambat', value: row.late_minutes ? `${formatNumberId(row.late_minutes, 0)} menit` : '0 menit' },
+                            { label: 'Lembur', value: row.overtime_minutes ? `${formatNumberId(row.overtime_minutes, 0)} menit` : '0 menit' }
                           ],
                           sourceDocument: 'recomputeAttendanceDay.ts'
                         }}

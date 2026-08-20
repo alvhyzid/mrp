@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { canAccessProductionDashboard, canManageProductionDisruptions, canRecordStepProgress } from '@/lib/roles';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
+import { formatNumberId } from '@/lib/currency';
 
 const statusLabels: Record<string, string> = { planned: 'Direncanakan', in_progress: 'Berjalan', paused: 'Dijeda', completed: 'Selesai', cancelled: 'Batal' };
 const statusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical' | 'secondary'> = {
@@ -376,7 +377,7 @@ export default function ProductionDashboardPage() {
     const outputsCreated = body.outputs as { lot_number: string; qty: number; output_type: string; genealogy_rows_created: number }[];
     setOutputMessage(
       outputsCreated
-        .map((o) => `Lot "${o.lot_number}" (${outputTypeLabels[o.output_type] ?? o.output_type}, ${o.qty} ${wo.item_base_uom ?? ''}) — genealogy dari ${o.genealogy_rows_created} lot bahan.`)
+        .map((o) => `Lot "${o.lot_number}" (${outputTypeLabels[o.output_type] ?? o.output_type}, ${formatNumberId(o.qty, 2)} ${wo.item_base_uom ?? ''}) — genealogy dari ${formatNumberId(o.genealogy_rows_created, 0)} lot bahan.`)
         .join(' ')
     );
     setOutputLines([{ ...emptyOutputLine }]);
@@ -417,7 +418,7 @@ export default function ProductionDashboardPage() {
     () => [
       { id: 'item', header: 'Item', cell: ({ row }) => <span className="font-medium text-foreground">{row.original.item_code}</span> },
       { id: 'so', header: 'SO', cell: ({ row }) => row.original.so_number ?? '-' },
-      { id: 'qty', header: 'Planned Qty', cell: ({ row }) => `${row.original.planned_qty} ${row.original.item_base_uom ?? ''}` },
+      { id: 'qty', header: 'Planned Qty', cell: ({ row }) => `${formatNumberId(row.original.planned_qty, 2)} ${row.original.item_base_uom ?? ''}` },
       { accessorKey: 'status', header: 'Status', cell: ({ row }) => <Badge variant={statusBadgeVariant[row.original.status] ?? 'secondary'}>{statusLabels[row.original.status] ?? row.original.status}</Badge> },
       {
         id: 'readiness',
@@ -426,7 +427,7 @@ export default function ProductionDashboardPage() {
           readinessLabels[row.original.readiness] ? (
             <Badge variant={readinessBadgeVariant[row.original.readiness]}>
               {readinessLabels[row.original.readiness]}
-              {row.original.open_alert_count > 0 ? ` (${row.original.open_alert_count})` : ''}
+              {row.original.open_alert_count > 0 ? ` (${formatNumberId(row.original.open_alert_count, 0)})` : ''}
             </Badge>
           ) : (
             '-'
@@ -558,7 +559,7 @@ export default function ProductionDashboardPage() {
                           {b.item_code} — {b.item_name}
                         </td>
                         <td className="px-3 py-1.5">
-                          {b.planned_qty} {b.uom}
+                          {formatNumberId(b.planned_qty, 2)} {b.uom}
                         </td>
                         <td className="px-3 py-1.5">{b.production_plant_name ?? '-'}</td>
                         <td className="px-3 py-1.5">
@@ -719,10 +720,10 @@ export default function ProductionDashboardPage() {
             <CardHeader>
               <CardDescription className="uppercase tracking-[0.2em]">Progres Tahap</CardDescription>
               <CardTitle className="text-xl">
-                {expandedWo.item_code} — {expandedWo.planned_qty} {expandedWo.item_base_uom}
+                {expandedWo.item_code} — {formatNumberId(expandedWo.planned_qty, 2)} {expandedWo.item_base_uom}
               </CardTitle>
               <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                Yield aktual vs rencana: <span className="font-medium text-foreground">{expandedWo.total_output_qty}</span> / {expandedWo.planned_qty} {expandedWo.item_base_uom}
+                Yield aktual vs rencana: <span className="font-medium text-foreground">{formatNumberId(expandedWo.total_output_qty, 2)}</span> / {formatNumberId(expandedWo.planned_qty, 2)} {expandedWo.item_base_uom}
                 {expandedWo.planned_qty > 0 ? ` (${Math.round((expandedWo.total_output_qty / expandedWo.planned_qty) * 10000) / 100}%)` : ''}
                 <ProvenanceInfoButton
                   label="Yield Aktual vs Rencana"
@@ -730,8 +731,8 @@ export default function ProductionDashboardPage() {
                     formula:
                       'Aktual = Σ qty di work_order_outputs untuk Work Order ini dengan output_type=main_output (SEMUA batch, akumulatif — belum tentu WO ini sudah selesai). Rencana = planned_qty Work Order. Persentase = aktual ÷ rencana × 100. Hasil produksi TIDAK PERNAH diasumsikan sama dengan rencana (prinsip inti sistem ini) — angka ini mencatat selisihnya apa adanya.',
                     inputs: [
-                      { label: 'Rencana (planned_qty)', value: `${expandedWo.planned_qty} ${expandedWo.item_base_uom ?? ''}` },
-                      { label: 'Aktual (Σ work_order_outputs main_output)', value: `${expandedWo.total_output_qty} ${expandedWo.item_base_uom ?? ''}` }
+                      { label: 'Rencana (planned_qty)', value: `${formatNumberId(expandedWo.planned_qty, 2)} ${expandedWo.item_base_uom ?? ''}` },
+                      { label: 'Aktual (Σ work_order_outputs main_output)', value: `${formatNumberId(expandedWo.total_output_qty, 2)} ${expandedWo.item_base_uom ?? ''}` }
                     ]
                   }}
                 />
@@ -747,7 +748,7 @@ export default function ProductionDashboardPage() {
                   <SelectContent>
                     {batchesForExpanded.map((batch) => (
                       <SelectItem key={batch.production_batch_id} value={String(batch.production_batch_id)}>
-                        {batch.batch_number} ({batch.planned_qty} {batch.uom}) — {batchStatusLabels[batch.status] ?? batch.status}
+                        {batch.batch_number} ({formatNumberId(batch.planned_qty, 2)} {batch.uom}) — {batchStatusLabels[batch.status] ?? batch.status}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -809,7 +810,7 @@ export default function ProductionDashboardPage() {
                     const selectedBatch = batchesForExpanded.find((b) => String(b.production_batch_id) === selectedBatchId);
                     return selectedBatch ? (
                       <p className="text-xs text-muted-foreground">
-                        Mencatat progres untuk batch <span className="font-medium text-foreground">{selectedBatch.batch_number}</span> ({selectedBatch.planned_qty} {selectedBatch.uom})
+                        Mencatat progres untuk batch <span className="font-medium text-foreground">{selectedBatch.batch_number}</span> ({formatNumberId(selectedBatch.planned_qty, 2)} {selectedBatch.uom})
                       </p>
                     ) : null;
                   })()}
@@ -830,7 +831,7 @@ export default function ProductionDashboardPage() {
                           {existing ? <Badge variant={existing.status === 'completed' ? 'success' : existing.status === 'in_progress' ? 'warning' : 'secondary'}>{stepStatusLabels[existing.status]}</Badge> : null}
                         </div>
                         <p className="mb-2 text-xs text-muted-foreground">
-                          Durasi aktif {step.active_duration_minutes} menit, tunggu {step.wait_duration_minutes} menit
+                          Durasi aktif {formatNumberId(step.active_duration_minutes, 2)} menit, tunggu {formatNumberId(step.wait_duration_minutes, 2)} menit
                         </p>
                         <div className="grid grid-cols-[160px_140px_140px_140px_auto] items-end gap-2">
                           <label className="flex flex-col gap-1">

@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { canAccessPpicDashboard, canManageWorkCenterCapacity, canManageWorkOrder, canRecordStepProgress, canProposeProductionStandard, canDecideProductionStandardProposal } from '@/lib/roles';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
+import { formatNumberId } from '@/lib/currency';
 
 const statusLabels: Record<string, string> = { planned: 'Direncanakan', in_progress: 'Berjalan', paused: 'Dijeda', completed: 'Selesai', cancelled: 'Batal' };
 const statusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical' | 'secondary'> = {
@@ -221,7 +222,7 @@ function DraggableBlock({ block, canDrag, onOpenDetail }: { block: GanttBlock; c
       <div className="font-medium">{block.batch_number}</div>
       <div className="truncate">{block.item_code ?? block.item_name}</div>
       <div className="text-[10px] text-muted-foreground">
-        {block.step_name} · {block.duration_minutes} mnt
+        {block.step_name} · {formatNumberId(block.duration_minutes, 2)} mnt
       </div>
     </div>
   );
@@ -246,7 +247,7 @@ function DraggableUnscheduled({ batch, canDrag }: { batch: UnscheduledBatch; can
       <span className="font-medium text-foreground">{batch.batch_number}</span>
       <span className="text-muted-foreground">{batch.item_code ?? batch.item_name}</span>
       <span className="text-data text-muted-foreground">
-        {batch.planned_qty} {batch.uom}
+        {formatNumberId(batch.planned_qty, 2)} {batch.uom}
       </span>
     </div>
   );
@@ -459,7 +460,7 @@ export default function PpicDashboardPage() {
       setLearnMessage(`Batch ini TIDAK dijadikan sampel — log tahap belum lengkap (${(body.missing_routing_step_ids as number[]).length} tahap belum selesai).`);
     } else {
       const count = (body.samples_submitted as unknown[]).length;
-      setLearnMessage(count > 0 ? `${count} sampel standar berhasil diajukan dari batch ini.` : 'Tidak ada sampel yang bisa dihitung dari batch ini (belum ada output/durasi tercatat).');
+      setLearnMessage(count > 0 ? `${formatNumberId(count, 0)} sampel standar berhasil diajukan dari batch ini.` : 'Tidak ada sampel yang bisa dihitung dari batch ini (belum ada output/durasi tercatat).');
     }
     await loadProposals();
   };
@@ -743,7 +744,7 @@ export default function PpicDashboardPage() {
     () => [
       { accessorKey: 'item_code', header: 'Item' },
       { id: 'so', header: 'SO', cell: ({ row }) => row.original.so_number ?? '-' },
-      { id: 'qty', header: 'Planned Qty', cell: ({ row }) => `${row.original.planned_qty} ${row.original.item_base_uom ?? ''}` },
+      { id: 'qty', header: 'Planned Qty', cell: ({ row }) => `${formatNumberId(row.original.planned_qty, 2)} ${row.original.item_base_uom ?? ''}` },
       { accessorKey: 'status', header: 'Status', cell: ({ row }) => <Badge variant={statusBadgeVariant[row.original.status] ?? 'secondary'}>{statusLabels[row.original.status] ?? row.original.status}</Badge> },
       {
         id: 'readiness',
@@ -752,7 +753,7 @@ export default function PpicDashboardPage() {
           readinessLabels[row.original.readiness] ? (
             <Badge variant={readinessBadgeVariant[row.original.readiness]}>
               {readinessLabels[row.original.readiness]}
-              {row.original.open_alert_count > 0 ? ` (${row.original.open_alert_count})` : ''}
+              {row.original.open_alert_count > 0 ? ` (${formatNumberId(row.original.open_alert_count, 0)})` : ''}
             </Badge>
           ) : (
             '-'
@@ -820,7 +821,7 @@ export default function PpicDashboardPage() {
       { accessorKey: 'parent_item_code', header: 'Item' },
       { accessorKey: 'version', header: 'Versi', cell: ({ row }) => `v${row.original.version}` },
       { accessorKey: 'status', header: 'Status', cell: ({ row }) => <Badge variant={bomStatusBadgeVariant[row.original.status] ?? 'secondary'}>{bomStatusLabels[row.original.status] ?? row.original.status}</Badge> },
-      { id: 'yield', header: 'Hasil Standar', cell: ({ row }) => `${row.original.standard_yield_qty} ${row.original.standard_yield_uom}` },
+      { id: 'yield', header: 'Hasil Standar', cell: ({ row }) => `${formatNumberId(row.original.standard_yield_qty, 2)} ${row.original.standard_yield_uom}` },
       { id: 'lines', header: 'Jumlah Komponen', cell: ({ row }) => row.original.lines.length }
     ],
     []
@@ -929,15 +930,15 @@ export default function PpicDashboardPage() {
                         </td>
                         <td className="px-3 py-1.5">{metricKeyLabels[p.metric_key] ?? p.metric_key}</td>
                         <td className="px-3 py-1.5">
-                          {p.old_value ?? '-'} <span className="text-xs text-muted-foreground">({p.old_source ?? 'belum ada'})</span>
+                          {p.old_value !== null && p.old_value !== undefined ? formatNumberId(p.old_value, 2) : '-'} <span className="text-xs text-muted-foreground">({p.old_source ?? 'belum ada'})</span>
                         </td>
                         <td className="px-3 py-1.5 font-medium text-foreground">
-                          {p.proposed_value}
+                          {formatNumberId(p.proposed_value, 2)}
                           {p.will_flip_to_dipelajari ? <Badge variant="warning" className="ml-2">akan jadi DIPELAJARI</Badge> : null}
                         </td>
-                        <td className="px-3 py-1.5">{p.change_pct === null ? '-' : `${p.change_pct > 0 ? '+' : ''}${p.change_pct}%`}</td>
+                        <td className="px-3 py-1.5">{p.change_pct === null ? '-' : `${p.change_pct > 0 ? '+' : ''}${formatNumberId(p.change_pct, 2)}%`}</td>
                         <td className="px-3 py-1.5 text-xs text-muted-foreground">
-                          {p.calculation_method === 'median' ? 'Median' : 'Rata-rata (buang outlier)'} · n={p.sample_count}
+                          {p.calculation_method === 'median' ? 'Median' : 'Rata-rata (buang outlier)'} · n={formatNumberId(p.sample_count, 0)}
                         </td>
                         <td className="px-3 py-1.5">
                           {canDecideProductionStandardProposal(role) ? (
@@ -1035,7 +1036,7 @@ export default function PpicDashboardPage() {
                               </Button>
                             </div>
                           ) : wc.capacity_hours_per_day !== null ? (
-                            `${wc.capacity_hours_per_day} jam${wc.unit_count > 1 ? ` × ${wc.unit_count} unit` : ''}`
+                            `${formatNumberId(wc.capacity_hours_per_day, 2)} jam${wc.unit_count > 1 ? ` × ${formatNumberId(wc.unit_count, 0)} unit` : ''}`
                           ) : (
                             <span className="text-muted-foreground">-</span>
                           )}
@@ -1046,10 +1047,10 @@ export default function PpicDashboardPage() {
                           </td>
                         ) : (
                           <>
-                            <td className="px-3 py-1.5">{wc.total_capacity_hours} jam</td>
-                            <td className="px-3 py-1.5">{wc.scheduled_hours} jam</td>
+                            <td className="px-3 py-1.5">{formatNumberId(wc.total_capacity_hours, 2)} jam</td>
+                            <td className="px-3 py-1.5">{formatNumberId(wc.scheduled_hours, 2)} jam</td>
                             <td className="px-3 py-1.5">
-                              <Badge variant={utilizationBadgeVariant(wc.utilization_pct ?? 0)}>{wc.utilization_pct}%</Badge>
+                              <Badge variant={utilizationBadgeVariant(wc.utilization_pct ?? 0)}>{formatNumberId(wc.utilization_pct, 2)}%</Badge>
                             </td>
                           </>
                         )}
@@ -1295,8 +1296,8 @@ export default function PpicDashboardPage() {
                             const variant = capacityMinutes ? utilizationBadgeVariant((entry.active_minutes / capacityMinutes) * 100) : 'secondary';
                             return (
                               <td key={day} className="px-1 py-2 text-center">
-                                <button type="button" onClick={() => handleGoToDaily(day)} title={`${entry.batch_count} batch · ${Math.round(entry.active_minutes)} mnt aktif — klik untuk detail Harian`}>
-                                  <Badge variant={variant}>{entry.batch_count}</Badge>
+                                <button type="button" onClick={() => handleGoToDaily(day)} title={`${formatNumberId(entry.batch_count, 0)} batch · ${formatNumberId(Math.round(entry.active_minutes), 0)} mnt aktif — klik untuk detail Harian`}>
+                                  <Badge variant={variant}>{formatNumberId(entry.batch_count, 0)}</Badge>
                                 </button>
                               </td>
                             );
@@ -1412,8 +1413,8 @@ export default function PpicDashboardPage() {
                         <div className="flex items-center justify-between">
                           <span className="font-medium text-foreground">{progressStatusLabels[p.status] ?? p.status}</span>
                           <span className="text-xs text-muted-foreground">
-                            Input: {p.qty_input !== null ? `${p.qty_input} ${p.uom_input ?? ''}` : '-'} → Output: {p.qty_recorded !== null ? `${p.qty_recorded} ${p.uom ?? ''}` : '-'}
-                            {p.shrinkage_pct !== null ? ` · Susut ${p.shrinkage_pct}%` : ''}
+                            Input: {p.qty_input !== null ? `${formatNumberId(p.qty_input, 2)} ${p.uom_input ?? ''}` : '-'} → Output: {p.qty_recorded !== null ? `${formatNumberId(p.qty_recorded, 2)} ${p.uom ?? ''}` : '-'}
+                            {p.shrinkage_pct !== null ? ` · Susut ${formatNumberId(p.shrinkage_pct, 2)}%` : ''}
                           </span>
                         </div>
                         <div className="text-xs text-muted-foreground">
@@ -1431,7 +1432,7 @@ export default function PpicDashboardPage() {
                   <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Catat Progres Tahap Ini</p>
                   {progressSuggestion ? (
                     <p className="mb-2 text-xs text-muted-foreground">
-                      Jumlah masuk disarankan: <span className="font-medium text-foreground">{progressSuggestion.qty} {progressSuggestion.uom ?? ''}</span>{' '}
+                      Jumlah masuk disarankan: <span className="font-medium text-foreground">{formatNumberId(progressSuggestion.qty, 2)} {progressSuggestion.uom ?? ''}</span>{' '}
                       ({progressSuggestion.source === 'previous_step' ? 'dari output tahap sebelumnya' : 'dari planned_qty batch — tahap pertama/belum ada data sebelumnya'}) — bisa diubah.
                     </p>
                   ) : null}
@@ -1532,14 +1533,14 @@ export default function PpicDashboardPage() {
                         <td className="px-2 py-1.5">
                           {s.sequence_no}. {s.step_name}
                         </td>
-                        <td className="px-2 py-1.5">{s.qty_input !== null ? `${s.qty_input} ${s.uom_input ?? ''}` : '-'}</td>
-                        <td className="px-2 py-1.5">{s.qty_recorded !== null ? `${s.qty_recorded} ${s.uom ?? ''}` : '-'}</td>
-                        <td className="px-2 py-1.5">{s.shrinkage_pct !== null ? `${s.shrinkage_pct}%` : '-'}</td>
+                        <td className="px-2 py-1.5">{s.qty_input !== null ? `${formatNumberId(s.qty_input, 2)} ${s.uom_input ?? ''}` : '-'}</td>
+                        <td className="px-2 py-1.5">{s.qty_recorded !== null ? `${formatNumberId(s.qty_recorded, 2)} ${s.uom ?? ''}` : '-'}</td>
+                        <td className="px-2 py-1.5">{s.shrinkage_pct !== null ? `${formatNumberId(s.shrinkage_pct, 2)}%` : '-'}</td>
                         <td className="px-2 py-1.5">
                           {s.qty_reject !== null ? (
                             <span className="text-destructive">
-                              {s.qty_reject} {s.uom ?? ''}
-                              {s.reject_share_of_shrinkage_pct !== null ? ` (${s.reject_share_of_shrinkage_pct}% dari susut)` : ''}
+                              {formatNumberId(s.qty_reject, 2)} {s.uom ?? ''}
+                              {s.reject_share_of_shrinkage_pct !== null ? ` (${formatNumberId(s.reject_share_of_shrinkage_pct, 2)}% dari susut)` : ''}
                             </span>
                           ) : (
                             '-'
@@ -1565,12 +1566,12 @@ export default function PpicDashboardPage() {
                     }}
                   />
                 </span>
-                <span className="text-lg font-semibold text-foreground">{yieldSummary.total_yield_pct !== null ? `${yieldSummary.total_yield_pct}%` : 'Belum bisa dihitung'}</span>
+                <span className="text-lg font-semibold text-foreground">{yieldSummary.total_yield_pct !== null ? `${formatNumberId(yieldSummary.total_yield_pct, 2)}%` : 'Belum bisa dihitung'}</span>
               </div>
               {yieldSummary.total_reject > 0 ? (
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-foreground">Total Reject (semua tahap)</span>
-                  <span className="text-sm font-medium text-destructive">{yieldSummary.total_reject}</span>
+                  <span className="text-sm font-medium text-destructive">{formatNumberId(yieldSummary.total_reject, 2)}</span>
                 </div>
               ) : null}
               <p className="text-xs text-muted-foreground">

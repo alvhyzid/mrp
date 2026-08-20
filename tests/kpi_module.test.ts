@@ -382,8 +382,11 @@ describe('Modul KPI (KPI-1) — registry, snapshot, kartu, KPI Saya', () => {
     const marginPersen = (res.body.cards as any[]).find((c) => c.metric_key === 'metric.margin_kontribusi_persen');
     const gummyInput = marginPersen.provenance.inputs.find((i: any) => i.label === 'TESTGUMMY-FG');
     const drinkmeInput = marginPersen.provenance.inputs.find((i: any) => i.label === 'TESTDRINKME-FG');
-    expect(gummyInput.value).toBe('68.2%');
-    expect(drinkmeInput.value).toBe('18.7%');
+    // 27 Agu 2026 -- diformat lewat formatNumberId (koma desimal id-ID + pemisah
+    // ribuan konsisten dgn seluruh sistem), menggantikan toFixed lama (titik desimal
+    // ala en-US). Angka aritmatikanya TIDAK berubah, cuma representasi tampilannya.
+    expect(gummyInput.value).toBe('68,2%');
+    expect(drinkmeInput.value).toBe('18,7%');
 
     // Target 35% DICABUT 26 Agu 2026 -- KPI ini sekarang murni baseline tanpa
     // target, sama seperti 5 KPI lain (tidak ada lagi perbandingan "di atas/

@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { canManageCustomerPo, canApproveDepartment, isCompanyLeadership } from '@/lib/roles';
-import { formatCurrency } from '@/lib/currency';
+import { formatCurrency, formatNumberId } from '@/lib/currency';
 
 const paymentTermsOptions = ['full', 'tempo'];
 const customerTypes = ['company', 'individual'];
@@ -462,7 +462,7 @@ export default function CustomerPurchaseOrdersPage() {
                           {line.item_code} — {line.item_name}
                         </td>
                         <td className="px-3 py-1.5">
-                          {line.qty_ordered} {line.item_base_uom}
+                          {formatNumberId(line.qty_ordered, 2)} {line.item_base_uom}
                         </td>
                         {showPriceColumn ? (
                           <td className="px-3 py-1.5">{formatCurrency(line.unit_price, { maxDecimals: 0 })}</td>

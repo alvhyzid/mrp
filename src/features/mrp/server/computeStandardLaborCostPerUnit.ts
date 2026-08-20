@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getEmployerCostConfig, computeMonthlyEmployerUplift } from './computeEmployerCostUplift';
-import { formatCurrency } from '@/lib/currency';
+import { formatCurrency, formatNumberId } from '@/lib/currency';
 
 export interface LaborCostResult {
   costPerUnit: number;
@@ -185,7 +185,7 @@ export async function computeStandardLaborCostPerUnit(adminClient: SupabaseClien
     const costPerUnitThisLevel = dailyCrewCost / batchesPerDay / unitPerBatch;
     totalCostPerUnit += costPerUnitThisLevel * ratio;
     anyLevelCounted = true;
-    notes.push(`${itemLabel}: kru harian ${formatCurrency(dailyCrewCost, { maxDecimals: 0 })} ÷ ${batchesPerDay} batch/hari ÷ ${unitPerBatch} unit/batch = ${formatCurrency(costPerUnitThisLevel)}/unit level ini × rasio ${ratio.toFixed(6)} ke unit teratas.`);
+    notes.push(`${itemLabel}: kru harian ${formatCurrency(dailyCrewCost, { maxDecimals: 0 })} ÷ ${batchesPerDay} batch/hari ÷ ${unitPerBatch} unit/batch = ${formatCurrency(costPerUnitThisLevel)}/unit level ini × rasio ${formatNumberId(ratio, 6)} ke unit teratas.`);
   }
 
   return { costPerUnit: totalCostPerUnit, complete: anyLevelCounted && notes.every((n) => !n.includes('tidak dihitung') && !n.includes('dilewati')), notes };

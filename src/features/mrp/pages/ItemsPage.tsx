@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { canViewFinancialData, isCompanyLeadership } from '@/lib/roles';
 import { itemTypes, typeLabels, typeBadgeVariant } from '../itemTypeLabels';
-import { formatCurrency } from '@/lib/currency';
+import { formatCurrency, formatNumberId } from '@/lib/currency';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 
 type Item = {
@@ -234,7 +234,7 @@ export default function ItemsPage() {
       {
         accessorKey: 'min_stock_level',
         header: 'Min Stock',
-        cell: ({ row }) => <span className="text-data">{row.original.min_stock_level}</span>
+        cell: ({ row }) => <span className="text-data">{formatNumberId(row.original.min_stock_level, 2)}</span>
       }
     ];
 

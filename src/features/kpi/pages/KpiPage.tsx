@@ -7,7 +7,7 @@ import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { KpiCard } from '@/components/ui/kpi-card';
-import { formatCurrency } from '@/lib/currency';
+import { formatCurrency, formatNumberId } from '@/lib/currency';
 import { isCompanyLeadership } from '@/lib/roles';
 
 type KpiCardData = {
@@ -40,10 +40,10 @@ type KpiCardData = {
 // persediaan: terlalu tinggi = modal tertidur, terlalu rendah = risiko stock-out).
 const DISPLAY_CONFIG: Record<string, { title: string; format: (v: number) => string; higherIsBetter: boolean | null }> = {
   'metric.margin_kontribusi': { title: 'Margin Kontribusi Bulanan', format: (v) => formatCurrency(v, { maxDecimals: 0 }), higherIsBetter: true },
-  'metric.margin_kontribusi_persen': { title: 'Margin Kontribusi %', format: (v) => `${v.toFixed(1)}%`, higherIsBetter: true },
+  'metric.margin_kontribusi_persen': { title: 'Margin Kontribusi %', format: (v) => `${formatNumberId(v, 1)}%`, higherIsBetter: true },
   'metric.biaya_produksi_per_unit': { title: 'Biaya Produksi per Unit (Rata-rata)', format: (v) => formatCurrency(v, { maxDecimals: 0 }), higherIsBetter: false },
   'metric.laba_operasional_bulanan': { title: 'Laba Operasional Bulanan', format: (v) => formatCurrency(v, { maxDecimals: 0 }), higherIsBetter: true },
-  'metric.yield_per_tahap_produk': { title: 'Yield per Tahap (Rata-rata Mingguan)', format: (v) => `${v.toFixed(1)}%`, higherIsBetter: true },
+  'metric.yield_per_tahap_produk': { title: 'Yield per Tahap (Rata-rata Mingguan)', format: (v) => `${formatNumberId(v, 1)}%`, higherIsBetter: true },
   'metric.nilai_persediaan': { title: 'Nilai Persediaan', format: (v) => formatCurrency(v, { maxDecimals: 0 }), higherIsBetter: null }
 };
 

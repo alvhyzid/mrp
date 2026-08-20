@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
+import { formatNumberId } from '@/lib/currency';
 
 // Preview dokumen Surat Jalan — dipakai di Langkah 2 wizard "Buat Pengiriman"
 // (ShipmentsPage.tsx, draft belum tersimpan) DAN halaman cetak sungguhan
@@ -137,7 +138,7 @@ export default function SuratJalanPreview({
             <tr key={idx}>
               <td className="border border-neutral-400 px-2 py-1">{line.itemCode}</td>
               <td className="border border-neutral-400 px-2 py-1">{line.itemName}</td>
-              <td className="border border-neutral-400 px-2 py-1 text-right">{line.qty}</td>
+              <td className="border border-neutral-400 px-2 py-1 text-right">{formatNumberId(line.qty, 2)}</td>
               <td className="border border-neutral-400 px-2 py-1">{line.uom}</td>
               <td className="border border-neutral-400 px-2 py-1">{line.lotNumber}</td>
             </tr>

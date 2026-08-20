@@ -4,6 +4,20 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Format angka: pemisah ribuan + maks 2 desimal di SELURUH UI — 27 Agu 2026 — SELESAI
+
+Instruksi eksplisit pemilik produk: "berikan thousands separator di semua angka yg ada dalam system... jumlah digit dibelakang koma maksimal 2 digit." Dikonfirmasi 1 pengecualian sebelum eksekusi: angka teknis presisi tinggi (rasio bahan BOM, laju mesin per unit, mis. "0,028571 mnt/pcs") TETAP pakai presisi aslinya (sampai 6 desimal) supaya tidak jadi 0,00 di layar — tapi tetap dapat pemisah ribuan.
+
+Formatter terpusat `formatCurrency`/`formatNumberId` (`src/lib/currency.ts`, sudah ada sejak 21 Agu 2026) dipakai konsisten ke SELURUH `.toFixed(...)` yang ditemukan (25 titik di 6 halaman) + puluhan interpolasi angka mentah tanpa formatter sama sekali (qty, count, persen, jam, hari, buffer%, dst) di ~20 file lain — form input `<Input type="number">` sengaja DIKECUALIKAN (bukan "angka ditampilkan", tapi state yang sedang diketik user). 2 file server (`computeStandardLaborCostPerUnit.ts`, `computeKpiValues.ts`, `computeProcessMiningInsights.ts`) juga diperbarui karena menghasilkan teks catatan yang langsung tampil di UI (ProvenanceInfoButton).
+
+**Efek samping ditemukan+diperbaiki di tengah jalan**: 2 test (`standard_labor_cost.test.ts`, `kpi_module.test.ts`) meng-assert string literal format LAMA (titik desimal ala en-US dari `toFixed`, mis. "68.2%") — diperbarui ke format BENAR (koma desimal id-ID, mis. "68,2%"), angka aritmatikanya sendiri tidak berubah sama sekali, cuma representasi tampilan.
+
+**Bonus temuan saat mengerjakan Margin Watch**: ditambahkan `packaging_breakdown` (rincian biaya kemasan PER KOMPONEN) ke `getMarginWatch.ts`, ditampilkan di panel "Biaya Bahan & Kemasan Standar per Unit" — sebelumnya cuma total lump-sum. Diverifikasi visual di browser (login `company.a@debug.mrp`, lihat SO 043/6-ITM/2026): breakdown MLVT tampil tepat "10 × Rp469,85 = Rp4.698,5" + "1 × Rp2.500 = Rp2.500".
+
+Diverifikasi visual di browser (BOM, Routing, Sales Order, Margin Watch) — semua angka tampil dengan pemisah ribuan id-ID, dan angka presisi-tinggi (0,028571 mnt/unit) tetap utuh. Build + full test suite (32 file) hijau sebelum commit.
+
+---
+
 ## Kerja otonom A-F (±2 jam) — 26-27 Agu 2026 — STATUS: A/B/C/D/E/F SELESAI, konsolidasi plant SELESAI
 
 Instruksi eksplisit: kerjakan berurutan tanpa koordinasi, berhenti di titik aman,

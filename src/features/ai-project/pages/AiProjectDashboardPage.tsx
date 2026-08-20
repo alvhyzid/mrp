@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
+import { formatNumberId } from '@/lib/currency';
 
 type ChecklistItem = { ai_project_checklist_item_id: number; label: string; done: boolean };
 type Task = {
@@ -105,7 +106,7 @@ export default function AiProjectDashboardPage() {
     const response = await fetch('/api/ai-project/snapshot', { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` } });
     const data = await response.json();
     if (response.ok) {
-      setStatus(`Snapshot tersimpan: ${data.overall_percent.toFixed(1)}%.`);
+      setStatus(`Snapshot tersimpan: ${formatNumberId(data.overall_percent, 1)}%.`);
       await loadDashboard();
     }
   };
@@ -174,15 +175,15 @@ export default function AiProjectDashboardPage() {
                     label="Progres Total Proyek AI"
                     envelope={{
                       formula: 'Σ (progres % tiap fase × bobot fase ÷ 100). Progres per fase sendiri = Σ (progres % tiap tugas × bobot tugas ÷ 100). Berjenjang: tugas → fase → total, masing-masing tertimbang.',
-                      inputs: phases.map((p) => ({ label: p.name, value: `${p.progress_percent.toFixed(1)}% × bobot ${p.weight_percent}%` })),
+                      inputs: phases.map((p) => ({ label: p.name, value: `${formatNumberId(p.progress_percent, 1)}% × bobot ${formatNumberId(p.weight_percent, 2)}%` })),
                       sourceDocument: 'computeAiProjectProgress.ts'
                     }}
                   />
                 </span>
-                <span className="text-4xl font-semibold text-foreground">{overallPercent.toFixed(1)}%</span>
+                <span className="text-4xl font-semibold text-foreground">{formatNumberId(overallPercent, 1)}%</span>
                 {latestSnapshot ? (
                   <span className="text-xs text-muted-foreground">
-                    Snapshot terakhir: {latestSnapshot.overall_percent.toFixed(1)}% ({new Date(latestSnapshot.taken_at).toLocaleDateString('id-ID')})
+                    Snapshot terakhir: {formatNumberId(latestSnapshot.overall_percent, 1)}% ({new Date(latestSnapshot.taken_at).toLocaleDateString('id-ID')})
                   </span>
                 ) : null}
                 <div className="flex gap-2">
@@ -208,15 +209,15 @@ export default function AiProjectDashboardPage() {
                         envelope={{
                           formula: 'Σ (progres % tiap tugas di fase ini × bobot tugas ÷ 100). Kontribusinya ke total proyek = progres fase ini × bobot fase ini ÷ 100.',
                           inputs: [
-                            { label: 'Progres fase', value: `${phase.progress_percent.toFixed(1)}%` },
-                            { label: 'Bobot fase', value: `${phase.weight_percent}%` },
-                            { label: 'Kontribusi ke total', value: `${phase.contribution_to_total.toFixed(2)}%` }
+                            { label: 'Progres fase', value: `${formatNumberId(phase.progress_percent, 1)}%` },
+                            { label: 'Bobot fase', value: `${formatNumberId(phase.weight_percent, 2)}%` },
+                            { label: 'Kontribusi ke total', value: `${formatNumberId(phase.contribution_to_total, 2)}%` }
                           ]
                         }}
                       />
                     </span>
-                    <span className="text-xl font-semibold text-foreground">{phase.progress_percent.toFixed(0)}%</span>
-                    <span className="text-xs text-muted-foreground">Bobot {phase.weight_percent}% dari total</span>
+                    <span className="text-xl font-semibold text-foreground">{formatNumberId(phase.progress_percent, 0)}%</span>
+                    <span className="text-xs text-muted-foreground">Bobot {formatNumberId(phase.weight_percent, 2)}% dari total</span>
                   </CardContent>
                 </Card>
               ))}
@@ -235,15 +236,15 @@ export default function AiProjectDashboardPage() {
                       <Badge variant="secondary">{ownerLabels[task.owner_type] ?? task.owner_type}</Badge>
                     </div>
                     <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                      {task.progress_percent.toFixed(0)}% selesai · {task.progress_detail} · +{task.contribution_to_total_if_complete.toFixed(2)}% total bila selesai
+                      {formatNumberId(task.progress_percent, 0)}% selesai · {task.progress_detail} · +{formatNumberId(task.contribution_to_total_if_complete, 2)}% total bila selesai
                       <ProvenanceInfoButton
                         label="Dampak per Menit"
                         envelope={{
                           formula:
                             'Kontribusi bila selesai = (100 − progres% tugas ini) × bobot tugas% × bobot fase% ÷ 10000 — yaitu SISA potensi kenaikan progres total kalau tugas ini dituntaskan sekarang. Daftar ini diurutkan dari kontribusi terbesar (proksi "dampak per menit", BUKAN estimasi waktu literal — sistem belum punya data durasi tugas nyata).',
                           inputs: [
-                            { label: 'Progres tugas saat ini', value: `${task.progress_percent.toFixed(1)}%` },
-                            { label: 'Bobot tugas (dalam fase)', value: `${task.weight_percent}%` }
+                            { label: 'Progres tugas saat ini', value: `${formatNumberId(task.progress_percent, 1)}%` },
+                            { label: 'Bobot tugas (dalam fase)', value: `${formatNumberId(task.weight_percent, 2)}%` }
                           ],
                           sourceDocument: 'getAiProjectDashboard.ts'
                         }}
@@ -262,7 +263,7 @@ export default function AiProjectDashboardPage() {
                       <CardTitle className="text-base">{task.name}</CardTitle>
                       <div className="flex items-center gap-2">
                         <Badge variant="secondary">{ownerLabels[task.owner_type] ?? task.owner_type}</Badge>
-                        <Badge variant={task.progress_percent >= 100 ? 'success' : 'secondary'}>{task.progress_percent.toFixed(0)}%</Badge>
+                        <Badge variant={task.progress_percent >= 100 ? 'success' : 'secondary'}>{formatNumberId(task.progress_percent, 0)}%</Badge>
                         <ProvenanceInfoButton
                           label={`Progres — ${task.name}`}
                           envelope={{
@@ -279,7 +280,7 @@ export default function AiProjectDashboardPage() {
                       </div>
                     </div>
                     <CardDescription>
-                      {task.progress_detail} · bobot {task.weight_percent}% fase · +{task.contribution_to_total_if_complete.toFixed(2)}% total bila selesai
+                      {task.progress_detail} · bobot {formatNumberId(task.weight_percent, 2)}% fase · +{formatNumberId(task.contribution_to_total_if_complete, 2)}% total bila selesai
                     </CardDescription>
                   </CardHeader>
                   {task.checklist_items.length > 0 ? (

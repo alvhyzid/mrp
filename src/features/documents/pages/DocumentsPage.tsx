@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { isCompanyLeadership } from '@/lib/roles';
+import { formatNumberId } from '@/lib/currency';
 
 type DocumentType = { document_type_id: number; code: string; name: string };
 
@@ -32,9 +33,9 @@ const DEPARTMENTS = ['production', 'ppic', 'finance', 'purchasing', 'warehouse',
 const STATUS_LABELS: Record<string, string> = { AKTIF: 'Aktif', KEDALUWARSA: 'Kedaluwarsa', DIARSIP: 'Diarsip', DIGANTI: 'Diganti' };
 
 function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  if (bytes < 1024) return `${formatNumberId(bytes, 0)} B`;
+  if (bytes < 1024 * 1024) return `${formatNumberId(bytes / 1024, 0)} KB`;
+  return `${formatNumberId(bytes / 1024 / 1024, 1)} MB`;
 }
 
 // Master Dokumen MD-1 -- daftar+filter, unggah (lewat uploadDocument.ts terpusat),

@@ -6,6 +6,7 @@ import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
+import { formatNumberId } from '@/lib/currency';
 
 type ProcessMiningResult = {
   total_transitions: number;
@@ -20,8 +21,8 @@ type ProcessMiningResult = {
 
 function formatHours(hours: number): string {
   if (hours < 1) return `${Math.round(hours * 60)} menit`;
-  if (hours < 48) return `${hours.toFixed(1)} jam`;
-  return `${(hours / 24).toFixed(1)} hari`;
+  if (hours < 48) return `${formatNumberId(hours, 1)} jam`;
+  return `${formatNumberId(hours / 24, 1)} hari`;
 }
 
 export default function ProcessMiningPage() {
@@ -162,9 +163,9 @@ export default function ProcessMiningPage() {
                       </span>
                       <span className="font-medium">
                         {d.avg_duration_hours === null ? (
-                          <span className="italic text-muted-foreground">data belum cukup ({d.sample_count} sampel)</span>
+                          <span className="italic text-muted-foreground">data belum cukup ({formatNumberId(d.sample_count, 0)} sampel)</span>
                         ) : (
-                          `${formatHours(d.avg_duration_hours)} (${d.sample_count} sampel)`
+                          `${formatHours(d.avg_duration_hours)} (${formatNumberId(d.sample_count, 0)} sampel)`
                         )}
                       </span>
                     </div>
@@ -194,7 +195,7 @@ export default function ProcessMiningPage() {
                     <span>
                       {t.table_name}: {t.from_status} → {t.to_status}
                     </span>
-                    <span className="font-medium">{t.count}×</span>
+                    <span className="font-medium">{formatNumberId(t.count, 0)}×</span>
                   </div>
                 ))}
               </CardContent>
@@ -224,7 +225,7 @@ export default function ProcessMiningPage() {
                       <span>
                         {t.table_name}: {t.from_status} → {t.to_status}
                       </span>
-                      <span className="font-medium">{t.count}×</span>
+                      <span className="font-medium">{formatNumberId(t.count, 0)}×</span>
                     </div>
                   ))
                 )}

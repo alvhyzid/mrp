@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { formatCurrency } from '@/lib/currency';
+import { formatCurrency, formatNumberId } from '@/lib/currency';
 
 const DISPLAY_TITLES: Record<string, string> = {
   'metric.margin_kontribusi': 'Margin Kontribusi Bulanan',
@@ -18,7 +18,7 @@ const DISPLAY_TITLES: Record<string, string> = {
 
 function formatValueForMetric(metricKey: string, value: number | null): string {
   if (value === null) return 'belum bisa dihitung';
-  if (metricKey === 'metric.yield_per_tahap_produk' || metricKey === 'metric.margin_kontribusi_persen') return `${value.toFixed(1)}%`;
+  if (metricKey === 'metric.yield_per_tahap_produk' || metricKey === 'metric.margin_kontribusi_persen') return `${formatNumberId(value, 1)}%`;
   return formatCurrency(value, { maxDecimals: 0 });
 }
 

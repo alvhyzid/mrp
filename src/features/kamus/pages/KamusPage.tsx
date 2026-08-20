@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
+import { formatNumberId } from '@/lib/currency';
 
 type KamusTerm = {
   kamus_term_id: number;
@@ -255,14 +256,14 @@ export default function KamusPage() {
                 envelope={{
                   formula: 'Dari baris kamus_terms yang saat ini termuat di halaman (sesuai filter status/prioritas/scope aktif): jumlah prioritas 1-2 berstatus DIJAWAB atau DIKONFIRMASI, dibagi total baris prioritas 1-2 yang termuat. Angka ini mengikuti filter yang sedang aktif, BUKAN selalu total keseluruhan perusahaan.',
                   inputs: [
-                    { label: 'Terisi (DIJAWAB/DIKONFIRMASI)', value: String(progressByPriority.answered) },
-                    { label: 'Total prioritas 1-2 (sesuai filter)', value: String(progressByPriority.total) }
+                    { label: 'Terisi (DIJAWAB/DIKONFIRMASI)', value: formatNumberId(progressByPriority.answered, 0) },
+                    { label: 'Total prioritas 1-2 (sesuai filter)', value: formatNumberId(progressByPriority.total, 0) }
                   ]
                 }}
               />
             </span>
             <span className="text-2xl font-semibold text-foreground">
-              {progressByPriority.answered} dari {progressByPriority.total} terisi
+              {formatNumberId(progressByPriority.answered, 0)} dari {formatNumberId(progressByPriority.total, 0)} terisi
             </span>
           </CardContent>
         </Card>

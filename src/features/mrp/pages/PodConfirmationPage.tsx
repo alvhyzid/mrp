@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { formatNumberId } from '@/lib/currency';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -139,7 +140,7 @@ export default function PodConfirmationPage({ token }: { token: string }) {
                       {line.item_code} — {line.item_name}
                     </td>
                     <td className="px-3 py-1.5 text-right">
-                      {line.qty} {line.uom}
+                      {formatNumberId(line.qty, 2)} {line.uom}
                     </td>
                   </tr>
                 ))}

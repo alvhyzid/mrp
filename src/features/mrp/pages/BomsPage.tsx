@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { canManageBom, canViewFinancialData } from '@/lib/roles';
 import { typeLabels, typeBadgeVariant } from '../itemTypeLabels';
-import { formatCurrency } from '@/lib/currency';
+import { formatCurrency, formatNumberId } from '@/lib/currency';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 
 const bomStatuses = ['draft', 'active', 'archived'];
@@ -392,8 +392,8 @@ export default function BomsPage() {
         id: 'yield',
         header: 'Hasil Standar',
         cell: ({ row }) => (
-          <span className="text-data" title={`Angka presisi penuh: ${row.original.standard_yield_qty}`}>
-            ±{Math.round(row.original.standard_yield_qty)} {row.original.parent_item_base_uom ?? row.original.standard_yield_uom}
+          <span className="text-data" title={`Angka presisi penuh: ${formatNumberId(row.original.standard_yield_qty, 6)}`}>
+            ±{formatNumberId(Math.round(row.original.standard_yield_qty), 0)} {row.original.parent_item_base_uom ?? row.original.standard_yield_uom}
           </span>
         )
       },
@@ -490,18 +490,18 @@ export default function BomsPage() {
             <CardHeader>
               <CardDescription className="uppercase tracking-[0.2em]">Detail Komponen</CardDescription>
               <CardTitle className="flex items-center gap-2 text-xl">
-                {viewingBom.parent_item_code} — v{viewingBom.version} (±{Math.round(viewingBom.standard_yield_qty)} {viewingBom.parent_item_base_uom ?? viewingBom.standard_yield_uom})
+                {viewingBom.parent_item_code} — v{viewingBom.version} (±{formatNumberId(Math.round(viewingBom.standard_yield_qty), 0)} {viewingBom.parent_item_base_uom ?? viewingBom.standard_yield_uom})
                 <ProvenanceInfoButton
                   label="Hasil Standar per Batch"
                   envelope={{
                     formula: viewingBom.standard_yield_basis_note ?? 'Belum ada keterangan asal angka — isi lewat form edit BOM.',
-                    inputs: [{ label: 'Angka presisi penuh dipakai perhitungan', value: `${viewingBom.standard_yield_qty} ${viewingBom.parent_item_base_uom ?? viewingBom.standard_yield_uom} per batch` }],
+                    inputs: [{ label: 'Angka presisi penuh dipakai perhitungan', value: `${formatNumberId(viewingBom.standard_yield_qty, 6)} ${viewingBom.parent_item_base_uom ?? viewingBom.standard_yield_uom} per batch` }],
                     standardStatus: viewingBom.standard_yield_source as 'ESTIMASI_MANUAL' | 'DIPELAJARI' | null
                   }}
                 />
               </CardTitle>
               {viewingBom.buffer_percentage !== null && viewingBom.buffer_percentage !== undefined ? (
-                <CardDescription>Buffer {viewingBom.buffer_percentage}% — kebutuhan bahan per batch dihitung dengan tambahan ini.</CardDescription>
+                <CardDescription>Buffer {formatNumberId(viewingBom.buffer_percentage, 2)}% — kebutuhan bahan per batch dihitung dengan tambahan ini.</CardDescription>
               ) : null}
             </CardHeader>
             <CardContent>
@@ -513,12 +513,12 @@ export default function BomsPage() {
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Tipe</th>
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                         <span className="flex items-center gap-1">
-                          Jumlah per {viewingBom.standard_yield_qty} {viewingBom.parent_item_base_uom ?? viewingBom.standard_yield_uom}
+                          Jumlah per {formatNumberId(viewingBom.standard_yield_qty, 6)} {viewingBom.parent_item_base_uom ?? viewingBom.standard_yield_uom}
                           <ProvenanceInfoButton
                             label="Jumlah per Batch"
                             envelope={{
                               formula: 'Per Unit Output (kolom di sebelah kanan) × Hasil Standar per Batch BOM ini. Angka skala-batch, supaya kelihatan total kebutuhan komponen kalau produksi 1 batch penuh sesuai resep.',
-                              inputs: [{ label: 'Hasil standar per batch', value: `${viewingBom.standard_yield_qty} ${viewingBom.parent_item_base_uom ?? viewingBom.standard_yield_uom}` }]
+                              inputs: [{ label: 'Hasil standar per batch', value: `${formatNumberId(viewingBom.standard_yield_qty, 6)} ${viewingBom.parent_item_base_uom ?? viewingBom.standard_yield_uom}` }]
                             }}
                           />
                         </span>

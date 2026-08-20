@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { formatNumberId } from '@/lib/currency';
 
 // Process mining (Fase 0.4, docs/langkah-membangun-fitur-ai.md) -- TANPA LLM,
 // murni query & agregasi atas status_transition_log yang SUDAH ADA (tidak
@@ -65,7 +66,7 @@ export async function computeProcessMiningInsights(adminClient: SupabaseClient, 
   const daySpan = (new Date(latestAt).getTime() - new Date(earliestAt).getTime()) / (1000 * 60 * 60 * 24);
   const dataSufficientForTrend = daySpan >= 14;
   if (!dataSufficientForTrend) {
-    notes.push(`Rentang data cuma ${daySpan.toFixed(1)} hari (sejak ${earliestAt.slice(0, 10)}) -- BELUM CUKUP utk analisis tren (ambang 14 hari, konsisten dgn KPI baseline). Angka di bawah tetap dihitung dari data yang ADA, bukan diprediksi.`);
+    notes.push(`Rentang data cuma ${formatNumberId(daySpan, 1)} hari (sejak ${earliestAt.slice(0, 10)}) -- BELUM CUKUP utk analisis tren (ambang 14 hari, konsisten dgn KPI baseline). Angka di bawah tetap dihitung dari data yang ADA, bukan diprediksi.`);
   }
 
   // Durasi tiap status: cari pasangan transisi BERURUTAN utk record yang sama

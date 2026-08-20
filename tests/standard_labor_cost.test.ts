@@ -136,8 +136,12 @@ describe('computeStandardLaborCostPerUnit — kru harian ÷ batches_per_day, ber
     // top: 120000/2/10=6000. WIP: 60000/4/5=3000 * rasio 3 = 9000. Total=15000.
     expect(result.costPerUnit).toBeCloseTo(15000, 2);
     expect(result.complete).toBe(true);
-    expect(result.notes.some((n) => n.includes('rasio 1.000000'))).toBe(true);
-    expect(result.notes.some((n) => n.includes('rasio 3.000000'))).toBe(true);
+    // 27 Agu 2026 -- catatan ini sekarang diformat lewat formatNumberId (thousands
+    // separator + presisi penuh utk angka rasio BOM/SDM, TANPA nol berlebih di
+    // belakang koma) menggantikan toFixed(6) lama -- "rasio 1"/"rasio 3", bukan lagi
+    // "rasio 1.000000"/"rasio 3.000000".
+    expect(result.notes.some((n) => n.includes('rasio 1 ke'))).toBe(true);
+    expect(result.notes.some((n) => n.includes('rasio 3 ke'))).toBe(true);
   });
 
   it('(NEGATIF) item TANPA BOM sama sekali — dilewati dgn catatan eksplisit, bukan dianggap 0 diam-diam tanpa penjelasan', async () => {

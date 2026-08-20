@@ -145,7 +145,7 @@ export async function computeMarginKontribusiPersen(
     .filter(([, revenue]) => revenue > 0)
     .map(([itemId, revenue]) => ({
       label: codeByItemId.get(itemId) ?? `item ${itemId}`,
-      value: `${(((marginByItem.get(itemId) ?? 0) / revenue) * 100).toFixed(1)}%`
+      value: `${formatNumberId((((marginByItem.get(itemId) ?? 0) / revenue) * 100), 1)}%`
     }));
 
   return {

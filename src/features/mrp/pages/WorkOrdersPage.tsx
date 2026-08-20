@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { canManageWorkOrder } from '@/lib/roles';
 import { workOrderPriorities } from '../server/workOrderValidation';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
+import { formatNumberId } from '@/lib/currency';
 
 const priorityLabels: Record<string, string> = { low: 'Rendah', normal: 'Normal', high: 'Tinggi', urgent: 'Mendesak' };
 const priorityBadgeVariant: Record<string, 'secondary' | 'info' | 'warning' | 'critical'> = { low: 'secondary', normal: 'info', high: 'warning', urgent: 'critical' };
@@ -443,7 +444,7 @@ export default function WorkOrdersPage() {
         header: 'Planned Qty',
         cell: ({ row }) => (
           <span className="text-data">
-            {row.original.planned_qty} {row.original.item_base_uom}
+            {formatNumberId(row.original.planned_qty, 2)} {row.original.item_base_uom}
           </span>
         )
       },
@@ -464,7 +465,7 @@ export default function WorkOrdersPage() {
           readinessLabels[row.original.readiness] ? (
             <Badge variant={readinessBadgeVariant[row.original.readiness]}>
               {readinessLabels[row.original.readiness]}
-              {row.original.open_alert_count > 0 ? ` (${row.original.open_alert_count})` : ''}
+              {row.original.open_alert_count > 0 ? ` (${formatNumberId(row.original.open_alert_count, 0)})` : ''}
             </Badge>
           ) : (
             <span className="text-xs text-muted-foreground">-</span>
@@ -558,13 +559,13 @@ export default function WorkOrdersPage() {
             <CardHeader>
               <CardDescription className="uppercase tracking-[0.2em]">Detail Work Order</CardDescription>
               <CardTitle className="text-xl">
-                {expandedWo.item_code} — {expandedWo.planned_qty} {expandedWo.item_base_uom}
+                {expandedWo.item_code} — {formatNumberId(expandedWo.planned_qty, 2)} {expandedWo.item_base_uom}
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               {expandedWo.readiness === 'blocked' ? (
                 <p className="rounded-md border border-destructive/40 bg-destructive-subtle p-2 text-sm text-destructive-subtle-foreground">
-                  WO ini masih terhambat — ada {expandedWo.open_alert_count} peringatan sistem terbuka yang harus diselesaikan dulu.
+                  WO ini masih terhambat — ada {formatNumberId(expandedWo.open_alert_count, 0)} peringatan sistem terbuka yang harus diselesaikan dulu.
                 </p>
               ) : null}
 
@@ -613,7 +614,7 @@ export default function WorkOrdersPage() {
                               </p>
                               <p className="mb-2 flex items-center gap-1 text-xs text-muted-foreground">
                                 Kebutuhan: {bufferedQty.toLocaleString('id-ID', { maximumFractionDigits: 4 })} {line.uom} untuk batch {selectedBatch?.batch_number} ({batchQty} {selectedBatch?.uom})
-                                {expandedBom.buffer_percentage ? ` — sudah + buffer ${expandedBom.buffer_percentage}%` : ''}
+                                {expandedBom.buffer_percentage ? ` — sudah + buffer ${formatNumberId(expandedBom.buffer_percentage, 2)}%` : ''}
                                 <ProvenanceInfoButton
                                   label="Kebutuhan Bahan per Batch"
                                   envelope={{
@@ -640,7 +641,7 @@ export default function WorkOrdersPage() {
                                       <SelectContent>
                                         {lotsForComponent.map((lot) => (
                                           <SelectItem key={lot.lot_id} value={String(lot.lot_id)}>
-                                            {lot.lot_number} — {lot.quantity_on_hand} tersedia {lot.source_type === 'customer_supplied' ? '(kiriman client)' : ''}
+                                            {lot.lot_number} — {formatNumberId(lot.quantity_on_hand, 2)} tersedia {lot.source_type === 'customer_supplied' ? '(kiriman client)' : ''}
                                           </SelectItem>
                                         ))}
                                       </SelectContent>
@@ -810,7 +811,7 @@ export default function WorkOrdersPage() {
                 {expandedBom && Number(batchPlannedQty) > 0 ? (
                   <div className="mt-3">
                     <p className="mb-1 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Kalkulasi Kebutuhan Bahan{expandedBom.buffer_percentage ? ` (sudah + buffer ${expandedBom.buffer_percentage}%)` : ' (BOM ini belum punya buffer_percentage)'}
+                      Kalkulasi Kebutuhan Bahan{expandedBom.buffer_percentage ? ` (sudah + buffer ${formatNumberId(expandedBom.buffer_percentage, 2)}%)` : ' (BOM ini belum punya buffer_percentage)'}
                       <ProvenanceInfoButton
                         label="Kebutuhan Bahan per Batch"
                         envelope={{
@@ -907,7 +908,7 @@ export default function WorkOrdersPage() {
                       <SelectContent>
                         {(selectedSo?.lines ?? []).map((line) => (
                           <SelectItem key={line.sales_order_line_id} value={String(line.sales_order_line_id)}>
-                            {line.item_code} — {line.qty_ordered} {line.item_base_uom} (sudah direncanakan: {line.qty_already_planned_in_wo})
+                            {line.item_code} — {formatNumberId(line.qty_ordered, 2)} {line.item_base_uom} (sudah direncanakan: {formatNumberId(line.qty_already_planned_in_wo, 2)})
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -925,7 +926,7 @@ export default function WorkOrdersPage() {
                       <SelectContent>
                         {availableBoms.map((bom) => (
                           <SelectItem key={bom.bom_id} value={String(bom.bom_id)}>
-                            {selectedSoLine ? '' : `${bom.parent_item_code} — `}v{bom.version} ({bom.status}) — yield {bom.standard_yield_qty} {bom.standard_yield_uom}
+                            {selectedSoLine ? '' : `${bom.parent_item_code} — `}v{bom.version} ({bom.status}) — yield {formatNumberId(bom.standard_yield_qty, 2)} {bom.standard_yield_uom}
                           </SelectItem>
                         ))}
                       </SelectContent>

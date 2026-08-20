@@ -16,6 +16,7 @@ import { canManageShipments } from '@/lib/roles';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 import { ConfirmAndSignModal } from '@/features/signatures';
 import SuratJalanPreview from '../components/SuratJalanPreview';
+import { formatNumberId } from '@/lib/currency';
 
 const SHIPMENT_SIGN_CONFIRMATION_TEXT = 'Sudah di cek dan tambahkan tanda tangan saya';
 
@@ -440,7 +441,7 @@ export default function ShipmentsPage() {
               .filter((line) => line.qty_remaining_to_ship > 0)
               .map((line) => (
                 <span key={line.sales_order_line_id}>
-                  {line.item_code}: <span className="font-medium text-foreground">{line.qty_remaining_to_ship}</span> {line.item_base_uom} (dari {line.qty_ordered})
+                  {line.item_code}: <span className="font-medium text-foreground">{formatNumberId(line.qty_remaining_to_ship, 2)}</span> {line.item_base_uom} (dari {formatNumberId(line.qty_ordered, 2)})
                 </span>
               ))}
           </div>
@@ -546,7 +547,7 @@ export default function ShipmentsPage() {
                     {line.item_code} — {line.item_name}
                   </td>
                   <td className="px-3 py-1.5">
-                    {line.qty_shipped} {line.item_base_uom}
+                    {formatNumberId(line.qty_shipped, 2)} {line.item_base_uom}
                   </td>
                   <td className="px-3 py-1.5">
                     {line.lot_number}
@@ -672,9 +673,9 @@ export default function ShipmentsPage() {
                               {line.item_code} — {line.item_name}
                             </span>
                             <span>
-                              Sudah dikirim <span className="font-medium text-foreground">{line.qty_shipped}</span> / {line.qty_ordered} {line.item_base_uom}
+                              Sudah dikirim <span className="font-medium text-foreground">{formatNumberId(line.qty_shipped, 2)}</span> / {formatNumberId(line.qty_ordered, 2)} {line.item_base_uom}
                               {line.qty_remaining_to_ship > 0 ? (
-                                <span className="text-muted-foreground"> (sisa {line.qty_remaining_to_ship})</span>
+                                <span className="text-muted-foreground"> (sisa {formatNumberId(line.qty_remaining_to_ship, 2)})</span>
                               ) : (
                                 <span className="text-success-subtle-foreground"> (selesai)</span>
                               )}
@@ -695,7 +696,7 @@ export default function ShipmentsPage() {
                             <div className="text-sm">
                               <span className="font-medium text-foreground">{line.item_code}</span> <span className="text-muted-foreground">{line.item_name}</span>
                               <span className="ml-2 text-xs text-muted-foreground">
-                                (Sisa: <span className="font-medium text-foreground">{line.qty_remaining_to_ship}</span> {line.item_base_uom})
+                                (Sisa: <span className="font-medium text-foreground">{formatNumberId(line.qty_remaining_to_ship, 2)}</span> {line.item_base_uom})
                               </span>
                             </div>
                             <div className="grid grid-cols-[3fr_1fr] gap-3">
@@ -703,7 +704,7 @@ export default function ShipmentsPage() {
                                 <label className="mb-1 block text-xs text-muted-foreground">Lot (saran FEFO — bisa diganti)</label>
                                 {lotsLoaded && (lotsByItemId[line.item_id] ?? []).length === 0 ? (
                                   <p className="text-xs text-destructive">
-                                    Sisa {line.qty_remaining_to_ship} {line.item_base_uom} ini masih BELUM DIKIRIM dari pesanan, TAPI stok fisiknya kosong (0 lot tersedia) — tidak bisa dikirim sampai ada barang masuk untuk item ini di lokasi pabrik SO ini.
+                                    Sisa {formatNumberId(line.qty_remaining_to_ship, 2)} {line.item_base_uom} ini masih BELUM DIKIRIM dari pesanan, TAPI stok fisiknya kosong (0 lot tersedia) — tidak bisa dikirim sampai ada barang masuk untuk item ini di lokasi pabrik SO ini.
                                   </p>
                                 ) : (
                                 <Select
@@ -717,7 +718,7 @@ export default function ShipmentsPage() {
                                   <SelectContent>
                                     {(lotsByItemId[line.item_id] ?? []).map((lot) => (
                                       <SelectItem key={lot.lot_id} value={String(lot.lot_id)}>
-                                        {lot.lot_number} — stok {lot.quantity_on_hand} {line.item_base_uom}
+                                        {lot.lot_number} — stok {formatNumberId(lot.quantity_on_hand, 2)} {line.item_base_uom}
                                         {lot.expiry_date ? ` — kadaluarsa ${new Date(lot.expiry_date).toLocaleDateString('id-ID')}` : ''}
                                       </SelectItem>
                                     ))}

@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { formatCurrency } from '@/lib/currency';
+import { formatCurrency, formatNumberId } from '@/lib/currency';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { canManagePurchasing } from '@/lib/roles';
 
@@ -203,7 +203,7 @@ export default function PurchasingPage() {
     () => [
       { id: 'name', header: 'Nama', cell: ({ row }) => <span className="font-medium text-foreground">{row.original.name}</span> },
       { id: 'contact_info', header: 'Kontak', cell: ({ row }) => row.original.contact_info ?? '-' },
-      { id: 'lead_time', header: 'Lead Time', cell: ({ row }) => (row.original.lead_time_days !== null ? `${row.original.lead_time_days} hari` : '-') },
+      { id: 'lead_time', header: 'Lead Time', cell: ({ row }) => (row.original.lead_time_days !== null ? `${formatNumberId(row.original.lead_time_days, 0)} hari` : '-') },
       { id: 'type', header: 'Jenis', cell: ({ row }) => supplierTypeLabels[row.original.supplier_type] ?? row.original.supplier_type }
     ],
     []
@@ -246,10 +246,10 @@ export default function PurchasingPage() {
             <tr key={line.purchase_order_line_id} className="border-b last:border-0">
               <td className="px-3 py-1.5">{line.item_code ?? line.item_name}</td>
               <td className="px-3 py-1.5">
-                {line.qty_ordered} {line.purchase_uom}
+                {formatNumberId(line.qty_ordered, 2)} {line.purchase_uom}
               </td>
               <td className="px-3 py-1.5">
-                {line.qty_received} {line.purchase_uom}
+                {formatNumberId(line.qty_received, 2)} {line.purchase_uom}
               </td>
               {po.lines.some((l) => l.unit_price !== null) ? <td className="px-3 py-1.5">{formatCurrency(line.unit_price, { maxDecimals: 0 })}</td> : null}
             </tr>

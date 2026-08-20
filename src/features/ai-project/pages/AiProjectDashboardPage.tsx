@@ -6,6 +6,7 @@ import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 
 type ChecklistItem = { ai_project_checklist_item_id: number; label: string; done: boolean };
 type Task = {
@@ -167,7 +168,17 @@ export default function AiProjectDashboardPage() {
           <>
             <Card>
               <CardContent className="flex flex-col gap-2 pt-6">
-                <span className="text-xs uppercase tracking-wide text-muted-foreground">Progres Total Proyek AI</span>
+                <span className="flex items-center gap-1 text-xs uppercase tracking-wide text-muted-foreground">
+                  Progres Total Proyek AI
+                  <ProvenanceInfoButton
+                    label="Progres Total Proyek AI"
+                    envelope={{
+                      formula: 'Σ (progres % tiap fase × bobot fase ÷ 100). Progres per fase sendiri = Σ (progres % tiap tugas × bobot tugas ÷ 100). Berjenjang: tugas → fase → total, masing-masing tertimbang.',
+                      inputs: phases.map((p) => ({ label: p.name, value: `${p.progress_percent.toFixed(1)}% × bobot ${p.weight_percent}%` })),
+                      sourceDocument: 'computeAiProjectProgress.ts'
+                    }}
+                  />
+                </span>
                 <span className="text-4xl font-semibold text-foreground">{overallPercent.toFixed(1)}%</span>
                 {latestSnapshot ? (
                   <span className="text-xs text-muted-foreground">
@@ -190,7 +201,20 @@ export default function AiProjectDashboardPage() {
               {phases.map((phase) => (
                 <Card key={phase.ai_project_phase_id}>
                   <CardContent className="flex flex-col gap-1 pt-6">
-                    <span className="text-xs uppercase tracking-wide text-muted-foreground">{phase.name}</span>
+                    <span className="flex items-center gap-1 text-xs uppercase tracking-wide text-muted-foreground">
+                      {phase.name}
+                      <ProvenanceInfoButton
+                        label={phase.name}
+                        envelope={{
+                          formula: 'Σ (progres % tiap tugas di fase ini × bobot tugas ÷ 100). Kontribusinya ke total proyek = progres fase ini × bobot fase ini ÷ 100.',
+                          inputs: [
+                            { label: 'Progres fase', value: `${phase.progress_percent.toFixed(1)}%` },
+                            { label: 'Bobot fase', value: `${phase.weight_percent}%` },
+                            { label: 'Kontribusi ke total', value: `${phase.contribution_to_total.toFixed(2)}%` }
+                          ]
+                        }}
+                      />
+                    </span>
                     <span className="text-xl font-semibold text-foreground">{phase.progress_percent.toFixed(0)}%</span>
                     <span className="text-xs text-muted-foreground">Bobot {phase.weight_percent}% dari total</span>
                   </CardContent>
@@ -210,8 +234,20 @@ export default function AiProjectDashboardPage() {
                       <span className="font-medium">{task.name}</span>
                       <Badge variant="secondary">{ownerLabels[task.owner_type] ?? task.owner_type}</Badge>
                     </div>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
                       {task.progress_percent.toFixed(0)}% selesai · {task.progress_detail} · +{task.contribution_to_total_if_complete.toFixed(2)}% total bila selesai
+                      <ProvenanceInfoButton
+                        label="Dampak per Menit"
+                        envelope={{
+                          formula:
+                            'Kontribusi bila selesai = (100 − progres% tugas ini) × bobot tugas% × bobot fase% ÷ 10000 — yaitu SISA potensi kenaikan progres total kalau tugas ini dituntaskan sekarang. Daftar ini diurutkan dari kontribusi terbesar (proksi "dampak per menit", BUKAN estimasi waktu literal — sistem belum punya data durasi tugas nyata).',
+                          inputs: [
+                            { label: 'Progres tugas saat ini', value: `${task.progress_percent.toFixed(1)}%` },
+                            { label: 'Bobot tugas (dalam fase)', value: `${task.weight_percent}%` }
+                          ],
+                          sourceDocument: 'getAiProjectDashboard.ts'
+                        }}
+                      />
                     </span>
                   </div>
                 ))}
@@ -224,9 +260,22 @@ export default function AiProjectDashboardPage() {
                   <CardHeader>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <CardTitle className="text-base">{task.name}</CardTitle>
-                      <div className="flex gap-2">
+                      <div className="flex items-center gap-2">
                         <Badge variant="secondary">{ownerLabels[task.owner_type] ?? task.owner_type}</Badge>
                         <Badge variant={task.progress_percent >= 100 ? 'success' : 'secondary'}>{task.progress_percent.toFixed(0)}%</Badge>
+                        <ProvenanceInfoButton
+                          label={`Progres — ${task.name}`}
+                          envelope={{
+                            formula:
+                              task.progress_source === 'AUTO_QUERY'
+                                ? 'Dihitung LIVE dari query data nyata (progress_key terkait) — bukan diisi manual.'
+                                : 'Dihitung dari checklist: jumlah item tercentang ÷ total item checklist × 100%.',
+                            inputs: [
+                              { label: 'Sumber progres', value: task.progress_source },
+                              { label: 'Detail', value: task.progress_detail }
+                            ]
+                          }}
+                        />
                       </div>
                     </div>
                     <CardDescription>

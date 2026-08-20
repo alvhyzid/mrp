@@ -28,7 +28,7 @@ const items: { title: string; date: string; href: string; description: string }[
     title: 'Klik Ikon Info untuk Lihat Asal Angka',
     date: '25 Agu 2026',
     href: '/sales-orders',
-    description: 'Panel "Asal Angka" (ikon info kecil) sekarang ada di lebih banyak tempat: Margin Watch (semua kategori selisih), tanggal selesai kelayakan jadwal, biaya standar Item & BOM, margin kontribusi Laba Operasional, dan kebutuhan bahan Work Order.'
+    description: 'Panel "Asal Angka" (ikon info kecil) sekarang ada di ±30 tempat lebih banyak: Margin Watch, Kelayakan Jadwal, biaya standar Item/BOM/Routing, Laba Operasional, Work Order, Warehouse, Pengiriman, dan Absensi -- klik ikonnya kapan pun bingung dari mana angka itu berasal.'
   },
   {
     title: 'Dashboard Proyek AI',

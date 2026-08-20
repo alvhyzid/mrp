@@ -1511,7 +1511,18 @@ export default function PpicDashboardPage() {
                       <th className="h-8 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Tahap</th>
                       <th className="h-8 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Input</th>
                       <th className="h-8 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Output</th>
-                      <th className="h-8 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Susut</th>
+                      <th className="h-8 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          Susut
+                          <ProvenanceInfoButton
+                            label="Susut per Tahap"
+                            envelope={{
+                              formula: '(Input tahap − Output tahap) ÷ Input tahap × 100%. Susut = seluruh selisih input-output tahap ini, termasuk reject DAN penyusutan proses biasa (evaporasi, dsb) — kolom "Reject" di sebelah kanan memecah berapa persen dari susut ini yang spesifik karena reject.',
+                              inputs: [{ label: 'Dihitung per baris', value: 'Tiap tahap di tabel ini' }]
+                            }}
+                          />
+                        </span>
+                      </th>
                       <th className="h-8 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Reject</th>
                     </tr>
                   </thead>
@@ -1541,7 +1552,19 @@ export default function PpicDashboardPage() {
                 </table>
               </div>
               <div className="flex items-center justify-between border-t pt-2">
-                <span className="text-sm font-medium text-foreground">Total Yield Batch</span>
+                <span className="flex items-center gap-1 text-sm font-medium text-foreground">
+                  Total Yield Batch
+                  <ProvenanceInfoButton
+                    label="Total Yield Batch"
+                    envelope={{
+                      formula: 'Output tahap TERAKHIR (baik, sudah dikurangi reject) ÷ Input tahap PERTAMA × 100%. Beda dari "yield aktual vs rencana" di halaman Produksi — angka ini murni antar-tahap dalam SATU batch, bukan output vs planned_qty Work Order.',
+                      inputs: [
+                        { label: 'Input tahap pertama', value: yieldSummary.steps[0] ? `${yieldSummary.steps[0].qty_input ?? '-'} ${yieldSummary.steps[0].uom_input ?? ''}` : '-' },
+                        { label: 'Output tahap terakhir', value: yieldSummary.steps.length > 0 ? `${yieldSummary.steps[yieldSummary.steps.length - 1].qty_recorded ?? '-'} ${yieldSummary.steps[yieldSummary.steps.length - 1].uom ?? ''}` : '-' }
+                      ]
+                    }}
+                  />
+                </span>
                 <span className="text-lg font-semibold text-foreground">{yieldSummary.total_yield_pct !== null ? `${yieldSummary.total_yield_pct}%` : 'Belum bisa dihitung'}</span>
               </div>
               {yieldSummary.total_reject > 0 ? (

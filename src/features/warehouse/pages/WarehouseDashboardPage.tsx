@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { canAccessWarehouseDashboard, canAdjustStock } from '@/lib/roles';
 import { typeLabels, typeBadgeVariant } from '@/features/mrp';
+import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 
 const STOCK_ALERT_TYPES = ['stock_depletion_forecast', 'expiry_risk_low_usage', 'low_stock', 'material_shortage'];
 
@@ -366,7 +367,18 @@ export default function WarehouseDashboardPage() {
       { id: 'plant', header: 'Lokasi', cell: ({ row }) => row.original.production_plant_name },
       {
         id: 'qty',
-        header: 'Total Stok',
+        header: () => (
+          <span className="flex items-center gap-1">
+            Total Stok
+            <ProvenanceInfoButton
+              label="Total Stok"
+              envelope={{
+                formula: 'Σ quantity_on_hand semua lot berstatus tersedia untuk item ini di lokasi ini, jumlah lot = COUNT lot yang dijumlah. Bukan proyeksi — angka fisik gudang saat ini.',
+                inputs: [{ label: 'Sumber', value: 'lots (status=available)' }]
+              }}
+            />
+          </span>
+        ),
         cell: ({ row }) => (
           <span className="text-data">
             {row.original.total_qty} {row.original.base_uom} ({row.original.lot_count} lot)
@@ -386,7 +398,22 @@ export default function WarehouseDashboardPage() {
     () => [
       { id: 'type', header: 'Jenis', cell: ({ row }) => alertTypeLabels[row.original.alert_type] ?? row.original.alert_type },
       { id: 'item', header: 'Item', cell: ({ row }) => (row.original.related_item_code ? `${row.original.related_item_code} — ${row.original.related_item_name}` : '-') },
-      { accessorKey: 'message', header: 'Pesan' },
+      {
+        accessorKey: 'message',
+        header: () => (
+          <span className="flex items-center gap-1">
+            Pesan
+            <ProvenanceInfoButton
+              label="Proyeksi Stok/Kadaluarsa"
+              envelope={{
+                formula:
+                  'Pemakaian harian rata-rata = Σ qty_consumed 30 hari terakhir ÷ 30. Hari sampai habis = stok tersedia saat ini ÷ pemakaian harian rata-rata. Peringatan "kritis" muncul kalau hari sampai habis ≤ separuh lead time supplier item ini; peringatan kadaluarsa muncul kalau proyeksi habisnya LEBIH LAMBAT dari tanggal kadaluarsa lot tertua (bahan mengendap, bukan terpakai).',
+                inputs: [{ label: 'Sumber', value: 'recompute_stock_projection_for_item() — dihitung ulang tiap ada pemakaian bahan' }]
+              }}
+            />
+          </span>
+        )
+      },
       { accessorKey: 'severity', header: 'Tingkat', cell: ({ row }) => <Badge variant={severityBadgeVariant[row.original.severity] ?? 'secondary'}>{row.original.severity}</Badge> }
     ],
     []

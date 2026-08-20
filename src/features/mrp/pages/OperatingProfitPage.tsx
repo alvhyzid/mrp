@@ -218,7 +218,19 @@ export default function OperatingProfitPage() {
             </Card>
             <Card>
               <CardContent className="flex flex-col gap-1 pt-6">
-                <span className="text-xs uppercase tracking-wide text-muted-foreground">Laba Operasional</span>
+                <span className="flex items-center gap-1 text-xs uppercase tracking-wide text-muted-foreground">
+                  Laba Operasional
+                  <ProvenanceInfoButton
+                    label="Laba Operasional"
+                    envelope={{
+                      formula: 'Margin Kontribusi (Realized) − Overhead SDM, keduanya untuk periode yang sama. Bukan angka tersimpan sendiri — hasil pengurangan langsung dari dua kartu di sebelahnya.',
+                      inputs: [
+                        { label: 'Margin Kontribusi', value: formatCurrency(result.total_margin, { maxDecimals: 0 }) },
+                        { label: 'Overhead SDM', value: formatCurrency(result.overhead, { maxDecimals: 0 }) }
+                      ]
+                    }}
+                  />
+                </span>
                 <span className={`text-2xl font-semibold ${result.operating_profit < 0 ? 'text-destructive' : 'text-success'}`}>
                   {formatCurrency(result.operating_profit, { maxDecimals: 0 })}
                 </span>

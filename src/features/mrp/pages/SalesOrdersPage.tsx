@@ -657,11 +657,33 @@ export default function SalesOrdersPage() {
                         ) : null}
 
                         <div className="grid gap-1 sm:grid-cols-2">
-                          <span className="text-muted-foreground">
+                          <span className="flex items-center gap-1 text-muted-foreground">
                             Hari kerja tersedia s/d {feasibilityResult.requested_ship_date}: <span className="text-foreground">{feasibilityResult.total_working_days_to_deadline} hari</span>
+                            <ProvenanceInfoButton
+                              label="Hari Kerja Tersedia s/d Deadline"
+                              envelope={{
+                                formula: 'Jumlah hari kerja dari HARI INI sampai tanggal diminta client, dihitung dari kalender kerja perusahaan (jam kerja Senin-Jumat & Sabtu di Pengaturan Perusahaan). BELUM memperhitungkan kapan bahan tersedia — itu angka "Efektif" di sebelahnya.',
+                                inputs: [
+                                  { label: 'Dari', value: feasibilityResult.today ?? '-' },
+                                  { label: 'Sampai (diminta)', value: feasibilityResult.requested_ship_date ?? '-' },
+                                  { label: 'Hasil', value: `${feasibilityResult.total_working_days_to_deadline} hari` }
+                                ]
+                              }}
+                            />
                           </span>
-                          <span className="text-muted-foreground">
+                          <span className="flex items-center gap-1 text-muted-foreground">
                             Efektif (setelah bahan mulai tersedia): <span className="text-foreground">{feasibilityResult.effective_working_days_after_material_block} hari</span>
+                            <ProvenanceInfoButton
+                              label="Hari Kerja Efektif Setelah Bahan Tersedia"
+                              envelope={{
+                                formula: 'Sama seperti "Hari Kerja Tersedia", tapi dihitung mulai dari tanggal produksi BISA MULAI (menunggu bahan tahap pertama datang) — bukan dari hari ini. Kalau bahan sudah tersedia sekarang, angka ini sama dengan hari kerja tersedia biasa.',
+                                inputs: [
+                                  { label: 'Dari (produksi bisa mulai)', value: feasibilityResult.production_start_blocked_until ?? (feasibilityResult.today ?? 'hari ini') },
+                                  { label: 'Sampai (diminta)', value: feasibilityResult.requested_ship_date ?? '-' },
+                                  { label: 'Hasil', value: `${feasibilityResult.effective_working_days_after_material_block} hari` }
+                                ]
+                              }}
+                            />
                           </span>
                           {feasibilityResult.production_start_blocked_until ? (
                             <span className="text-muted-foreground sm:col-span-2">
@@ -691,8 +713,22 @@ export default function SalesOrdersPage() {
                             </span>
                           ) : null}
                           {!feasibilityResult.feasible ? (
-                            <span className="text-muted-foreground sm:col-span-2">
+                            <span className="flex items-center gap-1 text-muted-foreground sm:col-span-2">
                               Realistis terkirim tepat waktu: <span className="text-foreground">{feasibilityResult.realistic_qty_deliverable_on_time}</span> dari {feasibilityResult.qty_ordered} yang dipesan
+                              <ProvenanceInfoButton
+                                label="Realistis Terkirim Tepat Waktu"
+                                envelope={{
+                                  formula:
+                                    'MIN antara qty dipesan dan (hari kerja efektif × batch/hari × unit/batch) — dibatasi lebih lanjut kalau ada bahan tahap belakangan yang datang terlambat (pakai jendela hari kerja sejak bahan ITU siap, bukan sejak mulai produksi). Angka paling KONSERVATIF dari semua batasan dipakai, dibulatkan ke bawah. Sengaja melebih-lebihkan risiko keterlambatan, bukan optimistis.',
+                                  inputs: [
+                                    { label: 'Qty dipesan', value: String(feasibilityResult.qty_ordered) },
+                                    { label: 'Hari kerja efektif', value: `${feasibilityResult.effective_working_days_after_material_block} hari` },
+                                    { label: 'Batch/hari × unit/batch', value: `${feasibilityResult.batches_per_day} × ${feasibilityResult.unit_per_batch}` },
+                                    { label: 'Hasil realistis', value: String(feasibilityResult.realistic_qty_deliverable_on_time) }
+                                  ],
+                                  sourceDocument: 'getPlanningFeasibility.ts'
+                                }}
+                              />
                             </span>
                           ) : null}
                         </div>
@@ -723,7 +759,18 @@ export default function SalesOrdersPage() {
 
                         {feasibilityResult.components_to_produce && feasibilityResult.components_to_produce.length > 0 ? (
                           <div>
-                            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Perlu Diproduksi (bukan kekurangan beli — bahan penyusunnya cukup)</p>
+                            <p className="mb-1 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                              Perlu Diproduksi (bukan kekurangan beli — bahan penyusunnya cukup)
+                              <ProvenanceInfoButton
+                                label="Perlu Diproduksi"
+                                envelope={{
+                                  formula:
+                                    'Komponen WIP (barang setengah jadi, punya BOM sendiri) yang dilewati saat eksplosi BOM berjenjang menuju item pesanan. qty_needed = qty_per_unit_output komponen × qty dibutuhkan level di atasnya, diakumulasi lintas semua jalur pemakaian. BEDA dari "Kekurangan Bahan" di bawah — daftar ini bukan soal stok kurang, tapi barang yang MEMANG harus diproduksi dulu (bukan dibeli) sebelum item akhir bisa dibuat.',
+                                  inputs: [{ label: 'Item dievaluasi', value: `${feasibilityResult.item_code} — ${feasibilityResult.item_name}` }],
+                                  sourceDocument: 'explodeBomRequirements.ts'
+                                }}
+                              />
+                            </p>
                             <ul className="flex flex-col gap-0.5 text-xs">
                               {feasibilityResult.components_to_produce.map((c) => (
                                 <li key={c.item_id}>

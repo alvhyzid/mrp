@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { canManageBom } from '@/lib/roles';
+import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 
 type RoutingStep = {
   routing_step_id: number;
@@ -269,7 +270,18 @@ export default function RoutingsPage() {
       { id: 'step_count', header: 'Jumlah Tahap', cell: ({ row }) => <span className="text-data">{row.original.steps.length}</span> },
       {
         id: 'total_active',
-        header: 'Total Durasi Aktif',
+        header: () => (
+          <span className="flex items-center gap-1">
+            Total Durasi Aktif
+            <ProvenanceInfoButton
+              label="Total Durasi Aktif"
+              envelope={{
+                formula: 'Jumlah active_duration_minutes semua tahap SOP routing ini (tidak termasuk wait_duration_minutes/waktu tunggu antar tahap) — angka standar dipakai untuk hitung kapasitas & jadwal, bukan durasi aktual tercatat per batch.',
+                inputs: [{ label: 'Jumlah tahap dijumlah', value: 'Semua tahap di routing ini' }]
+              }}
+            />
+          </span>
+        ),
         cell: ({ row }) => <span className="text-data">{row.original.steps.reduce((sum, s) => sum + s.active_duration_minutes, 0)} mnt</span>
       },
       {

@@ -512,7 +512,16 @@ export default function BomsPage() {
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Komponen</th>
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Tipe</th>
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        Jumlah per {viewingBom.standard_yield_qty} {viewingBom.parent_item_base_uom ?? viewingBom.standard_yield_uom}
+                        <span className="flex items-center gap-1">
+                          Jumlah per {viewingBom.standard_yield_qty} {viewingBom.parent_item_base_uom ?? viewingBom.standard_yield_uom}
+                          <ProvenanceInfoButton
+                            label="Jumlah per Batch"
+                            envelope={{
+                              formula: 'Per Unit Output (kolom di sebelah kanan) × Hasil Standar per Batch BOM ini. Angka skala-batch, supaya kelihatan total kebutuhan komponen kalau produksi 1 batch penuh sesuai resep.',
+                              inputs: [{ label: 'Hasil standar per batch', value: `${viewingBom.standard_yield_qty} ${viewingBom.parent_item_base_uom ?? viewingBom.standard_yield_uom}` }]
+                            }}
+                          />
+                        </span>
                       </th>
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Per Unit Output</th>
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Tahap SOP</th>

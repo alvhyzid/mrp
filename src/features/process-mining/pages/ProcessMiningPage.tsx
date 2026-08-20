@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 
 type ProcessMiningResult = {
   total_transitions: number;
@@ -103,7 +104,20 @@ export default function ProcessMiningPage() {
           <>
             <Card>
               <CardContent className="flex flex-col gap-1 pt-6">
-                <span className="text-xs uppercase tracking-wide text-muted-foreground">Dasar Data</span>
+                <span className="flex items-center gap-1 text-xs uppercase tracking-wide text-muted-foreground">
+                  Dasar Data
+                  <ProvenanceInfoButton
+                    label="Dasar Data Process Mining"
+                    envelope={{
+                      formula: 'COUNT seluruh baris status_transition_log perusahaan ini (semua tabel/status digabung). Rentang hari = tanggal transisi terbaru − tanggal transisi tertua. Analisis tren di bawah baru ditampilkan kalau rentang ≥14 hari (konsisten dengan ambang KPI baseline lain di sistem ini).',
+                      inputs: [
+                        { label: 'Total transisi', value: String(data.total_transitions) },
+                        { label: 'Sejak', value: data.earliest_transition_at?.slice(0, 10) ?? '-' },
+                        { label: 'Terbaru', value: data.latest_transition_at?.slice(0, 10) ?? '-' }
+                      ]
+                    }}
+                  />
+                </span>
                 <span className="text-lg font-medium text-foreground">
                   Berdasarkan {data.total_transitions} transisi status
                   {data.earliest_transition_at ? ` sejak ${data.earliest_transition_at.slice(0, 10)}` : ''}
@@ -124,7 +138,18 @@ export default function ProcessMiningPage() {
             <Card>
               <CardHeader>
                 <CardDescription className="uppercase tracking-[0.2em]">Penumpukan</CardDescription>
-                <CardTitle className="text-lg">Durasi Rata-Rata per Status (diurutkan terlama)</CardTitle>
+                <CardTitle className="flex items-center gap-1 text-lg">
+                  Durasi Rata-Rata per Status (diurutkan terlama)
+                  <ProvenanceInfoButton
+                    label="Durasi Rata-Rata per Status"
+                    envelope={{
+                      formula:
+                        'Rata-rata selisih waktu antar transisi status berurutan di status_transition_log, per kombinasi tabel+status. Hanya ditampilkan sebagai angka kalau sampelnya ≥3 (ambang MIN_SAMPLES_FOR_DURATION) — di bawah itu ditandai "data belum cukup", BUKAN dirata-rata dari sampel terlalu sedikit yang bisa kebetulan.',
+                      inputs: [{ label: 'Ambang minimal sampel', value: '3 per status' }],
+                      sourceDocument: 'computeProcessMiningInsights.ts'
+                    }}
+                  />
+                </CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col gap-2">
                 {data.status_durations.length === 0 ? (
@@ -151,7 +176,17 @@ export default function ProcessMiningPage() {
             <Card>
               <CardHeader>
                 <CardDescription className="uppercase tracking-[0.2em]">Transisi</CardDescription>
-                <CardTitle className="text-lg">Transisi Paling Sering</CardTitle>
+                <CardTitle className="flex items-center gap-1 text-lg">
+                  Transisi Paling Sering
+                  <ProvenanceInfoButton
+                    label="Transisi Paling Sering"
+                    envelope={{
+                      formula: 'Jumlah baris status_transition_log dikelompokkan per tabel+status asal+status tujuan, diurutkan dari yang paling sering, ditampilkan 10 teratas.',
+                      inputs: [{ label: 'Ditampilkan', value: '10 kombinasi tersering' }],
+                      sourceDocument: 'computeProcessMiningInsights.ts'
+                    }}
+                  />
+                </CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col gap-1">
                 {data.transition_counts.slice(0, 10).map((t, idx) => (
@@ -168,7 +203,17 @@ export default function ProcessMiningPage() {
             <Card>
               <CardHeader>
                 <CardDescription className="uppercase tracking-[0.2em]">Perhatian</CardDescription>
-                <CardTitle className="text-lg">Transisi Mundur / Dibatalkan</CardTitle>
+                <CardTitle className="flex items-center gap-1 text-lg">
+                  Transisi Mundur / Dibatalkan
+                  <ProvenanceInfoButton
+                    label="Transisi Mundur / Dibatalkan"
+                    envelope={{
+                      formula: 'Dari daftar "Transisi Paling Sering", disaring hanya yang status TUJUANnya salah satu dari: cancelled, rejected, batal, draft — daftar tetap di kode (bukan dari data), supaya mudah diaudit.',
+                      inputs: [{ label: 'Status tujuan yang dihitung', value: 'cancelled, rejected, batal, draft' }],
+                      sourceDocument: 'computeProcessMiningInsights.ts'
+                    }}
+                  />
+                </CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col gap-1">
                 {data.backward_or_cancelled_transitions.length === 0 ? (

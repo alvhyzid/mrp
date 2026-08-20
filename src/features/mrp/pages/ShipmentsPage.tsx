@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { canManageShipments } from '@/lib/roles';
+import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 import { ConfirmAndSignModal } from '@/features/signatures';
 import SuratJalanPreview from '../components/SuratJalanPreview';
 
@@ -421,7 +422,18 @@ export default function ShipmentsPage() {
       { id: 'plant', header: 'Lokasi', cell: ({ row }) => row.original.production_plant_name ?? '-' },
       {
         id: 'remaining',
-        header: 'Sisa Qty Belum Terkirim',
+        header: () => (
+          <span className="flex items-center gap-1">
+            Sisa Qty Belum Terkirim
+            <ProvenanceInfoButton
+              label="Sisa Qty Belum Terkirim"
+              envelope={{
+                formula: 'qty_ordered (baris Sales Order) − qty_shipped (total sudah dikirim lewat surat jalan berstatus terkirim/diterima). Dihitung server-side per baris SO, bukan diperkirakan.',
+                inputs: [{ label: 'Sumber', value: 'listSalesOrders / listShipments' }]
+              }}
+            />
+          </span>
+        ),
         cell: ({ row }) => (
           <div className="flex flex-col gap-0.5 text-xs">
             {row.original.lines

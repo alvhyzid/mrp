@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 
 type RequirementResult = {
   code: string;
@@ -131,11 +132,32 @@ export default function AiReadinessPage() {
             <Card>
               <CardContent className="flex flex-wrap items-center gap-6 pt-6">
                 <div>
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">Kesiapan Keseluruhan</span>
+                  <span className="flex items-center gap-1 text-xs uppercase tracking-wide text-muted-foreground">
+                    Kesiapan Keseluruhan
+                    <ProvenanceInfoButton
+                      label="Kesiapan Keseluruhan"
+                      envelope={{
+                        formula: 'Rata-rata sederhana dari readiness_percent semua kemampuan AI (bukan tertimbang) — tiap kemampuan bobotnya sama di angka ini, walau prasyarat DI DALAM tiap kemampuan sendiri tertimbang.',
+                        inputs: [{ label: 'Jumlah kemampuan dirata-rata', value: String(data.total_count) }]
+                      }}
+                    />
+                  </span>
                   <p className="text-2xl font-semibold text-foreground">{data.overall_readiness_percent.toFixed(1)}%</p>
                 </div>
                 <div>
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">Kemampuan Terbuka</span>
+                  <span className="flex items-center gap-1 text-xs uppercase tracking-wide text-muted-foreground">
+                    Kemampuan Terbuka
+                    <ProvenanceInfoButton
+                      label="Kemampuan Terbuka"
+                      envelope={{
+                        formula: 'Jumlah kemampuan yang SEMUA prasyarat is_blocking=true-nya terpenuhi (gerbang keras, bukan skor) dibagi total kemampuan. Kemampuan tanpa prasyarat blocking selalu terbuka.',
+                        inputs: [
+                          { label: 'Terbuka', value: String(data.unlocked_count) },
+                          { label: 'Total', value: String(data.total_count) }
+                        ]
+                      }}
+                    />
+                  </span>
                   <p className="text-2xl font-semibold text-foreground">
                     {data.unlocked_count} / {data.total_count}
                   </p>
@@ -188,7 +210,16 @@ export default function AiReadinessPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge variant={c.is_unlocked ? 'success' : 'secondary'}>{c.is_unlocked ? 'Terbuka' : 'Terkunci'}</Badge>
-                        <span className="text-sm font-medium text-foreground">{c.readiness_percent.toFixed(1)}%</span>
+                        <span className="flex items-center gap-1 text-sm font-medium text-foreground">
+                          {c.readiness_percent.toFixed(1)}%
+                          <ProvenanceInfoButton
+                            label={`Kesiapan — ${c.name}`}
+                            envelope={{
+                              formula: 'Rata-rata TERTIMBANG persen tiap prasyarat kemampuan ini (Σ persen×bobot ÷ Σ bobot). Terbuka HANYA kalau semua prasyarat is_blocking=true terpenuhi — skor tinggi TIDAK otomatis membuka kalau ada 1 prasyarat blocking yang belum tercapai.',
+                              inputs: c.requirements.map((r) => ({ label: r.label, value: `${r.percent.toFixed(1)}% (bobot dari admin platform)` }))
+                            }}
+                          />
+                        </span>
                       </div>
                     </div>
                     <p className="text-sm text-muted-foreground">{c.description}</p>
@@ -200,7 +231,21 @@ export default function AiReadinessPage() {
                         return (
                           <div key={r.code} className="flex flex-col gap-0.5 rounded-md border p-2 text-sm">
                             <div className="flex items-center justify-between">
-                              <span>{r.label}</span>
+                              <span className="flex items-center gap-1">
+                                {r.label}
+                                <ProvenanceInfoButton
+                                  label={r.label}
+                                  envelope={{
+                                    formula: `Persen = MIN(100, aktual ÷ ambang × 100) untuk metrik "${r.metric_key}" (komparator ${r.comparator === 'GTE' ? 'aktual harus ≥ ambang' : 'aktual harus ≤ ambang'}). Nilai aktual dihitung LIVE dari data nyata, bukan cache statis.`,
+                                    inputs: [
+                                      { label: 'Aktual', value: formatMetricValue(r.metric_key, r.actual) },
+                                      { label: 'Ambang', value: formatMetricValue(r.metric_key, r.threshold) },
+                                      { label: 'Persen', value: `${r.percent.toFixed(1)}%` }
+                                    ],
+                                    sourceDocument: 'recomputeAiReadiness.ts'
+                                  }}
+                                />
+                              </span>
                               <Badge variant={r.met ? 'success' : 'warning'}>
                                 {formatMetricValue(r.metric_key, r.actual)} / {formatMetricValue(r.metric_key, r.threshold)}
                               </Badge>

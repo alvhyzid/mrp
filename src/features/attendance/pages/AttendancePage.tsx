@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 
 type AttendanceRow = {
   employee_attendance_id: number;
@@ -244,12 +245,25 @@ export default function AttendancePage() {
                 <div key={row.employee_attendance_id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm">
                   <div>
                     <p className="font-medium text-foreground">{row.employee_name ?? `#${row.employee_id}`}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="flex items-center gap-1 text-xs text-muted-foreground">
                       {row.check_in_at ? new Date(row.check_in_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'} —{' '}
                       {row.check_out_at ? new Date(row.check_out_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}
                       {row.work_minutes != null ? ` · ${Math.round(row.work_minutes)} menit kerja` : ''}
                       {row.late_minutes ? ` · terlambat ${row.late_minutes} menit` : ''}
                       {row.overtime_minutes ? ` · lembur ${row.overtime_minutes} menit` : ''}
+                      <ProvenanceInfoButton
+                        label="Jam Kerja/Terlambat/Lembur"
+                        envelope={{
+                          formula:
+                            'Terlambat = jam masuk − jam mulai shift (Senin-Jumat/Sabtu dari Pengaturan Perusahaan) − toleransi keterlambatan. Jam kerja = (jam pulang − jam masuk) − menit istirahat (dari koreksi eksplisit kalau ada, kalau tidak dari jadwal istirahat standar). Lembur = jam kerja − standar jam shift. Dihitung ULANG dari event scan (IN/OUT), tidak pernah diedit manual.',
+                          inputs: [
+                            { label: 'Jam kerja', value: row.work_minutes != null ? `${Math.round(row.work_minutes)} menit` : '-' },
+                            { label: 'Terlambat', value: row.late_minutes ? `${row.late_minutes} menit` : '0 menit' },
+                            { label: 'Lembur', value: row.overtime_minutes ? `${row.overtime_minutes} menit` : '0 menit' }
+                          ],
+                          sourceDocument: 'recomputeAttendanceDay.ts'
+                        }}
+                      />
                     </p>
                   </div>
                   <Badge variant={statusBadgeVariant[row.status] ?? 'secondary'}>{statusLabels[row.status] ?? row.status}</Badge>

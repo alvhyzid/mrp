@@ -1,16 +1,21 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-// 5 KPI kategori A (docs/rencana-kerja-kpi.md §4 #1-5) -- semua sudah punya data,
-// tinggal kartu. target_value/benchmark_value SEMUA null (baseline dulu, target
-// kemudian, prinsip "baseline dulu" §4 dokumen) KECUALI KPI ke-6 di bawah.
-// RIWAYAT: dokumen §3 "penyerahan-opus-fitur-kpi.md" menyebut GPM/margin 35% =
-// target resmi perusahaan -- TAPI 35% adalah PERSENTASE (gross profit margin),
-// sedangkan KPI #1 ("Margin kontribusi per order") berdenominasi RUPIAH ABSOLUT.
-// Sesi 25 Agu 2026 (koreksi pemilik produk): TIDAK dipaksakan ke KPI #1, melainkan
-// ditambahkan KPI ke-6 BARU "Margin Kontribusi %" (persentase, data SAMA dgn #1,
-// cuma satuan beda) -- target 35% dipasang DI SANA, dgn catatan eksplisit GPM riil
-// (setelah overhead pabrik) vs Margin Kontribusi (belum, aturan K2) -- lihat kamus
-// metric.margin_kontribusi_persen utk kutipan lengkap catatannya.
+// 6 KPI kategori A (docs/rencana-kerja-kpi.md §4 #1-5 + Margin Kontribusi % 25 Agu
+// 2026). target_value/benchmark_value SEMUA null (baseline dulu, target kemudian,
+// prinsip "baseline dulu" §4 dokumen) -- TANPA KECUALI.
+//
+// RIWAYAT (target 35% SUDAH DICABUT 26 Agu 2026, dicatat supaya tidak dipasang
+// ulang tanpa sadar): dokumen §3 "penyerahan-opus-fitur-kpi.md" awalnya menyebut
+// GPM/margin 35% = target resmi perusahaan. 25 Agu 2026 sempat dipasang ke KPI
+// "Margin Kontribusi %" (bukan KPI #1 yang berdenominasi Rupiah -- unit mismatch).
+// 26 Agu 2026, keputusan pemilik produk: 35% itu angka dari KONTEKS SIMULASI PO
+// lama (Gummy Zala/Drinkme), BUKAN kebijakan yang berlaku untuk studi kasus baru
+// (MLVT) -- DICABUT SEPENUHNYA, bukan cuma diganti angka. Target margin sekarang
+// diisi PER PRODUK/ORDER lewat updateKpiTarget.ts (baseline dulu, target
+// kemudian -- SAMA seperti 5 KPI lain, tidak ada lagi KPI dengan target
+// hardcode di seed). Kalau finance menetapkan kebijakan GPM baru utk MLVT
+// kelak, itu masuk lewat alur updateKpiTarget yang SUDAH ADA (tercatat
+// kpi_registry_history), bukan dipasang lagi di seed ini.
 const KPI_DEFINITIONS = [
   {
     metric_key: 'metric.margin_kontribusi',
@@ -34,15 +39,10 @@ const KPI_DEFINITIONS = [
     attribution_level: 'PERUSAHAAN' as const,
     visibility: ['ATASAN', 'DEPARTEMEN'],
     pemilik_role: 'finance_manager',
-    kontributor_roles: ['ppic_manager'],
-    // Target 35% = kebijakan GPM tim finance (permintaan pemilik produk 25 Agu 2026).
-    // target_set_by SENGAJA null -- ini keputusan kebijakan dari dokumen sumber, bukan
-    // hasil klik tombol "set target" oleh satu user tertentu (beda dari perubahan lewat
-    // updateKpiTarget.ts yang WAJIB terisi & tercatat kpi_registry_history).
-    target_value: 35,
-    benchmark_label: 'arah, bukan kontrak',
-    benchmark_source:
-      'Kebijakan GPM tim finance, Agu 2026. PERINGATAN: GPM sesungguhnya dihitung SETELAH overhead pabrik, Margin Kontribusi BELUM (aturan K2) -- angka ini SELALU LEBIH TINGGI dari GPM riil. Kalau sudah di bawah 35%, kondisi riil lebih buruk lagi.'
+    kontributor_roles: ['ppic_manager']
+    // Target/benchmark SENGAJA tidak diisi -- lihat riwayat GPM 35% di komentar
+    // atas file ini (dicabut 26 Agu 2026). Baseline dulu, target kemudian, sama
+    // seperti 5 KPI lain.
   },
   {
     metric_key: 'metric.biaya_produksi_per_unit',

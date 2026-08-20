@@ -191,13 +191,15 @@ describe('Modul KPI (KPI-1) — registry, snapshot, kartu, KPI Saya', () => {
     const { data: registryRows } = await adminClient.from('kpi_registry').select('metric_key, target_value, kind').eq('company_id', companyId);
     expect(registryRows?.length).toBe(6);
     expect(registryRows?.every((r) => r.kind === 'HASIL')).toBe(true);
-    // Sanity: target GPM 35% TIDAK dipaksakan ke KPI Rupiah (unit mismatch) --
-    // ditaruh di KPI "%" yang baru sebagai keputusan eksplisit pemilik produk.
+    // Target GPM 35% DICABUT 26 Agu 2026 (keputusan pemilik produk: angka itu
+    // khusus konteks simulasi PO lama, bukan kebijakan berlaku umum) -- SEMUA
+    // 6 KPI sekarang target_value null tanpa kecuali, baseline dulu target
+    // kemudian, sama seperti KPI lain sejak awal.
     const marginRupiah = registryRows?.find((r) => r.metric_key === 'metric.margin_kontribusi');
     const marginPersen = registryRows?.find((r) => r.metric_key === 'metric.margin_kontribusi_persen');
     expect(marginRupiah?.target_value).toBeNull();
-    expect(Number(marginPersen?.target_value)).toBe(35);
-    expect(registryRows?.filter((r) => r.metric_key !== 'metric.margin_kontribusi_persen').every((r) => r.target_value === null)).toBe(true);
+    expect(marginPersen?.target_value).toBeNull();
+    expect(registryRows?.every((r) => r.target_value === null)).toBe(true);
   });
 
   it('kartu KPI: company_admin melihat 6 kartu dgn provenance + definisi + tanggung jawab terisi', async () => {
@@ -217,7 +219,7 @@ describe('Modul KPI (KPI-1) — registry, snapshot, kartu, KPI Saya', () => {
     expect(yieldCard.attribution_level).toBe('LINI'); // instruksi eksplisit: JANGAN individu
 
     const marginPersen = cards.find((c) => c.metric_key === 'metric.margin_kontribusi_persen');
-    expect(Number(marginPersen.target_value)).toBe(35);
+    expect(marginPersen.target_value).toBeNull(); // target 35% dicabut 26 Agu 2026
     expect(String(marginPersen.definition.businessAnswer ?? marginPersen.definition.draft)).toContain('overhead');
   });
 
@@ -343,7 +345,7 @@ describe('Modul KPI (KPI-1) — registry, snapshot, kartu, KPI Saya', () => {
     expect(resDenied.status).toBe(403);
   });
 
-  it('VERIFIKASI Margin Kontribusi %: Gummy (harga 108rb, biaya 34.344) = 68,2% (di atas target 35%); Drinkme (harga 33rb, biaya 26.829) = 18,7% (di bawah target 35%)', async () => {
+  it('VERIFIKASI Margin Kontribusi %: Gummy (harga 108rb, biaya 34.307,23) = 68,2%; Drinkme (harga 33rb, biaya 26.817,29) = 18,7% (target dicabut 26 Agu 2026, tidak diverifikasi lagi di sini)', async () => {
     const today = new Date().toISOString().slice(0, 10);
     const futureDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
@@ -383,8 +385,9 @@ describe('Modul KPI (KPI-1) — registry, snapshot, kartu, KPI Saya', () => {
     expect(gummyInput.value).toBe('68.2%');
     expect(drinkmeInput.value).toBe('18.7%');
 
-    // Verifikasi literal pemilik produk: Drinkme menyala di bawah target 35%, Gummy tidak.
-    expect(parseFloat(drinkmeInput.value)).toBeLessThan(Number(marginPersen.target_value));
-    expect(parseFloat(gummyInput.value)).toBeGreaterThan(Number(marginPersen.target_value));
+    // Target 35% DICABUT 26 Agu 2026 -- KPI ini sekarang murni baseline tanpa
+    // target, sama seperti 5 KPI lain (tidak ada lagi perbandingan "di atas/
+    // bawah target" di sini).
+    expect(marginPersen.target_value).toBeNull();
   });
 });

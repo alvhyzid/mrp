@@ -625,22 +625,28 @@ per unit (`metric.biaya_produksi_per_unit`, rata-rata sederhana lintas produk ak
 rata-rata `total_yield_pct` lintas batch selesai minggu berjalan — rumus PERSIS
 `getBatchYieldSummary.ts`), nilai persediaan (`metric.nilai_persediaan`, Σ
 `quantity_on_hand`×`unit_cost` lot available, BARU — sebelumnya tidak ada fungsi yang
-menghitung ini). **Semua `target_value` null** kecuali KPI ke-6 di bawah.
+menghitung ini). **Semua `target_value` null, TANPA KECUALI** (lihat riwayat KPI ke-6
+di bawah — sempat ada 1 pengecualian, sudah dicabut).
 
 **KPI ke-6, ditambahkan 25 Agu 2026 (koreksi pemilik produk)**: Margin Kontribusi %
 (`metric.margin_kontribusi_persen`) — data SAMA dgn margin kontribusi Rupiah (RPC
 `get_monthly_operating_profit`, periode sama), dinyatakan persentase = total margin ÷ total
-nilai jual × 100. `target_value=35` (GPM kebijakan finance) DITERAPKAN DI SINI, bukan di KPI
-Rupiah (unit mismatch, lihat catatan sebelumnya). **Catatan wajib tampil di kartu**: GPM
-sesungguhnya dihitung SETELAH overhead pabrik, Margin Kontribusi BELUM (aturan K2) — angka
-ini SELALU LEBIH TINGGI dari GPM riil, dipasang sebagai peringatan dini konservatif.
-Diverifikasi via fixture test (`tests/kpi_module.test.ts`): harga+biaya nyata Gummy Zala
-(Rp108.000, biaya Rp34.307,23) → 68,2%; Drinkme (Rp33.000, biaya Rp26.817,29) → 18,7% —
-cocok dgn angka acuan pemilik produk (angka biaya DIPERBARUI 26 Agu 2026 setelah formula
-resmi Gummy Zala V2/Drinkme V1 diterapkan ke BOM — lihat Kelompok 12). **PERTANYAAN
-TERBUKA ke tim finance** (dicatat HANDOFF): apakah GPM 35% sungguh dihitung setelah
-overhead pabrik? Kalau ya, KPI GPM yang benar-benar sepadan (bukan proksi konservatif ini)
-perlu dibangun terpisah nanti.
+nilai jual × 100. Diverifikasi via fixture test (`tests/kpi_module.test.ts`): harga+biaya
+Gummy Zala (Rp108.000, biaya Rp34.307,23) → 68,2%; Drinkme (Rp33.000, biaya Rp26.817,29) →
+18,7% (angka biaya DIPERBARUI 26 Agu 2026 setelah formula resmi Gummy Zala V2/Drinkme V1
+diterapkan ke BOM — item-item ini sendiri sudah dihapus total dari sistem 26 Agu 2026 saat
+penggantian studi kasus ke MLVT, fixture test tetap valid karena pakai item uji terisolasi).
+
+> **RIWAYAT target 35% (dipasang 25 Agu, DICABUT 26 Agu 2026)**: sempat `target_value=35`
+> (GPM kebijakan finance) diterapkan di KPI ini (bukan di KPI Rupiah, unit mismatch), dengan
+> catatan GPM sesungguhnya dihitung SETELAH overhead pabrik sedangkan Margin Kontribusi
+> BELUM (aturan K2) — angka KPI ini SELALU LEBIH TINGGI dari GPM riil. **Keputusan pemilik
+> produk 26 Agu 2026: 35% itu angka dari KONTEKS SIMULASI PO lama (Gummy Zala/Drinkme),
+> BUKAN kebijakan yang berlaku untuk studi kasus baru — DICABUT SEPENUHNYA** (migrasi
+> `20260826140000_remove_gpm_35_target.sql`), target kembali null sama seperti 5 KPI lain.
+> Target sekarang diisi PER PRODUK/ORDER lewat `updateKpiTarget.ts` yang sudah ada, bukan
+> dipasang ulang di seed. Pertanyaan lama ke finance ("apakah GPM 35% dihitung setelah
+> overhead pabrik?") jadi TIDAK RELEVAN lagi — dicatat di sini supaya tidak diulang.
 
 ---
 

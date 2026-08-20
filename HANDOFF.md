@@ -4,6 +4,96 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Kerja otonom A-F (±2 jam) — 26 Agu 2026 — STATUS: A & B SELESAI, C-F menyusul di bawah
+
+Instruksi eksplisit: kerjakan berurutan tanpa koordinasi, berhenti di titik aman,
+catat posisi persis, jangan improvisasi fakta bisnis (tapi keputusan TEKNIS boleh).
+
+### A. Target GPM 35% dicabut — SELESAI
+Migrasi `20260826140000_remove_gpm_35_target.sql` — `kpi_registry.target_value`
+utk `metric.margin_kontribusi_persen` company_id=1 dikembalikan ke `null`
+(sebelumnya 35, diset 25 Agu 2026). Seed (`seedKpiRegistry.ts`) diperbarui supaya
+seed BARU tidak lagi memasang target ini (semua 6 KPI kategori A sekarang
+`target_value=null` tanpa kecuali, "baseline dulu target kemudian"). Kamus
+(`seedKamusMetricTerms.ts`) & dokumen skema diperbarui menandai riwayat (bukan
+dihapus dari sejarah, supaya tidak terulang tanpa sadar). Test diperbarui (TIDAK
+ADA analisis "biaya bahan maksimum GPM 35%" dibangun — instruksi lama itu memang
+dibatalkan, dicek tidak ada sisa kode untuk itu).
+
+**TEMUAN ANOMALI (dicatat, TIDAK diselidiki tuntas karena di luar scope Part A,
+tapi DIPERBAIKI)**: sebelum migrasi dijalankan, baris `kpi_registry`/`kamus_terms`
+untuk `metric.margin_kontribusi_persen` company_id=1 ternyata SUDAH HILANG
+sendirian (bukan oleh migrasi ini) -- 5 dari 6 KPI tersisa, kamus METRIC 10 dari
+11 term tersisa. Penyebab tidak dilacak (bukan dari migrasi Part A manapun, bukan
+dari test suite yang berjalan di sesi ini -- kemungkinan sisa dari sesi
+sebelumnya). Diperbaiki lewat re-insert manual persis sesuai kode seed yang
+sudah dikoreksi (target null). **Kalau anomali serupa muncul lagi di modul lain,
+layak diselidiki lebih dalam** -- dicatat di sini supaya tidak lewat begitu saja.
+
+`npx tsc --noEmit` bersih, `npm test` 192/192 lulus (sebelum Part B dijalankan).
+
+### B. Reset total studi kasus — SELESAI, bukti persis sesuai permintaan
+Migrasi final: `supabase/migrations/20260826210000_total_reset_case_study.sql`
+(menggantikan 2 percobaan sebelumnya yang masing-masing punya bug ditemukan lewat
+uji staging -- riwayat lengkap ada di komentar kepala file migrasi itu sendiri).
+
+**KONFLIK TEKNIS & RESOLUSI (keputusan Claude Code, BUKAN fakta bisnis)**:
+`routings.item_id` adalah FK **NOT NULL** ke `items` -- tidak mungkin "hapus
+SEMUA item tanpa sisa" DAN "routing serbuk 10 tahap tetap ada sebagai baris DB
+yang sama" sekaligus. Pertanyaan eksplisit tentang ini ditolak (tool rejected)
+sebelum instruksi otonom ini diberikan, jadi diputuskan sendiri: routing LAMA
+(dimiliki `PMSC001ITM`/`PMBX001ITM`) IKUT terhapus (konsekuensi wajar "tanpa
+sisa", `routings=0` sesudah migrasi) -- TAPI isinya (nama tahap, durasi, standar
+K8 3 batch/hari, kapasitas mesin) sudah direkam PERSIS SEBELUM dihapus di
+`docs/routing-serbuk-10-tahap-referensi.md`. Bagian D akan membangun ulang
+routing yang SAMA PERSIS untuk item MLVT baru -- "reuse" tercapai dalam ISI,
+bukan baris DB yang sama. **Kalau resolusi ini keliru menurut pemilik produk,
+beri tahu di sesi berikutnya -- baris routing lama TIDAK bisa dipulihkan tanpa
+restore dari backup pg_dump (sudah diverifikasi berisi data, dikonfirmasi
+pemilik produk sendiri).**
+
+**Diuji di STAGING 2x (project `mrp-rebuild-test-2A`) sebelum dev, PERSIS sesuai
+instruksi** -- proses ini menemukan & memperbaiki 2 bug nyata yang TIDAK
+kelihatan dari audit skema saja:
+1. `customer_po_approvals` tidak punya kolom `company_id` sama sekali (hanya
+   `customer_purchase_order_id`) -- baris jadi yatim kalau tidak dihapus lewat
+   join eksplisit.
+2. `delivery_confirmations` sama persis (hanya `shipment_id`, tanpa `company_id`).
+
+Fixture uji staging representatif (BUKAN kosong) dibangun manual mencakup SETIAP
+kategori tabel HAPUS & TETAP (items, lots, boms, PO/SO/WO, produksi, pengiriman,
+supplier + karyawan/plant/kamus/KPI registry/document_types) -- run pertama
+membuktikan logika benar, run kedua (migrasi identik, timestamp baru) membuktikan
+0 perubahan tambahan/tidak ada error = idempoten. Sisa fixture uji & debris
+debugging (11 percobaan company "PT ITM" gagal sebelum fixture lengkap berhasil)
+SUDAH dibersihkan tuntas dari staging sebelum sesi ini lanjut -- staging kembali
+ke kondisi sebelum diuji (hanya "Staging Verify Co" tersisa, tidak berubah).
+
+**BUKTI di dev (persis format yang diminta)**:
+
+| | Sebelum | Sesudah |
+|---|---|---|
+| items | 70 | **0** |
+| lots | 37 | **0** |
+| nilai persediaan | Rp270.766.422,02 | **Rp0** |
+| boms | 11 | **0** |
+| sales_orders | 2 | **0** |
+| customer_purchase_orders | 2 | **0** |
+| work_orders | 0 | **0** |
+| suppliers | 2 | **0** |
+| customers | 1 | **0** |
+| routings | 9 | **0** (lihat resolusi konflik di atas) |
+| production_standards | 17 | **0** |
+| **employees** | 63 | **63 (TIDAK BERUBAH)** |
+| production_plants | 4 | **4 (TIDAK BERUBAH — bukan 3 seperti perkiraan pemilik produk; ada "KL Bizhub" selain Karanglo/Ruko Dieng/Pabrik Utama)** |
+| work_centers | 3 | **3 (TIDAK BERUBAH)** |
+
+`npx tsc --noEmit` bersih. `npm test` PENUH dijalankan ULANG setelah dev
+benar-benar kosong (bukan cuma sebelum) -- hasil dicatat di bagian C di bawah
+begitu selesai (sedang berjalan saat catatan ini ditulis).
+
+---
+
 ## Penggantian studi kasus produk uji: Gummy Zala/Drinkme → MLVT — Tahap 2 SIAP, BELUM DIJALANKAN — 26 Agu 2026
 
 Lampu hijau pemilik produk untuk Tahap 2 pembersihan diterima, TAPI eksekusi masih

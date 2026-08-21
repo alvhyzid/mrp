@@ -63,6 +63,8 @@ export * from './getMonthlyOperatingProfit';
 export * from './getPlanningFeasibility';
 export * from './getMarginWatch';
 export * from './updateMarginFloorThreshold';
+export * from './lockMarginBaseline';
+export * from './lockFeasibilityBaseline';
 export * from './learnFromBatch';
 export * from './startProductionBatch';
 export * from './completeProductionBatch';

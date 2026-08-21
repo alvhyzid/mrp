@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getMarginWatch } from '../src/features/mrp/server/getMarginWatch';
 import { updateMarginFloorThreshold } from '../src/features/mrp/server/updateMarginFloorThreshold';
+import { lockMarginBaseline } from '../src/features/mrp/server/lockMarginBaseline';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Margin Watch Lapis 1 (baseline margin per order, dikunci sekali) + Lapis 2
@@ -37,6 +38,8 @@ describe('Margin Watch — baseline (Lapis 1) + selisih 5 kategori (Lapis 2)', (
   let cpoId: number;
   let soId: number;
   let soLineId: number;
+  let completeCostItemId: number; // Sesi 0C: item KHUSUS biaya lengkap, utk uji kunci/ambang (soLineId sengaja belum lengkap)
+  let completeCostSoLineId: number;
   let financeManagerAuthUid: string;
   let financeManagerToken: string;
 
@@ -166,6 +169,36 @@ describe('Margin Watch — baseline (Lapis 1) + selisih 5 kategori (Lapis 2)', (
     if (poError) throw new Error(poError.message);
     const { error: poLineError } = await adminClient.from('purchase_order_lines').insert([{ purchase_order_id: po.purchase_order_id, item_id: boxItemId, qty_ordered: 10000, qty_received: 0, unit_price: 2925 }]);
     if (poLineError) throw new Error(poLineError.message);
+
+    // Sesi 0C (21 Agu 2026): soLineId di atas SENGAJA biaya-nya tidak lengkap
+    // (menguji jalur "belum bisa dihitung") -- lockMarginBaseline MENOLAK
+    // mengunci baseline selama cost_data_complete=false (gerbang 0C.4), jadi
+    // baris itu tidak bisa dipakai lagi utk uji kunci/ambang margin. Item +
+    // SO line TERPISAH ini biayanya LENGKAP, khusus utk itu.
+    const { data: completeItem, error: completeItemError } = await adminClient
+      .from('items')
+      .insert([{ company_id: companyId, item_code: 'MARGINWATCH-COMPLETE', name: 'Produk Uji Biaya Lengkap', type: 'finished_good', base_uom: 'pcs', purchase_uom: 'pcs', uom_conversion_factor: 1 }])
+      .select('item_id')
+      .single();
+    if (completeItemError) throw new Error(completeItemError.message);
+    completeCostItemId = completeItem.item_id;
+
+    const { data: completeBom, error: completeBomError } = await adminClient
+      .from('boms')
+      .insert([{ company_id: companyId, parent_item_id: completeCostItemId, version: 1, standard_yield_qty: 1, standard_yield_uom: 'pcs', status: 'active' }])
+      .select('bom_id')
+      .single();
+    if (completeBomError) throw new Error(completeBomError.message);
+    const { error: completeBomLinesError } = await adminClient.from('bom_lines').insert([{ bom_id: completeBom.bom_id, component_item_id: boxItemId, qty_per_unit_output: 1, uom: 'pcs' }]);
+    if (completeBomLinesError) throw new Error(completeBomLinesError.message);
+
+    const { data: completeSoLine, error: completeSoLineError } = await adminClient
+      .from('sales_order_lines')
+      .insert([{ sales_order_id: soId, item_id: completeCostItemId, qty_ordered: 10000, unit_price: 5000 }])
+      .select('sales_order_line_id')
+      .single();
+    if (completeSoLineError) throw new Error(completeSoLineError.message);
+    completeCostSoLineId = completeSoLine.sales_order_line_id;
   });
 
   afterAll(async () => {
@@ -197,7 +230,7 @@ describe('Margin Watch — baseline (Lapis 1) + selisih 5 kategori (Lapis 2)', (
     await cleanupCompanyCascade(adminClient, companyId, cleanupSteps);
   });
 
-  it('Lapis 1 — baseline dikunci, ditandai TIDAK LENGKAP karena 1 bahan belum punya harga master (bukan diam-diam dianggap 0)', async () => {
+  it('Lapis 1 — dihitung LIVE (Sesi 0C: membuka panel TIDAK mengunci apa pun lagi), ditandai TIDAK LENGKAP karena 1 bahan belum punya harga master (bukan diam-diam dianggap 0)', async () => {
     const req = makeGetRequest(`http://localhost/api/sales-order-lines/${soLineId}/margin-watch`, financeManagerToken);
     const result = await getMarginWatch(req, soLineId);
     expect(result.status).toBe(200);
@@ -263,15 +296,35 @@ describe('Margin Watch — baseline (Lapis 1) + selisih 5 kategori (Lapis 2)', (
     expect(body.projection_complete).toBe(false);
   });
 
+  it('Sesi 0C: baseline BELUM terkunci saat pertama dilihat (locked:false, angka tetap dihitung LIVE) -- lalu dikunci lewat aksi eksplisit terpisah', async () => {
+    const req = makeGetRequest(`http://localhost/api/sales-order-lines/${completeCostSoLineId}/margin-watch`, financeManagerToken);
+    const result = await getMarginWatch(req, completeCostSoLineId);
+    const bodyBefore = result.body as any;
+    expect(bodyBefore.locked).toBe(false);
+    expect(bodyBefore.standard_packaging_cost_per_unit).toBeCloseTo(1500, 2);
+
+    const { count: rowsBefore } = await adminClient.from('sales_order_line_margin_snapshots').select('*', { count: 'exact', head: true }).eq('sales_order_line_id', completeCostSoLineId);
+    expect(rowsBefore).toBe(0);
+
+    const lockReq = makePatchRequest('http://localhost/api/sales-order-lines/margin-baseline-lock', financeManagerToken, { sales_order_line_id: completeCostSoLineId });
+    const lockResult = await lockMarginBaseline(lockReq);
+    expect(lockResult.status).toBe(200);
+
+    const reqAfter = makeGetRequest(`http://localhost/api/sales-order-lines/${completeCostSoLineId}/margin-watch`, financeManagerToken);
+    const resultAfter = await getMarginWatch(reqAfter, completeCostSoLineId);
+    const bodyAfter = resultAfter.body as any;
+    expect(bodyAfter.locked).toBe(true);
+  });
+
   it('ambang margin: BOLEH diubah kapan saja (beda dari baseline yang terkunci) dan memicu peringatan department finance+management saat proyeksi di bawah ambang', async () => {
     // proyeksi saat ini = standard_margin_total (5000-1500)*10000=35jt + variance harga (-14,25jt) = 20,75jt.
     // Set ambang di ATAS itu -> harus memicu alert.
-    const patchReq = makePatchRequest('http://localhost/api/sales-order-lines/margin-watch-threshold', financeManagerToken, { sales_order_line_id: soLineId, margin_floor_threshold: 25000000 });
+    const patchReq = makePatchRequest('http://localhost/api/sales-order-lines/margin-watch-threshold', financeManagerToken, { sales_order_line_id: completeCostSoLineId, margin_floor_threshold: 25000000 });
     const patchResult = await updateMarginFloorThreshold(patchReq);
     expect(patchResult.status).toBe(200);
 
-    const req = makeGetRequest(`http://localhost/api/sales-order-lines/${soLineId}/margin-watch`, financeManagerToken);
-    const result = await getMarginWatch(req, soLineId);
+    const req = makeGetRequest(`http://localhost/api/sales-order-lines/${completeCostSoLineId}/margin-watch`, financeManagerToken);
+    const result = await getMarginWatch(req, completeCostSoLineId);
     const body = result.body as any;
     expect(body.projected_margin_total).toBeLessThan(25000000);
 
@@ -281,14 +334,24 @@ describe('Margin Watch — baseline (Lapis 1) + selisih 5 kategori (Lapis 2)', (
   });
 
   it('(NEGATIF) menaikkan ambang di BAWAH proyeksi menyelesaikan (resolve) peringatan yang tadinya terbuka', async () => {
-    const patchReq = makePatchRequest('http://localhost/api/sales-order-lines/margin-watch-threshold', financeManagerToken, { sales_order_line_id: soLineId, margin_floor_threshold: 0 });
+    const patchReq = makePatchRequest('http://localhost/api/sales-order-lines/margin-watch-threshold', financeManagerToken, { sales_order_line_id: completeCostSoLineId, margin_floor_threshold: 0 });
     await updateMarginFloorThreshold(patchReq);
 
-    const req = makeGetRequest(`http://localhost/api/sales-order-lines/${soLineId}/margin-watch`, financeManagerToken);
-    await getMarginWatch(req, soLineId);
+    const req = makeGetRequest(`http://localhost/api/sales-order-lines/${completeCostSoLineId}/margin-watch`, financeManagerToken);
+    await getMarginWatch(req, completeCostSoLineId);
 
     const { data: alerts } = await adminClient.from('system_alerts').select('status').eq('company_id', companyId).eq('alert_type', 'margin_threshold_breach');
     expect((alerts ?? []).every((a) => a.status === 'resolved')).toBe(true);
+  });
+
+  it('(NEGATIF, Sesi 0C — gerbang 0C.4) coba KUNCI baseline saat cost_data_complete=false -> DITOLAK, pesan sebut persis apa yang kurang', async () => {
+    const lockReq = makePatchRequest('http://localhost/api/sales-order-lines/margin-baseline-lock', financeManagerToken, { sales_order_line_id: soLineId });
+    const lockResult = await lockMarginBaseline(lockReq);
+    expect(lockResult.status).toBe(400);
+    expect(String(lockResult.body.error)).toContain('MARGINWATCH-NOCOST');
+
+    const { count } = await adminClient.from('sales_order_line_margin_snapshots').select('*', { count: 'exact', head: true }).eq('sales_order_line_id', soLineId);
+    expect(count).toBe(0); // tetap tidak ada baris -- ditolak sebelum insert apa pun
   });
 
   it('(NEGATIF) role di luar akses finansial ditolak 403', async () => {
@@ -304,6 +367,12 @@ describe('Margin Watch — baseline (Lapis 1) + selisih 5 kategori (Lapis 2)', (
     const req = makeGetRequest(`http://localhost/api/sales-order-lines/${soLineId}/margin-watch`, token);
     const result = await getMarginWatch(req, soLineId);
     expect(result.status).toBe(403);
+
+    // (NEGATIF, Sesi 0C) role non-finansial mencoba memanggil AKSI KUNCI langsung
+    // ke server -> ditolak 403 (bukan sekadar tombol tersembunyi di UI).
+    const lockReq = makePatchRequest('http://localhost/api/sales-order-lines/margin-baseline-lock', token, { sales_order_line_id: completeCostSoLineId });
+    const lockResult = await lockMarginBaseline(lockReq);
+    expect(lockResult.status).toBe(403);
 
     await adminClient.from('users').delete().eq('auth_uid', uid);
     await adminClient.auth.admin.deleteUser(uid);

@@ -4,6 +4,56 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Sesi 0C — Pisahkan Membaca dari Mengunci Baseline + Gerbang Kelengkapan — 21 Agu 2026 — SELESAI
+
+**Jawaban 4 pertanyaan 0B yang tertunda (0C.1, dijawab tertulis SEBELUM kode ditulis):**
+
+**(a) Konsekuensi penghapusan baseline Rp7.198,50** — Margin Watch TIDAK kehilangan pembanding: baseline BARU (id=105) lahir OTOMATIS pada 2026-08-21T02:43:14Z, dipicu klik verifikasi Claude Code sendiri (bukti persis mekanisme "tulis-saat-dilihat" yang sedang diperbaiki sesi ini). Baris itu (dan feasibility id=282, mekanisme sama) sudah dibersihkan lewat migrasi 0C.6 di bawah setelah desain baru berjalan.
+
+**(b) Sapuan aksi "hanya melihat" lain** — "Seed 6 KPI Awal" DIPERIKSA ULANG: `seedKpiRegistry.ts` (dibaca penuh) pakai `upsert(..., ignoreDuplicates:true)` untuk `kpi_registry` DAN `kpi_responsibilities` — insert-hanya-jika-belum-ada, TIDAK ADA path delete sama sekali. Aman. Sapuan menyeluruh SEMUA `get*.ts` di `src/features/*/server/` (bukan cuma dugaan) untuk pola tulis: hanya 3 file punya `.insert(`/`.update(`/`.delete(` — `getMarginWatch.ts`, `getPlanningFeasibility.ts` (diperbaiki sesi ini), `getDocumentSignedUrl.ts` (insert `document_access_log`, log akses append-only yang MEMANG dirancang bertambah tiap akses — beda kelas, bukan baseline bisnis yang mengunci angka).
+
+**(c) Anomali `kpi_registry` lama, diperiksa ulang** — TETAP TIDAK ADA BUKTI, kali ini dengan pemeriksaan LEBIH KUAT: dicek apakah baris asli disembunyikan lewat `is_active=false` (soft-delete) alih-alih benar dihapus — hasilnya HANYA 1 baris fisik ada (id=297, hasil perbaikan manual sesi lalu, `is_active=true`), TIDAK ADA baris lain tersembunyi. Digrep ulang SEMUA 5 file yang menyentuh `kpi_registry` (`listKpiCards.ts`, `updateKpiTarget.ts`, `getMyKpi.ts`, `updateKpiVisibility.ts`, `seedKpiRegistry.ts`) — nol path delete, nol path set `is_active=false`. Kesimpulan tidak berubah dari Sesi 0/0B: penyebab tetap tidak terlacak, bukan aksi manual yang bisa dibuktikan.
+
+**(d) 9 test baru, nama file (dijawab utuh ketiga kalinya)** — `tests/production_plants.test.ts` (+3) dan `tests/mlvt_case_study_skeleton.test.ts` (+6, 4 dari kerangka MLVT + 2 dari koreksi faktor Sachet Roll). Lihat HANDOFF Sesi 0B untuk judul lengkap tiap test.
+
+### 0C.2 — Forensik baseline company_id=1 (sebelum dibersihkan)
+
+| Tabel | id | sales_order_line_id | created_at | Penilaian |
+|---|---|---|---|---|
+| margin_snapshots | 105 | 1212 | 2026-08-21T02:43:14Z | Klik verifikasi Claude Code (screenshot packaging_breakdown, SETELAH migrasi 20260827150000 membersihkan snapshot lama) |
+| feasibility_snapshots | 282 | 1212 | 2026-08-20T15:44:17Z | Klik verifikasi Claude Code (screenshot awal fitur Kelayakan Jadwal, laporan Sesi 0/0B) |
+
+Dasar penilaian: KEDUANYA `created_at` berkorelasi persis dengan jendela waktu sesi kerja verifikasi visual (bukan jam kerja kantor PT ITM), SO 043/6-ITM/2026 statusnya masih "confirmed" (belum pernah dikirim/ada keputusan bisnis nyata berdasarkan baseline ini), dan tidak ada baris lain di 4 tabel snapshot/cache yang disapu (`kpi_snapshots`, `ai_project_progress_snapshots` — keduanya 0 baris company_id=1).
+
+### 0C.3-0C.5 — Pisahkan baca dari kunci, gerbang kelengkapan, jalan keluar terkendali
+
+Migrasi `20260827160000_separate_baseline_lock_from_view.sql` (+ fixup idempotensi `20260827170000`, + backlog Kamus `20260827200000`). Diuji STAGING dulu (mrp-rebuild-test-2A) sebelum dev — dibuktikan lewat RLS langsung (bukan cuma baca kode): `ppic_staff` DITOLAK RLS menulis feasibility snapshot (sebelumnya LOLOS — bukti nyata perbaikan), `finance_manager` LOLOS, partial unique index terbukti benar (2 baris utk 1 SO line boleh kalau 1 diarsipkan, DITOLAK kalau keduanya aktif).
+
+- `getMarginWatch.ts`/`getPlanningFeasibility.ts`: MEMBACA sekarang **PASTI tidak menulis** — kalau belum ada baris aktif (`archived_at IS NULL`), dihitung LIVE + `locked:false`, tidak disimpan.
+- **Aksi baru**: `lockMarginBaseline.ts`/`lockFeasibilityBaseline.ts` (endpoint `POST /api/sales-order-lines/margin-baseline-lock` & `.../feasibility-baseline-lock`). Gerbang: role finansial (RLS insert/update DITEGAKKAN DI DATABASE, bukan cuma TypeScript — dibuktikan staging), data lengkap (margin: `cost_data_complete`, ditolak dgn pesan persis item kurang; feasibility: standar produksi harus ada), kunci ULANG HANYA `company_admin` + alasan wajib.
+- Skema: `unique(sales_order_line_id)` lama → unique index PARSIAL `WHERE archived_at IS NULL`. Kolom baru: `archived_at`, `archived_reason`, `locked_by`, `relock_reason` (kedua tabel) — masuk backlog Kamus (8 term, `scope='FIELD'`).
+- UI (`SalesOrdersPage.tsx`): badge "PERKIRAAN SEMENTARA — BELUM DIKUNCI" saat `locked:false`, tombol "Kunci sebagai Acuan Pembanding" (role finansial saja), tombol "Kunci Ulang" + input alasan (company_admin saja), teks waktu+siapa+alasan saat terkunci. Tooltip tombol lama (0B.8, sudah stale) diperbarui.
+
+### 0C.6 — Pembersihan lewat migrasi (bukan manual)
+
+Baris margin id=105 & feasibility id=282 (company_id=1) dihapus lewat blok DML di migrasi 20260827160000. **Idempotensi dibuktikan terpisah** (0C.6 spesifik, bukan seluruh file RLS): blok cleanup di-copy ke migrasi throwaway, dijalankan 2x berturut — kedua run 0 baris berubah, tidak error, dibuktikan lewat query count sebelum/sesudah (0 tetap 0). File throwaway dihapus + `migration repair --status reverted` setelahnya, tidak masuk riwayat final.
+
+**Bug ditemukan+diperbaiki lewat pengujian idempotensi sungguhan**: migrasi 20260827160000 sendiri (baris RLS-nya, BUKAN 0C.6) ternyata TIDAK idempoten kalau di-replay utuh — `drop policy ... sales_order_line_feasibility_snapshots_write` (nama lama) tapi `create policy ... _insert` (nama baru) tanpa guard utk nama barunya sendiri. Migrasi yang sudah diterapkan TIDAK diedit (aturan sama dgn tidak rename) — fixup ditambahkan sebagai migrasi baru (`20260827170000`).
+
+### Bukti skenario negatif (semua dijalankan & dibuktikan)
+
+(a) `tests/baseline_lock_separation.test.ts` — finance_manager buka Margin Watch + ppic_staff buka Kelayakan Jadwal 5x berturut-turut → 0 baris bertambah di kedua tabel (dihitung query count, bukan diasumsikan). (b) `tests/margin_watch.test.ts` — kunci baseline saat `cost_data_complete=false` → ditolak, pesan sebut persis `MARGINWATCH-NOCOST`. (c) role non-finansial (`ppic_staff`) panggil endpoint kunci langsung (bukan lewat UI) → 403 di KEDUA endpoint (margin & feasibility). (d) `company_admin` kunci ulang TANPA alasan → ditolak 400; DENGAN alasan → berhasil, baris lama tetap ada dgn `archived_at`/`archived_reason` terisi (dibuktikan query, bukan dihapus — 2 baris total utk 1 SO line, 1 aktif 1 arsip). (e) migrasi 0C.6 dijalankan 2x → 0 baris berubah kedua kalinya.
+
+### 0C.7 — Aturan permanen
+
+Ditambahkan ke `CLAUDE.md` (bagian baru "Aturan Verifikasi Manual"): verifikasi visual APA PUN di browser HANYA memakai tenant uji, TIDAK PERNAH akun PT ITM, sekalipun terlihat "hanya melihat" — berlaku untuk SEMUA fitur ke depan, bukan cuma Margin Watch/Kelayakan Jadwal.
+
+**Test lama yang ikut diperbaiki** (asumsi lama pecah oleh perubahan ini, ditemukan lewat full test suite, bukan ditebak): `tests/margin_watch.test.ts` (item+SO line baru khusus biaya-lengkap utk uji kunci/ambang, karena fixture lama SENGAJA biaya tidak lengkap → sekarang tidak bisa dikunci sama sekali, sesuai gerbang 0C.4 yang justru terbukti bekerja) dan `tests/employee_crud_and_k8_standards.test.ts` (tes drift standar butuh langkah kunci eksplisit dulu sebelum `standard_snapshot_taken_at` terisi).
+
+tsc bersih, build sukses, full test suite (34 file) hijau setelah 2 perbaikan di atas.
+
+---
+
 ## Sesi 0B — Tulis-Saat-Melihat: DESAIN, bukan bug — 21 Agu 2026 — SELESAI, MENUNGGU LAMPU HIJAU untuk Sesi 5+
 
 **PENTING — status antrean**: Sesi 5/6/1/2/3/4 BELUM dikerjakan. STOP CONDITION

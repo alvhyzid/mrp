@@ -60,39 +60,64 @@ export async function getMarginWatch(request: NextRequest, salesOrderLineId: num
     if (itemError) return { status: 500, body: { error: itemError.message } };
     if (!item) return { status: 404, body: { error: 'Item tidak ditemukan.' } };
 
-    // ===== LAPIS 1 — baseline margin, dikunci sekali (pola sama dgn feasibility snapshot) =====
+    // ===== LAPIS 1 — baseline margin. Sesi 0C (21 Agu 2026): MEMBACA panel ini
+    // TIDAK PERNAH lagi menulis apa pun -- baseline HANYA lahir lewat aksi
+    // eksplisit terpisah (lockMarginBaseline.ts), bergerbang peran finansial +
+    // kelengkapan data biaya. Kalau belum pernah dikunci, angka di bawah
+    // dihitung LIVE (persis rumus yang sama) dan dikembalikan dengan locked:false
+    // -- TIDAK disimpan, supaya tidak ada "baseline" yang lahir diam-diam dari
+    // sekadar membuka panel. Lihat HANDOFF.md Sesi 0/0B/0C untuk investigasi
+    // lengkap kenapa perilaku lama (insert-on-view) diubah.
     const { data: existingSnapshot, error: snapshotReadError } = await adminClient
       .from('sales_order_line_margin_snapshots')
       .select('*')
       .eq('sales_order_line_id', salesOrderLineId)
+      .is('archived_at', null)
       .maybeSingle();
     if (snapshotReadError) return { status: 500, body: { error: snapshotReadError.message } };
 
-    let snapshot = existingSnapshot;
-    if (!snapshot) {
+    const isLocked = !!existingSnapshot;
+    let snapshot: {
+      unit_price: number;
+      standard_material_cost_per_unit: number | null;
+      standard_packaging_cost_per_unit: number | null;
+      standard_labor_cost_per_unit: number | null;
+      cost_data_complete: boolean;
+      missing_cost_item_codes: string[] | null;
+      unverified_cost_item_codes: string[] | null;
+      labor_cost_complete: boolean;
+      labor_cost_notes: string[] | null;
+      margin_floor_threshold: number | null;
+      created_at: string | null;
+      locked_by: number | null;
+      relock_reason: string | null;
+    };
+    if (existingSnapshot) {
+      snapshot = existingSnapshot;
+    } else {
       const cost = await computeStandardCostPerUnit(adminClient, appUser.company_id, item.item_id);
       const labor = await computeStandardLaborCostPerUnit(adminClient, appUser.company_id, item.item_id);
-      const { data: inserted, error: insertError } = await adminClient
-        .from('sales_order_line_margin_snapshots')
-        .insert([
-          {
-            company_id: appUser.company_id,
-            sales_order_line_id: salesOrderLineId,
-            unit_price: soLine.unit_price,
-            standard_material_cost_per_unit: cost.materialCostPerUnit,
-            standard_packaging_cost_per_unit: cost.packagingCostPerUnit,
-            standard_labor_cost_per_unit: labor.costPerUnit,
-            cost_data_complete: cost.complete,
-            missing_cost_item_codes: cost.missingCostItemCodes,
-            unverified_cost_item_codes: cost.unverifiedCostItemCodes,
-            labor_cost_complete: labor.complete,
-            labor_cost_notes: labor.notes
-          }
-        ])
-        .select('*')
-        .single();
-      if (insertError) return { status: 500, body: { error: insertError.message } };
-      snapshot = inserted;
+      snapshot = {
+        unit_price: soLine.unit_price,
+        standard_material_cost_per_unit: cost.materialCostPerUnit,
+        standard_packaging_cost_per_unit: cost.packagingCostPerUnit,
+        standard_labor_cost_per_unit: labor.costPerUnit,
+        cost_data_complete: cost.complete,
+        missing_cost_item_codes: cost.missingCostItemCodes,
+        unverified_cost_item_codes: cost.unverifiedCostItemCodes,
+        labor_cost_complete: labor.complete,
+        labor_cost_notes: labor.notes,
+        margin_floor_threshold: null,
+        created_at: null,
+        locked_by: null,
+        relock_reason: null
+      };
+    }
+
+    let lockedByName: string | null = null;
+    if (isLocked && snapshot.locked_by) {
+      const { data: lockedByUser } = await adminClient.from('users').select('name').eq('user_id', snapshot.locked_by).maybeSingle();
+      lockedByName = lockedByUser?.name ?? null;
     }
 
     const qtyOrdered = Number(soLine.qty_ordered);
@@ -213,7 +238,10 @@ export async function getMarginWatch(request: NextRequest, salesOrderLineId: num
         total_variance_impact: totalVarianceImpact,
         projected_margin_total: projectedMarginTotal,
         projection_complete: projectionComplete && snapshot.labor_cost_complete,
-        snapshot_taken_at: snapshot.created_at
+        snapshot_taken_at: snapshot.created_at,
+        locked: isLocked,
+        locked_by_name: lockedByName,
+        relock_reason: snapshot.relock_reason
       }
     };
   } catch (error) {

@@ -84,37 +84,37 @@ export async function getPlanningFeasibility(request: NextRequest, salesOrderLin
       };
     }
 
-    // K8 bagian D.4 (Fase Produksi Nyata) — SNAPSHOT standar per rencana. Panggilan
-    // PERTAMA untuk sales_order_line ini mengunci unit_per_batch/batches_per_day
-    // yang dipakai SELAMANYA untuk baris itu (insert sekali, tidak pernah di-UPDATE
-    // dari sini) — supaya kalau standar itu berubah belakangan (job pembelajaran K8
-    // di-approve planner), angka rencana yang SUDAH dihitung/dipakai tidak ikut
-    // berubah diam-diam. Live value tetap dibaca setiap panggilan untuk dibandingkan
-    // dan dilaporkan sebagai `standard_drift` kalau beda dari snapshot.
+    // K8 bagian D.4 (Fase Produksi Nyata) — SNAPSHOT standar per rencana. Sesi 0C
+    // (21 Agu 2026): MEMBACA panel ini TIDAK PERNAH lagi menulis apa pun --
+    // rencana HANYA terkunci lewat aksi eksplisit terpisah
+    // (lockFeasibilityBaseline.ts), bergerbang peran finansial. Kalau belum
+    // pernah dikunci, angka di bawah dihitung LIVE dan dikembalikan dengan
+    // locked:false -- TIDAK disimpan. Lihat HANDOFF.md Sesi 0/0B/0C.
     const { data: existingSnapshot, error: snapshotReadError } = await adminClient
       .from('sales_order_line_feasibility_snapshots')
-      .select('unit_per_batch, batches_per_day, created_at')
+      .select('unit_per_batch, batches_per_day, created_at, locked_by, relock_reason')
       .eq('sales_order_line_id', salesOrderLineId)
+      .is('archived_at', null)
       .maybeSingle();
     if (snapshotReadError) return { status: 500, body: { error: snapshotReadError.message } };
 
     let unitPerBatch = Number(liveUnitPerBatch);
     let batchesPerDay = Number(liveBatchesPerDay);
-    let snapshotTakenAt: string;
+    const isLocked = !!existingSnapshot;
+    let snapshotTakenAt: string | null = null;
     let standardDrift: Record<string, unknown> | null = null;
+    let lockedByName: string | null = null;
+    let relockReason: string | null = null;
 
-    if (!existingSnapshot) {
-      const { data: inserted, error: snapshotInsertError } = await adminClient
-        .from('sales_order_line_feasibility_snapshots')
-        .insert([{ company_id: appUser.company_id, sales_order_line_id: salesOrderLineId, unit_per_batch: unitPerBatch, batches_per_day: batchesPerDay }])
-        .select('created_at')
-        .single();
-      if (snapshotInsertError) return { status: 500, body: { error: snapshotInsertError.message } };
-      snapshotTakenAt = inserted.created_at;
-    } else {
+    if (existingSnapshot) {
       unitPerBatch = Number(existingSnapshot.unit_per_batch);
       batchesPerDay = Number(existingSnapshot.batches_per_day);
       snapshotTakenAt = existingSnapshot.created_at;
+      relockReason = existingSnapshot.relock_reason;
+      if (existingSnapshot.locked_by) {
+        const { data: lockedByUser } = await adminClient.from('users').select('name').eq('user_id', existingSnapshot.locked_by).maybeSingle();
+        lockedByName = lockedByUser?.name ?? null;
+      }
 
       if (unitPerBatch !== Number(liveUnitPerBatch) || batchesPerDay !== Number(liveBatchesPerDay)) {
         standardDrift = {
@@ -275,6 +275,9 @@ export async function getPlanningFeasibility(request: NextRequest, salesOrderLin
         material_shortages: materialShortages,
         components_to_produce: componentsToProduce,
         standard_snapshot_taken_at: snapshotTakenAt,
+        locked: isLocked,
+        locked_by_name: lockedByName,
+        relock_reason: relockReason,
         standard_drift: standardDrift
       }
     };

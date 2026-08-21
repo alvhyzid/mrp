@@ -208,13 +208,17 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 - Jumlah Sudah Dikirim (qty_shipped) — otomatis bertambah tiap ada pengiriman berstatus "shipped" (17 Agu 2026)
 
 **Database Baseline Margin (Margin Watch)** (`sales_order_line_margin_snapshots`)
-- ID Baris SO (sales_order_line_id, unik) · Harga Jual (unit_price) · Biaya Bahan Standar per Unit (standard_material_cost_per_unit) · Biaya Kemasan Standar per Unit (standard_packaging_cost_per_unit)
+- ID Baris SO (sales_order_line_id) · Harga Jual (unit_price) · Biaya Bahan Standar per Unit (standard_material_cost_per_unit) · Biaya Kemasan Standar per Unit (standard_packaging_cost_per_unit)
 - Biaya SDM Standar per Unit (standard_labor_cost_per_unit) — 20 Agu 2026: SEKARANG SUDAH dihitung dari data kru nyata (lihat tabel Kru Standar Lini Produksi di bawah), sebelumnya selalu kosong
 - SDM Sudah Lengkap? (labor_cost_complete) · Catatan Bagian Mana Belum Terhitung (labor_cost_notes) — kalau ada tahap produksi yang kru-nya belum diisi datanya, angka yang tampil tetap dihitung dari bagian yang SUDAH ada datanya (bukan disembunyikan jadi kosong), tapi ditandai belum 100% lengkap
-- Data Biaya Lengkap? (cost_data_complete) · Kode Item yang Belum Punya Harga Master (missing_cost_item_codes)
+- Data Biaya Lengkap? (cost_data_complete) · Kode Item yang Belum Punya Harga Master (missing_cost_item_codes) — **Sesi 0C (21 Agu 2026): SEKARANG gerbang keras** — baseline TIDAK BISA dikunci selama ini belum lengkap, pesan penolakan sebut persis item mana yang kurang
 - Kode Item Harganya Belum Terverifikasi — BARU 26 Agu 2026, beda dari di atas: harga ADA dan ikut dihitung, cuma belum dikonfirmasi purchasing (unverified_cost_item_codes)
-- Ambang Margin Minimum — satu-satunya yang boleh diubah kapan saja, kirim peringatan kalau proyeksi margin turun di bawahnya (margin_floor_threshold)
-- Dikunci sekali saat pertama kali panel Margin Watch dibuka untuk baris SO itu — tidak berubah lagi meski harga master berubah belakangan (sama seperti standar K8/kelayakan jadwal)
+- Ambang Margin Minimum — boleh diubah kapan saja SETELAH baseline terkunci, kirim peringatan kalau proyeksi margin turun di bawahnya (margin_floor_threshold)
+- **Sesi 0C (21 Agu 2026) — Kunci vs Lihat**: SEBELUMNYA dikunci otomatis saat panel pertama dibuka (ternyata bisa dipicu role tanpa kewenangan finansial hanya dengan "melihat") — SEKARANG membuka panel HANYA menghitung & menampilkan (tidak menulis apa pun); mengunci adalah tombol terpisah "Kunci sebagai Acuan Pembanding", khusus role finansial, ditolak kalau data biaya belum lengkap. Waktu Diarsipkan (archived_at, NULL = baris ini yang aktif) · Alasan Diarsipkan (archived_reason) · Dikunci Oleh (locked_by) · Alasan Kunci Ulang (relock_reason) — mengunci ulang hanya company_admin + alasan wajib, baseline lama TETAP ADA (diarsipkan, bukan dihapus)
+
+**Database Rencana Kelayakan Jadwal** (`sales_order_line_feasibility_snapshots`)
+- ID Baris SO (sales_order_line_id) · Unit per Batch (unit_per_batch) · Batch per Hari (batches_per_day) · Waktu Dibuat (created_at)
+- Perilaku kunci/lihat, kolom arsip, dan alasan kunci ulang PERSIS SAMA dengan Baseline Margin di atas (Sesi 0C, 21 Agu 2026) — bedanya cuma isi datanya (standar produksi, bukan biaya)
 
 **Database Kru Standar Lini Produksi** (`routing_step_standard_crew`, 20 Agu 2026)
 - Berapa orang, tipe upah (harian/bulanan/per jam), dan jam kerja standar untuk 1 lini produksi (per routing, bukan per tahap) — dipakai untuk menghitung Biaya SDM Standar per Unit di atas

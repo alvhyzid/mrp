@@ -7,6 +7,7 @@ import { listEmployees } from '../src/features/hr/server/listEmployees';
 import { learnFromBatch } from '../src/features/mrp/server/learnFromBatch';
 import { decideProductionStandardProposal } from '../src/features/mrp/server/decideProductionStandardProposal';
 import { getPlanningFeasibility } from '../src/features/mrp/server/getPlanningFeasibility';
+import { lockFeasibilityBaseline } from '../src/features/mrp/server/lockFeasibilityBaseline';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
 
 // Fase Produksi Nyata (19 Agu 2026), PEKERJAAN 1 (create/edit Karyawan lewat UI)
@@ -564,14 +565,26 @@ describe('Fase Produksi Nyata — Employee CRUD (B-1) & K8 standard proposal wor
     expect(anonProposeResult.error!.code).toBe('42501');
   });
 
-  it('(c) snapshot standar per rencana: standar berubah SETELAH rencana dihitung -> angka rencana lama TIDAK berubah, muncul standard_drift', async () => {
+  it('(c) snapshot standar per rencana: standar berubah SETELAH rencana dikunci -> angka rencana lama TIDAK berubah, muncul standard_drift', async () => {
     const req1 = makeRequest(`http://localhost/api/sales-order-lines/${soLineId}/planning-feasibility`, generalManagerToken, 'GET');
     // getPlanningFeasibility menerima (request, salesOrderLineId) langsung, bukan lewat routing param.
     const result1 = await getPlanningFeasibility(req1, soLineId);
     expect(result1.status).toBe(200);
     expect(result1.body.batches_needed).toBe(5); // 500 qty / 100 unit_per_batch
     expect(result1.body.standard_drift).toBeNull();
-    const snapshotTakenAt = result1.body.standard_snapshot_taken_at;
+    // Sesi 0C (21 Agu 2026): membaca TIDAK LAGI mengunci -- rencana harus dikunci
+    // lewat aksi eksplisit terpisah sebelum standard_snapshot_taken_at terisi.
+    expect(result1.body.locked).toBe(false);
+    expect(result1.body.standard_snapshot_taken_at).toBeNull();
+
+    const lockReq = makeRequest('http://localhost/api/sales-order-lines/feasibility-baseline-lock', generalManagerToken, 'POST', { sales_order_line_id: soLineId });
+    const lockResult = await lockFeasibilityBaseline(lockReq);
+    expect(lockResult.status).toBe(200);
+
+    const req1b = makeRequest(`http://localhost/api/sales-order-lines/${soLineId}/planning-feasibility`, generalManagerToken, 'GET');
+    const result1b = await getPlanningFeasibility(req1b, soLineId);
+    expect(result1b.body.locked).toBe(true);
+    const snapshotTakenAt = result1b.body.standard_snapshot_taken_at;
     expect(snapshotTakenAt).toBeTruthy();
 
     // Standar berubah SETELAH rencana ini dihitung (simulasi hasil belajar/pin manual).

@@ -90,6 +90,9 @@ type FeasibilityResult = {
   standard_drift?: { message: string; unit_per_batch: { used_in_plan: number; current: number }; batches_per_day: { used_in_plan: number; current: number } } | null;
   reason?: string;
   standard_snapshot_taken_at?: string;
+  locked?: boolean;
+  locked_by_name?: string | null;
+  relock_reason?: string | null;
 };
 
 type MarginVarianceItem = { item_code: string; name: string; impact: number; detail: string };
@@ -116,7 +119,10 @@ type MarginWatchResult = {
   total_variance_impact: number;
   projected_margin_total: number;
   projection_complete: boolean;
-  snapshot_taken_at: string;
+  snapshot_taken_at: string | null;
+  locked: boolean;
+  locked_by_name: string | null;
+  relock_reason: string | null;
 };
 
 const marginCategoryProvenance: Record<string, { formula: string; sourceDocument?: string }> = {
@@ -156,6 +162,9 @@ export default function SalesOrdersPage() {
   const [feasibilityLoading, setFeasibilityLoading] = useState(false);
   const [feasibilityError, setFeasibilityError] = useState('');
   const [feasibilityResult, setFeasibilityResult] = useState<FeasibilityResult | null>(null);
+  const [feasibilityLockStatus, setFeasibilityLockStatus] = useState<'idle' | 'locking' | 'error'>('idle');
+  const [feasibilityLockMessage, setFeasibilityLockMessage] = useState('');
+  const [feasibilityRelockReason, setFeasibilityRelockReason] = useState('');
 
   const [marginLineId, setMarginLineId] = useState<number | null>(null);
   const [marginLoading, setMarginLoading] = useState(false);
@@ -164,6 +173,9 @@ export default function SalesOrdersPage() {
   const [marginThresholdInput, setMarginThresholdInput] = useState('');
   const [marginThresholdStatus, setMarginThresholdStatus] = useState<'idle' | 'saving' | 'error'>('idle');
   const [marginThresholdMessage, setMarginThresholdMessage] = useState('');
+  const [marginLockStatus, setMarginLockStatus] = useState<'idle' | 'locking' | 'error'>('idle');
+  const [marginLockMessage, setMarginLockMessage] = useState('');
+  const [marginRelockReason, setMarginRelockReason] = useState('');
 
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
@@ -296,6 +308,85 @@ export default function SalesOrdersPage() {
       return;
     }
     setFeasibilityResult(data as FeasibilityResult);
+  };
+
+  // Sesi 0C (21 Agu 2026) — mengunci baseline SEKARANG aksi terpisah dari
+  // sekadar membuka panel (getMarginWatch/getPlanningFeasibility tidak lagi
+  // menulis apa pun). Konfirmasi permanen + alasan wajib kalau mengunci ULANG.
+  const handleLockMargin = async (lineId: number, isRelock: boolean) => {
+    if (isRelock && !marginRelockReason.trim()) {
+      setMarginLockStatus('error');
+      setMarginLockMessage('Alasan wajib diisi untuk mengunci ulang.');
+      return;
+    }
+    const confirmed = window.confirm(
+      isRelock
+        ? 'Mengunci ULANG baseline Margin Watch akan mengarsipkan baseline lama (tetap tersimpan, tidak dihapus) dan menggantinya dengan angka biaya standar SAAT INI. Lanjutkan?'
+        : 'Mengunci baseline Margin Watch akan menyimpan angka biaya standar SAAT INI sebagai acuan pembanding PERMANEN untuk order ini -- tidak bisa diubah lagi kecuali company_admin mengunci ulang dengan alasan. Lanjutkan?'
+    );
+    if (!confirmed) return;
+
+    setMarginLockStatus('locking');
+    setMarginLockMessage('');
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      setMarginLockStatus('error');
+      setMarginLockMessage('Sesi Anda sudah tidak valid, silakan login ulang.');
+      return;
+    }
+    const response = await fetch('/api/sales-order-lines/margin-baseline-lock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ sales_order_line_id: lineId, reason: marginRelockReason })
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setMarginLockStatus('error');
+      setMarginLockMessage(data.error || 'Gagal mengunci baseline.');
+      return;
+    }
+    setMarginLockStatus('idle');
+    setMarginLockMessage('Baseline terkunci.');
+    setMarginRelockReason('');
+    await handleCheckMarginWatch(lineId);
+  };
+
+  const handleLockFeasibility = async (lineId: number, isRelock: boolean) => {
+    if (isRelock && !feasibilityRelockReason.trim()) {
+      setFeasibilityLockStatus('error');
+      setFeasibilityLockMessage('Alasan wajib diisi untuk mengunci ulang.');
+      return;
+    }
+    const confirmed = window.confirm(
+      isRelock
+        ? 'Mengunci ULANG rencana Kelayakan Jadwal akan mengarsipkan rencana lama (tetap tersimpan, tidak dihapus) dan menggantinya dengan standar produksi SAAT INI. Lanjutkan?'
+        : 'Mengunci rencana Kelayakan Jadwal akan menyimpan standar produksi SAAT INI sebagai acuan PERMANEN untuk order ini -- tidak bisa diubah lagi kecuali company_admin mengunci ulang dengan alasan. Lanjutkan?'
+    );
+    if (!confirmed) return;
+
+    setFeasibilityLockStatus('locking');
+    setFeasibilityLockMessage('');
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      setFeasibilityLockStatus('error');
+      setFeasibilityLockMessage('Sesi Anda sudah tidak valid, silakan login ulang.');
+      return;
+    }
+    const response = await fetch('/api/sales-order-lines/feasibility-baseline-lock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ sales_order_line_id: lineId, reason: feasibilityRelockReason })
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setFeasibilityLockStatus('error');
+      setFeasibilityLockMessage(data.error || 'Gagal mengunci rencana.');
+      return;
+    }
+    setFeasibilityLockStatus('idle');
+    setFeasibilityLockMessage('Rencana terkunci.');
+    setFeasibilityRelockReason('');
+    await handleCheckFeasibility(lineId);
   };
 
   const showPriceColumn = useMemo(() => salesOrders.some((so) => so.lines.some((line) => line.unit_price !== null)), [salesOrders]);
@@ -459,7 +550,7 @@ export default function SalesOrdersPage() {
                               variant="outline"
                               disabled={feasibilityLoading && feasibilityLineId === line.sales_order_line_id}
                               onClick={() => handleCheckFeasibility(line.sales_order_line_id)}
-                              title="Klik PERTAMA kali untuk baris SO ini mengunci standar produksi (unit/batch, batch/hari) sebagai rencana PERMANEN -- tidak bisa diubah lagi walau standarnya diperbarui belakangan. Klik berikutnya hanya membaca rencana yang sudah terkunci."
+                              title="Menghitung & menampilkan kelayakan jadwal dari data SAAT INI -- tidak menyimpan/mengunci apa pun. Untuk mengunci rencana sebagai acuan permanen, pakai tombol 'Kunci' di dalam panel."
                             >
                               {feasibilityLoading && feasibilityLineId === line.sales_order_line_id ? 'Memuat...' : 'Cek Kelayakan'}
                             </Button>
@@ -472,7 +563,7 @@ export default function SalesOrdersPage() {
                               variant="outline"
                               disabled={marginLoading && marginLineId === line.sales_order_line_id}
                               onClick={() => handleCheckMarginWatch(line.sales_order_line_id)}
-                              title="Klik PERTAMA kali untuk baris SO ini mengunci biaya standar (bahan, kemasan, SDM) sebagai baseline margin PERMANEN -- tidak bisa diubah lagi walau harga master diperbarui belakangan. Klik berikutnya hanya membaca baseline yang sudah terkunci."
+                              title="Menghitung & menampilkan margin dari data SAAT INI -- tidak menyimpan/mengunci apa pun. Untuk mengunci baseline sebagai acuan permanen, pakai tombol 'Kunci' di dalam panel."
                             >
                               {marginLoading && marginLineId === line.sales_order_line_id ? 'Memuat...' : 'Margin Watch'}
                             </Button>
@@ -491,9 +582,42 @@ export default function SalesOrdersPage() {
                   {marginLoading ? <p className="text-sm text-muted-foreground">Memuat...</p> : null}
                   {marginResult && !marginLoading ? (
                     <div className="flex flex-col gap-3 text-sm">
-                      <p className="text-xs text-muted-foreground">
-                        Baseline ini terkunci sejak {new Date(marginResult.snapshot_taken_at).toLocaleString('id-ID')} (klik pertama kali "Margin Watch" untuk baris SO ini) — permanen, tidak berubah walau harga master diperbarui belakangan.
-                      </p>
+                      {marginResult.locked ? (
+                        <p className="text-xs text-muted-foreground">
+                          Baseline terkunci sejak {marginResult.snapshot_taken_at ? new Date(marginResult.snapshot_taken_at).toLocaleString('id-ID') : '-'}
+                          {marginResult.locked_by_name ? ` oleh ${marginResult.locked_by_name}` : ''} — permanen, tidak berubah walau harga master diperbarui belakangan.
+                          {marginResult.relock_reason ? ` Alasan kunci ulang: "${marginResult.relock_reason}".` : ''}
+                          {canViewFinancialData(role) && role === 'company_admin' ? (
+                            <span className="ml-2 inline-flex items-center gap-1">
+                              <input
+                                type="text"
+                                placeholder="alasan kunci ulang"
+                                value={marginRelockReason}
+                                onChange={(e) => setMarginRelockReason(e.target.value)}
+                                className="h-6 rounded border px-1 text-xs"
+                              />
+                              <Button size="sm" variant="outline" disabled={marginLockStatus === 'locking'} onClick={() => handleLockMargin(marginLineId!, true)}>
+                                Kunci Ulang
+                              </Button>
+                            </span>
+                          ) : null}
+                        </p>
+                      ) : (
+                        <div className="rounded-md border border-warning/40 bg-warning-subtle p-2 text-xs font-medium text-warning-subtle-foreground">
+                          ⚠ PERKIRAAN SEMENTARA — BELUM DIKUNCI SEBAGAI ACUAN. Angka di bawah dihitung LIVE dari data saat ini, bukan baseline permanen.
+                          {canViewFinancialData(role) ? (
+                            <div className="mt-1">
+                              <Button size="sm" variant="outline" disabled={marginLockStatus === 'locking' || !marginResult.cost_data_complete} onClick={() => handleLockMargin(marginLineId!, false)}>
+                                {marginLockStatus === 'locking' ? 'Mengunci...' : 'Kunci sebagai Acuan Pembanding'}
+                              </Button>
+                              {!marginResult.cost_data_complete ? (
+                                <span className="ml-2 text-xs font-normal">Belum bisa dikunci: {marginResult.missing_cost_item_codes.length} bahan/kemasan belum punya harga standar.</span>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
+                      {marginLockMessage ? <p className={marginLockStatus === 'error' ? 'text-xs text-destructive' : 'text-xs text-success'}>{marginLockMessage}</p> : null}
                       {!marginResult.labor_cost_complete ? (
                         <div className="rounded-md border-2 border-destructive/50 bg-destructive/10 p-3 text-sm font-medium text-destructive">
                           ⚠ SEMUA angka margin di panel ini BELUM TERMASUK biaya SDM standar — margin rencana & proyeksi di bawah SELALU LEBIH BESAR dari kenyataan.
@@ -659,11 +783,39 @@ export default function SalesOrdersPage() {
                       <p className="text-sm text-muted-foreground">{feasibilityResult.reason}</p>
                     ) : (
                       <div className="flex flex-col gap-3 text-sm">
-                        {feasibilityResult.standard_snapshot_taken_at ? (
+                        {feasibilityResult.locked ? (
                           <p className="text-xs text-muted-foreground">
-                            Rencana ini terkunci sejak {new Date(feasibilityResult.standard_snapshot_taken_at).toLocaleString('id-ID')} (klik pertama kali "Cek Kelayakan" untuk baris SO ini) — permanen, tidak berubah walau standar produksi diperbarui belakangan.
+                            Rencana terkunci sejak {feasibilityResult.standard_snapshot_taken_at ? new Date(feasibilityResult.standard_snapshot_taken_at).toLocaleString('id-ID') : '-'}
+                            {feasibilityResult.locked_by_name ? ` oleh ${feasibilityResult.locked_by_name}` : ''} — permanen, tidak berubah walau standar produksi diperbarui belakangan.
+                            {feasibilityResult.relock_reason ? ` Alasan kunci ulang: "${feasibilityResult.relock_reason}".` : ''}
+                            {canViewFinancialData(role) && role === 'company_admin' ? (
+                              <span className="ml-2 inline-flex items-center gap-1">
+                                <input
+                                  type="text"
+                                  placeholder="alasan kunci ulang"
+                                  value={feasibilityRelockReason}
+                                  onChange={(e) => setFeasibilityRelockReason(e.target.value)}
+                                  className="h-6 rounded border px-1 text-xs"
+                                />
+                                <Button size="sm" variant="outline" disabled={feasibilityLockStatus === 'locking'} onClick={() => handleLockFeasibility(feasibilityLineId!, true)}>
+                                  Kunci Ulang
+                                </Button>
+                              </span>
+                            ) : null}
                           </p>
-                        ) : null}
+                        ) : (
+                          <div className="rounded-md border border-warning/40 bg-warning-subtle p-2 text-xs font-medium text-warning-subtle-foreground">
+                            ⚠ PERKIRAAN SEMENTARA — BELUM DIKUNCI SEBAGAI ACUAN. Angka di bawah dihitung LIVE dari data saat ini, bukan rencana permanen.
+                            {canViewFinancialData(role) ? (
+                              <div className="mt-1">
+                                <Button size="sm" variant="outline" disabled={feasibilityLockStatus === 'locking'} onClick={() => handleLockFeasibility(feasibilityLineId!, false)}>
+                                  {feasibilityLockStatus === 'locking' ? 'Mengunci...' : 'Kunci sebagai Acuan Pembanding'}
+                                </Button>
+                              </div>
+                            ) : null}
+                          </div>
+                        )}
+                        {feasibilityLockMessage ? <p className={feasibilityLockStatus === 'error' ? 'text-xs text-destructive' : 'text-xs text-success'}>{feasibilityLockMessage}</p> : null}
                         <div className="flex flex-wrap items-center gap-3">
                           <Badge variant={feasibilityResult.feasible ? 'success' : 'critical'}>{feasibilityResult.feasible ? 'FEASIBLE' : 'TIDAK FEASIBLE'}</Badge>
                           <span>

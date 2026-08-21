@@ -38,10 +38,11 @@ export async function updateMarginFloorThreshold(request: NextRequest): Promise<
       .from('sales_order_line_margin_snapshots')
       .select('sales_order_line_margin_snapshot_id, company_id')
       .eq('sales_order_line_id', salesOrderLineId)
+      .is('archived_at', null)
       .maybeSingle();
     if (snapshotError) return { status: 500, body: { error: snapshotError.message } };
     if (!snapshot || snapshot.company_id !== appUser.company_id) {
-      return { status: 404, body: { error: 'Belum ada baseline Margin Watch untuk baris ini — buka panel Margin Watch dulu supaya baseline terhitung.' } };
+      return { status: 404, body: { error: 'Belum ada baseline Margin Watch yang terkunci untuk baris ini — kunci baseline dulu (tombol "Kunci sebagai Acuan Pembanding") supaya ambang margin bisa diatur.' } };
     }
 
     const { error: updateError } = await adminClient

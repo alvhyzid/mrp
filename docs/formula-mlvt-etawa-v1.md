@@ -82,10 +82,15 @@ finishing shrink.
 
 ## Kemasan
 
-- **Sachet Roll Etawa Fit** — 1 roll = 500 m ÷ 15 cm/sachet = **3.333,33 sachet/roll**.
-  Disimpan di `items` sebagai `base_uom='sachet'`, `purchase_uom='roll'`,
-  `uom_conversion_factor=3333,333333` — supaya `bom_lines` tingkat sachet konsumsi
-  PERSIS 1 (base_uom) per 1 sachet diproduksi, bukan pecahan roll yang membingungkan.
+- **Sachet Roll Etawa Fit** — 1 roll = 500 m ÷ 15 cm/sachet = **TEPAT 3.333 sachet/roll**
+  (KOREKSI 27 Agu 2026 — sebelumnya sempat tersimpan 3.333,333333, tapi
+  3.333 × 15 cm = 499,95 m dari roll 500 m; sisa 5 cm TIDAK CUKUP untuk 1 sachet
+  utuh, jadi sachet ke-3.334 tidak pernah nyata ada). Disimpan di `items` sebagai
+  `base_uom='sachet'`, `purchase_uom='roll'`, `uom_conversion_factor=3333` —
+  supaya `bom_lines` tingkat sachet konsumsi PERSIS 1 (base_uom) per 1 sachet
+  diproduksi, bukan pecahan roll yang membingungkan. Konsekuensi: 25.000 sachet
+  (order 2.500 box) butuh **7,5008 roll** (bukan tepat 7,5) → dibulatkan ke ATAS
+  jadi **8 roll** saat pembelian.
 - **Box Etawa Fit** — 1 per box produk (`base_uom='box'`, `purchase_uom='box'`, factor 1).
 - **Karton** — isi 30-40 box, jumlah per karton TIDAK tetap (tidak dimodelkan sebagai
   item BOM, hanya kapasitas kirim/pengemasan akhir).
@@ -98,7 +103,7 @@ finishing shrink.
 | Sachet (2.500 × 10) | 25.000 |
 | Bubuk (25.000 × 20,23 g) | 505,75 kg |
 | Batch mixer 60 kg (tanpa yield) | ≈ 8,43 batch |
-| Batch mixer 60 kg (yield 95%) | ≈ 8,87 batch |
+| Batch mixer 60 kg (yield hipotetis 95%*) | ≈ 8,87 batch |
 | Kebutuhan PMBASE-MLVT (25.000 × 13,00 g) | 325 kg |
 | Kebutuhan Castor Sugar (25.000 × 5,00 g) | 125 kg |
 | Kebutuhan PMSPC-MLVT (25.000 × 1,50 g) | 37,5 kg |
@@ -106,15 +111,30 @@ finishing shrink.
 | Kebutuhan PMSW-MLVT (25.000 × 0,25 g) | 6,25 kg |
 | Kebutuhan Zeofree (25.000 × 0,08 g) | 2 kg |
 
+\* Yield 95% di baris di atas adalah angka HIPOTETIS untuk cross-check hitungan
+batch mixer saja (dipinjam dari Drinkme lama sebagai contoh perhitungan) — BUKAN
+klaim yield MLVT sungguhan. Yield MLVT ETAWAFIT BELUM PERNAH DIUKUR: di database,
+`production_standards.yield_percentage` untuk MLVT-BOX diset **100% + catatan
+eksplisit "BELUM DIUKUR — menunggu batch nyata"** (dikoreksi 27 Agu 2026 dari 95%
+yang sempat ikut ditanam sebagai titik awal — lihat migrasi
+`20260827130000_sachet_roll_precision_yield_correction.sql`), supaya rencana
+konsumsi bahan tidak diam-diam membesar oleh asumsi sebelum ada data lapangan.
+Yield akan dipelajari dari batch produksi nyata lewat K8.
+
 ## Biaya kemasan per box (Margin Watch)
+
+**KOREKSI 27 Agu 2026**: tabel di bawah memakai `standard_cost` Sachet Roll Etawa
+Fit presisi penuh (1.566.000 ÷ 3.333 = Rp469,8470, numeric(14,4) — bukan dibulatkan
+ke Rp469,85 seperti sebelumnya). Konsekuensi yang sudah disetujui pemilik produk:
+total kemasan/box bergeser dari Rp7.198,50 → **Rp7.198,47** (selisih Rp0,03/box).
 
 | Komponen | Perhitungan | Biaya |
 |---|---|---|
-| Sachet Roll Etawa Fit | 10 sachet × Rp469,85 | Rp4.698,50 |
+| Sachet Roll Etawa Fit | 10 sachet × Rp469,8470 | Rp4.698,47 |
 | Box Etawa Fit | 1 × Rp2.500 | Rp2.500,00 |
-| **Total kemasan/box** | | **Rp7.198,50** |
+| **Total kemasan/box** | | **Rp7.198,47** |
 
-Rp7.198,50 = **31,3%** dari harga jual Rp23.000/box. Ini fakta biaya, bukan penilaian
+Rp7.198,47 = **31,3%** dari harga jual Rp23.000/box. Ini fakta biaya, bukan penilaian
 terhadap target margin apa pun (target GPM 35% sudah dicabut dari sistem, lihat Bagian A
 migrasi 26 Agu 2026).
 
@@ -138,3 +158,10 @@ Stevia Powder, Sucralose, Capsicum, Ginger Oil, Blackpepper, Cinnamon, Kunyit Bu
 Color Derasi Curcumin (0310), Creamer AVI, Xantan Gum, Garam, Cloudifier, Etawa Powder)
 lewat UI, tabel di atas jadi acuan langsung untuk mengisi baris `bom_lines` yang masih
 kosong — jumlah persis "Amount to Add" per basis masing-masing BOM.
+
+**Dicek ulang 27 Agu 2026** (tugas faktor Sachet Roll + BOM premix): status di atas
+masih PERSIS sama — seluruh 16 bahan baku di atas dicek satu per satu di master item
+company PT ITM, hasilnya masih "TIDAK ADA" semua (tidak ada juga nama yang mirip
+selain item MLVT/kemasan itu sendiri, yang bukan bahan baku). Karena itu Bagian C
+(isi baris BOM premix) TIDAK dikerjakan lagi di tugas ini — sesuai instruksi
+eksplisit "jangan membuatnya sendiri" begitu ada yang belum ada.

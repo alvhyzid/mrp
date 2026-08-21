@@ -4,6 +4,154 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Faktor Sachet Roll + rekonsiliasi penanggalan + BOM premix + arkeologi yield — 21 Agu 2026 — SELESAI
+
+### Bagian A — Penanggalan repo (PENTING, baca sebelum menambah migrasi baru)
+
+`date -u` mesin saat migrasi terbaru ditulis: **2026-08-21T02:24:02Z**. `git log -1
+--format=%cI` saat itu: `2026-08-20T23:24:38+07:00` (konsisten, ~10 jam sebelumnya).
+**Temuan**: migrasi terakhir yang SUDAH DITERAPKAN sebelum tugas ini,
+`20260827120000_mlvt_case_study_skeleton.sql`, memakai timestamp filename 27 Agu
+2026 — **6 hari LEBIH MAJU** dari tanggal mesin sungguhan. Drift ini berasal dari
+kebiasaan sesi-sesi sebelumnya (termasuk sesi ini sendiri) yang menaikkan tanggal
+di nama file migrasi secara manual untuk menjaga urutan, tanpa mengecek `date -u`
+lebih dulu. **TIDAK diperbaiki dengan rename** (memutus riwayat
+`schema_migrations`, dilarang eksplisit) — migrasi baru tugas ini
+(`20260827130000_sachet_roll_precision_yield_correction.sql`) memakai timestamp
+LEBIH BESAR dari 20260827120000 (bukan tanggal mesin sungguhan 21 Agu), sesuai
+aturan tie-break eksplisit. **Migrasi berikutnya setelah tugas ini WAJIB memakai
+timestamp > 20260827130000**, terlepas dari `date -u` saat itu, sampai drift ini
+diluruskan lewat keputusan eksplisit pemilik produk (belum diminta).
+
+### Bagian B — Faktor & biaya Sachet Roll Etawa Fit — SELESAI
+
+Migrasi `20260827130000_sachet_roll_precision_yield_correction.sql`. Arkeologi
+`information_schema` (via RAISE NOTICE, dicek DULU sebelum mengubah apa pun):
+`items.standard_cost` = `numeric(14,4)`, `items.uom_conversion_factor` =
+`numeric(14,6)`, `lots.unit_cost` (disebut literal di instruksi, TAPI bukan kolom
+yang diubah — Sachet Roll Etawa Fit MLVT belum pernah punya lot, 0 dicek sebelum
+migrasi) = `numeric(14,4)`.
+
+- Faktor Sachet Roll Etawa Fit: **3.333,333333 → TEPAT 3333** sachet/roll (3.333 ×
+  15 cm = 499,95 m dari roll 500 m; sisa 5 cm tidak cukup jadi 1 sachet).
+- `standard_cost`: **469,85 (dibulatkan 2 desimal) → 469,8470** (1.566.000 ÷ 3.333,
+  presisi PENUH `numeric(14,4)` — 4 desimal, BUKAN 469,85).
+- Konsekuensi disetujui pemilik produk: kemasan MLVT/box **Rp7.198,50 →
+  Rp7.198,47** (selisih Rp0,03/box) — `tests/mlvt_case_study_skeleton.test.ts`
+  diperbarui, BUKAN faktor lama dikembalikan.
+- **0 lot tersentuh** (dicek sebelum migrasi: 0 lot untuk Sachet Roll Etawa Fit —
+  nilai persediaan TIDAK berubah sepeser pun, sesuai batas tugas).
+
+**Bukti skenario negatif (semua dijalankan & dibuktikan, bukan diasumsikan)**:
+(a) migrasi di-copy ke filename baru & di-push 2x — run kedua terverifikasi TIDAK
+mengubah data (query sebelum/sesudah identik: factor=3333, cost=469.847,
+yield=100), file uji dihapus + `migration repair --status reverted` setelahnya
+(idempoten, tidak ada di riwayat migrasi final). (b) 25.000 sachet ÷ 3333 =
+**7,50075...** (dibulatkan 4 desimal: 7,5008), BUKAN 7,5 seperti faktor lama
+(25.000 ÷ 3.333,333333 = persis 7,5) — dibulatkan ke atas jadi **8 roll** saat
+beli. (c) grep repo untuk nilai 95/0,95 terkait MLVT: **kosong di kode aplikasi
+`src/`, kosong di migrasi BARU ini, kosong di live query `production_standards`**
+— SATU pengecualian jujur: migrasi LAMA yang sudah diterapkan
+(`20260827120000_mlvt_case_study_skeleton.sql`) masih secara harfiah berisi teks
+`'yield_percentage', 95` di baris SQL historisnya — ini TIDAK diedit (mengedit isi
+migrasi yang sudah diterapkan sama bermasalahnya dengan rename, riwayatnya jadi
+tidak mencerminkan apa yang benar-benar pernah dijalankan) — nilai itu inert,
+sudah dikoreksi oleh migrasi baru, bukan nilai yang berlaku di sistem sekarang.
+
+**Temuan tambahan di luar cakupan tugas, dibersihkan**: verifikasi visual Margin
+Watch di browser SEBELUM migrasi B dijalankan (untuk membuktikan fitur
+`packaging_breakdown` sesi sebelumnya) sempat memicu pembuatan baris
+`sales_order_line_margin_snapshots` (Lapis 1, "dikunci sekali" by design, TIDAK
+ADA mekanisme reset di app) memakai `standard_cost` LAMA (469,85). Ini artefak
+pengujian Claude Code sendiri, BUKAN data pemilik produk — dibersihkan lewat
+migrasi `20260827150000_cleanup_stale_mlvt_margin_snapshot.sql` supaya panggilan
+`getMarginWatch` berikutnya membuat snapshot baru dari angka yang sudah benar.
+Diverifikasi ulang di browser: "Biaya standar: Rp7.198,47/unit" tampil benar
+setelah pembersihan.
+
+### Bagian C — BOM premix — TIDAK DIKERJAKAN (C2 terpicu), yield DIKOREKSI (C4)
+
+C1 (cek 16 bahan baku di master item PT ITM): **SEMUA 16 "TIDAK ADA"** — Creamer
+AVI, Maltodextrin, Castor Sugar, Etawa Powder, Garam, Cloudifier, Cinnamon, Kunyit
+Bubuk, Color Derasi Curcumin (0310), Xantan Gum, Zeofree, Blackpepper, Stevia
+Powder, Sucralose, Capsicum, Ginger Oil — tidak ada juga nama yang mirip (selain
+item MLVT/kemasan itu sendiri, false-positive dari pencocokan substring "Etawa").
+Karena itu **C3 (isi baris BOM premix) TIDAK dikerjakan** sesuai instruksi
+eksplisit "jangan membuat sendiri" — daftar 16 item di atas menunggu pemilik
+produk input manual lewat UI (persis seperti dicatat sebelumnya di
+`docs/formula-mlvt-etawa-v1.md`, dicek ulang hari ini, statusnya tidak berubah).
+
+**C4 (yield) TETAP dikerjakan** meski C3 dilewati — ini perbaikan berdiri sendiri,
+tidak bergantung pada bahan baku: `production_standards.yield_percentage` untuk
+MLVT-BOX dikoreksi dari **95% (dipinjam dari Drinkme lama, belum pernah diukur
+untuk MLVT) → 100%**, `source='ESTIMASI_MANUAL'`, `sample_count=0`,
+`pin_reason='BELUM DIUKUR -- menunggu batch nyata'`. Alasan: yield akan
+DIPELAJARI dari batch nyata lewat K8 — menanam 95% lebih dulu membuat rencana
+konsumsi bahan membesar sebelum ada data, sehingga pengukuran pertama nanti
+diam-diam "mengukur" asumsinya sendiri, bukan kenyataan lapangan.
+
+### Bagian D — Arkeologi kesiapan pengukuran yield (LAPORAN SAJA, tidak ada kode diubah)
+
+**D1 — bisa merekam konsumsi & output per batch?** YA secara skema:
+`work_order_consumption.qty_consumed` (numeric(14,4), per `production_batch_id` +
+`component_lot_id`) dan `work_order_outputs.qty` (numeric(14,4), per
+`production_batch_id`, `output_type` main_output/reprocessable_waste/
+disposed_waste) — KEDUANYA ADA sejak migrasi awal (12 Agu), diperluas dgn
+`production_batch_id` 14 Agu. **TAPI hari ini (dicek live, bukan cuma skema)**:
+`work_order_consumption`=0 baris, `work_order_outputs`=1 baris (sisa yatim dari
+sesi test lama, `work_order_id=529` yang sudah tidak ada — bukan data MLVT,
+tidak disentuh, di luar cakupan tugas ini), `work_order_step_progress`=0 baris,
+`production_batches`=0 baris — SELURUH tabel ini kosong di seluruh database
+(bukan cuma MLVT) per hari ini, konsekuensi wajar dari reset total studi kasus
+(Bagian B, 26 Agu) + test yang selalu bersih-bersih sendiri. Mekanismenya
+TERBUKTI berfungsi lewat test otomatis yang lulus (mis.
+`tests/production_batch_lifecycle.test.ts` insert+assert ke tabel-tabel ini),
+bukan lewat baris yang persisten hari ini.
+
+**D2 — terekam TERPISAH di 3 titik (premix/mixing/filling)?** SEBAGIAN.
+`work_order_step_progress` per `routing_step_id` MEMANG bisa membedakan tahap
+"Batch Mixing" vs "Filling Sachet" (keduanya baris terpisah di routing Sachet
+MLVT yang sudah ada). **TAPI "pembuatan premix" itu sendiri (PMBASE/PMSPC/PMHOT/
+PMSW dari bahan bakunya) TIDAK PUNYA ROUTING SAMA SEKALI** (0 routing_steps untuk
+keempat item premix) — jadi TIDAK ADA cara merekam Work Order/batch utk
+"membuat premix" sebagai proses tersendiri hari ini, terlepas dari bahan baku
+sudah ada atau belum. Tahap "Premix Mixing" di routing Sachet adalah
+MENCAMPURKAN premix yang SUDAH JADI ke adonan utama, BUKAN membuat premix dari
+nol — beda proses, celah nyata (masuk daftar D5).
+
+**D3 — reject filling terpisah dari susut campuran?** YA. `qty_reject`
+(ditambahkan 20 Agu 2026, kolom terpisah dari `qty_input`/`qty_recorded` yang
+sudah ada) bisa diisi KHUSUS di baris `work_order_step_progress` tahap Filling
+Sachet, berbeda dari susut tersirat (input−output) di tahap Batch Mixing.
+
+**D4 — berat isi sachet aktual (gram/sachet) bisa direkam?** TIDAK ADA kolom
+langsung untuk ini di mana pun (dicek: tidak ada tabel QC/quality/net_weight sama
+sekali di skema). Satu-satunya cara mengetahui rata-rata berat isi adalah
+MENGHITUNG SENDIRI (gram bubuk dikonsumsi tahap Batch Mixing ÷ jumlah sachet
+keluar tahap Filling) — angka TURUNAN, bukan hasil timbangan langsung per sachet/
+sampel QC yang tersimpan sebagai datanya sendiri.
+
+**D5 — daftar celah (LAPORAN, TIDAK DIBANGUN)**:
+1. Tidak ada routing utk 4 item premix — tidak bisa ada Work Order/batch "buat
+   premix" sama sekali sampai ini dibuat.
+2. Tidak ada tabel/kolom utk mencatat sampel berat aktual per sachet (QC timbang)
+   — yield sachet-level cuma bisa dihitung tidak langsung dari selisih input/
+   output antar tahap, bukan pengukuran langsung.
+3. `routing_step_standard_crew` (kru standar SDM) 0 baris untuk SEMUA routing,
+   bukan cuma MLVT — gap lama yang sudah dicatat berulang di HANDOFF, disebut
+   ulang di sini karena relevan kalau nanti yield dihitung bersamaan dgn biaya
+   SDM aktual per batch.
+4. Begitu Work Order MLVT pertama jalan, PASTIKAN progres dicatat per-tahap
+   (bukan cuma 1 baris gabungan utk seluruh routing) — mekanismenya SUDAH ADA
+   (`work_order_step_progress` per `routing_step_id`), tinggal kedisiplinan
+   pengisian di lantai produksi, bukan pembangunan kode baru.
+
+Test baru: 2 skenario regresi ditambahkan ke
+`tests/mlvt_case_study_skeleton.test.ts` (faktor+cost presisi, yield bukan 95%).
+Build + tsc + full test suite (32 file) hijau sebelum commit.
+
+---
+
 ## Format angka: pemisah ribuan + maks 2 desimal di SELURUH UI — 27 Agu 2026 — SELESAI
 
 Instruksi eksplisit pemilik produk: "berikan thousands separator di semua angka yg ada dalam system... jumlah digit dibelakang koma maksimal 2 digit." Dikonfirmasi 1 pengecualian sebelum eksekusi: angka teknis presisi tinggi (rasio bahan BOM, laju mesin per unit, mis. "0,028571 mnt/pcs") TETAP pakai presisi aslinya (sampai 6 desimal) supaya tidak jadi 0,00 di layar — tapi tetap dapat pemisah ribuan.

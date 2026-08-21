@@ -42,9 +42,16 @@ describe('Kerangka Studi Kasus MLVT ETAWAFIT (Bagian D) — data company_id=1', 
     itemSachetId = sachet!.item_id;
   });
 
-  it('(positif) biaya kemasan per box eksplosi BOM tepat Rp7.198,50 (10 sachet x Rp469,85 + Box Etawa Fit Rp2.500) -- bahan baku premix TETAP ditandai belum lengkap, TIDAK diam-diam dianggap 0', async () => {
+  it('(positif) biaya kemasan per box eksplosi BOM tepat Rp7.198,47 (10 sachet x Rp469,8470 + Box Etawa Fit Rp2.500) -- bahan baku premix TETAP ditandai belum lengkap, TIDAK diam-diam dianggap 0', async () => {
+    // 27 Agu 2026 (tugas faktor Sachet Roll): faktor konversi dikoreksi dari
+    // 3.333,333333 -> TEPAT 3333 sachet/roll (3333 x 15cm = 499,95m dari roll
+    // 500m, sisa 5cm tidak cukup jadi 1 sachet). standard_cost sachet dikoreksi
+    // jadi 1.566.000/3333 = 469,8470 (presisi penuh numeric(14,4), BUKAN
+    // dibulatkan ke 469,85 seperti sebelumnya) -- konsekuensi yang sudah
+    // disetujui pemilik produk: kemasan/box bergeser Rp7.198,50 -> Rp7.198,47
+    // (selisih Rp0,03/box), BUKAN regresi.
     const result = await computeStandardCostPerUnit(adminClient as any, companyId, itemBoxId);
-    expect(result.packagingCostPerUnit).toBeCloseTo(7198.5, 2);
+    expect(result.packagingCostPerUnit).toBeCloseTo(7198.47, 2);
     expect(result.complete).toBe(false);
     expect(result.missingCostItemCodes.sort()).toEqual(['PMBASE-MLVT/001ITM', 'PMHOT-MLVT/001ITM', 'PMSPC-MLVT/001ITM', 'PMSW-MLVT/001ITM'].sort());
   });
@@ -56,6 +63,28 @@ describe('Kerangka Studi Kasus MLVT ETAWAFIT (Bagian D) — data company_id=1', 
     expect(steps![3].step_name).toBe('Filling Sachet');
     expect(Number(steps![3].duration_per_unit_minutes)).toBeCloseTo(0.028571, 6);
     expect(steps![3].work_center_id).not.toBeNull();
+  });
+
+  it('(regresi) faktor konversi Sachet Roll Etawa Fit TEPAT 3333 sachet/roll (bukan 3.333,333333) dan standard_cost TEPAT 1.566.000/3333 pada presisi penuh (bukan dibulatkan ke 469,85)', async () => {
+    const { data: item } = await adminClient.from('items').select('uom_conversion_factor, standard_cost').eq('company_id', companyId).eq('item_code', 'SACHET-ROLL-ETAWAFIT/001ITM').single();
+    expect(Number(item!.uom_conversion_factor)).toBe(3333);
+    expect(Number(item!.standard_cost)).toBeCloseTo(469.847, 4);
+    // 25.000 sachet pesanan MLVT (2.500 box x 10) TIDAK LAGI jatuh tepat 7,5 roll
+    // dengan faktor 3333 -- butuh 7,5008 roll, dibulatkan ke ATAS jadi 8 roll saat beli.
+    const rollsNeeded = 25000 / Number(item!.uom_conversion_factor);
+    expect(rollsNeeded).toBeCloseTo(7.5008, 3);
+    expect(rollsNeeded).not.toBeCloseTo(7.5, 6);
+    expect(Math.ceil(rollsNeeded)).toBe(8);
+  });
+
+  it('(regresi) yield MLVT-BOX BUKAN 95% -- dikoreksi ke 100% eksplisit "belum diukur" (yield akan dipelajari dari batch nyata, bukan ditanam di muka)', async () => {
+    const { data: box } = await adminClient.from('items').select('item_id').eq('company_id', companyId).eq('item_code', 'MLVT-BOX/001ITM').single();
+    const { data: ps } = await adminClient.from('production_standards').select('*').eq('company_id', companyId).eq('item_id', box!.item_id).eq('metric_key', 'yield_percentage').is('routing_step_id', null).single();
+    expect(Number(ps!.value)).toBe(100);
+    expect(ps!.value).not.toBe(95);
+    expect(ps!.sample_count).toBe(0);
+    expect(ps!.source).toBe('ESTIMASI_MANUAL');
+    expect(ps!.pin_reason).toContain('BELUM DIUKUR');
   });
 
   it('(negatif) coba buat PO client BARU dengan po_number DUPLIKAT ("182/RND/SUMG/VI/2026") untuk company yang sama -> ditolak unique constraint database', async () => {

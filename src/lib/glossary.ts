@@ -113,6 +113,11 @@ export const ENTITY_LABELS: Record<string, string> = {
 // kalau makna sebuah kolom BEDA tergantung tabelnya.
 // ============================================================================
 export const FIELD_LABELS: Record<string, string> = {
+  company_id: 'ID Perusahaan',
+  user_id: 'ID Pengguna',
+  name: 'Nama',
+  email: 'Email',
+  industry_type: 'Jenis Industri',
   unit_price: 'Harga Satuan',
   unit_cost: 'Biaya Satuan',
   standard_cost: 'Biaya Standar',
@@ -235,7 +240,10 @@ export const COMMON_STATUS_LABELS: Record<string, string> = {
   shipped: 'Dikirim',
   delivered: 'Diterima',
   on_hold: 'Ditunda',
-  partial: 'Sebagian'
+  partial: 'Sebagian',
+  trial: 'Uji Coba',
+  suspended: 'Ditangguhkan',
+  invited: 'Diundang'
 };
 
 export const DEPARTMENT_LABELS: Record<string, string> = {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
+import { getFieldLabel, getRoleLabel, getEntityLabel, COMMON_STATUS_LABELS } from '@/lib/glossary';
 
 function parseJwt(token: string) {
   try {
@@ -82,7 +83,7 @@ export default function DebugPage() {
               <p className="text-sm uppercase tracking-[0.2em] text-slate-500">Debug</p>
               <h1 className="text-3xl font-semibold text-slate-900">Debug Auth & RLS</h1>
               <p className="mt-2 text-slate-600">
-                company_id dari JWT: <span className="font-semibold text-slate-900">{companyId === null ? 'null' : companyId}</span>
+                {getFieldLabel('company_id')} dari sesi login Anda: <span className="font-semibold text-slate-900">{companyId === null ? '-' : companyId}</span>
               </p>
             </div>
           </div>
@@ -93,22 +94,22 @@ export default function DebugPage() {
         ) : null}
 
         <div className="rounded-3xl bg-white p-10 shadow-lg ring-1 ring-slate-200">
-          <h2 className="text-2xl font-semibold text-slate-900">Companies yang berhasil di-query</h2>
+          <h2 className="text-2xl font-semibold text-slate-900">{getEntityLabel('companies')} yang berhasil diambil</h2>
           <p className="mt-2 text-sm text-slate-600">Hanya baris yang terbatas oleh RLS sesuai sesi login Anda.</p>
           <div className="mt-6 overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200 text-left text-sm text-slate-700">
               <thead>
                 <tr>
-                  <th className="px-4 py-3 font-medium text-slate-900">company_id</th>
-                  <th className="px-4 py-3 font-medium text-slate-900">name</th>
-                  <th className="px-4 py-3 font-medium text-slate-900">industry_type</th>
-                  <th className="px-4 py-3 font-medium text-slate-900">status</th>
+                  <th className="px-4 py-3 font-medium text-slate-900">{getFieldLabel('company_id')}</th>
+                  <th className="px-4 py-3 font-medium text-slate-900">{getFieldLabel('name')}</th>
+                  <th className="px-4 py-3 font-medium text-slate-900">{getFieldLabel('industry_type')}</th>
+                  <th className="px-4 py-3 font-medium text-slate-900">{getFieldLabel('status')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {companyRows.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-4 py-5 text-slate-500">Tidak ada baris companies yang bisa dibaca.</td>
+                    <td colSpan={4} className="px-4 py-5 text-slate-500">Tidak ada baris perusahaan yang bisa dibaca.</td>
                   </tr>
                 ) : (
                   companyRows.map((row) => (
@@ -116,7 +117,7 @@ export default function DebugPage() {
                       <td className="px-4 py-4 font-medium text-slate-900">{row.company_id}</td>
                       <td className="px-4 py-4">{row.name}</td>
                       <td className="px-4 py-4">{row.industry_type}</td>
-                      <td className="px-4 py-4">{row.status}</td>
+                      <td className="px-4 py-4">{COMMON_STATUS_LABELS[row.status] ?? row.status}</td>
                     </tr>
                   ))
                 )}
@@ -126,34 +127,34 @@ export default function DebugPage() {
         </div>
 
         <div className="rounded-3xl bg-white p-10 shadow-lg ring-1 ring-slate-200">
-          <h2 className="text-2xl font-semibold text-slate-900">Users yang berhasil di-query</h2>
+          <h2 className="text-2xl font-semibold text-slate-900">{getEntityLabel('users')} yang berhasil diambil</h2>
           <p className="mt-2 text-sm text-slate-600">Hanya baris yang terbatas oleh RLS sesuai sesi login Anda.</p>
           <div className="mt-6 overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200 text-left text-sm text-slate-700">
               <thead>
                 <tr>
-                  <th className="px-4 py-3 font-medium text-slate-900">user_id</th>
-                  <th className="px-4 py-3 font-medium text-slate-900">company_id</th>
-                  <th className="px-4 py-3 font-medium text-slate-900">name</th>
-                  <th className="px-4 py-3 font-medium text-slate-900">email</th>
-                  <th className="px-4 py-3 font-medium text-slate-900">role</th>
-                  <th className="px-4 py-3 font-medium text-slate-900">status</th>
+                  <th className="px-4 py-3 font-medium text-slate-900">{getFieldLabel('user_id')}</th>
+                  <th className="px-4 py-3 font-medium text-slate-900">{getFieldLabel('company_id')}</th>
+                  <th className="px-4 py-3 font-medium text-slate-900">{getFieldLabel('name')}</th>
+                  <th className="px-4 py-3 font-medium text-slate-900">{getFieldLabel('email')}</th>
+                  <th className="px-4 py-3 font-medium text-slate-900">{getFieldLabel('role')}</th>
+                  <th className="px-4 py-3 font-medium text-slate-900">{getFieldLabel('status')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {userRows.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-5 text-slate-500">Tidak ada baris users yang bisa dibaca.</td>
+                    <td colSpan={6} className="px-4 py-5 text-slate-500">Tidak ada baris pengguna yang bisa dibaca.</td>
                   </tr>
                 ) : (
                   userRows.map((row) => (
                     <tr key={row.user_id}>
                       <td className="px-4 py-4 font-medium text-slate-900">{row.user_id}</td>
-                      <td className="px-4 py-4">{row.company_id === null ? 'null' : row.company_id}</td>
+                      <td className="px-4 py-4">{row.company_id === null ? '-' : row.company_id}</td>
                       <td className="px-4 py-4">{row.name}</td>
                       <td className="px-4 py-4">{row.email}</td>
-                      <td className="px-4 py-4">{row.role}</td>
-                      <td className="px-4 py-4">{row.status}</td>
+                      <td className="px-4 py-4">{getRoleLabel(row.role)}</td>
+                      <td className="px-4 py-4">{COMMON_STATUS_LABELS[row.status] ?? row.status}</td>
                     </tr>
                   ))
                 )}

@@ -5,7 +5,7 @@ import { Information } from '@carbon/icons-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import type { ProvenanceEnvelope } from '@/lib/provenance';
-import { humanizeProvenanceText } from '@/lib/glossary';
+import { humanizeProvenanceText, getRoleLabel } from '@/lib/glossary';
 import { useIsCompanyAdmin } from '@/lib/useIsCompanyAdmin';
 
 const standardStatusLabels: Record<string, string> = {
@@ -173,7 +173,7 @@ export function ProvenanceInfoButton({
                   <ul className="flex flex-col gap-0.5 text-xs">
                     {kpi.responsibilities.map((r, idx) => (
                       <li key={idx}>
-                        {r.responsibility}: {r.role ?? '-'}
+                        {r.responsibility}: {getRoleLabel(r.role)}
                         {r.note ? ` — ${r.note}` : ''}
                       </li>
                     ))}

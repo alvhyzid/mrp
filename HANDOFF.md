@@ -4,6 +4,83 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Sesi 0 — Penyelidikan Integritas Data (Invarian 9) — 21 Agu 2026 — SELESAI, MENUNGGU LAMPU HIJAU untuk Sesi 1+
+
+**PENTING — status antrean**: Sesi 1-4 (rebrand inventaris, alur repeat order, dst.)
+BELUM dikerjakan sesuai instruksi eksplisit "berhenti dan laporkan di akhir tiap
+sesi, jangan jalankan sesi berikutnya sebelum lampu hijau". Sesi berikutnya
+menunggu keputusan pemilik produk atas temuan di bawah, terutama soal baris
+`sales_order_line_feasibility_snapshots` yang BELUM dibersihkan (lihat 0.3).
+
+**0.1/0.2 — asal baris "Rp7.198,50 terkunci"**: `sales_order_line_margin_snapshots`,
+kolom `standard_packaging_cost_per_unit`, **company_id=1 (PT ITM) — YA, tenant
+NYATA**. `created_at` asli 2026-08-20T16:09:54Z. **Bukan ditulis oleh test
+otomatis** — ditulis oleh sesi Claude Code SENDIRI: verifikasi visual manual di
+browser (login `company.a@debug.mrp`, klik tombol "Margin Watch") untuk
+membuktikan fitur `packaging_breakdown` yang baru ditambahkan berfungsi.
+`getMarginWatch.ts` membuat baris Lapis-1 SEKALI secara *lazy* pada panggilan
+pertama — klik "lihat" yang terlihat read-only ternyata memicu INSERT. Baris ini
+SUDAH dibersihkan (migrasi `20260827150000_cleanup_stale_mlvt_margin_snapshot.sql`,
+dikerjakan di tugas sebelum Sesi 0 ini secara eksplisit, sebelum instruksi "jangan
+langsung hapus" di Sesi 0 ada) — snapshot baru (id=105) sudah benar
+(Rp7.198,47, `created_at` 2026-08-21T02:43:14Z, dari klik ulang verifikasi).
+
+**0.3 — sapuan tabel snapshot/baseline/cache company_id=1**: `kpi_snapshots`=0,
+`ai_project_progress_snapshots`=0. **DITEMUKAN 1 BARIS LAGI yang BELUM
+dibersihkan**: `sales_order_line_feasibility_snapshots` id=282, `sales_order_line_id`=1212,
+`unit_per_batch`=226,19, `batches_per_day`=3, `created_at`=2026-08-20T15:44:17Z —
+SAMA PERSIS mekanismenya (klik "Cek Kelayakan" saat verifikasi visual sesi
+sebelumnya). **TIDAK dihapus** sesuai instruksi eksplisit Sesi 0 ("jangan
+langsung dihapus, laporkan dulu") — menunggu keputusan Anda. Total tercemar:
+**2 baris** (1 sudah dibersihkan sebelum instruksi ini berlaku, 1 menunggu),
+JAUH di bawah ambang stop (10).
+
+**0.4 — hubungan dengan anomali `kpi_registry` lama**: **BUKAN mekanisme yang
+sama**, berdasarkan bukti yang ada. Anomali lama = baris HILANG tanpa jejak kode
+apa pun (dicek ulang: tidak ada satu pun path kode yang men-DELETE
+`kpi_registry`/`kamus_terms`). Temuan baru = baris BARU TERCIPTA lewat mekanisme
+yang PERSIS diketahui (lazy-insert-on-view, terbukti bisa direproduksi). Arah
+gejala berlawanan (hilang vs. muncul), mekanisme berbeda total — tidak ada bukti
+keterkaitan, dan saya tidak akan mengklaim keterkaitan tanpa bukti.
+
+**0.5 — pengaman**: **Tidak ada satu pun dari 32 file test otomatis yang menulis
+ke company_id=1** — seluruh fixture memakai company barunya sendiri (auto-increment,
+dicek satu per satu: `production_plants.test.ts` → "PlantConsolidationTestCorp",
+`mlvt_case_study_skeleton.test.ts` describe kedua → "MlvtReprocessTestCorp", describe
+pertama BACA SAJA company_id=1 tanpa write). Kontaminasi 100% berasal dari sesi
+Claude Code SENDIRI lewat browser manual, BUKAN dari test file mana pun. Guard
+tetap ditambahkan sebagai pengaman terakhir untuk masa depan: `cleanupCompanyCascade()`
+(`tests/testCompanyCleanup.ts`, dipanggil oleh SETIAP `afterAll` test fixture)
+sekarang **throw keras** kalau dipanggil dengan `company_id=1`. Dibuktikan lewat
+test sementara yang sengaja memanggil `cleanupCompanyCascade(adminClient, 1, [])`
+dan mengonfirmasi ia throw `PELANGGARAN INVARIAN 9` — lulus, lalu file test
+sementara itu DIHAPUS (sesuai instruksi, bukan bagian permanen suite).
+`company_id=2` ("Company B") SENGAJA tidak diblokir — itu tenant uji resmi.
+
+**0.6 — 9 test baru (192→201)**:
+- `tests/production_plants.test.ts` (+3, task konsolidasi plant 27 Agu): WO
+  ditolak di plant `is_active=false`, WO ditolak referensi plant terhapus, WO
+  berhasil di plant aktif — lahir dari gerbang `is_active` baru di `createWorkOrder.ts`.
+- `tests/mlvt_case_study_skeleton.test.ts` (+4 awal, task kerangka MLVT 27 Agu):
+  biaya kemasan eksplosi BOM tepat, routing tersalin persis dari dokumen
+  referensi, PO duplikat ditolak constraint, proses-ulang PO `processed` ditolak
+  fungsi DB — lahir dari kebutuhan verifikasi skeleton MLVT + ≥2 skenario negatif.
+- `tests/mlvt_case_study_skeleton.test.ts` (+2, task faktor Sachet Roll 21 Agu):
+  regresi faktor/`standard_cost` presisi penuh, regresi yield BUKAN 95% — lahir
+  dari koreksi Bagian B/C4 tugas itu.
+
+**Bukti skenario negatif**: (a) lihat 0.5 di atas (guard terbukti throw, test
+bukti dihapus setelahnya). (b) full suite dijalankan 2x berturut-turut — 16
+tabel company_id=1 dihitung SEBELUM, SESUDAH RUN 1, SESUDAH RUN 2: hasilnya
+**byte-identik ketiganya** (items=8, boms=6, routings=2, production_standards=14,
+customers=1, customer_purchase_orders=1, sales_orders=1,
+sales_order_line_margin_snapshots=1, sales_order_line_feasibility_snapshots=1,
+employees=30, production_plants=3, work_centers=1, users=7) — 0 drift.
+
+tsc bersih, build sukses, 32 file/201 test lulus 2x berturut-turut.
+
+---
+
 ## Faktor Sachet Roll + rekonsiliasi penanggalan + BOM premix + arkeologi yield — 21 Agu 2026 — SELESAI
 
 ### Bagian A — Penanggalan repo (PENTING, baca sebelum menambah migrasi baru)

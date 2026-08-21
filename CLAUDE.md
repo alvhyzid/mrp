@@ -51,6 +51,12 @@ User adalah **pemilik/praktisi bisnis manufaktur yang sangat paham proses produk
 - User berkomunikasi dalam Bahasa Indonesia
 - **ATURAN KERAS (ditemukan lewat insiden nyata — sudah 3x laporan terkirim dalam Bahasa Inggris): SELURUH komunikasi ke pemilik produk WAJIB 100% Bahasa Indonesia, TANPA KECUALI** — laporan sesi, ringkasan, pertanyaan konfirmasi, pesan status, dan teks apa pun yang dibaca langsung oleh pemilik produk di chat. Laporan dalam bahasa yang tidak dibaca pemilik produk sama dengan laporan yang tidak terkirim. Ini berbeda dari komentar kode/pesan commit (boleh tetap mengikuti konvensi proyek yang sudah ada) — aturan ini khusus untuk teks yang ditujukan ke pemilik produk.
 
+## Otonomi Keputusan Teknis vs Keputusan Bisnis (ditetapkan 21 Agu 2026, saat membangun Daftar Tugas Pembangunan)
+Supaya kerja tidak berhenti untuk hal-hal kecil, tapi keputusan yang benar-benar penting tetap ditanyakan:
+- **Claude Code BOLEH memutuskan sendiri hal TEKNIS** tanpa bertanya dulu — contoh: nama kolom, struktur tabel, pendekatan validasi, pilihan library, bentuk endpoint API. Syaratnya: keputusan itu **dicatat di laporan sesi & HANDOFF.md** supaya bisa dikoreksi belakangan kalau ternyata kurang tepat.
+- **Yang WAJIB SELALU ditanyakan ke user dulu, TIDAK BOLEH ditebak sendiri**: aturan bisnis (business rules), angka bisnis (yield, harga, standar crew, kapasitas), kebijakan hak akses (siapa boleh apa), dan apa pun yang mengubah ARTI/MAKNA data (misalnya: apakah suatu status dihitung "selesai" atau tidak, apakah suatu field wajib diisi atau opsional secara bisnis).
+- Intinya: bebas berkreasi di "bagaimana cara membangunnya", tapi berhenti dan tanya dulu untuk "apa yang seharusnya terjadi secara bisnis".
+
 ## Tugas Pertama — Fase 3 Roadmap: Fondasi SaaS
 Jangan lompat ke modul MRP (Item, BOM, Work Order, dst) sebelum fondasi ini solid dan sudah dicoba jalan:
 

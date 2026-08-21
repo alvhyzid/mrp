@@ -743,6 +743,61 @@ Audit trail — HANYA leadership yang bisa baca (beda dari `status_transition_lo
 
 ---
 
+## Kelompok 13: Daftar Tugas Pembangunan (21 Agu 2026)
+
+Halaman "Daftar Tugas Pembangunan" (di menu "Apa yang Baru") — riwayat & backlog seluruh
+pekerjaan pembangunan sistem ini sendiri, per-tenant (`company_id`), supaya tenant lain di
+masa depan tidak melihat backlog internal PT ITM. Halaman ini **HANYA BACA (read-only)** —
+task cuma dibuat/ditutup oleh Claude Code lewat migrasi, TIDAK PERNAH lewat UI aplikasi.
+Ditegakkan di server: **tidak ada policy RLS insert/update/delete sama sekali** untuk
+`authenticated`/`anon` di ketiga tabel kelompok ini (dibuktikan `tests/build_tasks.test.ts`
+via percobaan tulis langsung pakai kunci anon — INSERT ditolak WITH CHECK, UPDATE/DELETE
+diam-diam 0 baris cocok karena tidak ada policy yang berlaku).
+
+### `build_tasks`
+- `build_task_id`, `company_id`, `task_code` (unik per company, mis. `PMB-03` — awalan modul
+  + nomor urut, TIDAK PERNAH dipakai ulang meski task dibatalkan)
+- `name`, `module_code`, `module_name` (istilah glosarium, bukan nama tabel)
+- `description` (bahasa manusia), `effect_description` (apa yang berubah kalau ada/tidak ada)
+- `urgency` (`super_urgent`/`mendesak`/`penting`/`bisa_menunggu`/`ditunda_sadar` — `super_urgent`
+  HANYA pernah diset oleh pemilik produk lewat arsitek, Claude Code tidak pernah set sendiri
+  termasuk untuk temuannya sendiri), `super_urgent_since` (nullable)
+- `tags` (`text[]`, GIN index — bukan tabel junction, sengaja: kamus tag kecil & jarang berubah)
+- `pic` (free text, bukan enum — pihak eksternal bukan daftar tertutup)
+- `status` (`menunggu`/`sedang_dikerjakan`/`menunggu_persetujuan`/`selesai`/`ditunda_sadar`/`dibatalkan`)
+- `link_url` (nullable — boleh kosong kalau layarnya belum ada)
+- `origin` (`pemilik_produk`/`temuan_claude`/`perencanaan_awal`)
+- `detail_pekerjaan` (bisa panjang — harus cukup detail supaya sesi Claude Code MANAPUN di masa
+  depan bisa mengerjakannya TANPA baca riwayat percakapan)
+- `notes` (nullable)
+- `created_at`, `started_at` (nullable), `completed_at` (nullable), `approved_at` (nullable)
+- Kolom E.3 (WAJIB lengkap kalau `status = menunggu_persetujuan`, ditegakkan CHECK constraint
+  `build_tasks_approval_fields_required` — bukan cuma validasi UI): `approval_review_steps`,
+  `approval_location`, `approval_example_case`, `approval_if_approved`, `approval_if_rejected`,
+  `approval_options` (nullable, kalau ada pilihan + rekomendasi)
+
+> **Field turunan, TIDAK disimpan** (dihitung di `getBuildTasks.ts`/`BuildTasksPage.tsx` saat
+> baca): `aman_paralel` (dari tag — tidak bertag Visual DAN tidak bertag Teks/Bahasa) dan "lama
+> menggantung di status sekarang" (dari timestamp yang relevan dengan status aktif).
+
+### `build_task_urgency_history`
+Riwayat perubahan urgensi — TIDAK PERNAH ditimpa, termasuk histori "diturunkan lagi".
+- `build_task_urgency_history_id`, `build_task_id` (→ `build_tasks`), `old_urgency` (nullable,
+  kosong kalau task baru dibuat), `new_urgency`, `changed_at`, `requested_by` (free text, atas
+  permintaan siapa)
+
+### `build_task_approval_history`
+Riwayat setuju/tolak — ditolak TIDAK PERNAH menghapus riwayat sebelumnya, berapa kali sebuah
+task ditolak adalah informasi berguna tersendiri.
+- `build_task_approval_history_id`, `build_task_id` (→ `build_tasks`), `action`
+  (`approved`/`rejected`), `at`, `note` (nullable), `by_whom` (free text)
+
+> **Ambang jumlah SUPER URGENT sebelum keterangan penjaga muncul** (D.3): 3, konstanta
+> `AMBANG_SUPER_URGENT` di `BuildTasksPage.tsx` — keputusan teknis, bisa diubah kapan saja,
+> HANYA keterangan (tidak pernah memblokir apa pun).
+
+---
+
 ## Relasi Kunci (Ringkasan)
 
 ```
@@ -771,4 +826,5 @@ ai_capabilities ──< ai_capability_requirements (katalog GLOBAL, bukan per-co
 companies ──< ai_capability_status ──> ai_capabilities; companies ──< ai_capability_overrides, ai_answer_feedback ──> ai_capabilities
 employees ──< attendance_events, attendance_devices, attendance_corrections, leave_requests; employee_attendance dihitung ULANG dari attendance_events
 kamus_terms ──< kpi_registry (metric_key, FK komposit) ──< kpi_snapshots, kpi_actions, kpi_responsibilities, kpi_registry_history
+companies ──< build_tasks ──< build_task_urgency_history, build_task_approval_history
 ```

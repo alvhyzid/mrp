@@ -177,6 +177,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'Settings',
     items: [
       { label: 'Apa yang Baru', href: '/whats-new', visible: () => true, icon: Star },
+      { label: 'Daftar Tugas Pembangunan', href: '/build-tasks', visible: () => true, icon: Task },
       { label: 'Kesiapan AI', href: '/ai-readiness', visible: () => true, icon: Meter },
       { label: 'Dashboard Proyek AI', href: '/ai-project', visible: (role) => role === 'company_admin' || role === 'general_manager', icon: ChartLine },
       { label: 'Process Mining', href: '/process-mining', visible: (role) => role === 'company_admin' || role === 'general_manager', icon: Analytics },

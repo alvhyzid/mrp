@@ -493,3 +493,29 @@ Satu tempat untuk semua berkas masuk/keluar sistem — PO klien, POD, surat jala
 - "Lihat" dicatat HANYA untuk dokumen Terbatas (supaya log tidak penuh tanpa nilai audit)
 
 > 6 KPI awal sudah diisi (Margin Kontribusi, Margin Kontribusi %, Biaya per Unit, Laba Operasional, Yield per Tahap, Nilai Persediaan) — semua nilai target kosong TANPA KECUALI (baseline dulu, target kemudian). Margin Kontribusi % sempat punya target 35% (kebijakan GPM finance untuk konteks Gummy Zala/Drinkme lama) 25 Agu 2026, DICABUT 26 Agu 2026 (keputusan pemilik produk: angka itu khusus konteks lama, bukan kebijakan berlaku umum) saat studi kasus diganti MLVT.
+
+---
+
+## Kelompok 13: Daftar Tugas Pembangunan (21 Agu 2026)
+
+Halaman di menu "Apa yang Baru" yang mencatat SELURUH riwayat & rencana pembangunan sistem ini sendiri — supaya pemilik produk bisa melihat progres pembangunan tanpa harus membaca riwayat obrolan. Halaman ini HANYA MENAMPILKAN (baca) — task hanya dibuat/ditutup oleh Claude Code lewat migrasi database, tidak ada tombol tambah/ubah/hapus di layar ini sama sekali.
+
+**Database Tugas Pembangunan** (`build_tasks`)
+- ID Task (build_task_id) · ID Perusahaan (company_id) · Kode Task permanen (task_code, mis. PMB-03 — tidak pernah dipakai ulang)
+- Nama · Modul/Departemen (module_code/module_name, istilah glosarium) · Deskripsi bahasa manusia · Pengaruh ke Sistem
+- Urgensi (urgency: SUPER URGENT/Mendesak/Penting/Bisa Menunggu/Ditunda Sadar) — SUPER URGENT hanya pernah diset pemilik produk, tidak pernah oleh Claude Code sendiri
+- Jenis Task sebagai tag majemuk (tags: Visual/Teks-Bahasa/Fungsi/Database/Formula/Keamanan/Data/Integrasi/Dokumentasi)
+- PIC (Claude Code/Pemilik Produk/PPIC/pihak luar) · Status (Menunggu/Sedang Dikerjakan/Menunggu Persetujuan/Selesai/Ditunda Sadar/Dibatalkan)
+- Tautan layar terkait (link_url, boleh kosong) · Asal task (origin: dari pemilik produk/temuan Claude Code/perencanaan awal)
+- Waktu dibuat/mulai/selesai/disetujui · Detail Pekerjaan (bisa panjang, harus cukup detail supaya sesi Claude Code manapun bisa mengerjakannya tanpa baca riwayat obrolan) · Catatan opsional
+- Kolom "Menunggu Persetujuan" (wajib lengkap kalau statusnya itu, ditegakkan di database bukan cuma layar): Apa yang Perlu Diperiksa, Di Mana, Contoh Kasus, Bila Disetujui, Bila Ditolak, Pilihan & Rekomendasi
+
+> Field "aman dikerjakan paralel" dan "sudah menggantung berapa lama di status ini" TIDAK disimpan — dihitung otomatis tiap halaman dibuka, dari tag dan timestamp yang ada.
+
+**Database Riwayat Urgensi** (`build_task_urgency_history`)
+- ID Riwayat · ID Task · Urgensi Lama/Baru · Kapan · Atas Permintaan Siapa
+
+**Database Riwayat Persetujuan** (`build_task_approval_history`)
+- ID Riwayat · ID Task · Aksi (Disetujui/Ditolak) · Kapan · Catatan · Oleh Siapa
+
+> Task tidak pernah dihapus dari riwayat, termasuk yang ditolak berkali-kali — supaya jejak pembangunan lengkap dan tidak hilang saat sesi obrolan berakhir.

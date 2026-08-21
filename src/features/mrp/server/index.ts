@@ -50,6 +50,7 @@ export * from './listProductionDisruptions';
 export * from './createProductionDisruption';
 export * from './resolveProductionDisruption';
 export * from './supplierValidation';
+export * from './getBuildTasks';
 export * from './listSuppliers';
 export * from './createSupplier';
 export * from './updateSupplier';

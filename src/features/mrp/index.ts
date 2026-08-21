@@ -3,6 +3,7 @@ export { default as BomsPage } from './pages/BomsPage';
 export { default as RoutingsPage } from './pages/RoutingsPage';
 export { default as PurchasingPage } from './pages/PurchasingPage';
 export { default as CustomersPage } from './pages/CustomersPage';
+export { default as BuildTasksPage } from './pages/BuildTasksPage';
 export { default as CustomerPurchaseOrdersPage } from './pages/CustomerPurchaseOrdersPage';
 export { default as WorkOrdersPage } from './pages/WorkOrdersPage';
 export { default as SalesOrdersPage } from './pages/SalesOrdersPage';

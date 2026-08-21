@@ -113,10 +113,30 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
 
     const { data: batches, error: batchError } = await adminClient
       .from('production_batches')
-      .select('production_batch_id, batch_number, work_order_id, planned_qty, uom, planned_date, status, shift_id')
+      .select('production_batch_id, batch_number, work_order_id, planned_qty, uom, planned_date, status, shift_id, routing_snapshot_taken_at')
       .eq('company_id', appUser.company_id)
       .in('status', ['planned', 'in_progress']);
     if (batchError) return { status: 500, body: { error: batchError.message } };
+
+    // Sesi 6A (21 Agu 2026) — batch yang SUDAH DIMULAI (routing_snapshot_taken_at
+    // terisi) memakai tahap BEKU miliknya sendiri, BUKAN routing_steps hidup --
+    // supaya posisi/lebar blok Gantt utk batch yang sedang berjalan tidak
+    // diam-diam bergeser kalau routing diedit setelah batch itu dimulai.
+    const startedBatchIds = (batches ?? []).filter((b) => b.routing_snapshot_taken_at).map((b) => b.production_batch_id);
+    const { data: snapshotSteps, error: snapshotStepsError } = startedBatchIds.length
+      ? await adminClient
+          .from('production_batch_routing_step_snapshots')
+          .select('production_batch_id, routing_step_id, sequence_no, step_name, work_center_id, active_duration_minutes, duration_per_unit_minutes, wait_duration_minutes')
+          .in('production_batch_id', startedBatchIds)
+      : { data: [] as { production_batch_id: number; routing_step_id: number | null; sequence_no: number; step_name: string; work_center_id: number | null; active_duration_minutes: number | null; duration_per_unit_minutes: number | null; wait_duration_minutes: number | null }[], error: null };
+    if (snapshotStepsError) return { status: 500, body: { error: snapshotStepsError.message } };
+    const snapshotStepsByBatchId = new Map<number, RoutingStep[]>();
+    for (const step of snapshotSteps ?? []) {
+      const list = snapshotStepsByBatchId.get(step.production_batch_id) ?? [];
+      list.push({ ...step, routing_step_id: step.routing_step_id ?? 0, routing_id: 0 });
+      snapshotStepsByBatchId.set(step.production_batch_id, list);
+    }
+    for (const list of snapshotStepsByBatchId.values()) list.sort((a, b) => a.sequence_no - b.sequence_no);
 
     const woIds = Array.from(new Set((batches ?? []).map((b) => b.work_order_id)));
     const shiftIds = Array.from(new Set((batches ?? []).map((b) => b.shift_id).filter((id): id is number => !!id)));
@@ -185,7 +205,7 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
       const item = wo ? itemsById.get(wo.item_id) : undefined;
 
       const routingId = wo?.routing_id;
-      const steps = routingId ? (stepsByRoutingId.get(routingId) ?? []) : [];
+      const steps = batch.routing_snapshot_taken_at ? (snapshotStepsByBatchId.get(batch.production_batch_id) ?? []) : routingId ? (stepsByRoutingId.get(routingId) ?? []) : [];
 
       if (!batch.planned_date) {
         const firstStepWithWc = steps.find((s) => s.work_center_id);

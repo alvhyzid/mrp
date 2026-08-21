@@ -32,7 +32,7 @@ export async function getGanttBlockDetail(request: NextRequest): Promise<ApiResu
 
     const { data: batch, error: batchError } = await adminClient
       .from('production_batches')
-      .select('production_batch_id, company_id, work_order_id, batch_number, planned_qty, uom, planned_date, status, started_at, completed_at, shift_id')
+      .select('production_batch_id, company_id, work_order_id, batch_number, planned_qty, uom, planned_date, status, started_at, completed_at, shift_id, routing_snapshot_taken_at')
       .eq('production_batch_id', productionBatchId)
       .maybeSingle();
     if (batchError) return { status: 500, body: { error: batchError.message } };
@@ -40,13 +40,43 @@ export async function getGanttBlockDetail(request: NextRequest): Promise<ApiResu
       return { status: 404, body: { error: 'Batch produksi tidak ditemukan.' } };
     }
 
-    const { data: step, error: stepError } = await adminClient
-      .from('routing_steps')
-      .select('routing_step_id, routing_id, sequence_no, step_name, work_center_id, active_duration_minutes, duration_per_unit_minutes, wait_duration_minutes')
-      .eq('routing_step_id', routingStepId)
-      .maybeSingle();
-    if (stepError) return { status: 500, body: { error: stepError.message } };
-    if (!step) return { status: 404, body: { error: 'Tahap routing tidak ditemukan.' } };
+    // Sesi 6A (21 Agu 2026) — batch yang SUDAH DIMULAI membaca durasi standar dari
+    // SNAPSHOT beku (production_batch_routing_step_snapshots), BUKAN routing_steps
+    // hidup — supaya mengedit routing hari ini tidak diam-diam mengubah "durasi
+    // standar" yang tampil untuk batch yang sudah berjalan/selesai. Batch yang
+    // BELUM dimulai (routing_snapshot_taken_at masih null, status masih 'planned')
+    // tetap membaca master hidup (6A.4) — dan batch LAMA sebelum fitur ini ada
+    // (status sudah in_progress/completed TAPI routing_snapshot_taken_at null)
+    // ditandai jujur "tanpa snapshot (sebelum fitur ini)", bukan snapshot karangan.
+    const usesSnapshot = !!batch.routing_snapshot_taken_at;
+    const isLegacyWithoutSnapshot = !batch.routing_snapshot_taken_at && batch.status !== 'planned';
+
+    let step: { routing_step_id: number | null; routing_id?: number; sequence_no: number; step_name: string; work_center_id: number | null; active_duration_minutes: number | null; duration_per_unit_minutes: number | null; wait_duration_minutes: number | null } | null = null;
+    let workCenterNameFromSnapshot: string | null = null;
+    let workCenterCodeFromSnapshot: string | null = null;
+
+    if (usesSnapshot) {
+      const { data: stepSnapshot, error: stepSnapshotError } = await adminClient
+        .from('production_batch_routing_step_snapshots')
+        .select('routing_step_id, sequence_no, step_name, work_center_id, work_center_name, work_center_code, active_duration_minutes, duration_per_unit_minutes, wait_duration_minutes')
+        .eq('production_batch_id', productionBatchId)
+        .eq('routing_step_id', routingStepId)
+        .maybeSingle();
+      if (stepSnapshotError) return { status: 500, body: { error: stepSnapshotError.message } };
+      if (!stepSnapshot) return { status: 404, body: { error: 'Tahap routing (versi beku batch ini) tidak ditemukan.' } };
+      step = stepSnapshot;
+      workCenterNameFromSnapshot = stepSnapshot.work_center_name;
+      workCenterCodeFromSnapshot = stepSnapshot.work_center_code;
+    } else {
+      const { data: liveStep, error: stepError } = await adminClient
+        .from('routing_steps')
+        .select('routing_step_id, routing_id, sequence_no, step_name, work_center_id, active_duration_minutes, duration_per_unit_minutes, wait_duration_minutes')
+        .eq('routing_step_id', routingStepId)
+        .maybeSingle();
+      if (stepError) return { status: 500, body: { error: stepError.message } };
+      if (!liveStep) return { status: 404, body: { error: 'Tahap routing tidak ditemukan.' } };
+      step = liveStep;
+    }
 
     const { data: workOrder, error: woError } = await adminClient
       .from('work_orders')
@@ -54,13 +84,14 @@ export async function getGanttBlockDetail(request: NextRequest): Promise<ApiResu
       .eq('work_order_id', batch.work_order_id)
       .maybeSingle();
     if (woError) return { status: 500, body: { error: woError.message } };
-    if (!workOrder || workOrder.routing_id !== step.routing_id) {
+    if (!workOrder) return { status: 404, body: { error: 'Work Order tidak ditemukan.' } };
+    if (!usesSnapshot && workOrder.routing_id !== step.routing_id) {
       return { status: 400, body: { error: 'Tahap routing ini tidak terkait dengan Work Order batch ini.' } };
     }
 
     const [itemRes, workCenterRes, shiftRes, assignmentsRes, progressRes] = await Promise.all([
       adminClient.from('items').select('item_id, item_code, name').eq('item_id', workOrder.item_id).maybeSingle(),
-      step.work_center_id
+      !usesSnapshot && step.work_center_id
         ? adminClient.from('work_centers').select('work_center_id, name, code').eq('work_center_id', step.work_center_id).maybeSingle()
         : Promise.resolve({ data: null, error: null }),
       batch.shift_id
@@ -113,7 +144,20 @@ export async function getGanttBlockDetail(request: NextRequest): Promise<ApiResu
           active_duration_minutes: getEffectiveStepDurationMinutes(step, Number(batch.planned_qty)),
           wait_duration_minutes: step.wait_duration_minutes ?? 0
         },
-        workCenter: workCenterRes.data ? { name: workCenterRes.data.name, code: workCenterRes.data.code } : null,
+        // Sesi 6A: durasi_standar_dari_snapshot = true berarti angka di atas BEKU
+        // sejak batch ini dimulai (tidak ikut berubah walau routing diedit
+        // sesudahnya). tanpa_snapshot_batch_lama = true berarti batch ini sudah
+        // berjalan/selesai TAPI dibuat SEBELUM fitur ini ada -- angkanya di atas
+        // masih dibaca live (apa adanya, bukan snapshot karangan).
+        durasi_standar_dari_snapshot: usesSnapshot,
+        tanpa_snapshot_batch_lama: isLegacyWithoutSnapshot,
+        workCenter: usesSnapshot
+          ? workCenterNameFromSnapshot
+            ? { name: workCenterNameFromSnapshot, code: workCenterCodeFromSnapshot }
+            : null
+          : workCenterRes.data
+            ? { name: workCenterRes.data.name, code: workCenterRes.data.code }
+            : null,
         shift: shiftRes.data ? { name: shiftRes.data.name, start_time: shiftRes.data.start_time, end_time: shiftRes.data.end_time } : null,
         assignments: (assignmentsRes.data ?? []).map((a) => ({
           work_order_assignment_id: a.work_order_assignment_id,

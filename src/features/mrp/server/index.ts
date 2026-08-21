@@ -81,3 +81,4 @@ export * from './confirmDelivery';
 export * from './computeEmployerCostUplift';
 export * from './computeStandardCostPerUnit';
 export * from './computeStandardLaborCostPerUnit';
+export * from './getProductionBatchBomSnapshot';

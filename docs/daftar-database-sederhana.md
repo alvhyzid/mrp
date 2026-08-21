@@ -264,8 +264,18 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 - Tanggal Rencana — kapan batch SEHARUSNYA dikerjakan, dasar Dashboard Kapasitas (planned_date)
 - Status: rencana/berjalan/selesai/batal (status) · Waktu Mulai (started_at) · Waktu Selesai (completed_at)
 - Rework? — ditandai saat "Selesaikan Batch", BARU 25 Agu 2026 (rework)
+- Waktu Beku Routing/BOM (routing_snapshot_taken_at) + salinan versi BOM/routing yang dipakai (snapshotted_bom_id, snapshotted_bom_version, snapshotted_buffer_percentage, snapshotted_routing_id), Sesi 6A 21 Agu 2026 — diisi SAAT batch mulai, supaya mengedit resep/routing sesudahnya tidak diam-diam mengubah angka batch yang sudah berjalan/selesai. Kosong = batch belum dimulai (masih baca resep/routing terbaru) ATAU batch lama dari sebelum fitur ini ada.
 
 > 1 Work Order biasanya dikerjakan lewat 3-5 batch fisik per shift — masing-masing punya bahan, hasil, dan jejak lot sendiri untuk traceability BPOM/halal.
+
+**Database Tahap Routing Beku per Batch** (`production_batch_routing_step_snapshots`, Sesi 6A)
+- Salinan PERSIS tahap routing (nama tahap, urutan, work center, durasi standar) pada saat batch itu MULAI — supaya "durasi standar" yang ditampilkan di Gantt/Kapasitas untuk batch ini tidak ikut berubah walau routing aslinya diedit belakangan
+
+**Database Standar Kru Beku per Batch** (`production_batch_standard_crew_snapshots`, Sesi 6A)
+- Salinan komposisi kru standar pada saat batch mulai — disiapkan untuk kebutuhan ke depan, belum ada layar yang menampilkannya per-batch hari ini
+
+**Database Baris BOM Beku per Batch** (`production_batch_bom_line_snapshots`, Sesi 6A)
+- Salinan PERSIS rasio bahan (per komponen) pada saat batch itu MULAI — supaya "Kebutuhan Bahan" yang ditampilkan untuk batch ini tidak ikut berubah walau BOM aslinya diedit belakangan
 
 **Database Hasil Produksi** (`work_order_outputs`)
 - ID Hasil (work_order_output_id) · ID Work Order (work_order_id) · ID Batch (production_batch_id) · ID Item Hasil (item_id) · ID Shift (shift_id) · Jenis Output (output_type) · Jumlah (qty) · ID Lot Baru (lot_id)

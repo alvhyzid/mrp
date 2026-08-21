@@ -30,7 +30,7 @@ export async function listRoutings(request: NextRequest): Promise<ApiResult> {
       return { status: 200, body: { routings: [] } };
     }
 
-    const [itemsRes, stepsRes, workCentersRes] = await Promise.all([
+    const [itemsRes, stepsRes, workCentersRes, workOrdersRes] = await Promise.all([
       adminClient.from('items').select('item_id, item_code, name, base_uom').eq('company_id', appUser.company_id),
       adminClient
         .from('routing_steps')
@@ -39,12 +39,41 @@ export async function listRoutings(request: NextRequest): Promise<ApiResult> {
           'routing_id',
           routings.map((r) => r.routing_id)
         ),
-      adminClient.from('work_centers').select('work_center_id, name, code').eq('company_id', appUser.company_id)
+      adminClient.from('work_centers').select('work_center_id, name, code').eq('company_id', appUser.company_id),
+      // Sesi 6A (21 Agu 2026, 6A.5) — WO mana saja (per routing_id) yang punya
+      // Work Order dengan company_id ini, dipakai di bawah untuk menghitung
+      // berapa BATCH BERJALAN (status in_progress) memakai tiap routing_id.
+      adminClient
+        .from('work_orders')
+        .select('work_order_id, routing_id')
+        .eq('company_id', appUser.company_id)
+        .in(
+          'routing_id',
+          routings.map((r) => r.routing_id)
+        )
     ]);
 
     if (itemsRes.error) return { status: 500, body: { error: itemsRes.error.message } };
     if (stepsRes.error) return { status: 500, body: { error: stepsRes.error.message } };
     if (workCentersRes.error) return { status: 500, body: { error: workCentersRes.error.message } };
+    if (workOrdersRes.error) return { status: 500, body: { error: workOrdersRes.error.message } };
+
+    const routingIdByWorkOrderId = new Map((workOrdersRes.data ?? []).map((wo) => [wo.work_order_id, wo.routing_id]));
+    const runningBatchCountByRoutingId = new Map<number, number>();
+    if (routingIdByWorkOrderId.size > 0) {
+      const { data: runningBatches, error: runningBatchesError } = await adminClient
+        .from('production_batches')
+        .select('work_order_id')
+        .eq('status', 'in_progress')
+        .in('work_order_id', Array.from(routingIdByWorkOrderId.keys()));
+      if (runningBatchesError) return { status: 500, body: { error: runningBatchesError.message } };
+      for (const batch of runningBatches ?? []) {
+        const routingId = routingIdByWorkOrderId.get(batch.work_order_id);
+        if (routingId) {
+          runningBatchCountByRoutingId.set(routingId, (runningBatchCountByRoutingId.get(routingId) ?? 0) + 1);
+        }
+      }
+    }
 
     const itemsById = new Map((itemsRes.data ?? []).map((i) => [i.item_id, i]));
     const workCentersById = new Map((workCentersRes.data ?? []).map((wc) => [wc.work_center_id, wc]));
@@ -80,7 +109,8 @@ export async function listRoutings(request: NextRequest): Promise<ApiResult> {
         item_name: item?.name ?? null,
         item_base_uom: item?.base_uom ?? null,
         version: routing.version,
-        steps
+        steps,
+        running_batch_count: runningBatchCountByRoutingId.get(routing.routing_id) ?? 0
       };
     });
 

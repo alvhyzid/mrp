@@ -186,6 +186,11 @@ describe('Fase Produksi Nyata P1 — Mulai/Selesaikan Batch (state machine + K8 
       ['production_standard_samples', () => adminClient.from('production_standard_samples').delete().eq('company_id', companyId)],
       ['production_standards', () => adminClient.from('production_standards').delete().eq('company_id', companyId)],
       ['status_transition_log', () => adminClient.from('status_transition_log').delete().eq('company_id', companyId)],
+      // Sesi 6A (21 Agu 2026) — startProductionBatch sekarang menulis snapshot
+      // routing/BOM/kru beku di sini; harus dibersihkan SEBELUM production_batches.
+      ['production_batch_routing_step_snapshots', () => adminClient.from('production_batch_routing_step_snapshots').delete().eq('company_id', companyId)],
+      ['production_batch_standard_crew_snapshots', () => adminClient.from('production_batch_standard_crew_snapshots').delete().eq('company_id', companyId)],
+      ['production_batch_bom_line_snapshots', () => adminClient.from('production_batch_bom_line_snapshots').delete().eq('company_id', companyId)],
       ['work_order_step_progress', () => adminClient.from('work_order_step_progress').delete().eq('work_order_id', workOrderId)],
       ['work_order_outputs', () => adminClient.from('work_order_outputs').delete().eq('work_order_id', workOrderId)],
       ['production_batches', () => adminClient.from('production_batches').delete().eq('work_order_id', workOrderId)],

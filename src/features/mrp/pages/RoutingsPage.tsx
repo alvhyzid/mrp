@@ -34,6 +34,7 @@ type Routing = {
   item_base_uom: string | null;
   version: number;
   steps: RoutingStep[];
+  running_batch_count: number;
 };
 
 type ItemOption = { item_id: number; item_code: string; name: string; base_uom: string };
@@ -270,6 +271,16 @@ export default function RoutingsPage() {
       { accessorKey: 'version', header: 'Versi', cell: ({ row }) => <span className="text-data">v{row.original.version}</span> },
       { id: 'step_count', header: 'Jumlah Tahap', cell: ({ row }) => <span className="text-data">{row.original.steps.length}</span> },
       {
+        id: 'running_batch_count',
+        header: 'Batch Berjalan',
+        cell: ({ row }) =>
+          row.original.running_batch_count > 0 ? (
+            <span className="text-data font-medium text-warning-subtle-foreground">⚠ {row.original.running_batch_count}</span>
+          ) : (
+            <span className="text-data text-muted-foreground">0</span>
+          )
+      },
+      {
         id: 'total_active',
         header: () => (
           <span className="flex items-center gap-1">
@@ -380,6 +391,11 @@ export default function RoutingsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {viewingRouting.running_batch_count > 0 ? (
+                <p className="mb-3 rounded-md border border-warning/40 bg-warning-subtle p-2 text-sm text-warning-subtle-foreground">
+                  ⚠ Dipakai {viewingRouting.running_batch_count} batch berjalan — perubahan tidak akan mengubah batch tersebut (angkanya sudah dibekukan sejak batch itu dimulai).
+                </p>
+              ) : null}
               <div className="overflow-hidden rounded-md border">
                 <table className="w-full text-data">
                   <thead>

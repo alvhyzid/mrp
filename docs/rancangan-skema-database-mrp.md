@@ -370,6 +370,25 @@ Level eksekusi NYATA di lantai produksi — 1 Work Order biasanya dikerjakan lew
 - `status` (planned / in_progress / completed / cancelled)
 - `started_at`, `completed_at`
 - `rework` (boolean, default false, 25 Agu 2026 — tumpangan §5 rencana KPI) — ditandai operator/SPV saat "Selesaikan Batch" kalau batch ini reproses ulang; dasar KPI backlog `metric.rejection_persen`/FPY nanti (KPI-2/3, belum dibangun), tapi datanya mulai terekam SEKARANG supaya punya riwayat sejak dini.
+- `routing_snapshot_taken_at`, `snapshotted_bom_id` (→ `boms.bom_id`), `snapshotted_bom_version`, `snapshotted_buffer_percentage`, `snapshotted_routing_id` (→ `routings.routing_id`) (Sesi 6A, 21 Agu 2026) — lihat catatan "Snapshot Routing & BOM per Batch" di bawah. `routing_snapshot_taken_at` NULL berarti: batch belum dimulai (masih `planned`, tetap sengaja baca master hidup), ATAU batch lama dari SEBELUM fitur ini ada (tidak diisi snapshot karangan, ditandai apa adanya di UI).
+
+> **Snapshot Routing & BOM per Batch (Sesi 6A, 21 Agu 2026) — risiko yang ditutup:** `work_orders.bom_id`/`routing_id` HANYA referensi ke baris yang BISA berubah isinya (`updateRouting.ts`/`updateBom.ts` menghapus+menulis ulang `routing_steps`/`bom_lines` untuk `routing_id`/`bom_id` yang SAMA, bukan bikin versi baru — dikonfirmasi lewat kode, bukan diasumsikan). Tanpa snapshot, mengedit routing/BOM hari ini diam-diam mengubah "durasi standar tahap" (`getGanttBlockDetail.ts`, Gantt Produksi `getWorkCenterGantt.ts`, Kapasitas Work Center `getWorkCenterCapacity.ts`) dan "Kebutuhan Bahan" (`WorkOrdersPage.tsx`) yang ditampilkan untuk batch yang SUDAH SELESAI kemarin — bukan cuma batch baru. Sekarang: `startProductionBatch.ts` membekukan `routing_steps` (→ `production_batch_routing_step_snapshots`), `routing_step_standard_crew` (→ `production_batch_standard_crew_snapshots`, disiapkan untuk kebutuhan ke depan — belum ada tampilan level-batch yang memakainya hari ini) dan `bom_lines` (→ `production_batch_bom_line_snapshots`) PERSIS SAAT batch itu mulai (bukan saat dibuat/selesai). Keempat fungsi tampilan di atas membaca dari snapshot kalau `routing_snapshot_taken_at` terisi, dan tetap membaca master hidup kalau belum (batch belum dimulai). Layar Routing menampilkan peringatan jujur "dipakai N batch berjalan — perubahan tidak akan mengubah batch tersebut" (bukan blokir) kalau versi itu sedang dipakai. Aritmatika TIDAK berubah — cuma SUMBER angkanya (snapshot beku vs master hidup).
+
+### `production_batch_routing_step_snapshots`
+Tahap routing beku PER BATCH (Sesi 6A). `routing_step_id`/`work_center_id` disimpan sebagai referensi HISTORIS SAJA (bukan FK wajib — baris `routing_steps` aslinya bisa diganti ID baru oleh `updateRouting.ts`), `work_center_name`/`work_center_code` disalin PERSIS supaya tetap benar walau work center itu sendiri berganti nama nanti.
+- `production_batch_routing_step_snapshot_id`, `company_id`, `production_batch_id`
+- `routing_step_id`, `sequence_no`, `step_name`, `work_center_id`, `work_center_name`, `work_center_code`
+- `active_duration_minutes`, `wait_duration_minutes`, `duration_per_unit_minutes`, `snapshot_taken_at`
+
+### `production_batch_standard_crew_snapshots`
+Standar kru beku PER BATCH (Sesi 6A) — salinan `routing_step_standard_crew` PERSIS saat batch dimulai. Disiapkan untuk kebutuhan ke depan (belum ada tampilan level-batch yang membacanya hari ini, karena `routing_step_standard_crew` sendiri belum punya UI tulis sama sekali per audit Sesi 5).
+- `production_batch_standard_crew_snapshot_id`, `company_id`, `production_batch_id`
+- `routing_step_standard_crew_id`, `role_label`, `wage_type`, `headcount`, `hours_per_day`, `is_full_day_dedicated`, `source`, `notes`, `snapshot_taken_at`
+
+### `production_batch_bom_line_snapshots`
+Baris BOM beku PER BATCH (Sesi 6A). `component_item_id` AMAN di-FK (items tidak pernah hard-delete). `bom_line_id`/`routing_step_id` referensi historis saja, sama alasannya dengan tabel routing di atas.
+- `production_batch_bom_line_snapshot_id`, `company_id`, `production_batch_id`
+- `bom_line_id`, `component_item_id` (→ `item_id`), `qty_per_unit_output`, `uom`, `routing_step_id`, `snapshot_taken_at`
 
 ### `work_orders`
 Perintah produksi (SPK) — jantung eksekusi MRP, level rencana besar (bisa dipecah jadi banyak `production_batches`).

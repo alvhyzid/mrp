@@ -102,6 +102,11 @@ type BlockDetail = {
   shift: { name: string; start_time: string; end_time: string } | null;
   assignments: BlockDetailAssignment[];
   progress: BlockDetailProgress[];
+  // Sesi 6A (21 Agu 2026): true = durasi di atas BEKU sejak batch ini dimulai
+  // (tidak ikut berubah walau routing diedit sesudahnya). tanpa_snapshot_batch_lama
+  // = batch ini sudah berjalan/selesai TAPI dibuat sebelum fitur snapshot ada.
+  durasi_standar_dari_snapshot?: boolean;
+  tanpa_snapshot_batch_lama?: boolean;
 };
 type YieldStep = {
   routing_step_id: number;
@@ -1358,7 +1363,14 @@ export default function PpicDashboardPage() {
                 <div className="text-right">{blockDetail.batch.planned_date ?? '-'}</div>
 
                 <div className="text-xs uppercase tracking-wide text-muted-foreground">Durasi Aktif</div>
-                <div className="text-right">{blockDetail.step.active_duration_minutes} mnt</div>
+                <div className="text-right">
+                  {blockDetail.step.active_duration_minutes} mnt
+                  {blockDetail.durasi_standar_dari_snapshot ? (
+                    <span className="ml-1 text-xs font-normal text-muted-foreground">(beku sejak batch dimulai)</span>
+                  ) : blockDetail.tanpa_snapshot_batch_lama ? (
+                    <span className="ml-1 text-xs font-normal text-warning-subtle-foreground">(tanpa snapshot — batch sebelum fitur ini ada)</span>
+                  ) : null}
+                </div>
 
                 <div className="text-xs uppercase tracking-wide text-muted-foreground">Durasi Tunggu</div>
                 <div className="text-right">{blockDetail.step.wait_duration_minutes} mnt</div>

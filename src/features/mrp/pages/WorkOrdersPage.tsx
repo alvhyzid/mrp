@@ -139,6 +139,15 @@ export default function WorkOrdersPage() {
   const [batchFormStatus, setBatchFormStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [batchFormMessage, setBatchFormMessage] = useState('');
   const [consumptionBatchId, setConsumptionBatchId] = useState('');
+  // Sesi 6A (21 Agu 2026) — "Kebutuhan Bahan" utk batch yang SUDAH DIMULAI wajib
+  // pakai baris BOM BEKU milik batch itu (snapshot), bukan bom_lines hidup --
+  // null berarti belum di-fetch/batch belum dimulai (jatuh balik ke expandedBom
+  // hidup seperti sebelumnya).
+  const [batchBomSnapshot, setBatchBomSnapshot] = useState<{
+    has_snapshot: boolean;
+    buffer_percentage: number | null;
+    lines: { component_item_id: number; component_item_code: string | null; component_item_name: string | null; qty_per_unit_output: number; uom: string }[];
+  } | null>(null);
 
   const [laborForm, setLaborForm] = useState({ employee_id: '', routing_step_id: '', hours: '', work_date: todayDateString(), is_overtime: false });
   const [laborStatus, setLaborStatus] = useState<'idle' | 'pending' | 'success' | 'warning' | 'error'>('idle');
@@ -216,6 +225,33 @@ export default function WorkOrdersPage() {
     const { ok, body } = await authedFetch('/api/employees');
     if (ok) setEmployees((body.employees || []).filter((e: EmployeeOption) => e.is_active));
   }, [authedFetch]);
+
+  useEffect(() => {
+    if (!consumptionBatchId) {
+      setBatchBomSnapshot(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await authedFetch(`/api/production-batches/${consumptionBatchId}/bom-snapshot`);
+        if (!cancelled && result.ok) {
+          setBatchBomSnapshot(
+            result.body as {
+              has_snapshot: boolean;
+              buffer_percentage: number | null;
+              lines: { component_item_id: number; component_item_code: string | null; component_item_name: string | null; qty_per_unit_output: number; uom: string }[];
+            }
+          );
+        }
+      } catch {
+        // gagal diam-diam -- panel jatuh balik ke BOM hidup (perilaku lama), tidak menghalangi pencatatan konsumsi.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [consumptionBatchId, authedFetch]);
 
   useEffect(() => {
     const checkAccessAndLoad = async () => {
@@ -591,21 +627,34 @@ export default function WorkOrdersPage() {
                   <p className="text-sm text-muted-foreground">Belum ada batch — buat batch dulu di bagian &quot;Batch Produksi&quot; di bawah sebelum mencatat pemakaian bahan.</p>
                 ) : !consumptionBatchId ? (
                   <p className="text-sm text-muted-foreground">Pilih batch produksi dulu di atas untuk mencatat pemakaian bahan batch itu.</p>
-                ) : !expandedBom || expandedBom.lines.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">BOM untuk item ini belum punya komponen.</p>
-                ) : (
-                  (() => {
+                ) : (() => {
+                    // Sesi 6A: batch yang SUDAH DIMULAI (batchBomSnapshot.has_snapshot)
+                    // memakai baris BOM BEKU miliknya sendiri -- BUKAN expandedBom hidup
+                    // -- supaya "Kebutuhan" di bawah tidak diam-diam berubah kalau BOM
+                    // diedit setelah batch ini jalan. Batch yang belum dimulai (belum
+                    // ada snapshot) tetap jatuh balik ke expandedBom hidup seperti biasa.
+                    const consumptionBom = batchBomSnapshot?.has_snapshot
+                      ? { lines: batchBomSnapshot.lines, buffer_percentage: batchBomSnapshot.buffer_percentage }
+                      : expandedBom;
+                    if (!consumptionBom || consumptionBom.lines.length === 0) {
+                      return <p className="text-sm text-muted-foreground">BOM untuk item ini belum punya komponen.</p>;
+                    }
                     const selectedBatch = batchesForExpanded.find((b) => String(b.production_batch_id) === consumptionBatchId);
                     const batchQty = selectedBatch?.planned_qty ?? 0;
                     return (
                       <div className="flex flex-col gap-3">
-                        {expandedBom.lines.map((line) => {
+                        {batchBomSnapshot?.has_snapshot ? (
+                          <p className="rounded-md border border-info/40 bg-info-subtle p-2 text-xs text-info-subtle-foreground">
+                            Kebutuhan di bawah dibekukan sejak batch ini dimulai — tidak ikut berubah walau BOM diedit sesudahnya.
+                          </p>
+                        ) : null}
+                        {consumptionBom.lines.map((line) => {
                           const lotsForComponent = lotsForExpanded.filter((lot) => lot.item_id === line.component_item_id);
                           const entry = consumptionForm[line.component_item_id] ?? { lot_id: '', qty: '' };
                           const selectedLot = lotsForComponent.find((lot) => String(lot.lot_id) === entry.lot_id);
                           const crossCustomerWarning =
                             selectedLot && selectedLot.source_type === 'customer_supplied' && expandedWo.customer_id && selectedLot.source_customer_id !== expandedWo.customer_id;
-                          const bufferedQty = line.qty_per_unit_output * batchQty * (1 + (expandedBom.buffer_percentage ?? 0) / 100);
+                          const bufferedQty = line.qty_per_unit_output * batchQty * (1 + (consumptionBom.buffer_percentage ?? 0) / 100);
 
                           return (
                             <div key={line.component_item_id} className="rounded-md border p-2">
@@ -614,7 +663,7 @@ export default function WorkOrdersPage() {
                               </p>
                               <p className="mb-2 flex items-center gap-1 text-xs text-muted-foreground">
                                 Kebutuhan: {bufferedQty.toLocaleString('id-ID', { maximumFractionDigits: 4 })} {line.uom} untuk batch {selectedBatch?.batch_number} ({batchQty} {selectedBatch?.uom})
-                                {expandedBom.buffer_percentage ? ` — sudah + buffer ${formatNumberId(expandedBom.buffer_percentage, 2)}%` : ''}
+                                {consumptionBom.buffer_percentage ? ` — sudah + buffer ${formatNumberId(consumptionBom.buffer_percentage, 2)}%` : ''}
                                 <ProvenanceInfoButton
                                   label="Kebutuhan Bahan per Batch"
                                   envelope={{
@@ -622,7 +671,7 @@ export default function WorkOrdersPage() {
                                     inputs: [
                                       { label: 'Qty per unit output (BOM)', value: line.qty_per_unit_output.toLocaleString('id-ID', { maximumFractionDigits: 6 }) },
                                       { label: 'Qty batch', value: `${batchQty} ${selectedBatch?.uom ?? ''}` },
-                                      { label: 'Buffer BOM', value: `${expandedBom.buffer_percentage ?? 0}%` },
+                                      { label: 'Buffer BOM', value: `${consumptionBom.buffer_percentage ?? 0}%` },
                                       { label: 'Kebutuhan (dengan buffer)', value: `${bufferedQty.toLocaleString('id-ID', { maximumFractionDigits: 4 })} ${line.uom}` }
                                     ]
                                   }}
@@ -673,8 +722,7 @@ export default function WorkOrdersPage() {
                         })}
                       </div>
                     );
-                  })()
-                )}
+                  })()}
               </div>
             </CardContent>
           </Card>

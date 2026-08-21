@@ -64,7 +64,7 @@ export async function getWorkCenterCapacity(request: NextRequest): Promise<ApiRe
       adminClient.from('production_plants').select('production_plant_id, name').in('production_plant_id', plantIds),
       adminClient
         .from('production_batches')
-        .select('production_batch_id, work_order_id, planned_qty, status, planned_date, started_at, created_at')
+        .select('production_batch_id, work_order_id, planned_qty, status, planned_date, started_at, created_at, routing_snapshot_taken_at')
         .eq('company_id', appUser.company_id)
         .in('status', ['planned', 'in_progress'])
     ]);
@@ -103,11 +103,32 @@ export async function getWorkCenterCapacity(request: NextRequest): Promise<ApiRe
       stepsByRoutingId.set(step.routing_id, list);
     }
 
+    // Sesi 6A (21 Agu 2026) — batch yang SUDAH DIMULAI memakai tahap BEKU
+    // miliknya sendiri, BUKAN routing_steps hidup, supaya jam terjadwal minggu
+    // ini tidak diam-diam berubah kalau routing diedit setelah batch dimulai.
+    const startedBatchIdsThisWeek = batchesThisWeek.filter((b) => b.routing_snapshot_taken_at).map((b) => b.production_batch_id);
+    const { data: snapshotSteps, error: snapshotStepsError } = startedBatchIdsThisWeek.length
+      ? await adminClient
+          .from('production_batch_routing_step_snapshots')
+          .select('production_batch_id, work_center_id, active_duration_minutes, duration_per_unit_minutes')
+          .in('production_batch_id', startedBatchIdsThisWeek)
+      : { data: [] as { production_batch_id: number; work_center_id: number | null; active_duration_minutes: number | null; duration_per_unit_minutes: number | null }[], error: null };
+    if (snapshotStepsError) return { status: 500, body: { error: snapshotStepsError.message } };
+    const snapshotStepsByBatchId = new Map<number, typeof snapshotSteps>();
+    for (const step of snapshotSteps ?? []) {
+      const list = snapshotStepsByBatchId.get(step.production_batch_id) ?? [];
+      list.push(step);
+      snapshotStepsByBatchId.set(step.production_batch_id, list);
+    }
+
     const scheduledMinutesByWorkCenter = new Map<number, number>();
     for (const batch of batchesThisWeek) {
-      const routingId = routingIdByWoId.get(batch.work_order_id);
-      if (!routingId) continue;
-      const steps = stepsByRoutingId.get(routingId) ?? [];
+      const steps = batch.routing_snapshot_taken_at
+        ? snapshotStepsByBatchId.get(batch.production_batch_id) ?? []
+        : (() => {
+            const routingId = routingIdByWoId.get(batch.work_order_id);
+            return routingId ? stepsByRoutingId.get(routingId) ?? [] : [];
+          })();
       for (const step of steps) {
         if (!step.work_center_id) continue;
         const current = scheduledMinutesByWorkCenter.get(step.work_center_id) ?? 0;

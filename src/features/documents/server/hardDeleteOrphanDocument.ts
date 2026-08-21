@@ -15,7 +15,7 @@ export async function hardDeleteOrphanDocument(request: NextRequest, documentId:
   try {
     const { appUser } = await getCurrentUser(request);
     if (!canHardDeleteOrphanDocument(appUser.role)) {
-      return { status: 403, body: { error: 'Hanya company_admin yang dapat menghapus permanen berkas yatim.' } };
+      return { status: 403, body: { error: 'Hanya Admin Perusahaan yang dapat menghapus permanen berkas yatim.' } };
     }
     if (!appUser.company_id) {
       return { status: 400, body: { error: 'User belum terkait dengan perusahaan yang valid.' } };

@@ -40,7 +40,7 @@ export async function uploadDocument(request: NextRequest): Promise<ApiResult> {
     const docType = String(formData.get('doc_type') ?? '').trim();
     const title = String(formData.get('title') ?? '').trim();
     if (!docType || !title) {
-      return { status: 400, body: { error: 'doc_type dan title wajib diisi.' } };
+      return { status: 400, body: { error: 'Jenis dokumen dan judul wajib diisi.' } };
     }
 
     const sensitivity = String(formData.get('sensitivity') ?? 'UMUM').trim();

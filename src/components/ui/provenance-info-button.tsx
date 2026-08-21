@@ -5,6 +5,8 @@ import { Information } from '@carbon/icons-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import type { ProvenanceEnvelope } from '@/lib/provenance';
+import { humanizeProvenanceText } from '@/lib/glossary';
+import { useIsCompanyAdmin } from '@/lib/useIsCompanyAdmin';
 
 const standardStatusLabels: Record<string, string> = {
   ESTIMASI_MANUAL: 'Estimasi Manual',
@@ -54,6 +56,8 @@ export function ProvenanceInfoButton({
   kpi?: KpiTabData | null;
 }) {
   const [open, setOpen] = useState(false);
+  const [showTechnicalDetail, setShowTechnicalDetail] = useState(false);
+  const isCompanyAdmin = useIsCompanyAdmin();
   const tabs = [
     { key: 'definisi' as const, title: 'Definisi', available: !!definition },
     { key: 'asal-usul' as const, title: 'Asal-usul', available: true },
@@ -101,7 +105,6 @@ export function ProvenanceInfoButton({
                 <p>{definition.businessAnswer ?? definition.draft ?? 'Belum ada penjelasan tersimpan.'}</p>
                 {!definition.businessAnswer && definition.draft ? <p className="mt-1 text-xs italic text-muted-foreground">Draf awal, belum dikonfirmasi manusia.</p> : null}
               </div>
-              <p className="font-mono text-xs text-muted-foreground">Kamus: {definition.termKey}</p>
             </div>
           ) : null}
 
@@ -109,25 +112,19 @@ export function ProvenanceInfoButton({
             <div className="flex flex-col gap-3 text-sm">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Rumus</p>
-                <p>{envelope.formula}</p>
+                <p>{humanizeProvenanceText(envelope.formula)}</p>
               </div>
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Nilai Input</p>
                 <ul className="flex flex-col gap-0.5">
                   {envelope.inputs.map((input, idx) => (
                     <li key={idx} className="flex justify-between gap-2">
-                      <span className="text-muted-foreground">{input.label}</span>
+                      <span className="text-muted-foreground">{humanizeProvenanceText(input.label)}</span>
                       <span className="font-medium">{input.value}</span>
                     </li>
                   ))}
                 </ul>
               </div>
-              {envelope.sourceDocument ? (
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Dokumen Sumber</p>
-                  <p className="font-mono text-xs">{envelope.sourceDocument}</p>
-                </div>
-              ) : null}
               {envelope.standardStatus ? <Badge variant="secondary">{standardStatusLabels[envelope.standardStatus] ?? envelope.standardStatus}</Badge> : null}
               {envelope.history && envelope.history.length > 0 ? (
                 <div>
@@ -208,6 +205,36 @@ export function ProvenanceInfoButton({
               ) : (
                 <p className="text-xs italic text-muted-foreground">Tidak ada tindakan terbuka terkait KPI ini.</p>
               )}
+            </div>
+          ) : null}
+
+          {/* Sesi 6 (21 Agu 2026, 6.4) — identifier tabel/kolom mentah TIDAK
+              PERNAH dihapus dari sistem (fondasi Kamus & Fase AI), tapi
+              dipindah ke sini: tertutup secara default, dan HANYA DIRENDER
+              SAMA SEKALI (bukan disembunyikan CSS) kalau isCompanyAdmin true --
+              non-admin tidak akan menemukan identifier ini bahkan di HTML. */}
+          {isCompanyAdmin && (!showTabBar || activeTab === 'asal-usul' || activeTab === 'definisi') ? (
+            <div className="mt-1 border-t pt-2">
+              <button
+                type="button"
+                onClick={() => setShowTechnicalDetail((v) => !v)}
+                className="text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+              >
+                {showTechnicalDetail ? '▾' : '▸'} Detail Teknis
+              </button>
+              {showTechnicalDetail ? (
+                <div className="mt-2 flex flex-col gap-2 text-xs">
+                  {definition ? (
+                    <p className="font-mono text-muted-foreground">Kamus: {definition.termKey}</p>
+                  ) : null}
+                  {(!showTabBar || activeTab === 'asal-usul') ? (
+                    <>
+                      <p className="font-mono text-muted-foreground">Rumus mentah: {envelope.formula}</p>
+                      {envelope.sourceDocument ? <p className="font-mono text-muted-foreground">Sumber kode/dokumen: {envelope.sourceDocument}</p> : null}
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </DialogContent>

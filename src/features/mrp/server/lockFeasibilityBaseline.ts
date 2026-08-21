@@ -27,7 +27,7 @@ export async function lockFeasibilityBaseline(request: NextRequest): Promise<Api
     const body = await request.json();
     const salesOrderLineId = Number(body.sales_order_line_id);
     if (!salesOrderLineId) {
-      return { status: 400, body: { error: 'sales_order_line_id wajib diisi.' } };
+      return { status: 400, body: { error: 'Baris Sales Order wajib diisi.' } };
     }
     const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
 
@@ -71,7 +71,7 @@ export async function lockFeasibilityBaseline(request: NextRequest): Promise<Api
 
     if (existingActive) {
       if (appUser.role !== 'company_admin') {
-        return { status: 403, body: { error: 'Rencana Kelayakan Jadwal untuk baris ini sudah terkunci -- hanya company_admin yang boleh mengunci ulang.' } };
+        return { status: 403, body: { error: 'Rencana Kelayakan Jadwal untuk baris ini sudah terkunci -- hanya Admin Perusahaan yang boleh mengunci ulang.' } };
       }
       if (!reason) {
         return { status: 400, body: { error: 'Alasan wajib diisi untuk mengunci ulang rencana yang sudah ada.' } };

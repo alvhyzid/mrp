@@ -10,6 +10,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 import { formatNumberId } from '@/lib/currency';
+import { getKamusTermTitle, humanizeKamusDraft } from '@/lib/glossary';
+import { useIsCompanyAdmin } from '@/lib/useIsCompanyAdmin';
 
 type KamusTerm = {
   kamus_term_id: number;
@@ -74,6 +76,10 @@ export default function KamusPage() {
   const [savingId, setSavingId] = useState<number | null>(null);
   const [generateStatus, setGenerateStatus] = useState('');
   const [exportOutput, setExportOutput] = useState<Record<string, string> | null>(null);
+  // Sesi 6 (21 Agu 2026, 6.4) — identifier teknis (term_key) tetap ada, tapi
+  // di balik "Detail Teknis" tertutup, hanya company_admin.
+  const isCompanyAdmin = useIsCompanyAdmin();
+  const [expandedTechDetail, setExpandedTechDetail] = useState<Record<number, boolean>>({});
 
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
@@ -347,13 +353,30 @@ export default function KamusPage() {
                 <Card key={term.kamus_term_id}>
                   <CardHeader>
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <CardTitle className="text-base font-mono">{term.term_key}</CardTitle>
+                      <CardTitle className="text-base">{getKamusTermTitle(term)}</CardTitle>
                       <div className="flex gap-2">
                         <Badge variant="secondary">Prioritas {term.priority}</Badge>
                         <Badge variant="secondary">{domainLabels[term.domain] ?? term.domain}</Badge>
                         <Badge variant={statusBadgeVariant[term.status] ?? 'secondary'}>{statusLabels[term.status] ?? term.status}</Badge>
                       </div>
                     </div>
+                    {isCompanyAdmin ? (
+                      <div className="mt-1">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedTechDetail((prev) => ({ ...prev, [term.kamus_term_id]: !prev[term.kamus_term_id] }))}
+                          className="text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                        >
+                          {expandedTechDetail[term.kamus_term_id] ? '▾' : '▸'} Detail Teknis
+                        </button>
+                        {expandedTechDetail[term.kamus_term_id] ? (
+                          <div className="mt-1 flex flex-col gap-0.5">
+                            <p className="font-mono text-xs text-muted-foreground">{term.term_key}</p>
+                            {term.ai_draft ? <p className="font-mono text-xs text-muted-foreground">{term.ai_draft}</p> : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {term.suggested_role ? (
                       <CardDescription>Sebaiknya dijawab: {departmentLabels[term.suggested_role] ?? term.suggested_role}</CardDescription>
                     ) : (
@@ -364,7 +387,11 @@ export default function KamusPage() {
                     ) : null}
                   </CardHeader>
                   <CardContent className="flex flex-col gap-3">
-                    {term.ai_draft ? <p className="rounded-md border border-warning/40 bg-warning-subtle p-2 text-xs text-warning-subtle-foreground">Draf AI (perlu konfirmasi manusia): {term.ai_draft}</p> : null}
+                    {term.ai_draft ? (
+                      <p className="rounded-md border border-warning/40 bg-warning-subtle p-2 text-xs text-warning-subtle-foreground">
+                        Draf AI (perlu konfirmasi manusia): {humanizeKamusDraft(term)}
+                      </p>
+                    ) : null}
 
                     {term.status !== 'DIKONFIRMASI' ? (
                       <>

@@ -325,7 +325,7 @@ export default function HrDashboardPage() {
             <span className="text-muted-foreground">-</span>
           ) : (
             <span className="text-data">
-              {formatCurrency(row.original.wage_rate, { maxDecimals: 0 })} / {row.original.wage_type}
+              {formatCurrency(row.original.wage_rate, { maxDecimals: 0 })} / {(row.original.wage_type ? wageTypeLabels[row.original.wage_type] : null) ?? row.original.wage_type}
             </span>
           )
       });

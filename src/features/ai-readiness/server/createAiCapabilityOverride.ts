@@ -21,13 +21,13 @@ export async function createAiCapabilityOverride(
   try {
     const { appUser } = await getCurrentUser(request);
     if (appUser.role !== SUPER_ADMIN_ROLE) {
-      return { status: 403, body: { error: 'Override kesiapan AI hanya bisa dibuat oleh admin internal platform (super_admin), bukan admin tenant.' } };
+      return { status: 403, body: { error: 'Override kesiapan AI hanya bisa dibuat oleh Admin Internal Platform, bukan admin perusahaan.' } };
     }
     if (!input.reason?.trim()) {
       return { status: 400, body: { error: 'Alasan override wajib diisi.' } };
     }
     if (!input.expiresAt) {
-      return { status: 400, body: { error: 'Override wajib berbatas waktu (expires_at).' } };
+      return { status: 400, body: { error: 'Override wajib berbatas waktu (tanggal kedaluwarsa).' } };
     }
 
     const adminClient = getAdminClient();

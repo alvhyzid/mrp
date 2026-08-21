@@ -35,7 +35,7 @@ export async function recordAttendanceEvent(request: NextRequest, input: RecordA
       return { status: 400, body: { error: 'User belum terkait dengan perusahaan yang valid.' } };
     }
     if (input.method === 'MANUAL_HRD' && !canManageHr(appUser.role)) {
-      return { status: 403, body: { error: 'Hanya HRD/company_admin yang dapat mencatat kehadiran manual.' } };
+      return { status: 403, body: { error: 'Hanya HRD/Admin Perusahaan yang dapat mencatat kehadiran manual.' } };
     }
     if (input.method !== 'MANUAL_HRD') {
       // QR_TABLET/GEO_PHONE: hanya karyawan yang bersangkutan boleh mengirim event miliknya sendiri.

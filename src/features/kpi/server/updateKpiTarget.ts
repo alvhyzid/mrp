@@ -29,13 +29,13 @@ export async function updateKpiTarget(request: NextRequest, kpiRegistryId: numbe
     }
 
     if (!canManageKpiRegistry(appUser.role)) {
-      return { status: 403, body: { error: 'Hanya company_admin/general_manager yang boleh menetapkan target KPI.' } };
+      return { status: 403, body: { error: 'Hanya Admin Perusahaan/General Manager yang boleh menetapkan target KPI.' } };
     }
 
     const body = await request.json();
     const newTarget = body.target_value === null || body.target_value === undefined ? null : Number(body.target_value);
     if (newTarget !== null && Number.isNaN(newTarget)) {
-      return { status: 400, body: { error: 'target_value harus berupa angka atau null.' } };
+      return { status: 400, body: { error: 'Nilai target harus berupa angka atau dikosongkan.' } };
     }
 
     const oldTarget = kpi.target_value !== null ? Number(kpi.target_value) : null;

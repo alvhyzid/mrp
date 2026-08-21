@@ -20,6 +20,7 @@ const priorityLabels: Record<string, string> = { low: 'Rendah', normal: 'Normal'
 const priorityBadgeVariant: Record<string, 'secondary' | 'info' | 'warning' | 'critical'> = { low: 'secondary', normal: 'info', high: 'warning', urgent: 'critical' };
 
 const statusLabels: Record<string, string> = { planned: 'Direncanakan', in_progress: 'Berjalan', paused: 'Dijeda', completed: 'Selesai', cancelled: 'Batal' };
+const bomStatusLabels: Record<string, string> = { draft: 'Draf', active: 'Aktif', archived: 'Diarsipkan' };
 const statusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical' | 'secondary'> = {
   planned: 'info',
   in_progress: 'warning',
@@ -669,8 +670,8 @@ export default function WorkOrdersPage() {
                                   envelope={{
                                     formula: 'Kebutuhan = qty_per_unit_output (BOM) × qty batch × (1 + buffer_percentage BOM ÷ 100). Buffer mengantisipasi susut/reject saat proses — dikonfigurasi per BOM, bukan nilai tetap sistem.',
                                     inputs: [
-                                      { label: 'Qty per unit output (BOM)', value: line.qty_per_unit_output.toLocaleString('id-ID', { maximumFractionDigits: 6 }) },
-                                      { label: 'Qty batch', value: `${batchQty} ${selectedBatch?.uom ?? ''}` },
+                                      { label: 'Rasio Bahan per Unit Hasil (BOM)', value: line.qty_per_unit_output.toLocaleString('id-ID', { maximumFractionDigits: 6 }) },
+                                      { label: 'Kuantitas Batch', value: `${batchQty} ${selectedBatch?.uom ?? ''}` },
                                       { label: 'Buffer BOM', value: `${consumptionBom.buffer_percentage ?? 0}%` },
                                       { label: 'Kebutuhan (dengan buffer)', value: `${bufferedQty.toLocaleString('id-ID', { maximumFractionDigits: 4 })} ${line.uom}` }
                                     ]
@@ -866,7 +867,7 @@ export default function WorkOrdersPage() {
                           formula:
                             'Tanpa Buffer = qty_per_unit_output (BOM) × qty batch direncanakan. Dibutuhkan (+buffer) = Tanpa Buffer × (1 + buffer_percentage BOM ÷ 100). Buffer mengantisipasi susut/reject saat proses — dikonfigurasi per BOM.',
                           inputs: [
-                            { label: 'Qty batch direncanakan', value: String(batchPlannedQty) },
+                            { label: 'Kuantitas Batch Direncanakan', value: String(batchPlannedQty) },
                             { label: 'Buffer BOM', value: `${expandedBom.buffer_percentage ?? 0}%` }
                           ]
                         }}
@@ -974,7 +975,7 @@ export default function WorkOrdersPage() {
                       <SelectContent>
                         {availableBoms.map((bom) => (
                           <SelectItem key={bom.bom_id} value={String(bom.bom_id)}>
-                            {selectedSoLine ? '' : `${bom.parent_item_code} — `}v{bom.version} ({bom.status}) — yield {formatNumberId(bom.standard_yield_qty, 2)} {bom.standard_yield_uom}
+                            {selectedSoLine ? '' : `${bom.parent_item_code} — `}v{bom.version} ({bomStatusLabels[bom.status] ?? bom.status}) — yield {formatNumberId(bom.standard_yield_qty, 2)} {bom.standard_yield_uom}
                           </SelectItem>
                         ))}
                       </SelectContent>

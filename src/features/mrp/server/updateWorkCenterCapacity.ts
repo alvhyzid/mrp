@@ -21,7 +21,7 @@ export async function updateWorkCenterCapacity(request: NextRequest): Promise<Ap
     const body = await request.json();
     const workCenterId = Number(body.work_center_id);
     if (!workCenterId) {
-      return { status: 400, body: { error: 'work_center_id wajib diisi.' } };
+      return { status: 400, body: { error: 'Lini/Stasiun Kerja wajib diisi.' } };
     }
 
     const capacityRaw = body.capacity_hours_per_day;

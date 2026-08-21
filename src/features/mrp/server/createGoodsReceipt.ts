@@ -25,7 +25,7 @@ export async function createGoodsReceipt(request: NextRequest): Promise<ApiResul
 
     const body = await request.json();
     const purchaseOrderId = Number(body.purchase_order_id);
-    if (!purchaseOrderId) return { status: 400, body: { error: 'purchase_order_id wajib diisi.' } };
+    if (!purchaseOrderId) return { status: 400, body: { error: 'PO Supplier wajib diisi.' } };
     if (!Array.isArray(body.lines) || body.lines.length === 0) return { status: 400, body: { error: 'Minimal 1 baris item diterima wajib diisi.' } };
 
     const adminClient = getAdminClient();

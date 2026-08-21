@@ -27,7 +27,7 @@ export async function updateProductionBatchSchedule(request: NextRequest): Promi
     const body = await request.json();
     const batchId = Number(body.production_batch_id);
     if (!batchId) {
-      return { status: 400, body: { error: 'production_batch_id wajib diisi.' } };
+      return { status: 400, body: { error: 'Batch produksi wajib diisi.' } };
     }
 
     const plannedDate = typeof body.planned_date === 'string' ? body.planned_date.trim() : '';

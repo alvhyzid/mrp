@@ -16,7 +16,7 @@ export async function listRoutingSteps(request: NextRequest): Promise<ApiResult>
 
     const routingId = Number(request.nextUrl.searchParams.get('routing_id'));
     if (!routingId) {
-      return { status: 400, body: { error: 'routing_id wajib diisi.' } };
+      return { status: 400, body: { error: 'Routing wajib diisi.' } };
     }
 
     const adminClient = getAdminClient();

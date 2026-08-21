@@ -16,7 +16,7 @@ export async function runKpiSeed(request: NextRequest): Promise<ApiResult> {
   try {
     const { appUser } = await getCurrentUser(request);
     if (!isCompanyLeadership(appUser.role)) {
-      return { status: 403, body: { error: 'Seed modul KPI khusus company_admin atau general_manager.' } };
+      return { status: 403, body: { error: 'Seed modul KPI khusus Admin Perusahaan atau General Manager.' } };
     }
     if (!appUser.company_id) {
       return { status: 400, body: { error: 'User belum terkait dengan perusahaan yang valid.' } };

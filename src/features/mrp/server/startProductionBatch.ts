@@ -38,7 +38,7 @@ export async function startProductionBatch(request: NextRequest): Promise<ApiRes
     const body = await request.json();
     const productionBatchId = Number(body.production_batch_id);
     if (!productionBatchId) {
-      return { status: 400, body: { error: 'production_batch_id wajib diisi.' } };
+      return { status: 400, body: { error: 'Batch produksi wajib diisi.' } };
     }
 
     const adminClient = getAdminClient();

@@ -43,7 +43,7 @@ export async function answerKamusTerm(request: NextRequest, kamusTermId: number)
       const answerPitfall = String(body.answer_pitfall ?? '').trim();
       const answerRange = String(body.answer_range ?? '').trim();
       if (!answerPlain) {
-        return { status: 400, body: { error: 'Penjelasan (answer_plain) wajib diisi.' } };
+        return { status: 400, body: { error: 'Penjelasan wajib diisi.' } };
       }
       updatePayload = {
         answer_plain: answerPlain,
@@ -55,7 +55,7 @@ export async function answerKamusTerm(request: NextRequest, kamusTermId: number)
     } else if (action === 'assign') {
       const assignedToRole = String(body.assigned_to_role ?? '').trim();
       if (!assignedToRole) {
-        return { status: 400, body: { error: 'Departemen tujuan (assigned_to_role) wajib diisi.' } };
+        return { status: 400, body: { error: 'Departemen tujuan wajib diisi.' } };
       }
       updatePayload = {
         assigned_to_role: assignedToRole,

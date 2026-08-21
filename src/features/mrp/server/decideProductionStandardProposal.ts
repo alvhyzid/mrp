@@ -16,7 +16,7 @@ export async function decideProductionStandardProposal(request: NextRequest): Pr
   try {
     const { appUser } = await getCurrentUser(request);
     if (!canDecideProductionStandardProposal(appUser.role)) {
-      return { status: 403, body: { error: 'Hanya company_admin, general_manager, atau ppic_manager yang dapat mengesahkan usulan standar produksi.' } };
+      return { status: 403, body: { error: 'Hanya Admin Perusahaan, General Manager, atau Manajer PPIC yang dapat mengesahkan usulan standar produksi.' } };
     }
     if (!appUser.company_id || !appUser.user_id) {
       return { status: 400, body: { error: 'User belum terkait dengan perusahaan yang valid.' } };
@@ -26,7 +26,7 @@ export async function decideProductionStandardProposal(request: NextRequest): Pr
     const proposalId = Number(body.production_standard_proposal_id);
     const decision = String(body.decision ?? '');
     if (!proposalId || !['approved', 'rejected'].includes(decision)) {
-      return { status: 400, body: { error: 'production_standard_proposal_id dan decision (approved/rejected) wajib diisi.' } };
+      return { status: 400, body: { error: 'Usulan standar dan keputusan (setuju/tolak) wajib diisi.' } };
     }
 
     const adminClient = getAdminClient();

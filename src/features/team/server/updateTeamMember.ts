@@ -15,7 +15,7 @@ export async function updateTeamMember(request: NextRequest): Promise<ApiResult>
     const { appUser } = await getCurrentUser(request);
 
     if (appUser.role !== 'company_admin') {
-      return { status: 403, body: { error: 'Hanya company_admin yang dapat mengubah anggota tim.' } };
+      return { status: 403, body: { error: 'Hanya Admin Perusahaan yang dapat mengubah anggota tim.' } };
     }
 
     const body = await request.json();

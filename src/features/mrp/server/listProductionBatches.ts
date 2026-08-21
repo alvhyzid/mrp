@@ -16,7 +16,7 @@ export async function listProductionBatches(request: NextRequest): Promise<ApiRe
     const { searchParams } = new URL(request.url);
     const workOrderId = Number(searchParams.get('work_order_id'));
     if (!workOrderId) {
-      return { status: 400, body: { error: 'work_order_id wajib diisi.' } };
+      return { status: 400, body: { error: 'Work Order wajib diisi.' } };
     }
 
     const adminClient = getAdminClient();

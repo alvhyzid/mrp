@@ -6,6 +6,9 @@ import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency, formatNumberId } from '@/lib/currency';
+import { getRoleLabel } from '@/lib/glossary';
+
+const ACTION_STATUS_LABELS: Record<string, string> = { TERBUKA: 'Terbuka', BERJALAN: 'Berjalan', SELESAI: 'Selesai' };
 
 const DISPLAY_TITLES: Record<string, string> = {
   'metric.margin_kontribusi': 'Margin Kontribusi Bulanan',
@@ -105,7 +108,7 @@ export default function MyKpiPage() {
           <>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {data.kpis.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Belum ada KPI yang relevan dengan peran Anda ({data.role}).</p>
+                <p className="text-sm text-muted-foreground">Belum ada KPI yang relevan dengan peran Anda ({getRoleLabel(data.role)}).</p>
               ) : (
                 data.kpis.map((k) => (
                   <Card key={k.kpi_registry_id}>
@@ -138,7 +141,7 @@ export default function MyKpiPage() {
                         </div>
                         <div className="flex items-center gap-2">
                           {a.due_date ? <span className="text-xs text-muted-foreground">Tenggat {a.due_date}</span> : null}
-                          <Badge variant="secondary">{a.status}</Badge>
+                          <Badge variant="secondary">{ACTION_STATUS_LABELS[a.status] ?? a.status}</Badge>
                         </div>
                       </div>
                     ))}

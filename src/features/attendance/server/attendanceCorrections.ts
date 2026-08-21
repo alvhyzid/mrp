@@ -55,7 +55,7 @@ export async function decideAttendanceCorrection(request: NextRequest, correctio
   try {
     const { appUser } = await getCurrentUser(request);
     if (!canManageHr(appUser.role)) {
-      return { status: 403, body: { error: 'Hanya HRD/company_admin yang dapat memutuskan koreksi absensi.' } };
+      return { status: 403, body: { error: 'Hanya HRD/Admin Perusahaan yang dapat memutuskan koreksi absensi.' } };
     }
     const adminClient = getAdminClient();
     const { data: correction, error: fetchError } = await adminClient.from('attendance_corrections').select('*').eq('attendance_correction_id', correctionId).maybeSingle();

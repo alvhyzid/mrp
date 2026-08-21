@@ -7,6 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 import { formatNumberId } from '@/lib/currency';
+import { getEntityLabel, COMMON_STATUS_LABELS } from '@/lib/glossary';
+
+function statusLabel(s: string): string {
+  return COMMON_STATUS_LABELS[s] ?? s;
+}
 
 type ProcessMiningResult = {
   total_transitions: number;
@@ -159,7 +164,7 @@ export default function ProcessMiningPage() {
                   data.status_durations.map((d, idx) => (
                     <div key={idx} className="flex items-center justify-between rounded-md border p-2 text-sm">
                       <span>
-                        {d.table_name}.{d.status}
+                        {getEntityLabel(d.table_name)} — {statusLabel(d.status)}
                       </span>
                       <span className="font-medium">
                         {d.avg_duration_hours === null ? (
@@ -193,7 +198,7 @@ export default function ProcessMiningPage() {
                 {data.transition_counts.slice(0, 10).map((t, idx) => (
                   <div key={idx} className="flex items-center justify-between text-sm">
                     <span>
-                      {t.table_name}: {t.from_status} → {t.to_status}
+                      {getEntityLabel(t.table_name)}: {statusLabel(t.from_status)} → {statusLabel(t.to_status)}
                     </span>
                     <span className="font-medium">{formatNumberId(t.count, 0)}×</span>
                   </div>
@@ -223,7 +228,7 @@ export default function ProcessMiningPage() {
                   data.backward_or_cancelled_transitions.map((t, idx) => (
                     <div key={idx} className="flex items-center justify-between text-sm">
                       <span>
-                        {t.table_name}: {t.from_status} → {t.to_status}
+                        {getEntityLabel(t.table_name)}: {statusLabel(t.from_status)} → {statusLabel(t.to_status)}
                       </span>
                       <span className="font-medium">{formatNumberId(t.count, 0)}×</span>
                     </div>

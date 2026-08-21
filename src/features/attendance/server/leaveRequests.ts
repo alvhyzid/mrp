@@ -52,7 +52,7 @@ export async function decideLeaveRequest(request: NextRequest, leaveRequestId: n
   try {
     const { appUser } = await getCurrentUser(request);
     if (!canManageHr(appUser.role)) {
-      return { status: 403, body: { error: 'Hanya HRD/company_admin yang dapat memutuskan pengajuan izin.' } };
+      return { status: 403, body: { error: 'Hanya HRD/Admin Perusahaan yang dapat memutuskan pengajuan izin.' } };
     }
     const adminClient = getAdminClient();
     const { data: leaveRequest, error: fetchError } = await adminClient.from('leave_requests').select('*').eq('leave_request_id', leaveRequestId).maybeSingle();

@@ -35,6 +35,8 @@ const approvalStatusBadgeVariant: Record<string, 'warning' | 'success' | 'critic
   approved: 'success',
   rejected: 'critical'
 };
+const approvalStatusLabels: Record<string, string> = { pending: 'Menunggu', approved: 'Disetujui', rejected: 'Ditolak' };
+const paymentStatusLabels: Record<string, string> = { pending: 'Menunggu', partial: 'Sebagian', confirmed: 'Lunas' };
 const departmentLabels: Record<string, string> = { finance: 'Finance', ppic: 'PPIC', manager: 'Manager' };
 
 type PoLine = {
@@ -461,7 +463,7 @@ export default function CustomerPurchaseOrdersPage() {
                   <span className="text-muted-foreground">Syarat Bayar:</span> {expandedPo.payment_terms ?? '-'}
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Status Bayar:</span> {expandedPo.payment_status}
+                  <span className="text-muted-foreground">Status Bayar:</span> {paymentStatusLabels[expandedPo.payment_status] ?? expandedPo.payment_status}
                 </div>
               </div>
 
@@ -505,7 +507,7 @@ export default function CustomerPurchaseOrdersPage() {
                       <div key={approval.customer_po_approval_id} className="flex items-center justify-between rounded-md border p-2">
                         <div className="flex items-center gap-2">
                           <Badge variant={approvalStatusBadgeVariant[approval.status] ?? 'secondary'}>{departmentLabels[approval.department]}</Badge>
-                          <span className="text-xs text-muted-foreground">{approval.status}</span>
+                          <span className="text-xs text-muted-foreground">{approvalStatusLabels[approval.status] ?? approval.status}</span>
                         </div>
                         {canAct ? (
                           <div className="flex gap-2">

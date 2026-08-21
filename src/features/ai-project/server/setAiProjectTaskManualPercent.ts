@@ -18,7 +18,7 @@ export async function setAiProjectTaskManualPercent(request: NextRequest, taskId
   try {
     const { appUser } = await getCurrentUser(request);
     if (!isCompanyLeadership(appUser.role)) {
-      return { status: 403, body: { error: 'Dashboard Proyek AI khusus company_admin atau general_manager (tim inti).' } };
+      return { status: 403, body: { error: 'Dashboard Proyek AI khusus Admin Perusahaan atau General Manager (tim inti).' } };
     }
     if (!appUser.company_id) {
       return { status: 400, body: { error: 'User belum terkait dengan perusahaan yang valid.' } };
@@ -27,7 +27,7 @@ export async function setAiProjectTaskManualPercent(request: NextRequest, taskId
     const body = await request.json();
     const percent = Number(body.manual_percent);
     if (Number.isNaN(percent) || percent < 0 || percent > 100) {
-      return { status: 400, body: { error: 'manual_percent harus angka 0-100.' } };
+      return { status: 400, body: { error: 'Persentase manual harus berupa angka 0-100.' } };
     }
 
     const adminClient = getAdminClient();

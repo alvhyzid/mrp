@@ -36,7 +36,7 @@ export async function updateCompany(request: NextRequest): Promise<ApiResult> {
     const { appUser } = await getCurrentUser(request);
 
     if (appUser.role !== 'company_admin') {
-      return { status: 403, body: { error: 'Hanya company_admin yang dapat mengubah data perusahaan.' } };
+      return { status: 403, body: { error: 'Hanya Admin Perusahaan yang dapat mengubah data perusahaan.' } };
     }
 
     if (!appUser.company_id) {

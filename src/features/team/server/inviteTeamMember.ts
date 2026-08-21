@@ -15,7 +15,7 @@ export async function inviteTeamMember(request: NextRequest): Promise<ApiResult>
     const { appUser } = await getCurrentUser(request);
 
     if (appUser.role !== 'company_admin') {
-      return { status: 403, body: { error: 'Hanya company_admin yang dapat mengundang anggota.' } };
+      return { status: 403, body: { error: 'Hanya Admin Perusahaan yang dapat mengundang anggota.' } };
     }
 
     const body = await request.json();

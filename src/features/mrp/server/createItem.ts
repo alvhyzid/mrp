@@ -13,7 +13,7 @@ export async function createItem(request: NextRequest): Promise<ApiResult> {
     const { appUser } = await getCurrentUser(request);
 
     if (!isCompanyLeadership(appUser.role)) {
-      return { status: 403, body: { error: 'Hanya company_admin atau general_manager yang dapat menambah item.' } };
+      return { status: 403, body: { error: 'Hanya Admin Perusahaan atau General Manager yang dapat menambah item.' } };
     }
 
     if (!appUser.company_id) {

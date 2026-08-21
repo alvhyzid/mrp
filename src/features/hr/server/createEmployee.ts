@@ -17,7 +17,7 @@ export async function createEmployee(request: NextRequest): Promise<ApiResult> {
     const { appUser } = await getCurrentUser(request);
 
     if (!canManageHr(appUser.role)) {
-      return { status: 403, body: { error: 'Hanya company_admin, hr_manager, atau hr_staff yang dapat menambah karyawan.' } };
+      return { status: 403, body: { error: 'Hanya Admin Perusahaan, Manajer HRD, atau Staf HRD yang dapat menambah karyawan.' } };
     }
 
     if (!appUser.company_id) {

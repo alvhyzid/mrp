@@ -11,7 +11,7 @@ export async function toggleAiProjectChecklistItem(request: NextRequest, checkli
   try {
     const { appUser } = await getCurrentUser(request);
     if (!isCompanyLeadership(appUser.role)) {
-      return { status: 403, body: { error: 'Dashboard Proyek AI khusus company_admin atau general_manager (tim inti).' } };
+      return { status: 403, body: { error: 'Dashboard Proyek AI khusus Admin Perusahaan atau General Manager (tim inti).' } };
     }
     if (!appUser.company_id) {
       return { status: 400, body: { error: 'User belum terkait dengan perusahaan yang valid.' } };

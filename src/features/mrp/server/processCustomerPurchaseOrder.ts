@@ -25,7 +25,7 @@ export async function processCustomerPurchaseOrder(request: NextRequest): Promis
     const { appUser } = await getCurrentUser(request);
 
     if (!isCompanyLeadership(appUser.role)) {
-      return { status: 403, body: { error: 'Hanya company_admin atau general_manager yang boleh memproses PO client.' } };
+      return { status: 403, body: { error: 'Hanya Admin Perusahaan atau General Manager yang boleh memproses PO client.' } };
     }
 
     if (!appUser.company_id) {

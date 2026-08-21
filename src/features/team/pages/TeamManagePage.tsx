@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { COMPANY_ROLES, INVITABLE_ROLES } from '@/lib/roles';
+import { getRoleLabel } from '@/lib/glossary';
 
 const inviteRoles = INVITABLE_ROLES;
 const memberRoles = COMPANY_ROLES;
@@ -28,6 +29,11 @@ const statusBadgeVariant: Record<string, 'success' | 'critical' | 'warning'> = {
   active: 'success',
   suspended: 'critical',
   invited: 'warning'
+};
+const statusLabels: Record<string, string> = {
+  active: 'Aktif',
+  suspended: 'Ditangguhkan',
+  invited: 'Diundang'
 };
 
 export default function TeamManagePage() {
@@ -191,7 +197,7 @@ export default function TeamManagePage() {
       },
       {
         accessorKey: 'role',
-        header: 'Role',
+        header: 'Peran',
         cell: ({ row }) => {
           const member = row.original;
           const isSelf = member.user_id === currentUserId;
@@ -208,7 +214,7 @@ export default function TeamManagePage() {
               <SelectContent>
                 {memberRoles.map((roleOption) => (
                   <SelectItem key={roleOption} value={roleOption}>
-                    {roleOption}
+                    {getRoleLabel(roleOption)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -220,7 +226,7 @@ export default function TeamManagePage() {
         accessorKey: 'status',
         header: 'Status',
         cell: ({ row }) => (
-          <Badge variant={statusBadgeVariant[row.original.status] ?? 'info'}>{row.original.status}</Badge>
+          <Badge variant={statusBadgeVariant[row.original.status] ?? 'info'}>{statusLabels[row.original.status] ?? row.original.status}</Badge>
         )
       },
       {
@@ -327,7 +333,7 @@ export default function TeamManagePage() {
               </label>
 
               <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium text-foreground">Role</span>
+                <span className="text-sm font-medium text-foreground">Peran</span>
                 <Select value={inviteRole} onValueChange={setInviteRole}>
                   <SelectTrigger>
                     <SelectValue />
@@ -335,7 +341,7 @@ export default function TeamManagePage() {
                   <SelectContent>
                     {inviteRoles.map((roleOption) => (
                       <SelectItem key={roleOption} value={roleOption}>
-                        {roleOption}
+                        {getRoleLabel(roleOption)}
                       </SelectItem>
                     ))}
                   </SelectContent>

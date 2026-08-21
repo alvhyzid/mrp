@@ -27,7 +27,7 @@ export async function lockMarginBaseline(request: NextRequest): Promise<ApiResul
     const body = await request.json();
     const salesOrderLineId = Number(body.sales_order_line_id);
     if (!salesOrderLineId) {
-      return { status: 400, body: { error: 'sales_order_line_id wajib diisi.' } };
+      return { status: 400, body: { error: 'Baris Sales Order wajib diisi.' } };
     }
     const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
 
@@ -56,7 +56,7 @@ export async function lockMarginBaseline(request: NextRequest): Promise<ApiResul
     // 0C.5: kunci ULANG (baseline sudah ada) hanya company_admin, DAN alasan wajib.
     if (existingActive) {
       if (appUser.role !== 'company_admin') {
-        return { status: 403, body: { error: 'Baseline Margin Watch untuk baris ini sudah terkunci -- hanya company_admin yang boleh mengunci ulang.' } };
+        return { status: 403, body: { error: 'Baseline Margin Watch untuk baris ini sudah terkunci -- hanya Admin Perusahaan yang boleh mengunci ulang.' } };
       }
       if (!reason) {
         return { status: 400, body: { error: 'Alasan wajib diisi untuk mengunci ulang baseline yang sudah ada.' } };

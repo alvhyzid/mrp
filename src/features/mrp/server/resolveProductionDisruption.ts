@@ -20,7 +20,7 @@ export async function resolveProductionDisruption(request: NextRequest): Promise
     const body = await request.json();
     const productionDisruptionId = Number(body.production_disruption_id);
     if (!productionDisruptionId) {
-      return { status: 400, body: { error: 'production_disruption_id wajib diisi.' } };
+      return { status: 400, body: { error: 'Gangguan produksi wajib diisi.' } };
     }
 
     const adminClient = getAdminClient();

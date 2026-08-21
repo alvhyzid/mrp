@@ -24,6 +24,7 @@ const adjustmentReasonLabels: Record<string, string> = {
 };
 
 const severityBadgeVariant: Record<string, 'info' | 'warning' | 'critical'> = { info: 'info', warning: 'warning', critical: 'critical' };
+const severityLabels: Record<string, string> = { info: 'Info', warning: 'Peringatan', critical: 'Kritis' };
 const alertTypeLabels: Record<string, string> = {
   stock_depletion_forecast: 'Proyeksi Stok Habis',
   expiry_risk_low_usage: 'Risiko Kadaluarsa (Pemakaian Lambat)',
@@ -415,7 +416,7 @@ export default function WarehouseDashboardPage() {
           </span>
         )
       },
-      { accessorKey: 'severity', header: 'Tingkat', cell: ({ row }) => <Badge variant={severityBadgeVariant[row.original.severity] ?? 'secondary'}>{row.original.severity}</Badge> }
+      { accessorKey: 'severity', header: 'Tingkat', cell: ({ row }) => <Badge variant={severityBadgeVariant[row.original.severity] ?? 'secondary'}>{severityLabels[row.original.severity] ?? row.original.severity}</Badge> }
     ],
     []
   );

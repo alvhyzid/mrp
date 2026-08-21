@@ -35,13 +35,13 @@ export async function recordDocumentSignature(request: NextRequest): Promise<Api
     const confirmationText = String(body.confirmation_text ?? '').trim();
 
     if (!documentType) {
-      return { status: 400, body: { error: 'document_type wajib diisi.' } };
+      return { status: 400, body: { error: 'Jenis dokumen wajib diisi.' } };
     }
     if (!documentId) {
-      return { status: 400, body: { error: 'document_id wajib diisi.' } };
+      return { status: 400, body: { error: 'Dokumen wajib diisi.' } };
     }
     if (!confirmationText) {
-      return { status: 400, body: { error: 'confirmation_text wajib diisi.' } };
+      return { status: 400, body: { error: 'Teks konfirmasi wajib diisi.' } };
     }
 
     const adminClient = getAdminClient();

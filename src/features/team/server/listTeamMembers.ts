@@ -11,7 +11,7 @@ export async function listTeamMembers(request: NextRequest): Promise<ApiResult> 
     const { appUser } = await getCurrentUser(request);
 
     if (appUser.role !== 'company_admin') {
-      return { status: 403, body: { error: 'Hanya company_admin yang dapat melihat daftar tim.' } };
+      return { status: 403, body: { error: 'Hanya Admin Perusahaan yang dapat melihat daftar tim.' } };
     }
 
     if (!appUser.company_id) {

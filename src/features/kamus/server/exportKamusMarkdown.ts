@@ -27,7 +27,7 @@ export async function exportKamusMarkdown(request: NextRequest): Promise<ApiResu
   try {
     const { appUser } = await getCurrentUser(request);
     if (!isCompanyLeadership(appUser.role)) {
-      return { status: 403, body: { error: 'Hanya company_admin atau general_manager yang dapat mengekspor kamus.' } };
+      return { status: 403, body: { error: 'Hanya Admin Perusahaan atau General Manager yang dapat mengekspor kamus.' } };
     }
     if (!appUser.company_id) {
       return { status: 400, body: { error: 'User belum terkait dengan perusahaan yang valid.' } };

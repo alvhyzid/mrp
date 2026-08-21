@@ -32,7 +32,7 @@ export async function completeProductionBatch(request: NextRequest): Promise<Api
     const body = await request.json();
     const productionBatchId = Number(body.production_batch_id);
     if (!productionBatchId) {
-      return { status: 400, body: { error: 'production_batch_id wajib diisi.' } };
+      return { status: 400, body: { error: 'Batch produksi wajib diisi.' } };
     }
     const rework = Boolean(body.rework);
 

@@ -17,7 +17,7 @@ export async function getDashboardSummary(request: NextRequest): Promise<ApiResu
     const { appUser } = await getCurrentUser(request);
 
     if (!isCompanyLeadership(appUser.role)) {
-      return { status: 403, body: { error: 'Ringkasan KPI ini khusus company_admin/general_manager.' } };
+      return { status: 403, body: { error: 'Ringkasan KPI ini khusus Admin Perusahaan/General Manager.' } };
     }
     if (!appUser.company_id) {
       return { status: 400, body: { error: 'User belum terkait dengan perusahaan yang valid.' } };

@@ -20,7 +20,7 @@ export async function getBatchYieldSummary(request: NextRequest): Promise<ApiRes
 
     const productionBatchId = Number(request.nextUrl.searchParams.get('production_batch_id'));
     if (!productionBatchId) {
-      return { status: 400, body: { error: 'production_batch_id wajib diisi.' } };
+      return { status: 400, body: { error: 'Batch produksi wajib diisi.' } };
     }
 
     const adminClient = getAdminClient();

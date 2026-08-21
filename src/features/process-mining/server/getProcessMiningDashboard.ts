@@ -16,7 +16,7 @@ export async function getProcessMiningDashboard(request: NextRequest): Promise<A
   try {
     const { appUser } = await getCurrentUser(request);
     if (!isCompanyLeadership(appUser.role)) {
-      return { status: 403, body: { error: 'Dashboard Process Mining khusus company_admin atau general_manager.' } };
+      return { status: 403, body: { error: 'Dashboard Process Mining khusus Admin Perusahaan atau General Manager.' } };
     }
     if (!appUser.company_id) {
       return { status: 400, body: { error: 'User belum terkait dengan perusahaan yang valid.' } };

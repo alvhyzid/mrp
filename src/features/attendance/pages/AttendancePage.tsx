@@ -10,6 +10,9 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 import { formatNumberId } from '@/lib/currency';
+import { ATTENDANCE_EVENT_TYPE_LABELS } from '@/lib/glossary';
+
+const leaveTypeLabels: Record<string, string> = { IZIN: 'Izin', SAKIT: 'Sakit', CUTI: 'Cuti' };
 
 type AttendanceRow = {
   employee_attendance_id: number;
@@ -309,7 +312,7 @@ export default function AttendancePage() {
                   pendingCorrections.map((row) => (
                     <div key={row.attendance_correction_id} className="flex items-center justify-between rounded-md border p-2 text-sm">
                       <span>
-                        {row.employee_name} — {row.attendance_date} — {row.requested_event_type} pukul{' '}
+                        {row.employee_name} — {row.attendance_date} — {ATTENDANCE_EVENT_TYPE_LABELS[row.requested_event_type] ?? row.requested_event_type} pukul{' '}
                         {new Date(row.requested_occurred_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} ({row.reason})
                       </span>
                       <div className="flex gap-2">
@@ -338,7 +341,7 @@ export default function AttendancePage() {
                   pendingLeaveRequests.map((row) => (
                     <div key={row.leave_request_id} className="flex items-center justify-between rounded-md border p-2 text-sm">
                       <span>
-                        {row.employee_name} — {row.leave_type} — {row.start_date} s/d {row.end_date}
+                        {row.employee_name} — {leaveTypeLabels[row.leave_type] ?? row.leave_type} — {row.start_date} s/d {row.end_date}
                       </span>
                       <div className="flex gap-2">
                         <Button size="sm" variant="outline" onClick={() => decideLeave(row.leave_request_id, true)}>

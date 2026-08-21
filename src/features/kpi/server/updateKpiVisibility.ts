@@ -21,7 +21,7 @@ export async function updateKpiVisibility(request: NextRequest, kpiRegistryId: n
       return { status: 400, body: { error: 'User belum terkait dengan perusahaan yang valid.' } };
     }
     if (!canManageKpiRegistry(appUser.role)) {
-      return { status: 403, body: { error: 'Hanya company_admin/general_manager yang boleh mengubah visibilitas/atribusi KPI.' } };
+      return { status: 403, body: { error: 'Hanya Admin Perusahaan/General Manager yang boleh mengubah visibilitas/atribusi KPI.' } };
     }
 
     const adminClient = getAdminClient();

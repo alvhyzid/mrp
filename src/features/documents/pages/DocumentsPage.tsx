@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { isCompanyLeadership } from '@/lib/roles';
 import { formatNumberId } from '@/lib/currency';
+import { DEPARTMENT_LABELS } from '@/lib/glossary';
 
 type DocumentType = { document_type_id: number; code: string; name: string };
 
@@ -31,6 +32,7 @@ type DocumentRow = {
 
 const DEPARTMENTS = ['production', 'ppic', 'finance', 'purchasing', 'warehouse', 'hr', 'management', 'fat', 'rnd'];
 const STATUS_LABELS: Record<string, string> = { AKTIF: 'Aktif', KEDALUWARSA: 'Kedaluwarsa', DIARSIP: 'Diarsip', DIGANTI: 'Diganti' };
+const SENSITIVITY_LABELS: Record<string, string> = { UMUM: 'Umum', DEPARTEMEN: 'Departemen', TERBATAS: 'Terbatas' };
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${formatNumberId(bytes, 0)} B`;
@@ -193,7 +195,7 @@ export default function DocumentsPage() {
       <div className="flex w-full flex-col gap-6 px-6">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Registry</p>
+            <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Registri</p>
             <h1 className="text-2xl font-semibold text-foreground">Master Dokumen</h1>
             <p className="mt-1 text-sm text-muted-foreground">Satu tempat untuk semua berkas masuk/keluar sistem -- PO klien, POD, surat jalan, COA, sertifikat, spesifikasi, kontrak, SOP.</p>
           </div>
@@ -242,7 +244,7 @@ export default function DocumentsPage() {
                 <SelectItem value="ALL">Semua Departemen</SelectItem>
                 {DEPARTMENTS.map((d) => (
                   <SelectItem key={d} value={d}>
-                    {d}
+                    {DEPARTMENT_LABELS[d] ?? d}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -294,10 +296,10 @@ export default function DocumentsPage() {
                       {doc.title}
                       {doc.doc_number ? <span className="text-muted-foreground"> ({doc.doc_number})</span> : null}
                     </td>
-                    <td className="px-3 py-1.5">{doc.doc_type}</td>
-                    <td className="px-3 py-1.5">{doc.department ?? '-'}</td>
+                    <td className="px-3 py-1.5">{documentTypes.find((t) => t.code === doc.doc_type)?.name ?? doc.doc_type}</td>
+                    <td className="px-3 py-1.5">{doc.department ? DEPARTMENT_LABELS[doc.department] ?? doc.department : '-'}</td>
                     <td className="px-3 py-1.5">
-                      <Badge variant={doc.sensitivity === 'TERBATAS' ? 'destructive' : doc.sensitivity === 'DEPARTEMEN' ? 'secondary' : 'outline'}>{doc.sensitivity}</Badge>
+                      <Badge variant={doc.sensitivity === 'TERBATAS' ? 'destructive' : doc.sensitivity === 'DEPARTEMEN' ? 'secondary' : 'outline'}>{SENSITIVITY_LABELS[doc.sensitivity] ?? doc.sensitivity}</Badge>
                     </td>
                     <td className="px-3 py-1.5">{STATUS_LABELS[doc.status] ?? doc.status}</td>
                     <td className="px-3 py-1.5">{formatBytes(doc.size_bytes)}</td>
@@ -366,7 +368,7 @@ export default function DocumentsPage() {
                     <option value="">-</option>
                     {DEPARTMENTS.map((d) => (
                       <option key={d} value={d}>
-                        {d}
+                        {DEPARTMENT_LABELS[d] ?? d}
                       </option>
                     ))}
                   </select>

@@ -86,7 +86,7 @@ export async function createShipmentWithSignature(request: NextRequest): Promise
       return { status: 400, body: { error: 'Alamat tujuan wajib diisi.' } };
     }
     if (!confirmationText) {
-      return { status: 400, body: { error: 'confirmation_text wajib diisi.' } };
+      return { status: 400, body: { error: 'Teks konfirmasi wajib diisi.' } };
     }
     if (!Array.isArray(body.lines) || body.lines.length === 0) {
       return { status: 400, body: { error: 'Minimal 1 baris item wajib diisi.' } };

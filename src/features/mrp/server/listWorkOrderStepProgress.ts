@@ -16,7 +16,7 @@ export async function listWorkOrderStepProgress(request: NextRequest): Promise<A
 
     const workOrderId = Number(request.nextUrl.searchParams.get('work_order_id'));
     if (!workOrderId) {
-      return { status: 400, body: { error: 'work_order_id wajib diisi.' } };
+      return { status: 400, body: { error: 'Work Order wajib diisi.' } };
     }
     // production_batch_id opsional — kalau diisi, hasil difilter ke batch itu saja
     // (progres sekarang dicatat per batch, bukan digabung di level WO).

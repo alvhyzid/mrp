@@ -25,7 +25,7 @@ export async function updateMarginFloorThreshold(request: NextRequest): Promise<
     const body = await request.json();
     const salesOrderLineId = Number(body.sales_order_line_id);
     if (!salesOrderLineId) {
-      return { status: 400, body: { error: 'sales_order_line_id wajib diisi.' } };
+      return { status: 400, body: { error: 'Baris Sales Order wajib diisi.' } };
     }
     const thresholdRaw = body.margin_floor_threshold;
     const threshold = thresholdRaw === null || thresholdRaw === '' || thresholdRaw === undefined ? null : Number(thresholdRaw);

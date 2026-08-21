@@ -25,7 +25,7 @@ export async function getGanttBlockDetail(request: NextRequest): Promise<ApiResu
     const productionBatchId = Number(request.nextUrl.searchParams.get('production_batch_id'));
     const routingStepId = Number(request.nextUrl.searchParams.get('routing_step_id'));
     if (!productionBatchId || !routingStepId) {
-      return { status: 400, body: { error: 'production_batch_id dan routing_step_id wajib diisi.' } };
+      return { status: 400, body: { error: 'Batch produksi dan tahap routing wajib diisi.' } };
     }
 
     const adminClient = getAdminClient();

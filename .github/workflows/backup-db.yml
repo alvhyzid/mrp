@@ -1,13 +1,11 @@
-name: Backup Database (manual)
+name: Backup Database (terjadwal + manual)
 
 # GELOMBANG 1 poin 8 / instruksi A2 (18 Agu 2026) — syarat WAJIB "pg_dump backup dulu"
 # sebelum pembersihan data demo lama tidak bisa dipenuhi dari environment kerja lokal
 # (tidak ada Docker sama sekali di sana, dan `supabase db dump` SELALU shell-out ke
 # pg_dump lewat container terlepas dari target lokal/remote — lihat HANDOFF.md). GitHub
 # Actions runner PUNYA Docker (dibuktikan job "Rebuild Schema from Migrations" di
-# ci.yml, jalan tiap push), jadi backup SUNGGUHAN (schema + DATA) dijalankan di sini —
-# trigger MANUAL saja (workflow_dispatch), bukan tiap push, karena ini query terhadap
-# project REMOTE (dev), bukan container lokal sekali pakai seperti job rebuild-migrations.
+# ci.yml, jalan tiap push), jadi backup SUNGGUHAN (schema + DATA) dijalankan di sini.
 #
 # KOREKSI (run #1-#2 gagal, run #2 dibuktikan lewat log sungguhan): `supabase db dump`
 # TIDAK PUNYA mode gabungan schema+data dalam 1 command — `--help` cuma punya toggle
@@ -15,8 +13,21 @@ name: Backup Database (manual)
 # tanpa --data-only cuma berisi CREATE TABLE/ALTER TABLE/CREATE SEQUENCE utk companies,
 # NOL baris COPY/INSERT data). Jadi backup PENUH butuh 2 pemanggilan terpisah, digabung
 # jadi 1 file (schema dulu, baru data — urutan pg_dump standar).
+#
+# INF-05 (22 Agu 2026, SUPER URGENT) — audit infrastruktur INF-01 menemukan backup
+# project berisi data nyata PT ITM TIDAK PERNAH otomatis (fitur PITR asli Supabase mati,
+# 0 snapshot; jalur ini sebelumnya HANYA workflow_dispatch manual, retensi artifact 7
+# hari, backup terakhir yang berhasil sempat 2 hari sebelum ditemukan). Ditambah
+# `schedule` (cron harian) supaya berjalan OTOMATIS tanpa menunggu diklik, dan retensi
+# artifact dinaikkan dari 7 ke 30 hari. Pemeriksaan isi (bukan cuma status hijau) SUDAH
+# ADA sejak awal di step "Verifikasi dump tidak kosong & berisi data" di bawah -- tidak
+# diubah, sudah memenuhi syarat "backup yang tidak diperiksa isinya sama dengan tidak
+# ada backup".
 on:
   workflow_dispatch: {}
+  schedule:
+    # 18:00 UTC = 01:00 WIB -- jam sepi trafik, jauh dari jam kerja.
+    - cron: '0 18 * * *'
 
 jobs:
   backup:
@@ -91,10 +102,10 @@ jobs:
           echo "Jumlah tabel (semua schema) yang punya data di dump ini: ${TABLES_WITH_DATA}."
           echo "OK: dump gabungan berisi schema DAN data sungguhan (${COPY_COUNT} COPY block, ${INSERT_COUNT} INSERT statement, ${TABLES_WITH_DATA} tabel berisi data)."
 
-      - name: Upload backup sebagai artifact (retensi 7 hari)
+      - name: Upload backup sebagai artifact (retensi 30 hari -- dinaikkan dari 7, INF-05 22 Agu 2026)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: db-backup-full
           path: backup-full-*.sql
-          retention-days: 7
+          retention-days: 30

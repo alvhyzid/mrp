@@ -41,6 +41,8 @@ describe('Sesi 0C — pisahkan membaca dari mengunci baseline (Margin Watch + Ke
   let cpoId: number;
   let soId: number;
   let soLineId: number;
+  let noStandardItemId: number;
+  let noStandardSoLineId: number;
   let financeAuthUid: string;
   let financeToken: string;
   let adminAuthUid: string;
@@ -94,6 +96,22 @@ describe('Sesi 0C — pisahkan membaca dari mengunci baseline (Margin Watch + Ke
 
     const { data: soLine } = await adminClient.from('sales_order_lines').insert([{ sales_order_id: soId, item_id: itemId, qty_ordered: 100, unit_price: 1000 }]).select('sales_order_line_id').single();
     soLineId = soLine!.sales_order_line_id;
+
+    // Item SAUDARA TANPA production_standards -- untuk membuktikan gerbang kelengkapan
+    // (Sesi 5, 5.0.3) menutup pintu KUNCI KELAYAKAN JADWAL juga, bukan cuma Margin Watch.
+    const { data: noStandardItem } = await adminClient
+      .from('items')
+      .insert([{ company_id: companyId, item_code: 'BASELINELOCK-NOSTANDARD', name: 'Item BaselineLockTest Tanpa Standar', type: 'finished_good', base_uom: 'pcs', purchase_uom: 'pcs', uom_conversion_factor: 1, standard_cost: 100 }])
+      .select('item_id')
+      .single();
+    noStandardItemId = noStandardItem!.item_id;
+
+    const { data: noStandardSoLine } = await adminClient
+      .from('sales_order_lines')
+      .insert([{ sales_order_id: soId, item_id: noStandardItemId, qty_ordered: 50, unit_price: 1000 }])
+      .select('sales_order_line_id')
+      .single();
+    noStandardSoLineId = noStandardSoLine!.sales_order_line_id;
 
     const financeUser = await adminClient.auth.admin.createUser({ email: 'finance.baselinelocktest@debug.mrp', password: roleTestPassword, email_confirm: true });
     financeAuthUid = financeUser.data.user!.id;
@@ -158,6 +176,15 @@ describe('Sesi 0C — pisahkan membaca dari mengunci baseline (Margin Watch + Ke
     const lockResult = await lockFeasibilityBaseline(lockReq);
     expect(lockResult.status).toBe(403);
     const { count } = await adminClient.from('sales_order_line_feasibility_snapshots').select('*', { count: 'exact', head: true }).eq('sales_order_line_id', soLineId);
+    expect(count).toBe(0);
+  });
+
+  it('(negatif 5.0.3) finance_manager coba KUNCI Kelayakan Jadwal utk item TANPA production_standards -> ditolak 400, tidak ada baris tersimpan', async () => {
+    const lockReq = makePostRequest('http://localhost/api/sales-order-lines/feasibility-baseline-lock', financeToken, { sales_order_line_id: noStandardSoLineId });
+    const lockResult = await lockFeasibilityBaseline(lockReq);
+    expect(lockResult.status).toBe(400);
+    expect((lockResult.body as any).error).toContain('standar unit-per-batch');
+    const { count } = await adminClient.from('sales_order_line_feasibility_snapshots').select('*', { count: 'exact', head: true }).eq('sales_order_line_id', noStandardSoLineId);
     expect(count).toBe(0);
   });
 

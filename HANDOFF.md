@@ -4,6 +4,42 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Sesi 5 — Penutupan 0C + Audit Lubang UI — 21 Agu 2026 — SELESAI
+
+### Bagian 0 — Penutupan 0C
+
+**5.0.1 — Baris 02:43 (query langsung, bukan narasi).** `sales_order_line_margin_snapshots` DAN `sales_order_line_feasibility_snapshots` company_id=1 = **0 baris di keduanya, saat ini**. Baris 02:43 (margin id=105) dan feasibility id=282 SUDAH dihapus — keduanya termasuk yang dibersihkan migrasi `20260827160000` bagian 0C.6 (match by `item_code='MLVT-BOX/001ITM'`), yang SUDAH applied (dikonfirmasi `npx supabase migration list`, semua migrasi s.d. `20260827200000` local=remote). Tidak ada baris lain company_id=1 di kedua tabel ini.
+
+**5.0.2 — Baseline MLVT biaya nol/tidak lengkap.** TIDAK ADA yang perlu dihapus — tabelnya 0 baris (lihat 5.0.1), jadi tidak ada baseline terkunci yang perlu migrasi pembersihan baru.
+
+**5.0.3 — Gerbang kelengkapan Kelayakan Jadwal.** Test baru ditambahkan (`baseline_lock_separation.test.ts`, fixture item TANPA `production_standards`) membuktikan `lockFeasibilityBaseline` menolak 400 dengan pesan "Belum bisa dikunci: standar unit-per-batch dan/atau kapasitas batch/hari belum ada untuk item ini" — tidak ada baris tersimpan. **Temuan jujur, bukan yang diasumsikan tugas**: item MLVT-BOX/001ITM REAL sudah PUNYA `production_standards` (`unit_per_batch=226.19`, `batches_per_day=3`) — jadi mengunci KELAYAKAN JADWAL utk SO MLVT nyata TIDAK akan ditolak (gerbangnya cuma cek keberadaan unit/batch, bukan harga bahan). Yang DITOLAK utk SO MLVT adalah gerbang MARGIN (`cost_data_complete=false`, 16 bahan baku belum ada). Kedua gerbang memang mengecek hal BERBEDA secara sengaja (kapasitas produksi vs harga bahan) — bukan bug, tapi juga bukan "gerbang yang sama menutup dua pintu" seperti premis tugas. Tidak dijalankan langsung ke SO MLVT company_id=1 (hanya baca), sesuai batas "data PT ITM hanya dibaca".
+
+**5.0.4 — Pengawas anomali KPI.** `tests/kpi_kamus_integrity_guard.test.ts` (baru): cek read-only company_id=1 — 6 metric_key kategori A `kpi_registry` + 11 term_key scope METRIC `kamus_terms` (snapshot nyata, diverifikasi query langsung sebelum ditulis). Gagal dengan pesan sebut persis metric_key/term_key yang hilang. Dibuktikan BISA gagal (bukan selalu hijau): 2 test tambahan di fixture terisolasi menghapus 1 baris masing-masing tabel, memverifikasi pesan kegagalan tepat, lalu memulihkan.
+
+**5.0.5 — Koreksi aturan verifikasi CLAUDE.md.** Diperbaiki: verifikasi visual browser TETAP WAJIB (test tidak menggantikan), HANYA tenant uji, sisa fixture WAJIB dibersihkan+dilaporkan. Lihat `CLAUDE.md` bagian "Aturan Verifikasi Manual".
+
+**5.0.6 — 9 test (192→201) + 8 test (201→209), dilacak lewat `git show` per commit (bukan ingatan), disilangkan dengan angka test yang DITULISKAN SENDIRI di tiap pesan commit (`192/192`→`199 test`→`201 test`→`209 test`, semua cocok persis):**
+- `tests/production_plants.test.ts` (baru, commit `85f47bb`, +3): WO di plant nonaktif ditolak; WO ke plant terhapus ditolak; WO di plant aktif berhasil.
+- `tests/mlvt_case_study_skeleton.test.ts` (baru, commit `df4c7cd`, +4): biaya kemasan MLVT tepat; routing Sachet/Box tersalin persis; PO client duplikat ditolak; PO yang sudah `processed` tidak bisa diproses ulang.
+- `tests/mlvt_case_study_skeleton.test.ts` (commit `8d4d027`, +2): faktor Sachet Roll tepat 3333 (regresi); yield MLVT 100% bukan 95% (regresi).
+- `tests/baseline_lock_separation.test.ts` (baru, commit `79dd56d`, +6): buka panel 5x tidak menulis; ppic_staff ditolak kunci feasibility; finance_manager kunci pertama berhasil; finance_manager kunci-ulang ditolak; admin kunci-ulang tanpa alasan ditolak; admin kunci-ulang dengan alasan berhasil (lama diarsipkan).
+- `tests/margin_watch.test.ts` (commit `79dd56d`, +2): baseline belum terkunci saat pertama dilihat (locked:false, lalu dikunci eksplisit); kunci ditolak saat `cost_data_complete=false`.
+
+**Bukti negatif Bagian 0**: (a) test "(negatif a)" — buka panel 5x, 0 baris bertambah (lulus, bagian dari 214 test hijau). (b) 2 test baru sengaja menghapus 1 baris KPI/Kamus di fixture terisolasi, memverifikasi pesan pengawas persis, lalu memulihkan — lulus. (c) migrasi 0C.6 sudah applied sebelumnya, 0 baris berubah kalau dibaca ulang sekarang (idempoten, dibuktikan lewat query, bukan re-run — migrasinya sendiri sudah applied, tidak direplay ulang di sesi ini).
+
+**2 bug ditemukan+diperbaiki di test baru sendiri sebelum commit** (bukan di kode aplikasi): FK komposit `kpi_registry.metric_key → kamus_terms(company_id, term_key)` mengharuskan baris kamus disiapkan LEBIH DULU; kolom `priority`/`domain` NOT NULL di `kamus_terms` belum diisi. Keduanya ditemukan lewat full-suite run (bukan lolos tsc), diperbaiki, re-run bersih 214/214.
+
+### Bagian 1 — Audit Lubang UI (read-only, 0 perubahan kode aplikasi)
+
+Hasil lengkap: `docs/audit-lubang-ui.md`. 72 tabel utama diperiksa (76 termasuk tabel `_lines`). **12 lubang [P]**, di bawah ambang STOP (15). Temuan utama: Sales Order tak pernah berubah status lewat kode; PO Customer tak bisa ditunda/dibatalkan walau tombolnya ada di layar; fungsi hapus dokumen & set-target KPI sudah lengkap di backend tapi tak tersambung ke layar manapun; tidak ada layar traceability lot; routing bisa diedit saat dipakai WO aktif tanpa peringatan; banyak jalur tulis (SDM/payroll, transaksi inti, transisi pengiriman, traceability produksi) tanpa jejak siapa/kapan; 1 temuan salah-label (absensi tutup-otomatis tercatat seolah aksi manual HRD). **Jawaban 5.7**: `routing_step_standard_crew` (0 UI sama sekali, 0 baris utk PT ITM) dan durasi siklus nyata (SUDAH punya jalur lengkap lewat layar Progres Tahap → belajar otomatis → Usulan Standar yang sudah ada) adalah **DUA lubang berbeda** — bukan satu layar yang menutup keduanya.
+
+Bukti negatif: (a) `git status` menunjukkan Bagian 1 hanya menambah `docs/audit-lubang-ui.md`. (b) 3 tabel "UI lengkap" dibuktikan dgn path+fungsi persis: `items` (`createItem.ts`/`updateItem.ts`), `boms` (`createBom.ts`/`updateBom.ts`, arsip via `status`), `employees` (`createEmployee.ts`/`updateEmployee.ts`, arsip via `is_active`).
+
+### Status build/test
+tsc bersih, `npm run build` sukses, full suite **34 file, 214 test hijau** (2x run konsisten). Commit ini mencakup Bagian 0 (kode+test) dan Bagian 1 (dokumen) sekaligus — **menunggu lampu hijau pemilik produk sebelum lanjut ke sesi berikutnya manapun** (tidak ada sesi lanjutan yang secara eksplisit diperintahkan setelah ini).
+
+---
+
 ## Sesi 0C — Pisahkan Membaca dari Mengunci Baseline + Gerbang Kelengkapan — 21 Agu 2026 — SELESAI
 
 **Jawaban 4 pertanyaan 0B yang tertunda (0C.1, dijawab tertulis SEBELUM kode ditulis):**

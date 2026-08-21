@@ -1,6 +1,135 @@
-# Audit Lubang UI — Sesi 5 (21 Agu 2026)
+# Audit Lengkap Tabel — Sesi 7 (21 Agu 2026, menggantikan cakupan Sesi 5)
 
-Audit read-only, tanpa perubahan kode. Metodologi: untuk setiap tabel di skema (kecuali tabel sistem Supabase & tabel murni teknis/konfigurasi validasi), ditelusuri lewat `grep` langsung ke kode — apakah ada `.insert(`/`.update(`/`.delete(` yang benar-benar terhubung ke sebuah halaman (`app/**/page.tsx` → `src/features/<domain>/pages/*.tsx`), bukan cuma fungsi server yang ada tapi tidak pernah dipanggil dari layar manapun ("mati"). **72 tabel utama diperiksa** (76 kalau 4 tabel baris/`_lines` yang menyatu dengan tabel headernya dihitung terpisah).
+## Kenapa dokumen ini ditulis ulang, bukan ditambal
+
+Sesi 7.1 menemukan 5 tabel (`routings`, `companies`, `invitations`, `shipments`, `work_orders`) yang seharusnya bertanda [X] tapi tidak pernah masuk daftar akhir Sesi 5. Pemilik produk meminta penjelasan MEKANISME-nya, bukan sekadar "kelalaian" — karena mekanisme yang sama kemungkinan meloloskan tabel lain juga. Investigasi menemukan **DUA mekanisme berbeda**, bukan satu:
+
+**Mekanisme A — sinkronisasi daftar tabel dengan skema tidak pernah dicek ulang lewat sumber otoritatif.** "72 tabel" Sesi 5 ternyata dikumpulkan dari ingatan/dokumen rancangan, BUKAN dari daftar tabel sungguhan di database. Dibandingkan langsung dengan API introspection Supabase (lihat metodologi baru di bawah) — **37 tabel tidak pernah disebut sama sekali** di `audit-lubang-ui.md` versi Sesi 5. Mayoritas termasuk 2 kelompok yang bisa dijelaskan (bukan acak): (a) modul yang dibangun SETELAH baseline Sesi 5 disusun (mis. `production_batch_*_snapshots` dari Sesi 6A — secara harfiah belum ada saat Sesi 5 berjalan), dan (b) modul yang sudah ada tapi domainnya tidak pernah disinkronkan ulang ke daftar audit (KPI: `kpi_actions`/`kpi_responsibilities`/`kpi_snapshots`/`kpi_registry_history`; Kamus: `kamus_terms`/`kamus_term_history`; AI-Project/AI-Readiness: seluruh `ai_*`; Dokumen: `document_access_log`/`document_links`). Ini BUKAN 5 tabel yang hilang — ini gejala bahwa daftar tabel itu sendiri tidak pernah disinkronkan ulang ke skema yang sebenarnya.
+
+**Mekanisme B — tabel yang SUDAH disurvei datanya benar, tapi tidak lolos ke daftar klasifikasi akhir.** Ini mekanisme spesifik untuk `routings`/`companies`/`invitations`/`shipments`/`work_orders`. Kelimanya SUDAH ADA di tabel per-domain Sesi 5 dengan kolom Create/Edit/Arsip-Hapus yang TERISI BENAR (Arsip/Hapus = "TIDAK ADA" untuk kelimanya, persis kondisi sebenarnya) — jadi DATA MENTAHNYA TIDAK SALAH. Yang gagal adalah LANGKAH SINTESIS: mengubah baris tabel per-domain jadi baris bernomor di "Ringkasan Akhir [P]/[X]" dilakukan dengan membaca-lalu-memilih (pattern-matching temuan yang "terasa penting"), BUKAN dengan menyapu MEKANIS setiap baris tabel per-domain dan menandai [X] kalau Buat=ya DAN (Ubah=ya ATAU Ubah=sebagian) DAN Arsip/Hapus=TIDAK ADA. Karena langkah sintesis ini tidak mekanis, benar seperti dugaan pemilik produk: **kemungkinan tabel lain juga lolos** — dan memang benar, ditemukan lagi 3 baris [P] (Sales Order, PO Customer, Dokumen) yang seharusnya JUGA [X] dengan pola yang SAMA persis.
+
+## Metodologi baru — bisa diverifikasi ulang oleh siapa pun
+
+Daftar tabel TIDAK diambil dari dokumen/ingatan. Diambil langsung dari API introspection Supabase (`GET {project_url}/rest/v1/` dengan service-role key — PostgREST mencetak setiap tabel/view di schema `public` sebagai path, setara `information_schema.tables` untuk skema yang di-expose) pada 21 Agu 2026, lalu dicocokkan ke `CREATE TABLE`/`CREATE VIEW` di `supabase/migrations/*.sql` untuk memisahkan tabel asli dari view keamanan (`*_secure`, `work_orders_readiness`).
+
+**Hasil: 87 entitas total di schema public = 80 tabel asli + 7 view keamanan.** Sesi 5 mengklaim 72 (76 kalau baris/`_lines` dihitung terpisah) — selisih dari 80 tabel asli adalah **4 tabel** (kalau baseline dibandingkan ke 76) atau **8 tabel** (kalau ke 72), TAPI selisih riil jauh lebih besar dari itu (37 tabel tidak pernah disebut sama sekali — lihat Mekanisme A) karena banyak yang SEHARUSNYA di luar "72" itu justru pernah disinggung sepintas di teks tanpa masuk hitungan resmi. Angka "72" itu sendiri tidak pernah bisa dilacak ke satu sumber tunggal yang mekanis — kesimpulan paling jujur: angka itu adalah PERKIRAAN dari cakupan yang terasa lengkap saat itu, bukan hasil penghitungan sistematis.
+
+## Daftar LENGKAP 80 tabel — kategori & jalur keluar
+
+Kategori: **[E]** = baris anak (`_lines`/`_steps`) yang diedit menyatu dengan form header-nya (tidak dihitung sebagai tabel terpisah, sesuai konvensi Sesi 5 sendiri). **[LOG]** = ledger/log/snapshot append-only BY DESIGN (CLAUDE.md invarian #6/#4: traceability tidak boleh kehilangan jejak) — arsip/hapus TIDAK BERLAKU secara konsep, bukan gap. **[TX]** = dokumen transaksi bisnis (bukan master data) — di luar BATAS eksplisit Sesi 7 ("hanya master data"), dicatat supaya kelihatan, bukan disembunyikan. **[NOCRUD]** = tidak ada Buat/Ubah lewat layar sama sekali (butuh dibangun dari nol, beda kelas pekerjaan dari "tambah tombol keluar"). **[MASTER]** = tabel master data dengan Buat+Ubah tersambung layar TAPI Keluar bermasalah — **INI cakupan sisa Sesi 7**. **[OK]** = sudah lengkap (Lihat/Buat/Ubah/Keluar semua tersambung layar dengan benar).
+
+| # | Tabel | Kategori | Lihat | Buat | Ubah | Keluar |
+|---|---|---|---|---|---|---|
+| 1 | `ai_answer_feedback` | [LOG] | tidak ada layar terpisah | ya (widget umpan balik) | tidak berlaku | tidak berlaku |
+| 2 | `ai_capabilities` | [LOG] | ya (AiReadinessPage) | sistem (seed) | sistem (recompute) | tidak berlaku |
+| 3 | `ai_capability_overrides` | [NOCRUD] | tidak ada | fungsi ada, TIDAK ADA layar (kode mati) | tidak ada | tidak ada |
+| 4 | `ai_capability_requirements` | [LOG] | ya (bagian gating) | sistem (seed) | tidak ada | tidak berlaku |
+| 5 | `ai_capability_status` | [LOG] | ya | sistem (recompute) | sistem (recompute) | tidak berlaku |
+| 6 | `ai_project_checklist_items` | [OK] | ya | seed | ya (centang selesai) | tidak berlaku (bukan dihapus, dicentang) |
+| 7 | `ai_project_phases` | [LOG] | ya | seed | tidak ada | tidak berlaku (rencana kerja tetap) |
+| 8 | `ai_project_progress_snapshots` | [LOG] | ya (grafik) | otomatis | tidak berlaku | tidak berlaku |
+| 9 | `ai_project_tasks` | [LOG] | ya | seed | ya (`setAiProjectTaskManualPercent`) | tidak ada (dampak kecil, alat internal tracking) |
+| 10 | `attendance_corrections` | sudah tercatat [X] #18 | ya (sisi approve) | fungsi ada, TIDAK ADA form pengajuan | ya (approve/reject) | tidak berlaku |
+| 11 | `attendance_devices` | sudah tercatat [X] #17 | tidak ada | otomatis (self-register) | TIDAK ADA alur approve/revoke | tidak ada |
+| 12 | `attendance_events` | [LOG] | ya (rekap) | sistem/self-service | ya (koreksi via attendance_corrections) | tidak berlaku |
+| 13 | `bom_lines` | [E] | menyatu `boms` | menyatu | menyatu | menyatu |
+| 14 | `boms` | [MASTER] — **bug 7.4 ditemukan** | ya | ya | ya | ADA (`status=archived`) TAPI dropdown BOM di `WorkOrdersPage.tsx` TIDAK mengecualikan yang diarsipkan |
+| 15 | `companies` | [MASTER] (tenant sendiri, bukan MRP produksi — perlu keputusan cakupan) | ya | ya (self-signup) | ya (`updateCompany.ts`: nama, jenis industri) | TIDAK ADA |
+| 16 | `company_settings` | sudah tercatat [P][X] #7 | TIDAK ADA layar sama sekali | — | — | — |
+| 17 | `customer_po_approvals` | [LOG] | ya (bagian PO) | otomatis | ya (approve/reject) | tidak berlaku |
+| 18 | `customer_purchase_order_lines` | [E] | menyatu | menyatu | menyatu | menyatu |
+| 19 | `customer_purchase_orders` | [TX] | ya | ya | sebagian (audit lama [P] #2, SEHARUSNYA JUGA [X]) | TIDAK ADA |
+| 20 | `customers` | [MASTER] | hanya dropdown, TIDAK ADA halaman daftar | ya | TIDAK ADA (audit lama [X] #19) | TIDAK ADA |
+| 21 | `delivery_confirmations` | [LOG] | ya | RPC shipment | tidak berlaku (sengaja append-only) | tidak berlaku |
+| 22 | `document_access_log` | [LOG] | tidak ada layar terpisah | otomatis | tidak berlaku | tidak berlaku |
+| 23 | `document_links` | [E] | menyatu `documents` | otomatis saat upload | menyatu | menyatu |
+| 24 | `document_signatures` | [LOG] | ya (di Shipments) | RPC shipment | tidak ada (sengaja append-only) | tidak ada (sengaja) |
+| 25 | `document_types` | [NOCRUD] | TIDAK ADA layar kelola | TIDAK ADA UI (hanya service-role) | TIDAK ADA | TIDAK ADA |
+| 26 | `documents` | [TX] (dekat selesai) | ya | ya (upload) | TIDAK ADA | fungsi lengkap (`hardDeleteOrphanDocument.ts`) TAPI TIDAK ADA tombol (audit lama [P] #3, SEHARUSNYA JUGA [X]) |
+| 27 | `employee_attendance` | [LOG] | ya (rekap) | otomatis (hasil hitung) | tidak berlaku | tidak berlaku |
+| 28 | `employees` | [MASTER] — **perlu verifikasi 7.4** | ya | ya | ya | ADA (`is_active`) — pemakaian di dropdown Work Order SUDAH benar (filter `is_active`), TAPI belum dicek exhaustif di semua tempat lain |
+| 29 | `formula_templates` | dorman, 0 dampak aktif | — | — | — | — |
+| 30 | `goods_receipt_lines` | [E] | menyatu | menyatu | menyatu | menyatu |
+| 31 | `goods_receipts` | [TX] | TIDAK ADA riwayat/daftar | ya | TIDAK ADA | TIDAK ADA |
+| 32 | `invitations` | [MASTER] (tim/administrasi, bukan MRP produksi — perlu keputusan cakupan) | tidak ada (hanya lewat status `users`) | ya | ya (accept) | TIDAK ADA (tidak bisa membatalkan undangan salah kirim) |
+| 33 | `invoices` | sesuai rencana, fase billing belum mulai | — | — | — | — |
+| 34 | `items` | [MASTER] — **bug 7.4 ditemukan** | ya | ya | ya | ADA (`is_active`) TAPI dropdown item di `CustomerPurchaseOrdersPage.tsx`, `BomsPage.tsx`, `RoutingsPage.tsx` TIDAK mengecualikan yang nonaktif |
+| 35 | `kamus_routing_rules` | dorman | — | — | — | — |
+| 36 | `kamus_term_history` | [LOG] | ya (riwayat) | otomatis | tidak berlaku | tidak berlaku |
+| 37 | `kamus_terms` | [OK] (by design — dokumentasi permanen, sengaja tidak dihapus) | ya | otomatis (generator) | ya (jawab/konfirmasi) | tidak berlaku |
+| 38 | `kpi_actions` | [NOCRUD] | ya (bagian kartu KPI) | TIDAK ADA UI | TIDAK ADA UI | TIDAK ADA |
+| 39 | `kpi_registry` | [MASTER] (+ gap lebih besar dari sekadar arsip — lihat audit lama [P] #4) | ya | seed | fungsi ada (`updateKpiTarget`/`updateKpiVisibility`) TIDAK tersambung layar | ADA (`is_active`) TAPI TIDAK ADA UI toggle |
+| 40 | `kpi_registry_history` | [LOG] | ya (riwayat) | otomatis | tidak berlaku | tidak berlaku |
+| 41 | `kpi_responsibilities` | [NOCRUD] | ya (bagian kartu KPI) | hanya via seed script | TIDAK ADA UI | TIDAK ADA |
+| 42 | `kpi_snapshots` | [LOG] | ya (sparkline) | otomatis | tidak berlaku | tidak berlaku |
+| 43 | `leave_requests` | sudah tercatat [X] #18 | ya (sisi approve) | fungsi ada, TIDAK ADA form pengajuan | ya (approve/reject) | tidak berlaku |
+| 44 | `lot_genealogy` | [LOG] + sudah tercatat [P][I] #5 (tidak ada layar LIHAT) | TIDAK ADA layar | otomatis | tidak berlaku | tidak berlaku |
+| 45 | `lots` | [LOG] — LEDGER, dikecualikan eksplisit BATAS Sesi 7 | ya | otomatis | ya (adjustment tercatat) | tidak berlaku (ledger) |
+| 46 | `production_batch_bom_line_snapshots` | [LOG] | tidak langsung | otomatis (Sesi 6A) | tidak berlaku | tidak berlaku |
+| 47 | `production_batch_routing_step_snapshots` | [LOG] | ya (Gantt/detail blok) | otomatis (Sesi 6A) | tidak berlaku | tidak berlaku |
+| 48 | `production_batch_standard_crew_snapshots` | [LOG] | tidak langsung | otomatis (Sesi 6A) | tidak berlaku | tidak berlaku |
+| 49 | `production_batches` | [TX] — LEDGER produksi, dikecualikan eksplisit BATAS Sesi 7 | ya | ya | hanya reschedule tanggal (audit lama [X] #21) | TIDAK ADA |
+| 50 | `production_disruptions` | [LOG] | ya | ya (lapor) | ya (resolve) | tidak berlaku |
+| 51 | `production_plants` | [NOCRUD] — sudah tercatat [X] #14 | dropdown saja, TIDAK ADA halaman master | TIDAK ADA | TIDAK ADA | TIDAK ADA |
+| 52 | `production_standard_exclusions` | [LOG]/[E] menyatu alur standar | — | ya | — | — |
+| 53 | `production_standard_proposals` | [OK] (usulan diputuskan, bukan dihapus) | ya | otomatis | ya (setuju/tolak) | tidak berlaku |
+| 54 | `production_standard_samples` | [LOG] | — | otomatis | tidak berlaku | tidak berlaku |
+| 55 | `production_standards` | sudah tercatat [I][X] #24 (gap: tidak bisa override manual) | ya | tidak langsung | TIDAK ADA fitur pin/override | TIDAK ADA |
+| 56 | `purchase_order_lines` | [E] | menyatu | menyatu | menyatu | menyatu |
+| 57 | `purchase_orders` | [TX] | ya | ya | TIDAK ADA (audit lama [X] #20) | TIDAK ADA |
+| 58 | `routing_step_standard_crew` | [NOCRUD] — sudah tercatat [X] #13 | TIDAK ADA | TIDAK ADA | TIDAK ADA | TIDAK ADA |
+| 59 | `routing_steps` | [E] | menyatu `routings` | menyatu | menyatu | menyatu |
+| 60 | `routings` | **[SELESAI Sesi 7 bagian 1]** | ya | ya | ya | ya (Hapus/Arsipkan/Pulihkan, dibangun 21 Agu 2026) |
+| 61 | `sales_order_line_feasibility_snapshots` | [LOG] — baseline terkunci sengaja | ya | sistem (kunci) | tidak berlaku | tidak berlaku |
+| 62 | `sales_order_line_margin_snapshots` | [LOG] — baseline terkunci sengaja | ya | sistem (kunci) | tidak berlaku | tidak berlaku |
+| 63 | `sales_order_lines` | [E] | menyatu | menyatu | menyatu | menyatu |
+| 64 | `sales_orders` | [TX] | ya | otomatis (dari PO) | TIDAK ADA (audit lama [P] #1, SEHARUSNYA JUGA [X]) | TIDAK ADA |
+| 65 | `shifts` | [NOCRUD] — sudah tercatat [X] #15 | TIDAK ADA | TIDAK ADA | TIDAK ADA | TIDAK ADA |
+| 66 | `shipment_lines` | [E] | menyatu | menyatu | menyatu | menyatu |
+| 67 | `shipments` | [TX] | ya | ya | ya (dispatch/delivered) | TIDAK ADA (`cancelled` cuma label — ditemukan 7.1) |
+| 68 | `status_transition_log` | [LOG] | ya (riwayat) | otomatis | tidak berlaku | tidak berlaku |
+| 69 | `status_transition_rules` | dorman | — | — | — | — |
+| 70 | `stock_movements` | [LOG] — LEDGER, dikecualikan eksplisit BATAS Sesi 7 | ya (sebagian) | otomatis | tidak berlaku | tidak berlaku (ledger) |
+| 71 | `subscription_plans` | sesuai rencana, fase billing belum mulai | — | — | — | — |
+| 72 | `suppliers` | [MASTER] | ya | ya | TIDAK ADA (audit lama [X] #19) | TIDAK ADA |
+| 73 | `system_alerts` | [LOG] (auto-generated, hanya acknowledge) | ya | otomatis | ya (acknowledge) | tidak berlaku |
+| 74 | `users` | [OK] | ya | ya (invite/accept) | ya | ya (soft, status suspended) |
+| 75 | `work_centers` | [MASTER] (+ gap lebih besar: tidak bisa buat/ubah identitas — audit lama [X] #16) | ya (dropdown+dashboard) | TIDAK ADA | sebagian (kapasitas saja) | ADA (`is_active`) TAPI TIDAK ADA UI toggle |
+| 76 | `work_order_assignments` | [E]/[LOG] menyatu WO | menyatu | menyatu | menyatu | menyatu |
+| 77 | `work_order_consumption` | [LOG] — traceability BPOM/halal | ya | ya (catat pemakaian) | tidak berlaku | tidak berlaku |
+| 78 | `work_order_outputs` | [LOG] — traceability BPOM/halal | ya | ya (catat hasil) | tidak berlaku | tidak berlaku |
+| 79 | `work_order_step_progress` | [LOG] — traceability BPOM/halal | ya | ya (catat progres) | tidak berlaku | tidak berlaku |
+| 80 | `work_orders` | [TX] | ya | ya | `status` tidak pernah diubah kode manapun (audit lama [I] #23, perlu klarifikasi + SEHARUSNYA JUGA masuk radar [X]) | TIDAK ADA |
+
+## Jawaban langsung poin 3 — daftar LENGKAP tabel dengan Buat+Ubah tapi TANPA jalan keluar (bukan hanya yang [P])
+
+Menyapu tabel di atas MEKANIS (bukan pilih-pilih) untuk baris berkategori [MASTER] atau [TX] dengan Buat=ya DAN Keluar=TIDAK ADA/bermasalah:
+
+**Master data (di dalam BATAS "hanya master data" Sesi 7 — 7 layar sisa + 1 selesai):**
+1. `routings` — SELESAI.
+2. `boms` — kolom arsip ADA, tapi dropdown WO tidak mengecualikan yang diarsipkan (bug, bukan bangun dari nol).
+3. `items` — kolom arsip ADA, tapi dropdown item di 3 layar (PO Klien, BOM, Routing) tidak mengecualikan yang nonaktif (bug baru ditemukan).
+4. `employees` — kolom arsip ADA, satu titik pemakaian sudah benar, belum dicek exhaustif.
+5. `work_centers` — kolom arsip ADA di database, TIDAK ADA UI toggle sama sekali.
+6. `kpi_registry` — kolom arsip ADA di database, TIDAK ADA UI toggle (plus gap lebih besar: target juga tidak bisa diisi).
+7. `suppliers` — TIDAK ADA kolom arsip, TIDAK ADA edit sama sekali. Perlu migrasi + bangun dari nol.
+8. `customers` — TIDAK ADA kolom arsip, TIDAK ADA edit sama sekali. Perlu migrasi + bangun dari nol.
+
+**Di luar BATAS "hanya master data" (dokumen transaksi — dicatat, TIDAK dibangun sesi ini kecuali diminta):**
+- `sales_orders`, `customer_purchase_orders`, `shipments`, `work_orders`, `purchase_orders`, `goods_receipts`, `documents`.
+
+**Perlu keputusan cakupan dari pemilik produk (bukan MRP produksi murni, tapi juga bukan tabel transaksi ledger):**
+- `companies` (pengaturan tenant sendiri — "keluar" di sini lebih ke arah suspend/nonaktifkan akun sendiri, bukan hal yang wajar dilakukan sendiri).
+- `invitations` (batalkan undangan salah kirim).
+
+**Butuh dibangun dari nol (bukan sekadar tambah tombol keluar — CRUD dasarnya sendiri belum ada, kelas pekerjaan berbeda):**
+`production_plants`, `shifts`, `routing_step_standard_crew`, `document_types`, `kpi_actions`, `kpi_responsibilities`, `company_settings`, `ai_capability_overrides` (kode mati).
+
+---
+
+# Audit Lubang UI — Sesi 5 (21 Agu 2026, historis — lihat catatan di atas soal keterbatasan cakupan)
+
+Audit read-only, tanpa perubahan kode. Metodologi: untuk setiap tabel di skema (kecuali tabel sistem Supabase & tabel murni teknis/konfigurasi validasi), ditelusuri lewat `grep` langsung ke kode — apakah ada `.insert(`/`.update(`/`.delete(` yang benar-benar terhubung ke sebuah halaman (`app/**/page.tsx` → `src/features/<domain>/pages/*.tsx`), bukan cuma fungsi server yang ada tapi tidak pernah dipanggil dari layar manapun ("mati"). **72 tabel utama diperiksa** (76 kalau 4 tabel baris/`_lines` yang menyatu dengan tabel headernya dihitung terpisah) — **DIKOREKSI Sesi 7: daftar "72" ini tidak disinkronkan dari skema sungguhan, lihat bagian atas dokumen ini untuk audit lengkap 80 tabel.**
 
 Parameter klasifikasi (persis dari pemilik produk, boleh lebih dari satu tanda per baris):
 - **[P] PENTING UNTUK USER** — pekerjaan tidak bisa jalan tanpa ini
@@ -139,11 +268,8 @@ Pelajaran Sesi 0/0B/0C: yang berbahaya bukan cuma data tanpa layar, tapi juga pe
 
 ---
 
-## Koreksi 7.1 (Sesi 7, 21 Agu 2026) — aturan "buat & ubah tanpa jalan keluar wajib [X]" ditegakkan ulang
+## Koreksi 7.1 (Sesi 7, 21 Agu 2026) — SUPERSEDED, lihat bagian paling atas dokumen ini
 
-Baris #6 di atas (routing bisa diedit tanpa peringatan) LOLOS dari klasifikasi [X] karena membahas masalah BERBEDA (mengedit routing yang sedang dipakai WO aktif — sudah diperbaiki Sesi 6A lewat snapshot) — bukan soal TIDAK ADANYA tombol hapus/arsip sama sekali, yang merupakan keluhan asli pemilik produk yang memicu Sesi 7. Setelah aturan "bisa buat & ubah tapi tidak bisa mengeluarkan data → WAJIB [X]" ditegakkan ulang secara konsisten ke seluruh temuan:
-
-- **5 tabel yang seharusnya [X] tapi tidak pernah masuk daftar sama sekali**: `routings` (kasus yang dilaporkan — **DISELESAIKAN Sesi 7**, lihat HANDOFF.md), `companies`, `invitations`, `shipments`, `work_orders`. 4 yang terakhir BELUM dikerjakan (di luar cakupan master-data Sesi 7 — lihat BATAS sesi itu — atau memerlukan keputusan terpisah).
-- **3 baris [P] yang seharusnya JUGA diberi tag [X]** karena isinya persis "bisa buat, tidak bisa keluar": #1 (`sales_orders`), #2 (`customer_purchase_orders`), #3 (`documents`) — belum dikerjakan, di luar cakupan master-data Sesi 7.
+Koreksi awal 7.1 (5 tabel + 3 baris [P] yang seharusnya [X]) sudah ditulis ulang jadi audit lengkap 80-tabel berbasis introspection skema sungguhan — lihat "Audit Lengkap Tabel — Sesi 7" di paling atas dokumen ini untuk penjelasan mekanisme lengkap (kenapa 5 tabel ini lolos) dan daftar definitif seluruh tabel yang masih kurang jalan keluar. Bagian ini sengaja dibiarkan sebagai jejak sejarah (koreksi pertama, sebelum audit ulang penuh), bukan dihapus.
 
 **Tabel dorman tanpa dampak aktif** (dicatat, bukan diklasifikasi P/I/X karena tidak ada kode lain yang bergantung padanya hari ini): `formula_templates`, `status_transition_rules`, `kamus_routing_rules`. **Sesuai rencana roadmap, bukan gap aktif**: `subscription_plans`, `invoices` (fase billing belum dimulai per CLAUDE.md).

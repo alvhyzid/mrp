@@ -4,6 +4,20 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Pra-Sesi 6 — 3 Perbaikan Kecil — 21 Agu 2026 — SELESAI
+
+**1. Verifikasi visual (tenant uji company.b@debug.mrp, BUKAN test otomatis).** Playwright dipasang sementara (`npm install --no-save`, tidak masuk `package.json`) karena tidak ada browser tool tersedia di environment ini — login lewat form asli, bukan suntik sesi. Fixture SO baru dibuat di Company B (item+standar produksi+customer+PO+SO), Margin Watch & Kelayakan Jadwal dibuka sebagai `company.b@debug.mrp`: **kedua panel tampil wajar** — kotak peringatan kuning "⚠ PERKIRAAN SEMENTARA — BELUM DIKUNCI SEBAGAI ACUAN" muncul di keduanya, semua angka terformat benar (Rp8.000, Rp5.000, Rp600.000), tidak ada NaN/kosong/tanda hubung yang salah tempat. Screenshot disimpan di scratchpad sesi (tidak di-commit). Fixture dibersihkan total sesudahnya (item, 2 baris production_standards, plant baru, customer, CPO, SO, SO line — 8 baris, dikonfirmasi 0 sisa lewat query ulang).
+
+**2. Tombol Tunda/Batal PO Customer.** Ralat temuan audit Sesi 5 sendiri: kalimat ringkasan "tombolnya sudah ada di layar" TIDAK akurat — yang sebenarnya ada cuma badge status (`statusLabels`/`statusBadgeVariant` untuk `on_hold`/`cancelled`), bukan tombol aksi. Ditambahkan 2 tombol baru "Tunda"/"Batal" (disabled, tooltip native "Belum tersedia" via `<span title=...>` karena `disabled:pointer-events-none` pada komponen Button menghalangi `title` langsung di elemen disabled) di `CustomerPurchaseOrdersPage.tsx`, tampil untuk role `canManageCustomerPo` selama status PO = `new`. TIDAK membangun logikanya. Diverifikasi visual: fixture CPO baru di Company B, tombol tampil abu-abu, `isDisabled()` true untuk keduanya, screenshot dicek — dibersihkan sesudahnya (CPO, 3 approval otomatis, customer — 5 baris, dikonfirmasi 0 sisa).
+
+**3. Asal-usul standar baseline Kelayakan Jadwal.** Migrasi `20260827210000` menambah `unit_per_batch_source`/`unit_per_batch_sample_count`/`batches_per_day_source`/`batches_per_day_sample_count` ke `sales_order_line_feasibility_snapshots` (salinan `production_standards.source`/`sample_count` PERSIS saat dikunci). `lockFeasibilityBaseline.ts` merekamnya, `getPlanningFeasibility.ts` mengembalikannya sebagai `standard_provenance` saat `locked:true`, `SalesOrdersPage.tsx` menampilkannya sebagai kalimat baru di bawah info "Rencana terkunci sejak...". Gerbang kelengkapan TIDAK diubah (dikonfirmasi lewat test yang sudah ada, masih lulus tanpa modifikasi assersi gerbangnya) — murni tambahan kejujuran. Backlog Kamus 4 kolom baru: migrasi `20260827220000`. Margin baseline SENGAJA TIDAK disentuh di item ini — provenance biaya standarnya (item cost, kru SDM) tidak berbentuk pasangan source+sample_count yang sama seperti `production_standards`, jadi butuh keputusan desain terpisah kalau diminta nanti.
+
+**Test baru: 214 → 215 (+1).** `tests/baseline_lock_separation.test.ts` (+1): "(Sesi 5, item 3) baseline terkunci menyimpan+menampilkan asal-usul standar (source+sample_count) yang membentuknya" — mengunci lalu membaca ulang via `getPlanningFeasibility`, memastikan `standard_provenance` PERSIS `{ESTIMASI_MANUAL, sample_count:0}` sesuai fixture, bukan angka lain.
+
+tsc bersih, `npm run build` sukses, full suite **34 file, 215 test hijau**. Menunggu lampu hijau pemilik produk sebelum Sesi 6.
+
+---
+
 ## Sesi 5 — Penutupan 0C + Audit Lubang UI — 21 Agu 2026 — SELESAI
 
 ### Bagian 0 — Penutupan 0C

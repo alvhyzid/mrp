@@ -93,6 +93,13 @@ type FeasibilityResult = {
   locked?: boolean;
   locked_by_name?: string | null;
   relock_reason?: string | null;
+  // Sesi 5 (item 3, 21 Agu 2026): asal-usul standar unit_per_batch/batches_per_day
+  // yang MEMBENTUK baseline terkunci -- source = ESTIMASI_MANUAL/DIPELAJARI,
+  // sample_count = jumlah batch nyata yang mendasari kalau DIPELAJARI.
+  standard_provenance?: {
+    unit_per_batch: { source: string | null; sample_count: number | null };
+    batches_per_day: { source: string | null; sample_count: number | null };
+  } | null;
 };
 
 type MarginVarianceItem = { item_code: string; name: string; impact: number; detail: string };
@@ -803,7 +810,21 @@ export default function SalesOrdersPage() {
                               </span>
                             ) : null}
                           </p>
-                        ) : (
+                        ) : null}
+                        {feasibilityResult.locked && feasibilityResult.standard_provenance ? (
+                          <p className="text-xs text-muted-foreground">
+                            Asal-usul standar yang dikunci: unit/batch = {feasibilityResult.standard_provenance.unit_per_batch.source ?? 'tidak diketahui'}
+                            {feasibilityResult.standard_provenance.unit_per_batch.source === 'DIPELAJARI'
+                              ? ` (${formatNumberId(feasibilityResult.standard_provenance.unit_per_batch.sample_count ?? 0, 0)} sampel)`
+                              : ''}
+                            ; batch/hari = {feasibilityResult.standard_provenance.batches_per_day.source ?? 'tidak diketahui'}
+                            {feasibilityResult.standard_provenance.batches_per_day.source === 'DIPELAJARI'
+                              ? ` (${formatNumberId(feasibilityResult.standard_provenance.batches_per_day.sample_count ?? 0, 0)} sampel)`
+                              : ''}
+                            .
+                          </p>
+                        ) : null}
+                        {!feasibilityResult.locked ? (
                           <div className="rounded-md border border-warning/40 bg-warning-subtle p-2 text-xs font-medium text-warning-subtle-foreground">
                             ⚠ PERKIRAAN SEMENTARA — BELUM DIKUNCI SEBAGAI ACUAN. Angka di bawah dihitung LIVE dari data saat ini, bukan rencana permanen.
                             {canViewFinancialData(role) ? (
@@ -814,7 +835,7 @@ export default function SalesOrdersPage() {
                               </div>
                             ) : null}
                           </div>
-                        )}
+                        ) : null}
                         {feasibilityLockMessage ? <p className={feasibilityLockStatus === 'error' ? 'text-xs text-destructive' : 'text-xs text-success'}>{feasibilityLockMessage}</p> : null}
                         <div className="flex flex-wrap items-center gap-3">
                           <Badge variant={feasibilityResult.feasible ? 'success' : 'critical'}>{feasibilityResult.feasible ? 'FEASIBLE' : 'TIDAK FEASIBLE'}</Badge>

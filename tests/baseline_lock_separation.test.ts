@@ -195,6 +195,21 @@ describe('Sesi 0C — pisahkan membaca dari mengunci baseline (Margin Watch + Ke
     expect((lockResult.body as any).was_relock).toBe(false);
   });
 
+  it('(Sesi 5, item 3) baseline terkunci menyimpan+menampilkan asal-usul standar (source+sample_count) yang membentuknya', async () => {
+    // Fixture (beforeAll) mengunci production_standards dgn source ESTIMASI_MANUAL,
+    // sample_count 0 utk item ini -- baseline yang BARU SAJA dikunci di test
+    // sebelumnya wajib merekam+menampilkan PERSIS itu, bukan mengarang nilai lain.
+    const feasReq = makeGetRequest(`http://localhost/api/sales-order-lines/${soLineId}/planning-feasibility`, ppicToken);
+    const feasResult = await getPlanningFeasibility(feasReq, soLineId);
+    expect(feasResult.status).toBe(200);
+    const body = feasResult.body as any;
+    expect(body.locked).toBe(true);
+    expect(body.standard_provenance).toEqual({
+      unit_per_batch: { source: 'ESTIMASI_MANUAL', sample_count: 0 },
+      batches_per_day: { source: 'ESTIMASI_MANUAL', sample_count: 0 }
+    });
+  });
+
   it('(negatif d1) finance_manager (BUKAN company_admin) coba KUNCI ULANG -> ditolak', async () => {
     const lockReq = makePostRequest('http://localhost/api/sales-order-lines/feasibility-baseline-lock', financeToken, { sales_order_line_id: soLineId, reason: 'coba relock oleh non-admin' });
     const lockResult = await lockFeasibilityBaseline(lockReq);

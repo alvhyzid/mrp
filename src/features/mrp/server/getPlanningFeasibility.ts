@@ -92,7 +92,9 @@ export async function getPlanningFeasibility(request: NextRequest, salesOrderLin
     // locked:false -- TIDAK disimpan. Lihat HANDOFF.md Sesi 0/0B/0C.
     const { data: existingSnapshot, error: snapshotReadError } = await adminClient
       .from('sales_order_line_feasibility_snapshots')
-      .select('unit_per_batch, batches_per_day, created_at, locked_by, relock_reason')
+      .select(
+        'unit_per_batch, batches_per_day, created_at, locked_by, relock_reason, unit_per_batch_source, unit_per_batch_sample_count, batches_per_day_source, batches_per_day_sample_count'
+      )
       .eq('sales_order_line_id', salesOrderLineId)
       .is('archived_at', null)
       .maybeSingle();
@@ -105,12 +107,22 @@ export async function getPlanningFeasibility(request: NextRequest, salesOrderLin
     let standardDrift: Record<string, unknown> | null = null;
     let lockedByName: string | null = null;
     let relockReason: string | null = null;
+    // Sesi 5 (item 3, 21 Agu 2026): asal-usul standar yang MEMBENTUK baseline
+    // terkunci -- ditampilkan supaya pembaca selisih tahu apakah angka rencana
+    // ini tebakan kasar (ESTIMASI_MANUAL) atau hasil belajar dari batch nyata
+    // (DIPELAJARI, dgn jumlah sampel). Gerbang kelengkapan lockFeasibilityBaseline.ts
+    // TIDAK berubah -- ini murni kejujuran, bukan penolakan baru.
+    let standardProvenance: Record<string, unknown> | null = null;
 
     if (existingSnapshot) {
       unitPerBatch = Number(existingSnapshot.unit_per_batch);
       batchesPerDay = Number(existingSnapshot.batches_per_day);
       snapshotTakenAt = existingSnapshot.created_at;
       relockReason = existingSnapshot.relock_reason;
+      standardProvenance = {
+        unit_per_batch: { source: existingSnapshot.unit_per_batch_source, sample_count: existingSnapshot.unit_per_batch_sample_count },
+        batches_per_day: { source: existingSnapshot.batches_per_day_source, sample_count: existingSnapshot.batches_per_day_sample_count }
+      };
       if (existingSnapshot.locked_by) {
         const { data: lockedByUser } = await adminClient.from('users').select('name').eq('user_id', existingSnapshot.locked_by).maybeSingle();
         lockedByName = lockedByUser?.name ?? null;
@@ -278,7 +290,8 @@ export async function getPlanningFeasibility(request: NextRequest, salesOrderLin
         locked: isLocked,
         locked_by_name: lockedByName,
         relock_reason: relockReason,
-        standard_drift: standardDrift
+        standard_drift: standardDrift,
+        standard_provenance: standardProvenance
       }
     };
   } catch (error) {

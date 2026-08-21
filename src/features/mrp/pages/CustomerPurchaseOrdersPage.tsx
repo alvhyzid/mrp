@@ -416,11 +416,34 @@ export default function CustomerPurchaseOrdersPage() {
           <Card>
             <CardHeader>
               <CardDescription className="uppercase tracking-[0.2em]">Detail PO</CardDescription>
-              <CardTitle className="text-xl">
+              <CardTitle className="flex flex-wrap items-center gap-3 text-xl">
                 {expandedPo.po_number} — {expandedPo.customer_name}
+                <Badge variant={statusBadgeVariant[expandedPo.status] ?? 'secondary'}>{statusLabels[expandedPo.status] ?? expandedPo.status}</Badge>
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
+              {canManagePo && expandedPo.status === 'new' ? (
+                <div className="flex gap-2">
+                  {/* Sesi 5 (audit lubang UI): tunda/batal PO belum diimplementasikan --
+                      SENGAJA ditampilkan disabled + tooltip, bukan disembunyikan, supaya
+                      layar tidak berbohong seolah aksi ini bisa diklik padahal belum ada
+                      kodenya sama sekali. Tooltip dibungkus <span> (bukan langsung di
+                      <button>) karena disabled:pointer-events-none pada Button menghalangi
+                      hover native title muncul kalau ditaruh di elemen yang disabled itu
+                      sendiri. */}
+                  <span title="Belum tersedia">
+                    <Button size="sm" variant="outline" disabled>
+                      Tunda
+                    </Button>
+                  </span>
+                  <span title="Belum tersedia">
+                    <Button size="sm" variant="destructive" disabled>
+                      Batal
+                    </Button>
+                  </span>
+                </div>
+              ) : null}
+
               <div className="grid gap-2 text-sm sm:grid-cols-2">
                 <div>
                   <span className="text-muted-foreground">Tanggal PO:</span> {expandedPo.po_date ?? '-'}

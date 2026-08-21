@@ -219,6 +219,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 **Database Rencana Kelayakan Jadwal** (`sales_order_line_feasibility_snapshots`)
 - ID Baris SO (sales_order_line_id) · Unit per Batch (unit_per_batch) · Batch per Hari (batches_per_day) · Waktu Dibuat (created_at)
 - Perilaku kunci/lihat, kolom arsip, dan alasan kunci ulang PERSIS SAMA dengan Baseline Margin di atas (Sesi 0C, 21 Agu 2026) — bedanya cuma isi datanya (standar produksi, bukan biaya)
+- Asal-Usul Standar (unit_per_batch_source/sample_count, batches_per_day_source/sample_count, Sesi 5, 21 Agu 2026) — dicatat SAAT dikunci: apakah standar unit/batch & batch/hari-nya tebakan kasar ("ESTIMASI_MANUAL") atau hasil belajar dari batch nyata ("DIPELAJARI", plus berapa batch yang mendasarinya), supaya siapa pun yang membaca rencana ini tahu seberapa bisa dipercaya angkanya
 
 **Database Kru Standar Lini Produksi** (`routing_step_standard_crew`, 20 Agu 2026)
 - Berapa orang, tipe upah (harian/bulanan/per jam), dan jam kerja standar untuk 1 lini produksi (per routing, bukan per tahap) — dipakai untuk menghitung Biaya SDM Standar per Unit di atas

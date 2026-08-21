@@ -47,14 +47,16 @@ export async function lockFeasibilityBaseline(request: NextRequest): Promise<Api
 
     const { data: standards, error: standardsError } = await adminClient
       .from('production_standards')
-      .select('metric_key, value')
+      .select('metric_key, value, source, sample_count')
       .eq('company_id', appUser.company_id)
       .eq('item_id', soLine.item_id)
       .is('routing_step_id', null)
       .in('metric_key', ['unit_per_batch', 'batches_per_day']);
     if (standardsError) return { status: 500, body: { error: standardsError.message } };
-    const unitPerBatch = standards?.find((s) => s.metric_key === 'unit_per_batch')?.value;
-    const batchesPerDay = standards?.find((s) => s.metric_key === 'batches_per_day')?.value;
+    const unitPerBatchStandard = standards?.find((s) => s.metric_key === 'unit_per_batch');
+    const batchesPerDayStandard = standards?.find((s) => s.metric_key === 'batches_per_day');
+    const unitPerBatch = unitPerBatchStandard?.value;
+    const batchesPerDay = batchesPerDayStandard?.value;
     if (!unitPerBatch || !batchesPerDay) {
       return { status: 400, body: { error: 'Belum bisa dikunci: standar unit-per-batch dan/atau kapasitas batch/hari belum ada untuk item ini.' } };
     }
@@ -90,6 +92,10 @@ export async function lockFeasibilityBaseline(request: NextRequest): Promise<Api
           sales_order_line_id: salesOrderLineId,
           unit_per_batch: unitPerBatch,
           batches_per_day: batchesPerDay,
+          unit_per_batch_source: unitPerBatchStandard?.source ?? null,
+          unit_per_batch_sample_count: unitPerBatchStandard?.sample_count ?? null,
+          batches_per_day_source: batchesPerDayStandard?.source ?? null,
+          batches_per_day_sample_count: batchesPerDayStandard?.sample_count ?? null,
           locked_by: appUser.user_id,
           relock_reason: existingActive ? reason : null
         }

@@ -49,6 +49,7 @@ User adalah **pemilik/praktisi bisnis manufaktur yang sangat paham proses produk
 - Selalu jalankan & test perubahan sebelum bilang "selesai"
 - Untuk keputusan desain/arsitektur besar yang belum ada di dua dokumen referensi, TANYA dulu ke user — jangan asumsi sendiri
 - User berkomunikasi dalam Bahasa Indonesia
+- **ATURAN KERAS (ditemukan lewat insiden nyata — sudah 3x laporan terkirim dalam Bahasa Inggris): SELURUH komunikasi ke pemilik produk WAJIB 100% Bahasa Indonesia, TANPA KECUALI** — laporan sesi, ringkasan, pertanyaan konfirmasi, pesan status, dan teks apa pun yang dibaca langsung oleh pemilik produk di chat. Laporan dalam bahasa yang tidak dibaca pemilik produk sama dengan laporan yang tidak terkirim. Ini berbeda dari komentar kode/pesan commit (boleh tetap mengikuti konvensi proyek yang sudah ada) — aturan ini khusus untuk teks yang ditujukan ke pemilik produk.
 
 ## Tugas Pertama — Fase 3 Roadmap: Fondasi SaaS
 Jangan lompat ke modul MRP (Item, BOM, Work Order, dst) sebelum fondasi ini solid dan sudah dicoba jalan:

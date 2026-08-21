@@ -4,6 +4,113 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 
 ---
 
+## Sesi 0B — Tulis-Saat-Melihat: DESAIN, bukan bug — 21 Agu 2026 — SELESAI, MENUNGGU LAMPU HIJAU untuk Sesi 5+
+
+**PENTING — status antrean**: Sesi 5/6/1/2/3/4 BELUM dikerjakan. STOP CONDITION
+0B.4 TERPICU (lihat di bawah) — sesuai instruksi eksplisit, TIDAK lanjut ke Sesi 5
+tanpa arahan pemilik produk.
+
+**0B.1 — kode penulis persis**: `getMarginWatch.ts` baris ~76 (`if (!snapshot) { ...insert ke sales_order_line_margin_snapshots }`) dan `getPlanningFeasibility.ts`
+baris ~106 (`if (!existingSnapshot) { ...insert ke sales_order_line_feasibility_snapshots }`).
+**Terjadi pada AKSI EKSPLISIT PENGGUNA** (klik tombol "Margin Watch"/"Cek
+Kelayakan"), BUKAN saat sekadar membuka halaman SO — halaman detail SO sendiri
+tidak memanggil endpoint ini. TAPI label tombolnya ("Cek Kelayakan", "Margin
+Watch") terdengar seperti aksi LIHAT, bukan aksi SIMPAN — inilah sumber
+kebingungan yang membuat baris ini disangka "tulis diam-diam saat dilihat".
+
+**0B.2 — jejak niat perancang: ADA, eksplisit, di 3 tempat.** Kutipan
+`docs/rancangan-skema-database-mrp.md` baris 307: *"snapshot
+`unit_per_batch`/`batches_per_day`... dikunci SEKALI (panggilan pertama untuk 1
+baris SO), tidak pernah ikut berubah diam-diam kalau `production_standards`...
+berubah belakangan."* Baris 312 (Margin Watch): *"pola snapshot SAMA PERSIS
+dengan feasibility di atas (dikunci sekali, immutable untuk kolom biaya/harga)."*
+Komentar kode di kedua file server mengulang persis niat yang sama. **Kesimpulan:
+DESAIN, bukan bug.**
+
+**0B.3 — konsekuensi penghapusan terdahulu**: baris margin snapshot lama
+(id=101, Rp7.198,50) sudah dihapus di tugas sebelumnya (sebelum instruksi
+"jangan langsung hapus" ada). Dampak: **NIHIL secara bisnis** — baris itu
+sendiri adalah artefak verifikasi Claude Code (dibuat sebelum pemilik produk
+pernah melihat order ini), bukan baseline yang pernah dipakai untuk keputusan
+nyata; Lapis 2 (selisih) membandingkan ke harga LIVE, bukan ke snapshot lama,
+jadi tidak ada "selisih" yang jadi salah. Yang SECARA KETAT dilanggar: prinsip
+immutability sendiri (baris pernah dihapus+dibuat ulang, bukan hidup selamanya
+sejak `created_at` aslinya) — diakui apa adanya, bukan ditutupi.
+
+**0B.4 — SIAPA BISA MEMICU — STOP CONDITION TERPICU**: diuji dengan role
+`ppic_staff` (bukan company_admin, TIDAK punya `canViewFinancialData`, HANYA
+`canViewPlanningFeasibility`) di **fixture terisolasi** (company_id=3666,
+BUKAN company_id=1 — dihapus lagi setelah tes). Hasil: baris
+`sales_order_line_feasibility_snapshots` bertambah dari 0 -> 1 SETELAH
+`ppic_staff` memanggil endpoint kelayakan SATU KALI. RBAC sendiri benar (role
+tanpa izin akan 403, role ini memang authorized viewer fitur ini) — tapi ANY
+authorized viewer, bukan cuma company_admin, mengunci baseline permanen lewat
+apa yang terlihat seperti aksi "cek" biasa. **Sesuai instruksi eksplisit,
+sesi berhenti di sini, TIDAK lanjut ke Sesi 5.**
+
+**0B.5 — kelas kerentanan sama di tempat lain?** Tombol "Seed 6 KPI Awal"
+DIPERIKSA: `seedKpiRegistry.ts`/`seedKamusMetricTerms.ts` pakai
+`.upsert(..., { ignoreDuplicates: true })` -- **insert-hanya-jika-belum-ada,
+TIDAK PERNAH delete**. Aman. Sapuan seluruh `get*.ts` di `src/features/*/server/`
+untuk pola `select→maybeSingle→insert`: hanya 3 lokasi ditemukan --
+`getMarginWatch.ts`, `getPlanningFeasibility.ts` (kelas yang sama, sudah
+dibahas), dan `getDocumentSignedUrl.ts` (insert ke `document_access_log`) --
+**BEDA KELAS**, itu log akses append-only yang MEMANG dirancang bertambah
+tiap akses (bukan baseline bisnis yang mengunci angka), tidak berbahaya.
+
+**0B.6 — anomali kpi_registry lama, dibuka ulang dengan kacamata baru**:
+**TETAP TIDAK ADA BUKTI KETERKAITAN**, sekarang dengan pemeriksaan lebih
+lengkap: digrep ulang SELURUH `src/` untuk `delete` ke `kpi_registry`/
+`kamus_terms` -- kosong total (bukan cuma "tidak ada di test", tapi tidak ada
+DI MANA PUN, termasuk lewat FK cascade -- `kpi_registry.company_id` tidak
+punya `ON DELETE CASCADE`). Gejala juga berlawanan arah: baris HILANG (delete)
+vs. temuan baru ini baris MUNCUL (insert) -- mekanisme berbeda total. Tidak
+mengklaim keterkaitan tanpa bukti.
+
+**0B.7**: baris id=282 **TIDAK dihapus** sesi ini. Rekomendasi: karena 0B.2
+mengonfirmasi ini DESAIN sah (bukan artefak liar seperti margin snapshot yang
+sudah terlanjur dihapus), dan baris ini genuinely tercipta dari klik verifikasi
+Claude Code sebelum Sesi 0B (bukan dari pemilik produk), **rekomendasi hapus**
+-- tapi keputusan akhir menunggu pemilik produk, TIDAK dieksekusi sendiri.
+
+**0B.8 — perbaikan (DESAIN, bukan bug, sesuai instruksi "jangan ubah
+mekanisme, cukup dokumentasikan di UI")**: ditambahkan (a) tooltip `title` di
+tombol "Cek Kelayakan"/"Margin Watch" yang menjelaskan klik PERTAMA mengunci
+baseline permanen, (b) baris teks tampil di kedua panel menampilkan PERSIS
+kapan baseline itu terkunci (`snapshot_taken_at`/`standard_snapshot_taken_at`
+-- sudah ada di response API, TIDAK PERNAH dirender sebelumnya). Mekanisme
+lock-on-first-view TIDAK diubah sama sekali.
+
+**0B.9 — nama 9 test baru (jawaban lengkap 0.6 sesi lalu)**:
+`tests/production_plants.test.ts`: "(negatif 1) Work Order di plant BELUM
+BEROPERASI...", "(negatif 2) Work Order mereferensikan plant yang SUDAH
+DIHAPUS...", "(positif) Work Order di plant AKTIF...".
+`tests/mlvt_case_study_skeleton.test.ts`: "(positif) biaya kemasan per box
+eksplosi BOM tepat...", "(positif) routing Sachet & Box tersalin PERSIS...",
+"(negatif) coba buat PO client BARU dengan po_number DUPLIKAT...", "(negatif)
+coba PROSES ULANG PO client yang sudah berstatus processed...", "(regresi)
+faktor konversi Sachet Roll Etawa Fit TEPAT 3333...", "(regresi) yield
+MLVT-BOX BUKAN 95%...".
+
+**Koreksi diri**: saat memverifikasi visual perbaikan 0B.8 di browser, sempat
+memakai `company.a@debug.mrp` (company_id=1) untuk klik ulang "Cek
+Kelayakan"/"Margin Watch" -- TERBUKTI idempoten (0 baris baru, snapshot sudah
+ada), tapi seharusnya TIDAK memakai tenant nyata sama sekali untuk verifikasi
+manual apa pun mulai sekarang, sesuai batas eksplisit sesi ini. Tidak akan
+diulang.
+
+**Bukti skenario negatif**: (a) dihitung SEBELUM & SESUDAH `ppic_staff`
+(fixture terisolasi) membuka Margin Watch & Cek Kelayakan -- feasibility
+snapshot bertambah 0->1 (dilaporkan apa adanya, TERMASUK saat bertambah,
+sesuai instruksi). (b) tidak dikerjakan -- 0B.8 disimpulkan DESAIN, bukan bug,
+jadi tidak ada "perbaikan tulis-jadi-eksplisit" yang perlu dibuktikan 3x lipat;
+sebagai gantinya idempotensi PENAMBAHAN UI (title/teks) diverifikasi visual di
+browser (screenshot) dan lewat tsc+build+full test suite hijau.
+
+tsc bersih, build sukses. Full test suite dijalankan setelah perubahan 0B.8.
+
+---
+
 ## Sesi 0 — Penyelidikan Integritas Data (Invarian 9) — 21 Agu 2026 — SELESAI, MENUNGGU LAMPU HIJAU untuk Sesi 1+
 
 **PENTING — status antrean**: Sesi 1-4 (rebrand inventaris, alur repeat order, dst.)

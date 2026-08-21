@@ -89,6 +89,7 @@ type FeasibilityResult = {
   components_to_produce?: ComponentToProduce[];
   standard_drift?: { message: string; unit_per_batch: { used_in_plan: number; current: number }; batches_per_day: { used_in_plan: number; current: number } } | null;
   reason?: string;
+  standard_snapshot_taken_at?: string;
 };
 
 type MarginVarianceItem = { item_code: string; name: string; impact: number; detail: string };
@@ -453,14 +454,26 @@ export default function SalesOrdersPage() {
                         {showPriceColumn ? <td className="px-3 py-1.5">{line.unit_price === null ? <span className="text-muted-foreground">-</span> : formatCurrency(line.unit_price, { maxDecimals: 0 })}</td> : null}
                         {canViewPlanningFeasibility(role) ? (
                           <td className="px-3 py-1.5">
-                            <Button size="sm" variant="outline" disabled={feasibilityLoading && feasibilityLineId === line.sales_order_line_id} onClick={() => handleCheckFeasibility(line.sales_order_line_id)}>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={feasibilityLoading && feasibilityLineId === line.sales_order_line_id}
+                              onClick={() => handleCheckFeasibility(line.sales_order_line_id)}
+                              title="Klik PERTAMA kali untuk baris SO ini mengunci standar produksi (unit/batch, batch/hari) sebagai rencana PERMANEN -- tidak bisa diubah lagi walau standarnya diperbarui belakangan. Klik berikutnya hanya membaca rencana yang sudah terkunci."
+                            >
                               {feasibilityLoading && feasibilityLineId === line.sales_order_line_id ? 'Memuat...' : 'Cek Kelayakan'}
                             </Button>
                           </td>
                         ) : null}
                         {canViewFinancialData(role) ? (
                           <td className="px-3 py-1.5">
-                            <Button size="sm" variant="outline" disabled={marginLoading && marginLineId === line.sales_order_line_id} onClick={() => handleCheckMarginWatch(line.sales_order_line_id)}>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={marginLoading && marginLineId === line.sales_order_line_id}
+                              onClick={() => handleCheckMarginWatch(line.sales_order_line_id)}
+                              title="Klik PERTAMA kali untuk baris SO ini mengunci biaya standar (bahan, kemasan, SDM) sebagai baseline margin PERMANEN -- tidak bisa diubah lagi walau harga master diperbarui belakangan. Klik berikutnya hanya membaca baseline yang sudah terkunci."
+                            >
                               {marginLoading && marginLineId === line.sales_order_line_id ? 'Memuat...' : 'Margin Watch'}
                             </Button>
                           </td>
@@ -478,6 +491,9 @@ export default function SalesOrdersPage() {
                   {marginLoading ? <p className="text-sm text-muted-foreground">Memuat...</p> : null}
                   {marginResult && !marginLoading ? (
                     <div className="flex flex-col gap-3 text-sm">
+                      <p className="text-xs text-muted-foreground">
+                        Baseline ini terkunci sejak {new Date(marginResult.snapshot_taken_at).toLocaleString('id-ID')} (klik pertama kali "Margin Watch" untuk baris SO ini) — permanen, tidak berubah walau harga master diperbarui belakangan.
+                      </p>
                       {!marginResult.labor_cost_complete ? (
                         <div className="rounded-md border-2 border-destructive/50 bg-destructive/10 p-3 text-sm font-medium text-destructive">
                           ⚠ SEMUA angka margin di panel ini BELUM TERMASUK biaya SDM standar — margin rencana & proyeksi di bawah SELALU LEBIH BESAR dari kenyataan.
@@ -643,6 +659,11 @@ export default function SalesOrdersPage() {
                       <p className="text-sm text-muted-foreground">{feasibilityResult.reason}</p>
                     ) : (
                       <div className="flex flex-col gap-3 text-sm">
+                        {feasibilityResult.standard_snapshot_taken_at ? (
+                          <p className="text-xs text-muted-foreground">
+                            Rencana ini terkunci sejak {new Date(feasibilityResult.standard_snapshot_taken_at).toLocaleString('id-ID')} (klik pertama kali "Cek Kelayakan" untuk baris SO ini) — permanen, tidak berubah walau standar produksi diperbarui belakangan.
+                          </p>
+                        ) : null}
                         <div className="flex flex-wrap items-center gap-3">
                           <Badge variant={feasibilityResult.feasible ? 'success' : 'critical'}>{feasibilityResult.feasible ? 'FEASIBLE' : 'TIDAK FEASIBLE'}</Badge>
                           <span>

@@ -69,11 +69,34 @@ export default function ItemsPage() {
   // Field, validasi, handleSubmit TIDAK diubah, cuma wadahnya.
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
 
+  // Alur 1 (3.4) — "supplier yang memasok ini", PINTU MASUK KEDUA ke tabel yang
+  // sama dengan layar Supplier (supplier_item_prices). Item TETAP dipilih dari
+  // master di layar Supplier; di sini arahnya kebalikan (pilih SUPPLIER untuk
+  // item yang sedang dilihat).
+  const [suppliersForPicker, setSuppliersForPicker] = useState<{ supplier_id: number; name: string }[]>([]);
+  const [expandedItemPricesId, setExpandedItemPricesId] = useState<number | null>(null);
+  const [itemPrices, setItemPrices] = useState<
+    { supplier_item_price_id: number; supplier_id: number; supplier_name: string | null; reference_price: number | null; price_valid_from: string | null; lead_time_days_override: number | null }[]
+  >([]);
+  const [itemPricesLoading, setItemPricesLoading] = useState(false);
+  const [newSupplierPriceForm, setNewSupplierPriceForm] = useState({ supplier_id: '', reference_price: '', price_valid_from: '' });
+  const [supplierPriceFormMessage, setSupplierPriceFormMessage] = useState('');
+
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
     const { data } = await supabase.auth.getSession();
     return data?.session?.access_token ?? null;
   }, []);
+
+  const authedFetch = useCallback(
+    async (path: string, options: RequestInit = {}) => {
+      const accessToken = await getAccessToken();
+      if (!accessToken) throw new Error('Sesi tidak valid.');
+      const response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}`, ...(options.headers || {}) } });
+      return { ok: response.ok, body: await response.json() };
+    },
+    [getAccessToken]
+  );
 
   const loadItems = useCallback(async () => {
     const accessToken = await getAccessToken();
@@ -125,11 +148,66 @@ export default function ItemsPage() {
       setCanManage(isCompanyLeadership(meData?.user?.role));
       setCanViewCost(canViewFinancialData(meData?.user?.role));
       setCheckingAccess(false);
+      const { ok: suppliersOk, body: suppliersBody } = await authedFetch('/api/suppliers');
+      if (suppliersOk) setSuppliersForPicker(suppliersBody.suppliers || []);
       await loadItems();
     };
 
     checkAccessAndLoad();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, loadItems]);
+
+  const loadItemPrices = useCallback(
+    async (itemId: number) => {
+      setItemPricesLoading(true);
+      const { ok, body } = await authedFetch(`/api/supplier-item-prices?item_id=${itemId}`);
+      if (ok) setItemPrices(body.prices || []);
+      setItemPricesLoading(false);
+    },
+    [authedFetch]
+  );
+
+  const toggleItemSuppliers = async (item: Item) => {
+    if (expandedItemPricesId === item.item_id) {
+      setExpandedItemPricesId(null);
+      return;
+    }
+    setExpandedItemPricesId(item.item_id);
+    setNewSupplierPriceForm({ supplier_id: '', reference_price: '', price_valid_from: '' });
+    setSupplierPriceFormMessage('');
+    await loadItemPrices(item.item_id);
+  };
+
+  const handleAddItemSupplierPrice = async () => {
+    if (!newSupplierPriceForm.supplier_id || expandedItemPricesId === null) {
+      setSupplierPriceFormMessage('Supplier wajib dipilih.');
+      return;
+    }
+    const { ok, body } = await authedFetch('/api/supplier-item-prices', {
+      method: 'POST',
+      body: JSON.stringify({
+        supplier_id: Number(newSupplierPriceForm.supplier_id),
+        item_id: expandedItemPricesId,
+        reference_price: newSupplierPriceForm.reference_price || null,
+        price_valid_from: newSupplierPriceForm.price_valid_from || null
+      })
+    });
+    if (!ok) {
+      setSupplierPriceFormMessage(body.error || 'Gagal menyimpan.');
+      return;
+    }
+    setNewSupplierPriceForm({ supplier_id: '', reference_price: '', price_valid_from: '' });
+    setSupplierPriceFormMessage('');
+    await loadItemPrices(expandedItemPricesId);
+  };
+
+  const handleDeleteItemSupplierPrice = async (priceId: number) => {
+    if (expandedItemPricesId === null) return;
+    const confirmed = window.confirm('Hapus supplier ini dari daftar pemasok bahan ini?');
+    if (!confirmed) return;
+    const { ok } = await authedFetch(`/api/supplier-item-prices/${priceId}`, { method: 'DELETE' });
+    if (ok) await loadItemPrices(expandedItemPricesId);
+  };
 
   const resetForm = () => {
     setEditingItemId(null);
@@ -274,19 +352,88 @@ export default function ItemsPage() {
       {
         id: 'actions',
         header: 'Aksi',
-        cell: ({ row }) =>
-          canManage ? (
-            <Button size="sm" variant="outline" onClick={() => startEdit(row.original)}>
-              Edit
-            </Button>
-          ) : (
-            <span className="text-xs text-muted-foreground">-</span>
-          )
+        cell: ({ row }) => (
+          <div className="flex flex-wrap items-center gap-2">
+            {canManage ? (
+              <Button size="sm" variant="outline" onClick={() => startEdit(row.original)}>
+                Edit
+              </Button>
+            ) : null}
+            {row.original.type === 'raw_material' || row.original.type === 'packaging' ? (
+              <Button size="sm" variant="outline" onClick={() => toggleItemSuppliers(row.original)}>
+                {expandedItemPricesId === row.original.item_id ? 'Tutup' : 'Pemasok'}
+              </Button>
+            ) : null}
+            {!canManage && row.original.type !== 'raw_material' && row.original.type !== 'packaging' ? <span className="text-xs text-muted-foreground">-</span> : null}
+          </div>
+        )
       }
     );
 
     return baseColumns;
-  }, [canManage, canViewCost]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canManage, canViewCost, expandedItemPricesId]);
+
+  const renderItemSuppliers = (item: Item) => (
+    <div className="flex flex-col gap-3">
+      <h4 className="text-sm font-semibold text-foreground">Supplier yang Memasok "{item.name}"</h4>
+      {itemPricesLoading ? (
+        <p className="text-sm text-muted-foreground">Memuat...</p>
+      ) : itemPrices.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Belum ada supplier tercatat untuk bahan ini.</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {itemPrices.map((price) => (
+            <div key={price.supplier_item_price_id} className="flex items-center justify-between rounded-md border bg-background p-3 text-sm">
+              <div>
+                <p className="font-medium text-foreground">{price.supplier_name}</p>
+                <p className="text-xs text-muted-foreground">
+                  Harga acuan — belum ada pembelian nyata: {price.reference_price !== null ? formatCurrency(price.reference_price, { maxDecimals: 0 }) : '-'}
+                  {price.price_valid_from ? ` (berlaku sejak ${price.price_valid_from})` : ''}
+                </p>
+              </div>
+              {canManage ? (
+                <Button size="sm" variant="destructive" onClick={() => handleDeleteItemSupplierPrice(price.supplier_item_price_id)}>
+                  Hapus
+                </Button>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+      {canManage ? (
+        <div className="flex flex-col gap-2 rounded-md border border-dashed p-3">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tambah Supplier Pemasok</span>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <Select value={newSupplierPriceForm.supplier_id} onValueChange={(v) => setNewSupplierPriceForm((prev) => ({ ...prev, supplier_id: v }))}>
+              <SelectTrigger>
+                <SelectValue placeholder="Pilih supplier..." />
+              </SelectTrigger>
+              <SelectContent>
+                {suppliersForPicker.map((s) => (
+                  <SelectItem key={s.supplier_id} value={String(s.supplier_id)}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              type="number"
+              min={0}
+              placeholder="Harga acuan (opsional)"
+              value={newSupplierPriceForm.reference_price}
+              onChange={(e) => setNewSupplierPriceForm((prev) => ({ ...prev, reference_price: e.target.value }))}
+            />
+            <Input type="date" value={newSupplierPriceForm.price_valid_from} onChange={(e) => setNewSupplierPriceForm((prev) => ({ ...prev, price_valid_from: e.target.value }))} />
+          </div>
+          {supplierPriceFormMessage ? <p className="text-xs text-destructive">{supplierPriceFormMessage}</p> : null}
+          <Button size="sm" className="w-fit" onClick={handleAddItemSupplierPrice}>
+            Tambah
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  );
 
   if (checkingAccess) {
     return (
@@ -338,6 +485,9 @@ export default function ItemsPage() {
                 getSearchText={(item) => `${item.item_code} ${item.name}`}
                 paginated
                 pageSize={15}
+                getRowId={(item) => String(item.item_id)}
+                expandedRowId={expandedItemPricesId !== null ? String(expandedItemPricesId) : null}
+                renderExpandedRow={renderItemSuppliers}
                 primaryAction={canManage ? { label: 'Tambah Item', onClick: () => { resetForm(); setIsFormModalOpen(true); } } : undefined}
               />
             )}

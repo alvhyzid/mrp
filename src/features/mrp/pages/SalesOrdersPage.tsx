@@ -119,6 +119,7 @@ type MarginWatchResult = {
   cost_data_complete: boolean;
   missing_cost_item_codes: string[];
   unverified_cost_item_codes: string[];
+  estimated_from_reference_price_item_codes: string[];
   standard_margin_per_unit: number;
   standard_margin_total: number;
   margin_floor_threshold: number | null;
@@ -614,11 +615,18 @@ export default function SalesOrdersPage() {
                           ⚠ PERKIRAAN SEMENTARA — BELUM DIKUNCI SEBAGAI ACUAN. Angka di bawah dihitung LIVE dari data saat ini, bukan baseline permanen.
                           {canViewFinancialData(role) ? (
                             <div className="mt-1">
-                              <Button size="sm" variant="outline" disabled={marginLockStatus === 'locking' || !marginResult.cost_data_complete} onClick={() => handleLockMargin(marginLineId!, false)}>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={marginLockStatus === 'locking' || !marginResult.cost_data_complete || marginResult.estimated_from_reference_price_item_codes.length > 0}
+                                onClick={() => handleLockMargin(marginLineId!, false)}
+                              >
                                 {marginLockStatus === 'locking' ? 'Mengunci...' : 'Kunci sebagai Acuan Pembanding'}
                               </Button>
                               {!marginResult.cost_data_complete ? (
                                 <span className="ml-2 text-xs font-normal">Belum bisa dikunci: {marginResult.missing_cost_item_codes.length} bahan/kemasan belum punya harga standar.</span>
+                              ) : marginResult.estimated_from_reference_price_item_codes.length > 0 ? (
+                                <span className="ml-2 text-xs font-normal">Belum bisa dikunci: {marginResult.estimated_from_reference_price_item_codes.length} bahan masih pakai harga acuan supplier — belum ada pembelian nyata.</span>
                               ) : null}
                             </div>
                           ) : null}
@@ -645,6 +653,11 @@ export default function SalesOrdersPage() {
                       {marginResult.unverified_cost_item_codes.length > 0 ? (
                         <p className="rounded-md border border-warning/40 bg-warning-subtle p-2 text-xs text-warning-subtle-foreground">
                           Harga BELUM TERVERIFIKASI (ikut dihitung, tapi belum dikonfirmasi purchasing): {marginResult.unverified_cost_item_codes.join(', ')}.
+                        </p>
+                      ) : null}
+                      {marginResult.estimated_from_reference_price_item_codes.length > 0 ? (
+                        <p className="rounded-md border border-warning/40 bg-warning-subtle p-2 text-xs text-warning-subtle-foreground">
+                          Harga acuan supplier — belum ada pembelian nyata (dipakai sebagai perkiraan, tidak bisa jadi acuan terkunci): {marginResult.estimated_from_reference_price_item_codes.join(', ')}.
                         </p>
                       ) : null}
                       <div className="grid gap-1 sm:grid-cols-2">

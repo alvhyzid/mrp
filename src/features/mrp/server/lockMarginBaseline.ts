@@ -71,6 +71,18 @@ export async function lockMarginBaseline(request: NextRequest): Promise<ApiResul
         body: { error: `Belum bisa dikunci: ${cost.missingCostItemCodes.length} bahan/kemasan belum punya harga standar (standard_cost) -- ${cost.missingCostItemCodes.join(', ')}.` }
       };
     }
+    // Alur 1 (3.5) -- baseline TIDAK BOLEH berdiri di atas harga acuan supplier
+    // (belum ada pembelian nyata). Keputusan pemilik produk: baseline hanya
+    // berdiri di atas harga yang benar-benar dibayar (lot hasil penerimaan
+    // barang, K5). Preview Margin Watch BOLEH memakai estimasi ini; kunci TIDAK.
+    if (cost.estimatedFromReferencePriceItemCodes.length > 0) {
+      return {
+        status: 400,
+        body: {
+          error: `Belum bisa dikunci: ${cost.estimatedFromReferencePriceItemCodes.length} bahan (${cost.estimatedFromReferencePriceItemCodes.join(', ')}) masih memakai harga acuan supplier, belum ada pembelian nyata. Baseline hanya boleh berdiri di atas harga yang sudah benar-benar dibayar.`
+        }
+      };
+    }
     const labor = await computeStandardLaborCostPerUnit(adminClient, appUser.company_id, soLine.item_id);
 
     if (existingActive) {

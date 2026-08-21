@@ -85,6 +85,7 @@ export async function getMarginWatch(request: NextRequest, salesOrderLineId: num
       cost_data_complete: boolean;
       missing_cost_item_codes: string[] | null;
       unverified_cost_item_codes: string[] | null;
+      estimated_from_reference_price_item_codes: string[];
       labor_cost_complete: boolean;
       labor_cost_notes: string[] | null;
       margin_floor_threshold: number | null;
@@ -93,7 +94,9 @@ export async function getMarginWatch(request: NextRequest, salesOrderLineId: num
       relock_reason: string | null;
     };
     if (existingSnapshot) {
-      snapshot = existingSnapshot;
+      // Baseline yang SUDAH terkunci TIDAK PERNAH berasal dari harga acuan
+      // (lockMarginBaseline.ts menolaknya) -- selalu kosong di sini.
+      snapshot = { ...existingSnapshot, estimated_from_reference_price_item_codes: [] };
     } else {
       const cost = await computeStandardCostPerUnit(adminClient, appUser.company_id, item.item_id);
       const labor = await computeStandardLaborCostPerUnit(adminClient, appUser.company_id, item.item_id);
@@ -105,6 +108,11 @@ export async function getMarginWatch(request: NextRequest, salesOrderLineId: num
         cost_data_complete: cost.complete,
         missing_cost_item_codes: cost.missingCostItemCodes,
         unverified_cost_item_codes: cost.unverifiedCostItemCodes,
+        // Alur 1 (3.5) -- item yang biayanya diestimasi dari harga acuan
+        // supplier (belum ada pembelian nyata). Preview BOLEH menampilkan
+        // angka ini, tapi baseline TIDAK BOLEH dikunci selagi daftar ini
+        // tidak kosong (ditegakkan di lockMarginBaseline.ts).
+        estimated_from_reference_price_item_codes: cost.estimatedFromReferencePriceItemCodes,
         labor_cost_complete: labor.complete,
         labor_cost_notes: labor.notes,
         margin_floor_threshold: null,
@@ -231,6 +239,7 @@ export async function getMarginWatch(request: NextRequest, salesOrderLineId: num
         cost_data_complete: snapshot.cost_data_complete,
         missing_cost_item_codes: snapshot.missing_cost_item_codes ?? [],
         unverified_cost_item_codes: snapshot.unverified_cost_item_codes ?? [],
+        estimated_from_reference_price_item_codes: snapshot.estimated_from_reference_price_item_codes,
         standard_margin_per_unit: standardMarginPerUnit,
         standard_margin_total: standardMarginTotal,
         margin_floor_threshold: snapshot.margin_floor_threshold !== null ? Number(snapshot.margin_floor_threshold) : null,

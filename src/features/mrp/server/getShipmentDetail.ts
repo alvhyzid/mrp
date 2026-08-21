@@ -22,7 +22,9 @@ export async function getShipmentDetail(request: NextRequest, shipmentId: number
 
     const { data: shipment, error: shipmentError } = await adminClient
       .from('shipments')
-      .select('shipment_id, sales_order_id, shipment_number, shipment_date, status, delivery_address, recipient_name, recipient_phone, vehicle_number, driver_name, pod_token, created_at')
+      .select(
+        'shipment_id, sales_order_id, shipment_number, shipment_date, status, delivery_address, recipient_name, recipient_phone, vehicle_number, driver_name, pod_token, created_at, customer_name_snapshot, customer_billing_address_snapshot, customer_npwp_snapshot'
+      )
       .eq('shipment_id', shipmentId)
       .maybeSingle();
     if (shipmentError) return { status: 500, body: { error: shipmentError.message } };
@@ -40,7 +42,7 @@ export async function getShipmentDetail(request: NextRequest, shipmentId: number
 
     const [linesRes, customerRes, companyRes, signatureRes] = await Promise.all([
       adminClient.from('shipment_lines').select('shipment_line_id, item_id, qty_shipped, lot_id').eq('shipment_id', shipmentId),
-      adminClient.from('customers').select('customer_id, name').eq('customer_id', so.customer_id).single(),
+      adminClient.from('customers').select('customer_id, name, billing_address, npwp').eq('customer_id', so.customer_id).single(),
       adminClient.from('companies').select('company_id, name, logo_url').eq('company_id', appUser.company_id).single(),
       adminClient
         .from('document_signatures')
@@ -76,7 +78,14 @@ export async function getShipmentDetail(request: NextRequest, shipmentId: number
         shipment: {
           ...shipment,
           so_number: so.so_number,
-          customer_name: customerRes.data.name,
+          // Alur 1 (3.1b) — utamakan snapshot BEKU (identitas client persis
+          // saat shipment ini dibuat). Fallback ke join hidup HANYA untuk
+          // shipment lama dari sebelum kolom snapshot ini ada (customer_name_snapshot
+          // null) — shipment baru selalu punya snapshot, tidak pernah ikut
+          // berubah kalau data client diedit belakangan.
+          customer_name: shipment.customer_name_snapshot ?? customerRes.data.name,
+          customer_billing_address: shipment.customer_billing_address_snapshot ?? customerRes.data.billing_address ?? null,
+          customer_npwp: shipment.customer_npwp_snapshot ?? customerRes.data.npwp ?? null,
           lines: (linesRes.data ?? []).map((line) => {
             const item = itemsById.get(line.item_id);
             const lot = lotsById.get(line.lot_id);

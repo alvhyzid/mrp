@@ -15,6 +15,12 @@ export interface StandardCostResult {
   // formula resmi Gummy Zala V2/Drinkme V1) -- beda dari missingCostItemCodes:
   // di sini harga ADA dan IKUT dihitung, cuma belum dikonfirmasi purchasing.
   unverifiedCostItemCodes: string[];
+  // Alur 1 (3.5, 21 Agu 2026) -- item yang items.standard_cost-nya NULL, tapi
+  // ADA harga acuan supplier (supplier_item_prices) sehingga tetap DIESTIMASI
+  // (bukan langsung dianggap "belum lengkap"). Estimasi ini BOLEH tampil di
+  // preview Margin Watch, TAPI baseline TIDAK BOLEH dikunci selama daftar ini
+  // tidak kosong -- ditegakkan di lockMarginBaseline.ts.
+  estimatedFromReferencePriceItemCodes: string[];
 }
 
 // Margin Watch Lapis 1 (baseline) -- kebalikan dari explodeBomRequirements.ts
@@ -63,12 +69,44 @@ export async function computeStandardCostPerUnit(adminClient: SupabaseClient, co
   let packagingCostPerUnit = 0;
   const missingCostItemCodes: string[] = [];
   const unverifiedCostItemCodes: string[] = [];
+  const estimatedFromReferencePriceItemCodes: string[] = [];
+
+  // Alur 1 (3.5) -- untuk item TANPA standard_cost, cek harga acuan supplier
+  // sebagai ESTIMASI TERAKHIR sebelum menyerah ke "belum lengkap". Kalau ada
+  // lebih dari satu supplier, pakai yang paling MURAH -- perkiraan margin
+  // seharusnya konservatif (jangan optimis), bukan asal ambil satu.
+  const missingItemIds = Array.from(leafNeeded.keys()).filter((id) => {
+    const item = itemById.get(id);
+    return item && (item.standard_cost === null || item.standard_cost === undefined);
+  });
+  const referencePriceByItemId = new Map<number, number>();
+  if (missingItemIds.length > 0) {
+    const { data: refPrices } = await adminClient
+      .from('supplier_item_prices')
+      .select('item_id, reference_price')
+      .eq('company_id', companyId)
+      .in('item_id', missingItemIds)
+      .not('reference_price', 'is', null);
+    for (const row of refPrices ?? []) {
+      const current = referencePriceByItemId.get(row.item_id);
+      const price = Number(row.reference_price);
+      if (current === undefined || price < current) referencePriceByItemId.set(row.item_id, price);
+    }
+  }
 
   for (const [itemId, qty] of leafNeeded) {
     const item = itemById.get(itemId);
     if (!item) continue;
     if (item.standard_cost === null || item.standard_cost === undefined) {
-      missingCostItemCodes.push(item.item_code);
+      const referencePrice = referencePriceByItemId.get(itemId);
+      if (referencePrice === undefined) {
+        missingCostItemCodes.push(item.item_code);
+        continue;
+      }
+      estimatedFromReferencePriceItemCodes.push(item.item_code);
+      const cost = qty * referencePrice;
+      if (item.type === 'packaging') packagingCostPerUnit += cost;
+      else materialCostPerUnit += cost;
       continue;
     }
     if (item.cost_unverified) unverifiedCostItemCodes.push(item.item_code);
@@ -82,6 +120,7 @@ export async function computeStandardCostPerUnit(adminClient: SupabaseClient, co
     packagingCostPerUnit,
     complete: missingCostItemCodes.length === 0,
     missingCostItemCodes,
-    unverifiedCostItemCodes
+    unverifiedCostItemCodes,
+    estimatedFromReferencePriceItemCodes
   };
 }

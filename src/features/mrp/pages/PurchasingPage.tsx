@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ColumnDef } from '@tanstack/react-table';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
@@ -14,16 +14,71 @@ import { formatCurrency, formatNumberId } from '@/lib/currency';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { canManagePurchasing } from '@/lib/roles';
 
-type Supplier = { supplier_id: number; name: string; contact_info: string | null; lead_time_days: number | null; supplier_type: string };
+type Supplier = {
+  supplier_id: number;
+  name: string;
+  contact_info: string | null;
+  lead_time_days: number | null;
+  supplier_type: string;
+  address: string | null;
+  npwp: string | null;
+  pic_name: string | null;
+  pic_phone: string | null;
+  pic_email: string | null;
+  payment_terms: string | null;
+  archived_at: string | null;
+  archived_by_name: string | null;
+  purchase_order_count: number;
+  supplied_item_count: number;
+  can_delete: boolean;
+};
 type Plant = { production_plant_id: number; name: string };
 type ItemOption = { item_id: number; item_code: string | null; name: string; purchase_uom: string; type: string };
 type PoLine = { purchase_order_line_id: number; item_code: string | null; item_name: string | null; purchase_uom: string | null; qty_ordered: number; qty_received: number; unit_price: number | null };
 type PurchaseOrder = { purchase_order_id: number; supplier_name: string | null; production_plant_name: string | null; status: string; status_label: string; order_date: string; expected_date: string | null; lines: PoLine[] };
+type SupplierItemPrice = {
+  supplier_item_price_id: number;
+  supplier_id: number;
+  item_id: number;
+  item_code: string | null;
+  item_name: string | null;
+  item_base_uom: string | null;
+  supplier_item_code: string | null;
+  supplier_item_name: string | null;
+  reference_price: number | null;
+  price_valid_from: string | null;
+  min_order_qty: number | null;
+  min_order_uom: string | null;
+  lead_time_days_override: number | null;
+  notes: string | null;
+};
 
 type FormLine = { item_id: string; qty_ordered: string; unit_price: string };
 const emptyFormLine: FormLine = { item_id: '', qty_ordered: '', unit_price: '' };
 const emptyPoForm = { supplier_id: '', production_plant_id: '', expected_date: '', lines: [{ ...emptyFormLine }] as FormLine[] };
-const emptySupplierForm = { name: '', contact_info: '', lead_time_days: '', supplier_type: 'material_supplier' };
+const emptySupplierForm = {
+  name: '',
+  contact_info: '',
+  lead_time_days: '',
+  supplier_type: 'material_supplier',
+  address: '',
+  npwp: '',
+  pic_name: '',
+  pic_phone: '',
+  pic_email: '',
+  payment_terms: ''
+};
+const emptySupplierPriceForm = {
+  item_id: '',
+  supplier_item_code: '',
+  supplier_item_name: '',
+  reference_price: '',
+  price_valid_from: '',
+  min_order_qty: '',
+  min_order_uom: '',
+  lead_time_days_override: '',
+  notes: ''
+};
 
 const supplierTypeLabels: Record<string, string> = { material_supplier: 'Pemasok Bahan', subcontractor: 'Subkontraktor', both: 'Keduanya' };
 const poStatusVariant: Record<string, 'info' | 'warning' | 'success' | 'secondary' | 'critical'> = {
@@ -39,6 +94,7 @@ export default function PurchasingPage() {
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
   const [role, setRole] = useState<string | null>(null);
+  const canManage = canManagePurchasing(role);
 
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [suppliersLoading, setSuppliersLoading] = useState(true);
@@ -52,6 +108,19 @@ export default function PurchasingPage() {
   const [supplierForm, setSupplierForm] = useState(emptySupplierForm);
   const [supplierFormStatus, setSupplierFormStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [supplierFormMessage, setSupplierFormMessage] = useState('');
+  const [editingSupplierId, setEditingSupplierId] = useState<number | null>(null);
+  const [showArchivedSuppliers, setShowArchivedSuppliers] = useState(false);
+  const [supplierActionMessage, setSupplierActionMessage] = useState<{ supplierId: number; message: string; kind: 'error' | 'success' } | null>(null);
+
+  // Alur 1 (3.4) — "bahan yang dipasok", pintu masuk dari layar Supplier.
+  const [expandedSupplierId, setExpandedSupplierId] = useState<number | null>(null);
+  const [supplierPrices, setSupplierPrices] = useState<SupplierItemPrice[]>([]);
+  const [supplierPricesLoading, setSupplierPricesLoading] = useState(false);
+  const [isPriceModalOpen, setIsPriceModalOpen] = useState(false);
+  const [editingPriceId, setEditingPriceId] = useState<number | null>(null);
+  const [priceForm, setPriceForm] = useState(emptySupplierPriceForm);
+  const [priceFormStatus, setPriceFormStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [priceFormMessage, setPriceFormMessage] = useState('');
 
   const [poForm, setPoForm] = useState(emptyPoForm);
   const [poFormStatus, setPoFormStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
@@ -80,12 +149,15 @@ export default function PurchasingPage() {
     [getAccessToken]
   );
 
-  const loadSuppliers = useCallback(async () => {
-    setSuppliersLoading(true);
-    const { ok, body } = await authedFetch('/api/suppliers');
-    if (ok) setSuppliers(body.suppliers || []);
-    setSuppliersLoading(false);
-  }, [authedFetch]);
+  const loadSuppliers = useCallback(
+    async (includeArchived: boolean) => {
+      setSuppliersLoading(true);
+      const { ok, body } = await authedFetch(`/api/suppliers${includeArchived ? '?includeArchived=true' : ''}`);
+      if (ok) setSuppliers(body.suppliers || []);
+      setSuppliersLoading(false);
+    },
+    [authedFetch]
+  );
 
   const loadPurchaseOrders = useCallback(async () => {
     setPoLoading(true);
@@ -123,12 +195,54 @@ export default function PurchasingPage() {
       const meData = await meResponse.json();
       setRole(meData?.user?.role ?? null);
       setCheckingAccess(false);
-      await Promise.all([loadSuppliers(), loadPurchaseOrders(), loadPlantsAndItems()]);
+      await Promise.all([loadSuppliers(showArchivedSuppliers), loadPurchaseOrders(), loadPlantsAndItems()]);
     };
     checkAccessAndLoad();
-  }, [router, loadSuppliers, loadPurchaseOrders, loadPlantsAndItems]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router, loadPurchaseOrders, loadPlantsAndItems]);
 
-  const handleCreateSupplier = async () => {
+  const isFirstArchivedFilterRender = useRef(true);
+  useEffect(() => {
+    if (isFirstArchivedFilterRender.current) {
+      isFirstArchivedFilterRender.current = false;
+      return;
+    }
+    loadSuppliers(showArchivedSuppliers);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showArchivedSuppliers]);
+
+  const resetSupplierForm = () => {
+    setEditingSupplierId(null);
+    setSupplierForm(emptySupplierForm);
+  };
+
+  const startCreateSupplier = () => {
+    resetSupplierForm();
+    setSupplierFormStatus('idle');
+    setSupplierFormMessage('');
+    setIsSupplierModalOpen(true);
+  };
+
+  const startEditSupplier = (supplier: Supplier) => {
+    setEditingSupplierId(supplier.supplier_id);
+    setSupplierForm({
+      name: supplier.name,
+      contact_info: supplier.contact_info ?? '',
+      lead_time_days: supplier.lead_time_days === null ? '' : String(supplier.lead_time_days),
+      supplier_type: supplier.supplier_type,
+      address: supplier.address ?? '',
+      npwp: supplier.npwp ?? '',
+      pic_name: supplier.pic_name ?? '',
+      pic_phone: supplier.pic_phone ?? '',
+      pic_email: supplier.pic_email ?? '',
+      payment_terms: supplier.payment_terms ?? ''
+    });
+    setSupplierFormStatus('idle');
+    setSupplierFormMessage('');
+    setIsSupplierModalOpen(true);
+  };
+
+  const handleSaveSupplier = async () => {
     if (!supplierForm.name.trim()) {
       setSupplierFormStatus('error');
       setSupplierFormMessage('Nama supplier wajib diisi.');
@@ -136,25 +250,156 @@ export default function PurchasingPage() {
     }
     setSupplierFormStatus('saving');
     setSupplierFormMessage('');
-    const { ok, body } = await authedFetch('/api/suppliers', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: supplierForm.name,
-        contact_info: supplierForm.contact_info || null,
-        lead_time_days: supplierForm.lead_time_days || null,
-        supplier_type: supplierForm.supplier_type
-      })
-    });
+    const payload = {
+      name: supplierForm.name,
+      contact_info: supplierForm.contact_info || null,
+      lead_time_days: supplierForm.lead_time_days || null,
+      supplier_type: supplierForm.supplier_type,
+      address: supplierForm.address || null,
+      npwp: supplierForm.npwp || null,
+      pic_name: supplierForm.pic_name || null,
+      pic_phone: supplierForm.pic_phone || null,
+      pic_email: supplierForm.pic_email || null,
+      payment_terms: supplierForm.payment_terms || null
+    };
+    const { ok, body } = editingSupplierId
+      ? await authedFetch('/api/suppliers', { method: 'PATCH', body: JSON.stringify({ supplier_id: editingSupplierId, ...payload }) })
+      : await authedFetch('/api/suppliers', { method: 'POST', body: JSON.stringify(payload) });
     if (!ok) {
       setSupplierFormStatus('error');
       setSupplierFormMessage(body.error || 'Gagal menyimpan supplier.');
       return;
     }
     setSupplierFormStatus('success');
-    setSupplierFormMessage('Supplier baru berhasil ditambahkan.');
+    setSupplierFormMessage(editingSupplierId ? 'Supplier berhasil diperbarui.' : 'Supplier baru berhasil ditambahkan.');
+    setEditingSupplierId(null);
     setSupplierForm(emptySupplierForm);
-    setIsSupplierModalOpen(false);
-    await loadSuppliers();
+    await loadSuppliers(showArchivedSuppliers);
+  };
+
+  const handleDeleteSupplier = async (supplier: Supplier) => {
+    const confirmed = window.confirm(`Hapus permanen supplier "${supplier.name}"? Tindakan ini tidak bisa dibatalkan.`);
+    if (!confirmed) return;
+    const { ok, body } = await authedFetch(`/api/suppliers/${supplier.supplier_id}`, { method: 'DELETE' });
+    if (!ok) {
+      setSupplierActionMessage({ supplierId: supplier.supplier_id, message: body.error || 'Gagal menghapus supplier.', kind: 'error' });
+      return;
+    }
+    setSupplierActionMessage(null);
+    await loadSuppliers(showArchivedSuppliers);
+  };
+
+  const handleArchiveSupplier = async (supplier: Supplier) => {
+    const { ok, body } = await authedFetch(`/api/suppliers/${supplier.supplier_id}/archive`, { method: 'POST' });
+    if (!ok) {
+      setSupplierActionMessage({ supplierId: supplier.supplier_id, message: body.error || 'Gagal mengarsipkan supplier.', kind: 'error' });
+      return;
+    }
+    setSupplierActionMessage({ supplierId: supplier.supplier_id, message: 'Supplier berhasil diarsipkan.', kind: 'success' });
+    await loadSuppliers(showArchivedSuppliers);
+  };
+
+  const handleRestoreSupplier = async (supplier: Supplier) => {
+    const { ok, body } = await authedFetch(`/api/suppliers/${supplier.supplier_id}/restore`, { method: 'POST' });
+    if (!ok) {
+      setSupplierActionMessage({ supplierId: supplier.supplier_id, message: body.error || 'Gagal memulihkan supplier.', kind: 'error' });
+      return;
+    }
+    setSupplierActionMessage({ supplierId: supplier.supplier_id, message: 'Supplier berhasil dipulihkan.', kind: 'success' });
+    await loadSuppliers(showArchivedSuppliers);
+  };
+
+  const loadSupplierPrices = useCallback(
+    async (supplierId: number) => {
+      setSupplierPricesLoading(true);
+      const { ok, body } = await authedFetch(`/api/supplier-item-prices?supplier_id=${supplierId}`);
+      if (ok) setSupplierPrices(body.prices || []);
+      setSupplierPricesLoading(false);
+    },
+    [authedFetch]
+  );
+
+  const toggleSupplierDetail = async (supplier: Supplier) => {
+    if (expandedSupplierId === supplier.supplier_id) {
+      setExpandedSupplierId(null);
+      return;
+    }
+    setExpandedSupplierId(supplier.supplier_id);
+    await loadSupplierPrices(supplier.supplier_id);
+  };
+
+  const startAddPrice = () => {
+    setEditingPriceId(null);
+    setPriceForm(emptySupplierPriceForm);
+    setPriceFormStatus('idle');
+    setPriceFormMessage('');
+    setIsPriceModalOpen(true);
+  };
+
+  const startEditPrice = (price: SupplierItemPrice) => {
+    setEditingPriceId(price.supplier_item_price_id);
+    setPriceForm({
+      item_id: String(price.item_id),
+      supplier_item_code: price.supplier_item_code ?? '',
+      supplier_item_name: price.supplier_item_name ?? '',
+      reference_price: price.reference_price === null ? '' : String(price.reference_price),
+      price_valid_from: price.price_valid_from ?? '',
+      min_order_qty: price.min_order_qty === null ? '' : String(price.min_order_qty),
+      min_order_uom: price.min_order_uom ?? '',
+      lead_time_days_override: price.lead_time_days_override === null ? '' : String(price.lead_time_days_override),
+      notes: price.notes ?? ''
+    });
+    setPriceFormStatus('idle');
+    setPriceFormMessage('');
+    setIsPriceModalOpen(true);
+  };
+
+  const handleSavePrice = async () => {
+    if (!priceForm.item_id) {
+      setPriceFormStatus('error');
+      setPriceFormMessage('Bahan wajib dipilih dari daftar item.');
+      return;
+    }
+    if (expandedSupplierId === null) return;
+    setPriceFormStatus('saving');
+    setPriceFormMessage('');
+    const { ok, body } = await authedFetch('/api/supplier-item-prices', {
+      method: 'POST',
+      body: JSON.stringify({
+        supplier_id: expandedSupplierId,
+        item_id: Number(priceForm.item_id),
+        supplier_item_code: priceForm.supplier_item_code || null,
+        supplier_item_name: priceForm.supplier_item_name || null,
+        reference_price: priceForm.reference_price || null,
+        price_valid_from: priceForm.price_valid_from || null,
+        min_order_qty: priceForm.min_order_qty || null,
+        min_order_uom: priceForm.min_order_uom || null,
+        lead_time_days_override: priceForm.lead_time_days_override || null,
+        notes: priceForm.notes || null
+      })
+    });
+    if (!ok) {
+      setPriceFormStatus('error');
+      setPriceFormMessage(body.error || 'Gagal menyimpan bahan yang dipasok.');
+      return;
+    }
+    setPriceFormStatus('success');
+    setPriceFormMessage('Bahan yang dipasok berhasil disimpan.');
+    setEditingPriceId(null);
+    setPriceForm(emptySupplierPriceForm);
+    setIsPriceModalOpen(false);
+    await loadSupplierPrices(expandedSupplierId);
+    await loadSuppliers(showArchivedSuppliers);
+  };
+
+  const handleDeletePrice = async (price: SupplierItemPrice) => {
+    const confirmed = window.confirm(`Hapus "${price.item_code ?? price.item_name}" dari daftar bahan yang dipasok supplier ini?`);
+    if (!confirmed || expandedSupplierId === null) return;
+    const { ok } = await authedFetch(`/api/supplier-item-prices/${price.supplier_item_price_id}`, { method: 'DELETE' });
+    if (ok) {
+      await loadSupplierPrices(expandedSupplierId);
+      await loadSuppliers(showArchivedSuppliers);
+    }
   };
 
   const addPoLine = () => setPoForm((prev) => ({ ...prev, lines: [...prev.lines, { ...emptyFormLine }] }));
@@ -202,11 +447,123 @@ export default function PurchasingPage() {
   const supplierColumns = useMemo<ColumnDef<Supplier>[]>(
     () => [
       { id: 'name', header: 'Nama', cell: ({ row }) => <span className="font-medium text-foreground">{row.original.name}</span> },
-      { id: 'contact_info', header: 'Kontak', cell: ({ row }) => row.original.contact_info ?? '-' },
+      { id: 'pic', header: 'PIC', cell: ({ row }) => row.original.pic_name ?? '-' },
       { id: 'lead_time', header: 'Lead Time', cell: ({ row }) => (row.original.lead_time_days !== null ? `${formatNumberId(row.original.lead_time_days, 0)} hari` : '-') },
-      { id: 'type', header: 'Jenis', cell: ({ row }) => supplierTypeLabels[row.original.supplier_type] ?? row.original.supplier_type }
+      { id: 'type', header: 'Jenis', cell: ({ row }) => supplierTypeLabels[row.original.supplier_type] ?? row.original.supplier_type },
+      {
+        id: 'status',
+        header: 'Status',
+        cell: ({ row }) =>
+          row.original.archived_at ? (
+            <span className="text-data text-xs text-muted-foreground">
+              Diarsipkan{row.original.archived_by_name ? ` oleh ${row.original.archived_by_name}` : ''}
+            </span>
+          ) : (
+            <span className="text-data text-success-subtle-foreground">Aktif</span>
+          )
+      },
+      {
+        id: 'actions',
+        header: 'Aksi',
+        cell: ({ row }) => (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => toggleSupplierDetail(row.original)}>
+              {expandedSupplierId === row.original.supplier_id ? 'Tutup' : 'Bahan Dipasok'}
+            </Button>
+            {canManage && !row.original.archived_at ? (
+              <Button size="sm" variant="outline" onClick={() => startEditSupplier(row.original)}>
+                Edit
+              </Button>
+            ) : null}
+            {canManage && row.original.archived_at ? (
+              <Button size="sm" variant="outline" onClick={() => handleRestoreSupplier(row.original)}>
+                Pulihkan
+              </Button>
+            ) : null}
+            {canManage && !row.original.archived_at && row.original.can_delete ? (
+              <Button size="sm" variant="destructive" onClick={() => handleDeleteSupplier(row.original)}>
+                Hapus
+              </Button>
+            ) : null}
+            {canManage && !row.original.archived_at && !row.original.can_delete ? (
+              <Button size="sm" variant="destructive" onClick={() => handleArchiveSupplier(row.original)}>
+                Arsipkan
+              </Button>
+            ) : null}
+          </div>
+        )
+      }
     ],
-    []
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [canManage, expandedSupplierId]
+  );
+
+  const renderSupplierDetail = (supplier: Supplier) => (
+    <div className="flex flex-col gap-3">
+      {supplierActionMessage && supplierActionMessage.supplierId === supplier.supplier_id ? (
+        <p className={`text-sm ${supplierActionMessage.kind === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>{supplierActionMessage.message}</p>
+      ) : null}
+      <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+        <span>Alamat: {supplier.address ?? '-'}</span>
+        <span>NPWP: {supplier.npwp ?? '-'}</span>
+        <span>PIC: {supplier.pic_name ?? '-'}{supplier.pic_phone ? ` — ${supplier.pic_phone}` : ''}{supplier.pic_email ? ` — ${supplier.pic_email}` : ''}</span>
+        <span>Termin Pembayaran: {supplier.payment_terms ?? '-'}</span>
+      </div>
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold text-foreground">Bahan yang Dipasok</h4>
+        {canManage && !supplier.archived_at ? (
+          <Button size="sm" onClick={startAddPrice}>
+            + Tambah Bahan
+          </Button>
+        ) : null}
+      </div>
+      {supplierPricesLoading ? (
+        <p className="text-sm text-muted-foreground">Memuat...</p>
+      ) : supplierPrices.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Belum ada bahan yang dipasok tercatat untuk supplier ini.</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {supplierPrices.map((price) => (
+            <div key={price.supplier_item_price_id} className="rounded-md border bg-background p-3 text-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-medium text-foreground">
+                    {price.item_code} — {price.item_name}
+                  </p>
+                  {price.supplier_item_code || price.supplier_item_name ? (
+                    <p className="text-xs text-muted-foreground">
+                      Kode/nama menurut supplier: {price.supplier_item_code ?? '-'} {price.supplier_item_name ? `(${price.supplier_item_name})` : ''}
+                    </p>
+                  ) : null}
+                </div>
+                {canManage && !supplier.archived_at ? (
+                  <div className="flex shrink-0 gap-2">
+                    <Button size="sm" variant="outline" onClick={() => startEditPrice(price)}>
+                      Edit
+                    </Button>
+                    <Button size="sm" variant="destructive" onClick={() => handleDeletePrice(price)}>
+                      Hapus
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+              <div className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
+                <span>
+                  Harga acuan — belum ada pembelian nyata:{' '}
+                  {price.reference_price !== null ? formatCurrency(price.reference_price, { maxDecimals: 0 }) : '-'}
+                  {price.price_valid_from ? ` (berlaku sejak ${price.price_valid_from})` : ''}
+                </span>
+                <span>
+                  Minimum Order: {price.min_order_qty !== null ? `${formatNumberId(price.min_order_qty, 2)} ${price.min_order_uom ?? ''}` : '-'}
+                </span>
+                <span>Lead Time Khusus: {price.lead_time_days_override !== null ? `${price.lead_time_days_override} hari` : '(pakai lead time umum supplier)'}</span>
+                {price.notes ? <span>Catatan: {price.notes}</span> : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 
   const poColumns = useMemo<ColumnDef<PurchaseOrder>[]>(
@@ -288,8 +645,6 @@ export default function PurchasingPage() {
     );
   }
 
-  const canManage = canManagePurchasing(role);
-
   return (
     <main className="min-h-screen bg-muted/30 py-10">
       <div className="flex w-full flex-col gap-6 px-6">
@@ -304,6 +659,10 @@ export default function PurchasingPage() {
             <CardTitle className="text-xl">Supplier</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input type="checkbox" checked={showArchivedSuppliers} onChange={(e) => setShowArchivedSuppliers(e.target.checked)} />
+              Tampilkan yang diarsipkan
+            </label>
             {suppliersLoading ? (
               <p className="text-sm text-muted-foreground">Memuat...</p>
             ) : (
@@ -313,39 +672,179 @@ export default function PurchasingPage() {
                 emptyMessage="Belum ada supplier."
                 searchPlaceholder="Cari nama supplier..."
                 getSearchText={(s) => s.name}
-                primaryAction={canManage ? { label: 'Tambah Supplier', onClick: () => setIsSupplierModalOpen(true) } : undefined}
+                getRowId={(s) => String(s.supplier_id)}
+                expandedRowId={expandedSupplierId !== null ? String(expandedSupplierId) : null}
+                renderExpandedRow={renderSupplierDetail}
+                primaryAction={canManage ? { label: 'Tambah Supplier', onClick: startCreateSupplier } : undefined}
               />
             )}
           </CardContent>
         </Card>
 
         {canManage ? (
-          <Dialog open={isSupplierModalOpen} onOpenChange={setIsSupplierModalOpen}>
-            <DialogContent className="max-w-xl">
+          <Dialog
+            open={isSupplierModalOpen}
+            onOpenChange={(open) => {
+              setIsSupplierModalOpen(open);
+              if (!open) resetSupplierForm();
+            }}
+          >
+            <DialogContent className="max-w-lg">
               <DialogHeader>
-                <DialogTitle>Tambah Supplier Baru</DialogTitle>
+                <DialogTitle>{editingSupplierId ? `Ubah Supplier — ${supplierForm.name}` : 'Tambah Supplier Baru'}</DialogTitle>
               </DialogHeader>
-              <div className="grid grid-cols-2 gap-3">
-                <Input placeholder="Nama supplier" value={supplierForm.name} onChange={(e) => setSupplierForm((prev) => ({ ...prev, name: e.target.value }))} />
-                <Input placeholder="Kontak (opsional)" value={supplierForm.contact_info} onChange={(e) => setSupplierForm((prev) => ({ ...prev, contact_info: e.target.value }))} />
-                <Input type="number" min={0} placeholder="Lead time (hari)" value={supplierForm.lead_time_days} onChange={(e) => setSupplierForm((prev) => ({ ...prev, lead_time_days: e.target.value }))} />
-                <Select value={supplierForm.supplier_type} onValueChange={(v) => setSupplierForm((prev) => ({ ...prev, supplier_type: v }))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="material_supplier">Pemasok Bahan</SelectItem>
-                    <SelectItem value="subcontractor">Subkontraktor</SelectItem>
-                    <SelectItem value="both">Keduanya</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto pr-1">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Nama Supplier</span>
+                  <Input placeholder="mis. PT Sumber Bahan Jaya" value={supplierForm.name} onChange={(e) => setSupplierForm((prev) => ({ ...prev, name: e.target.value }))} />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Alamat</span>
+                  <Input placeholder="Alamat lengkap supplier" value={supplierForm.address} onChange={(e) => setSupplierForm((prev) => ({ ...prev, address: e.target.value }))} />
+                </label>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-medium text-foreground">NPWP</span>
+                    <Input placeholder="01.234.567.8-901.000" value={supplierForm.npwp} onChange={(e) => setSupplierForm((prev) => ({ ...prev, npwp: e.target.value }))} />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-medium text-foreground">Lead Time Umum (hari)</span>
+                    <Input type="number" min={0} placeholder="mis. 7" value={supplierForm.lead_time_days} onChange={(e) => setSupplierForm((prev) => ({ ...prev, lead_time_days: e.target.value }))} />
+                  </label>
+                </div>
+                <span className="-mt-2 text-xs text-muted-foreground">Lead time bisa ditimpa per bahan lewat "Bahan yang Dipasok".</span>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Termin Pembayaran</span>
+                  <Input placeholder="mis. 30 hari setelah terima barang" value={supplierForm.payment_terms} onChange={(e) => setSupplierForm((prev) => ({ ...prev, payment_terms: e.target.value }))} />
+                </label>
+
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm font-medium text-foreground">Kontak Person (PIC)</span>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <Input placeholder="Nama PIC" value={supplierForm.pic_name} onChange={(e) => setSupplierForm((prev) => ({ ...prev, pic_name: e.target.value }))} />
+                    <Input placeholder="Telepon PIC" value={supplierForm.pic_phone} onChange={(e) => setSupplierForm((prev) => ({ ...prev, pic_phone: e.target.value }))} />
+                    <Input placeholder="Email PIC" value={supplierForm.pic_email} onChange={(e) => setSupplierForm((prev) => ({ ...prev, pic_email: e.target.value }))} />
+                  </div>
+                </div>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Jenis Supplier</span>
+                  <Select value={supplierForm.supplier_type} onValueChange={(v) => setSupplierForm((prev) => ({ ...prev, supplier_type: v }))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="material_supplier">Pemasok Bahan</SelectItem>
+                      <SelectItem value="subcontractor">Subkontraktor</SelectItem>
+                      <SelectItem value="both">Keduanya</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Kontak Lain (opsional)</span>
+                  <Input placeholder="Catatan kontak tambahan" value={supplierForm.contact_info} onChange={(e) => setSupplierForm((prev) => ({ ...prev, contact_info: e.target.value }))} />
+                </label>
               </div>
               {supplierFormMessage ? <p className={`text-sm ${supplierFormStatus === 'error' ? 'text-destructive' : 'text-success'}`}>{supplierFormMessage}</p> : null}
               <div className="flex items-center gap-3">
-                <Button disabled={supplierFormStatus === 'saving'} onClick={handleCreateSupplier}>
-                  {supplierFormStatus === 'saving' ? 'Menyimpan...' : 'Tambah Supplier'}
+                <Button disabled={supplierFormStatus === 'saving'} onClick={handleSaveSupplier}>
+                  {supplierFormStatus === 'saving' ? 'Menyimpan...' : editingSupplierId ? 'Simpan Perubahan' : 'Tambah Supplier'}
                 </Button>
                 <Button variant="outline" onClick={() => setIsSupplierModalOpen(false)}>
+                  Batal
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        ) : null}
+
+        {canManage ? (
+          <Dialog open={isPriceModalOpen} onOpenChange={setIsPriceModalOpen}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>{editingPriceId ? 'Ubah Bahan yang Dipasok' : 'Tambah Bahan yang Dipasok'}</DialogTitle>
+              </DialogHeader>
+              <div className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto pr-1">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Bahan</span>
+                  <Select value={priceForm.item_id} onValueChange={(v) => setPriceForm((prev) => ({ ...prev, item_id: v }))} disabled={!!editingPriceId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih dari daftar item..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {items.map((item) => (
+                        <SelectItem key={item.item_id} value={String(item.item_id)}>
+                          {item.item_code} — {item.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <span className="text-xs text-muted-foreground">Belum ada bahannya di daftar? Buat dulu di layar Item, jangan diketik bebas di sini.</span>
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Kode/Nama Menurut Supplier (opsional)</span>
+                  <Input
+                    placeholder="mis. sebutan/kode barang ini menurut supplier, sering beda dari nama kita"
+                    value={priceForm.supplier_item_name}
+                    onChange={(e) => setPriceForm((prev) => ({ ...prev, supplier_item_name: e.target.value }))}
+                  />
+                  <Input
+                    placeholder="Kode barang menurut supplier (opsional)"
+                    value={priceForm.supplier_item_code}
+                    onChange={(e) => setPriceForm((prev) => ({ ...prev, supplier_item_code: e.target.value }))}
+                  />
+                </label>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-medium text-foreground">Harga Acuan</span>
+                    <Input type="number" min={0} placeholder="Perkiraan harga saat ini" value={priceForm.reference_price} onChange={(e) => setPriceForm((prev) => ({ ...prev, reference_price: e.target.value }))} />
+                    <span className="text-xs text-muted-foreground">Harga acuan — belum ada pembelian nyata. Bukan HPP.</span>
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-medium text-foreground">Berlaku Sejak</span>
+                    <Input type="date" value={priceForm.price_valid_from} onChange={(e) => setPriceForm((prev) => ({ ...prev, price_valid_from: e.target.value }))} />
+                  </label>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-medium text-foreground">Minimum Order</span>
+                    <Input type="number" min={0} placeholder="Jumlah" value={priceForm.min_order_qty} onChange={(e) => setPriceForm((prev) => ({ ...prev, min_order_qty: e.target.value }))} />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-medium text-foreground">Satuan Minimum Order</span>
+                    <Input placeholder="mis. karung, drum" value={priceForm.min_order_uom} onChange={(e) => setPriceForm((prev) => ({ ...prev, min_order_uom: e.target.value }))} />
+                  </label>
+                </div>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Lead Time Khusus Bahan Ini (hari, opsional)</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    placeholder="Kosongkan untuk pakai lead time umum supplier"
+                    value={priceForm.lead_time_days_override}
+                    onChange={(e) => setPriceForm((prev) => ({ ...prev, lead_time_days_override: e.target.value }))}
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Catatan</span>
+                  <Input placeholder="Catatan tambahan (opsional)" value={priceForm.notes} onChange={(e) => setPriceForm((prev) => ({ ...prev, notes: e.target.value }))} />
+                </label>
+              </div>
+              {priceFormMessage ? <p className={`text-sm ${priceFormStatus === 'error' ? 'text-destructive' : 'text-success'}`}>{priceFormMessage}</p> : null}
+              <div className="flex items-center gap-3">
+                <Button disabled={priceFormStatus === 'saving'} onClick={handleSavePrice}>
+                  {priceFormStatus === 'saving' ? 'Menyimpan...' : 'Simpan'}
+                </Button>
+                <Button variant="outline" onClick={() => setIsPriceModalOpen(false)}>
                   Batal
                 </Button>
               </div>

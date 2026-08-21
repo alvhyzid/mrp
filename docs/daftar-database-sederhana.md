@@ -157,6 +157,14 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 
 **Database Pemasok** (`suppliers`)
 - ID Pemasok (supplier_id) · ID Perusahaan (company_id) · Nama (name) · Info Kontak (contact_info) · Lead Time Hari (lead_time_days) · Jenis Pemasok (supplier_type)
+- Alamat (address) · NPWP (npwp) · Nama/Telepon/Email PIC (pic_name/pic_phone/pic_email) · Termin Pembayaran (payment_terms) — Alur 1, 21 Agu 2026, semua opsional
+- Waktu Diarsipkan (archived_at) · Diarsipkan Oleh (archived_by) — Alur 1: pola sama Routing, hapus permanen hanya kalau belum dipakai PO/bahan dipasok apa pun
+
+**Database Bahan yang Dipasok** (`supplier_item_prices`, Alur 1, 21 Agu 2026)
+- ID Baris (supplier_item_price_id) · ID Pemasok (supplier_id) · ID Bahan (item_id, wajib pilih dari master item)
+- Kode/Nama Menurut Supplier (supplier_item_code/supplier_item_name) · Harga Acuan — BUKAN HPP (reference_price) · Berlaku Sejak (price_valid_from)
+- Minimum Order (min_order_qty/min_order_uom) · Lead Time Khusus Bahan Ini (lead_time_days_override) · Catatan (notes)
+- Diisi dari 2 layar (Supplier atau Item), keduanya menulis ke tabel yang sama. Harga acuan boleh dipakai Margin Watch sebagai perkiraan, TIDAK BOLEH jadi dasar baseline terkunci.
 
 **Database Header PO ke Supplier** (`purchase_orders`)
 - ID PO (purchase_order_id) · ID Perusahaan (company_id) · ID Supplier (supplier_id)
@@ -177,6 +185,8 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 - ID Client (customer_id) · ID Perusahaan (company_id) · Nama (name)
 - Tipe: perusahaan/perorangan (customer_type)
 - Info Kontak (contact_info)
+- Alamat Penagihan (billing_address) · Alamat Pengiriman — boleh beda (shipping_address) · NPWP (npwp) · Nama/Telepon/Email PIC (pic_name/pic_phone/pic_email) · Termin Pembayaran (payment_terms) — Alur 1, 21 Agu 2026, semua opsional
+- Waktu Diarsipkan (archived_at) · Diarsipkan Oleh (archived_by) — Alur 1: pola sama Routing/Supplier, hapus permanen hanya kalau belum dipakai PO Client apa pun
 
 **Database Header PO dari Client** (`customer_purchase_orders`)
 - ID PO Client (customer_purchase_order_id) · ID Perusahaan (company_id) · ID Client (customer_id) · Nomor PO Client (po_number) · Tanggal PO (po_date) · Tanggal Kirim Diminta (requested_ship_date)
@@ -233,6 +243,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 - Alamat Tujuan (delivery_address, WAJIB diisi tiap pengiriman) · Nama Penerima (recipient_name) · No. HP Penerima (recipient_phone)
 - Foto Bukti Pengiriman (dispatch_photo_url, 17 Agu 2026) — WAJIB diupload staf gudang saat menekan "Proses Pengiriman", baru setelah foto tersimpan status berubah jadi "shipped" dan stok berkurang
 - Token Bukti Penerimaan (pod_token, 17 Agu 2026) — dibuat otomatis & acak saat status jadi "shipped", dipakai di link/QR code yang di-scan client untuk konfirmasi barang diterima TANPA perlu login
+- Nama/Alamat Penagihan/NPWP Client BEKU (customer_name_snapshot/customer_billing_address_snapshot/customer_npwp_snapshot, Alur 1, 21 Agu 2026) — dibekukan PERSIS saat surat jalan ini dibuat, TIDAK ikut berubah kalau data client diedit belakangan (dulu dibaca langsung dari `customers`, terbukti ikut berubah pada dokumen yang sudah dicetak)
 
 **Database Detail Item Dikirim** (`shipment_lines`)
 - ID Baris (shipment_line_id) · ID Pengiriman (shipment_id) · ID SO Line (sales_order_line_id) · ID Item (item_id) · Jumlah Dikirim (qty_shipped) · ID Lot (lot_id, WAJIB diisi — jejak lot untuk tiap pengiriman)

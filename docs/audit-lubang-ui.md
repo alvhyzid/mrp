@@ -39,7 +39,7 @@ Kategori: **[E]** = baris anak (`_lines`/`_steps`) yang diedit menyatu dengan fo
 | 17 | `customer_po_approvals` | [LOG] | ya (bagian PO) | otomatis | ya (approve/reject) | tidak berlaku |
 | 18 | `customer_purchase_order_lines` | [E] | menyatu | menyatu | menyatu | menyatu |
 | 19 | `customer_purchase_orders` | [TX] | ya | ya | sebagian (audit lama [P] #2, SEHARUSNYA JUGA [X]) | TIDAK ADA |
-| 20 | `customers` | [MASTER] | hanya dropdown, TIDAK ADA halaman daftar | ya | TIDAK ADA (audit lama [X] #19) | TIDAK ADA |
+| 20 | `customers` | **[SELESAI Alur 1]** | ya (`/customers`, halaman baru) | ya | ya | ya (Hapus/Arsipkan/Pulihkan, dibangun 21 Agu 2026) |
 | 21 | `delivery_confirmations` | [LOG] | ya | RPC shipment | tidak berlaku (sengaja append-only) | tidak berlaku |
 | 22 | `document_access_log` | [LOG] | tidak ada layar terpisah | otomatis | tidak berlaku | tidak berlaku |
 | 23 | `document_links` | [E] | menyatu `documents` | otomatis saat upload | menyatu | menyatu |
@@ -91,7 +91,7 @@ Kategori: **[E]** = baris anak (`_lines`/`_steps`) yang diedit menyatu dengan fo
 | 69 | `status_transition_rules` | dorman | — | — | — | — |
 | 70 | `stock_movements` | [LOG] — LEDGER, dikecualikan eksplisit BATAS Sesi 7 | ya (sebagian) | otomatis | tidak berlaku | tidak berlaku (ledger) |
 | 71 | `subscription_plans` | sesuai rencana, fase billing belum mulai | — | — | — | — |
-| 72 | `suppliers` | [MASTER] | ya | ya | TIDAK ADA (audit lama [X] #19) | TIDAK ADA |
+| 72 | `suppliers` | **[SELESAI Alur 1]** | ya | ya | ya | ya (Hapus/Arsipkan/Pulihkan, dibangun 21 Agu 2026) |
 | 73 | `system_alerts` | [LOG] (auto-generated, hanya acknowledge) | ya | otomatis | ya (acknowledge) | tidak berlaku |
 | 74 | `users` | [OK] | ya | ya (invite/accept) | ya | ya (soft, status suspended) |
 | 75 | `work_centers` | [MASTER] (+ gap lebih besar: tidak bisa buat/ubah identitas — audit lama [X] #16) | ya (dropdown+dashboard) | TIDAK ADA | sebagian (kapasitas saja) | ADA (`is_active`) TAPI TIDAK ADA UI toggle |
@@ -105,15 +105,15 @@ Kategori: **[E]** = baris anak (`_lines`/`_steps`) yang diedit menyatu dengan fo
 
 Menyapu tabel di atas MEKANIS (bukan pilih-pilih) untuk baris berkategori [MASTER] atau [TX] dengan Buat=ya DAN Keluar=TIDAK ADA/bermasalah:
 
-**Master data (di dalam BATAS "hanya master data" Sesi 7 — 7 layar sisa + 1 selesai):**
-1. `routings` — SELESAI.
-2. `boms` — kolom arsip ADA, tapi dropdown WO tidak mengecualikan yang diarsipkan (bug, bukan bangun dari nol).
-3. `items` — kolom arsip ADA, tapi dropdown item di 3 layar (PO Klien, BOM, Routing) tidak mengecualikan yang nonaktif (bug baru ditemukan).
-4. `employees` — kolom arsip ADA, satu titik pemakaian sudah benar, belum dicek exhaustif.
-5. `work_centers` — kolom arsip ADA di database, TIDAK ADA UI toggle sama sekali.
-6. `kpi_registry` — kolom arsip ADA di database, TIDAK ADA UI toggle (plus gap lebih besar: target juga tidak bisa diisi).
-7. `suppliers` — TIDAK ADA kolom arsip, TIDAK ADA edit sama sekali. Perlu migrasi + bangun dari nol.
-8. `customers` — TIDAK ADA kolom arsip, TIDAK ADA edit sama sekali. Perlu migrasi + bangun dari nol.
+**Master data (di dalam BATAS "hanya master data" Sesi 7 — 5 layar sisa + 3 selesai):**
+1. `routings` — **SELESAI** (Sesi 7 bagian 1).
+2. `suppliers` — **SELESAI** (Alur 1, 21 Agu 2026) — CRUD lengkap + Hapus/Arsipkan/Pulihkan + daftar bahan yang dipasok (`supplier_item_prices`, tabel baru).
+3. `customers` — **SELESAI** (Alur 1) — halaman baru `/customers`, CRUD lengkap + Hapus/Arsipkan/Pulihkan.
+4. `boms` — kolom arsip ADA, tapi dropdown WO tidak mengecualikan yang diarsipkan (bug, bukan bangun dari nol).
+5. `items` — kolom arsip ADA, tapi dropdown item di 3 layar (PO Klien, BOM, Routing) tidak mengecualikan yang nonaktif (bug baru ditemukan).
+6. `employees` — kolom arsip ADA, satu titik pemakaian sudah benar, belum dicek exhaustif.
+7. `work_centers` — kolom arsip ADA di database, TIDAK ADA UI toggle sama sekali.
+8. `kpi_registry` — kolom arsip ADA di database, TIDAK ADA UI toggle (plus gap lebih besar: target juga tidak bisa diisi).
 
 **Di luar BATAS "hanya master data" (dokumen transaksi — dicatat, TIDAK dibangun sesi ini kecuali diminta):**
 - `sales_orders`, `customer_purchase_orders`, `shipments`, `work_orders`, `purchase_orders`, `goods_receipts`, `documents`.

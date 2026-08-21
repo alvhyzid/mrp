@@ -124,6 +124,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'MRP',
     items: [
       { label: 'PO Client', href: '/customer-purchase-orders', visible: () => true, icon: Document },
+      { label: 'Pelanggan', href: '/customers', visible: () => true, icon: UserMultiple },
       { label: 'Sales Order', href: '/sales-orders', visible: () => true, icon: Receipt },
       { label: 'BOM (Resep)', href: '/boms', visible: () => true, icon: Assembly },
       { label: 'Routing', href: '/routing', visible: () => true, icon: FlowConnection },

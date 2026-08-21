@@ -96,13 +96,25 @@ export async function createShipmentWithSignature(request: NextRequest): Promise
 
     const { data: so, error: soError } = await adminClient
       .from('sales_orders')
-      .select('sales_order_id, company_id')
+      .select('sales_order_id, company_id, customer_id')
       .eq('sales_order_id', salesOrderId)
       .maybeSingle();
     if (soError) return { status: 500, body: { error: soError.message } };
     if (!so || so.company_id !== appUser.company_id) {
       return { status: 404, body: { error: 'Sales Order tidak ditemukan di perusahaan Anda.' } };
     }
+
+    // Alur 1 (3.1b) — bekukan identitas client PERSIS saat shipment ini dibuat
+    // (pola sama dengan snapshot routing/BOM Sesi 6A). Tanpa ini, surat jalan
+    // yang SUDAH dicetak & ditandatangani akan ikut berubah kalau data client
+    // diedit belakangan (getShipmentDetail.ts membaca customers.name secara
+    // LIVE tanpa snapshot ini).
+    const { data: customer, error: customerError } = await adminClient
+      .from('customers')
+      .select('name, billing_address, npwp')
+      .eq('customer_id', so.customer_id)
+      .maybeSingle();
+    if (customerError) return { status: 500, body: { error: customerError.message } };
 
     const { data: soLines, error: soLinesError } = await adminClient
       .from('sales_order_lines')
@@ -144,7 +156,10 @@ export async function createShipmentWithSignature(request: NextRequest): Promise
         p_signed_by: appUser.user_id,
         p_signer_role: appUser.role,
         p_signature_url_snapshot: appUser.signature_url,
-        p_confirmation_text: confirmationText
+        p_confirmation_text: confirmationText,
+        p_customer_name_snapshot: customer?.name ?? null,
+        p_customer_billing_address_snapshot: customer?.billing_address ?? null,
+        p_customer_npwp_snapshot: customer?.npwp ?? null
       })
       .single();
 

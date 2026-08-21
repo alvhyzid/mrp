@@ -99,7 +99,8 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 
 **Database Header Alur Produksi** (`routings`)
 - ID Routing (routing_id) · ID Perusahaan (company_id) · ID Item (item_id) · Versi (version)
-- **[RENCANA — BELUM DIBANGUN]** Status: draft/aktif/diarsipkan (status) — dengan aturan edit = versi baru begitu status `aktif`; detail di `rancangan-skema-database-mrp.md`
+- Waktu Diarsipkan (archived_at) · Diarsipkan Oleh (archived_by) — Sesi 7 (21 Agu 2026): versi routing sekarang bisa diarsipkan/dipulihkan lewat layar Routing, tidak lagi hanya buat & edit tanpa jalan keluar
+- **[RENCANA — BELUM DIBANGUN]** Edit = otomatis versi baru begitu sudah dipakai Work Order (sekarang masih menimpa versi yang sama); detail di `rancangan-skema-database-mrp.md`
 
 **Database Tahapan Produksi** (`routing_steps`)
 - ID Tahap (routing_step_id) · ID Routing (routing_id) · Nomor Urut (sequence_no) · Nama Tahap (step_name) · Durasi Aktif Menit (active_duration_minutes) · Durasi Tunggu Menit (wait_duration_minutes) · ID Mesin (work_center_id)

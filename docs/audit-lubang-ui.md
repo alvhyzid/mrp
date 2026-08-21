@@ -137,4 +137,13 @@ Pelajaran Sesi 0/0B/0C: yang berbahaya bukan cuma data tanpa layar, tapi juga pe
 
 **Jumlah [P]: 12** (di bawah ambang 15 — tidak memicu kondisi STOP).
 
+---
+
+## Koreksi 7.1 (Sesi 7, 21 Agu 2026) — aturan "buat & ubah tanpa jalan keluar wajib [X]" ditegakkan ulang
+
+Baris #6 di atas (routing bisa diedit tanpa peringatan) LOLOS dari klasifikasi [X] karena membahas masalah BERBEDA (mengedit routing yang sedang dipakai WO aktif — sudah diperbaiki Sesi 6A lewat snapshot) — bukan soal TIDAK ADANYA tombol hapus/arsip sama sekali, yang merupakan keluhan asli pemilik produk yang memicu Sesi 7. Setelah aturan "bisa buat & ubah tapi tidak bisa mengeluarkan data → WAJIB [X]" ditegakkan ulang secara konsisten ke seluruh temuan:
+
+- **5 tabel yang seharusnya [X] tapi tidak pernah masuk daftar sama sekali**: `routings` (kasus yang dilaporkan — **DISELESAIKAN Sesi 7**, lihat HANDOFF.md), `companies`, `invitations`, `shipments`, `work_orders`. 4 yang terakhir BELUM dikerjakan (di luar cakupan master-data Sesi 7 — lihat BATAS sesi itu — atau memerlukan keputusan terpisah).
+- **3 baris [P] yang seharusnya JUGA diberi tag [X]** karena isinya persis "bisa buat, tidak bisa keluar": #1 (`sales_orders`), #2 (`customer_purchase_orders`), #3 (`documents`) — belum dikerjakan, di luar cakupan master-data Sesi 7.
+
 **Tabel dorman tanpa dampak aktif** (dicatat, bukan diklasifikasi P/I/X karena tidak ada kode lain yang bergantung padanya hari ini): `formula_templates`, `status_transition_rules`, `kamus_routing_rules`. **Sesuai rencana roadmap, bukan gap aktif**: `subscription_plans`, `invoices` (fase billing belum dimulai per CLAUDE.md).

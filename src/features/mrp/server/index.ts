@@ -40,6 +40,7 @@ export * from './listWorkCenters';
 export * from './listRoutings';
 export * from './createRouting';
 export * from './updateRouting';
+export * from './deleteOrArchiveRouting';
 export * from './getGanttBlockDetail';
 export * from './suggestStepInputQty';
 export * from './getBatchYieldSummary';

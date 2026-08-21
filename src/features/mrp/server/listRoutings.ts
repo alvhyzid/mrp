@@ -16,11 +16,20 @@ export async function listRoutings(request: NextRequest): Promise<ApiResult> {
 
     const adminClient = getAdminClient();
 
-    const { data: routings, error: routingsError } = await adminClient
+    // Sesi 7 (7.4) — default TIDAK menyertakan yang diarsipkan (dropdown Work
+    // Order baru & daftar utama), kecuali diminta eksplisit lewat
+    // ?includeArchived=true (filter "Tampilkan yang diarsipkan" di layar).
+    const includeArchived = new URL(request.url).searchParams.get('includeArchived') === 'true';
+
+    let routingsQuery = adminClient
       .from('routings')
-      .select('routing_id, item_id, version')
+      .select('routing_id, item_id, version, archived_at, archived_by')
       .eq('company_id', appUser.company_id)
       .order('routing_id', { ascending: false });
+    if (!includeArchived) {
+      routingsQuery = routingsQuery.is('archived_at', null);
+    }
+    const { data: routings, error: routingsError } = await routingsQuery;
 
     if (routingsError) {
       return { status: 500, body: { error: routingsError.message } };
@@ -75,6 +84,21 @@ export async function listRoutings(request: NextRequest): Promise<ApiResult> {
       }
     }
 
+    // Sesi 7 (7.3) — dipakai layar utk memutuskan tombol Hapus vs Arsipkan
+    // (server yang menghitung, layar tinggal menampilkan).
+    const referencedWorkOrderCountByRoutingId = new Map<number, number>();
+    for (const wo of workOrdersRes.data ?? []) {
+      referencedWorkOrderCountByRoutingId.set(wo.routing_id, (referencedWorkOrderCountByRoutingId.get(wo.routing_id) ?? 0) + 1);
+    }
+
+    const archivedByUserIds = Array.from(new Set(routings.map((r) => r.archived_by).filter((id): id is number => !!id)));
+    const archivedByNameById = new Map<number, string>();
+    if (archivedByUserIds.length > 0) {
+      const { data: archivers, error: archiversError } = await adminClient.from('users').select('user_id, name').in('user_id', archivedByUserIds);
+      if (archiversError) return { status: 500, body: { error: archiversError.message } };
+      for (const u of archivers ?? []) archivedByNameById.set(u.user_id, u.name);
+    }
+
     const itemsById = new Map((itemsRes.data ?? []).map((i) => [i.item_id, i]));
     const workCentersById = new Map((workCentersRes.data ?? []).map((wc) => [wc.work_center_id, wc]));
 
@@ -110,7 +134,11 @@ export async function listRoutings(request: NextRequest): Promise<ApiResult> {
         item_base_uom: item?.base_uom ?? null,
         version: routing.version,
         steps,
-        running_batch_count: runningBatchCountByRoutingId.get(routing.routing_id) ?? 0
+        running_batch_count: runningBatchCountByRoutingId.get(routing.routing_id) ?? 0,
+        referenced_work_order_count: referencedWorkOrderCountByRoutingId.get(routing.routing_id) ?? 0,
+        can_delete: (referencedWorkOrderCountByRoutingId.get(routing.routing_id) ?? 0) === 0,
+        archived_at: routing.archived_at,
+        archived_by_name: routing.archived_by ? (archivedByNameById.get(routing.archived_by) ?? null) : null
       };
     });
 

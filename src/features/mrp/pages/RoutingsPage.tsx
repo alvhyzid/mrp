@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ColumnDef } from '@tanstack/react-table';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
@@ -35,6 +35,10 @@ type Routing = {
   version: number;
   steps: RoutingStep[];
   running_batch_count: number;
+  referenced_work_order_count: number;
+  can_delete: boolean;
+  archived_at: string | null;
+  archived_by_name: string | null;
 };
 
 type ItemOption = { item_id: number; item_code: string; name: string; base_uom: string };
@@ -65,6 +69,9 @@ export default function RoutingsPage() {
   const [routings, setRoutings] = useState<Routing[]>([]);
   const [routingsError, setRoutingsError] = useState('');
   const [routingsLoading, setRoutingsLoading] = useState(true);
+  // Sesi 7 (7.4) — "Tampilkan yang diarsipkan", default TIDAK dicentang.
+  const [showArchived, setShowArchived] = useState(false);
+  const [archiveActionStatus, setArchiveActionStatus] = useState<{ routingId: number; message: string; kind: 'error' | 'success' } | null>(null);
 
   const [items, setItems] = useState<ItemOption[]>([]);
   const [workCenters, setWorkCenters] = useState<WorkCenterOption[]>([]);
@@ -86,24 +93,27 @@ export default function RoutingsPage() {
     return data?.session?.access_token ?? null;
   }, []);
 
-  const loadRoutings = useCallback(async () => {
-    const accessToken = await getAccessToken();
-    if (!accessToken) return;
+  const loadRoutings = useCallback(
+    async (includeArchived: boolean) => {
+      const accessToken = await getAccessToken();
+      if (!accessToken) return;
 
-    setRoutingsLoading(true);
-    const response = await fetch('/api/routings', { headers: { Authorization: `Bearer ${accessToken}` } });
-    const data = await response.json();
+      setRoutingsLoading(true);
+      const response = await fetch(`/api/routings${includeArchived ? '?includeArchived=true' : ''}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+      const data = await response.json();
 
-    if (!response.ok) {
-      setRoutingsError(data.error || 'Gagal memuat daftar Routing.');
+      if (!response.ok) {
+        setRoutingsError(data.error || 'Gagal memuat daftar Routing.');
+        setRoutingsLoading(false);
+        return;
+      }
+
+      setRoutings(data.routings || []);
+      setRoutingsError('');
       setRoutingsLoading(false);
-      return;
-    }
-
-    setRoutings(data.routings || []);
-    setRoutingsError('');
-    setRoutingsLoading(false);
-  }, [getAccessToken]);
+    },
+    [getAccessToken]
+  );
 
   const loadItems = useCallback(async () => {
     const accessToken = await getAccessToken();
@@ -147,11 +157,24 @@ export default function RoutingsPage() {
 
       setCanManage(canManageBom(meData?.user?.role));
       setCheckingAccess(false);
-      await Promise.all([loadRoutings(), loadItems(), loadWorkCenters()]);
+      await Promise.all([loadRoutings(showArchived), loadItems(), loadWorkCenters()]);
     };
 
     checkAccessAndLoad();
-  }, [router, loadRoutings, loadItems, loadWorkCenters]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router, loadItems, loadWorkCenters]);
+
+  // Muat ulang saat filter "Tampilkan yang diarsipkan" diubah (bukan saat
+  // pertama kali mount -- itu sudah ditangani effect di atas).
+  const isFirstArchivedFilterRender = useRef(true);
+  useEffect(() => {
+    if (isFirstArchivedFilterRender.current) {
+      isFirstArchivedFilterRender.current = false;
+      return;
+    }
+    loadRoutings(showArchived);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showArchived]);
 
   const itemsById = useMemo(() => new Map(items.map((item) => [item.item_id, item])), [items]);
 
@@ -251,7 +274,61 @@ export default function RoutingsPage() {
     setFormMessage(editingRoutingId ? 'Routing berhasil diperbarui.' : `Routing baru berhasil dibuat (v${data.version}).`);
     setEditingRoutingId(null);
     setForm(emptyForm);
-    await loadRoutings();
+    await loadRoutings(showArchived);
+  };
+
+  // Sesi 7 (7.3/7.4) — server yang MEMUTUSKAN hapus vs tolak (deleteRouting)
+  // dan hapus vs tolak arsip (archiveRouting), layar hanya menampilkan tombol
+  // sesuai can_delete/archived_at yang sudah dihitung server (listRoutings).
+  const handleDeleteRouting = async (routing: Routing) => {
+    const confirmed = window.confirm(`Hapus permanen Routing "${routing.item_code} v${routing.version}"? Tindakan ini tidak bisa dibatalkan.`);
+    if (!confirmed) return;
+
+    const accessToken = await getAccessToken();
+    if (!accessToken) return;
+
+    const response = await fetch(`/api/routings/${routing.routing_id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } });
+    const data = await response.json();
+
+    if (!response.ok) {
+      setArchiveActionStatus({ routingId: routing.routing_id, message: data.error || 'Gagal menghapus Routing.', kind: 'error' });
+      return;
+    }
+
+    setArchiveActionStatus(null);
+    await loadRoutings(showArchived);
+  };
+
+  const handleArchiveRouting = async (routing: Routing) => {
+    const accessToken = await getAccessToken();
+    if (!accessToken) return;
+
+    const response = await fetch(`/api/routings/${routing.routing_id}/archive`, { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` } });
+    const data = await response.json();
+
+    if (!response.ok) {
+      setArchiveActionStatus({ routingId: routing.routing_id, message: data.error || 'Gagal mengarsipkan Routing.', kind: 'error' });
+      return;
+    }
+
+    setArchiveActionStatus({ routingId: routing.routing_id, message: 'Routing berhasil diarsipkan.', kind: 'success' });
+    await loadRoutings(showArchived);
+  };
+
+  const handleRestoreRouting = async (routing: Routing) => {
+    const accessToken = await getAccessToken();
+    if (!accessToken) return;
+
+    const response = await fetch(`/api/routings/${routing.routing_id}/restore`, { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` } });
+    const data = await response.json();
+
+    if (!response.ok) {
+      setArchiveActionStatus({ routingId: routing.routing_id, message: data.error || 'Gagal memulihkan Routing.', kind: 'error' });
+      return;
+    }
+
+    setArchiveActionStatus({ routingId: routing.routing_id, message: 'Routing berhasil dipulihkan.', kind: 'success' });
+    await loadRoutings(showArchived);
   };
 
   const viewingRouting = routings.find((r) => r.routing_id === viewingRoutingId) ?? null;
@@ -269,6 +346,21 @@ export default function RoutingsPage() {
         )
       },
       { accessorKey: 'version', header: 'Versi', cell: ({ row }) => <span className="text-data">v{row.original.version}</span> },
+      {
+        id: 'status',
+        header: 'Status',
+        cell: ({ row }) =>
+          row.original.archived_at ? (
+            <span className="text-data text-xs text-muted-foreground">
+              Diarsipkan
+              {row.original.archived_by_name ? ` oleh ${row.original.archived_by_name}` : ''}
+              <br />
+              {new Date(row.original.archived_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+            </span>
+          ) : (
+            <span className="text-data text-success-subtle-foreground">Aktif</span>
+          )
+      },
       { id: 'step_count', header: 'Jumlah Tahap', cell: ({ row }) => <span className="text-data">{row.original.steps.length}</span> },
       {
         id: 'running_batch_count',
@@ -311,9 +403,24 @@ export default function RoutingsPage() {
             >
               {viewingRoutingId === row.original.routing_id ? 'Tutup' : 'Detail'}
             </Button>
-            {canManage ? (
+            {canManage && !row.original.archived_at ? (
               <Button size="sm" variant="outline" onClick={() => startEdit(row.original)}>
                 Edit
+              </Button>
+            ) : null}
+            {canManage && row.original.archived_at ? (
+              <Button size="sm" variant="outline" onClick={() => handleRestoreRouting(row.original)}>
+                Pulihkan
+              </Button>
+            ) : null}
+            {canManage && !row.original.archived_at && row.original.can_delete ? (
+              <Button size="sm" variant="destructive" onClick={() => handleDeleteRouting(row.original)}>
+                Hapus
+              </Button>
+            ) : null}
+            {canManage && !row.original.archived_at && !row.original.can_delete ? (
+              <Button size="sm" variant="destructive" onClick={() => handleArchiveRouting(row.original)}>
+                Arsipkan
               </Button>
             ) : null}
           </div>
@@ -365,6 +472,13 @@ export default function RoutingsPage() {
               Routing = urutan tahap produksi per item. Ini yang jadi sumber data untuk Gantt Produksi & Dashboard Kapasitas di Dashboard PPIC — bukan sistem terpisah.
             </p>
             {routingsError ? <p className="text-sm text-destructive">{routingsError}</p> : null}
+            {archiveActionStatus ? (
+              <p className={`text-sm ${archiveActionStatus.kind === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>{archiveActionStatus.message}</p>
+            ) : null}
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} />
+              Tampilkan yang diarsipkan
+            </label>
             {routingsLoading ? (
               <p className="text-sm text-muted-foreground">Memuat Routing...</p>
             ) : (

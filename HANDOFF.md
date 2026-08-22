@@ -2,6 +2,15 @@
 
 Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`). Tiap sesi Claude Code WAJIB baca ini dulu sebelum mulai, dan memperbarui bagian relevan begitu sesi selesai. Klaim di sini harus tetap diverifikasi ulang, bukan otomatis dipercaya — HANDOFF ini rangkuman, bukan pengganti bukti.
 
+## Fungsi Baca yang Sengaja Menulis, Idempoten (daftar tetap — perbarui kalau ketemu yang baru, JANGAN hapus tanpa alasan tercatat)
+
+Ditemukan lewat sapuan INF-07 (22 Agu 2026). Kedua fungsi ini bernama seperti pembacaan murni (`get*`/`list*`) TAPI sengaja melakukan tulis sebagai efek samping, karena proyek ini belum punya penjadwal/cron terpisah — pembacaan halaman ITU SENDIRI yang jadi pemicu. Ini BERBEDA KELAS dari bug baseline Margin Watch lama (Sesi 0/0B/0C): bug lama menulis sesuatu yang **ireversibel** (mengunci baseline finansial permanen) tanpa disadari; kedua fungsi di bawah ini menulis sesuatu yang **idempoten dan reversibel** (upsert berdasar kunci unik, auto-resolve/auto-refresh), sengaja, dan sudah didokumentasikan sejak awal di kode/docs masing-masing.
+
+- **`src/features/mrp/server/getMarginWatch.ts`** — memanggil `rpc('upsert_margin_threshold_alert')` untuk mengisi/menyelesaikan baris `system_alerts` (peringatan margin di bawah ambang untuk finance/management) setiap kali Margin Watch dibuka. Idempoten: 1 alert per `sales_order_line_id`, auto-`resolved` begitu margin proyeksi pulih di atas ambang.
+- **`src/features/kpi/server/listKpiCards.ts`** — meng-`upsert` `kpi_snapshots` (nilai KPI per periode, untuk grafik sparkline) setiap kali halaman KPI dibuka — didokumentasikan di `docs/daftar-database-sederhana.md` ("Dihitung otomatis tiap halaman KPI dibuka, belum ada penjadwal/cron"). Idempoten: 1 baris per `company_id`+`metric_key`+periode (`onConflict`), nilai ditimpa bukan ditambah.
+
+**Aturan tetap**: bila salah satu dari dua fungsi ini (atau fungsi serupa di masa depan) diubah sehingga TIDAK LAGI idempoten, atau mulai mengunci/mengubah keputusan bisnis secara ireversibel — itu BUKAN lagi anggota daftar ini, harus ditinjau ulang seperti bug baseline lama. Komentar peringatan sudah ditambahkan langsung di kepala kedua berkas di atas.
+
 ---
 
 ## INF-05/INF-07 — Pengamanan Data Nyata & Investigasi Anomali Angka — 22 Agu 2026 — SELESAI SEBAGIAN

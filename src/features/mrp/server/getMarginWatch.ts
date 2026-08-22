@@ -1,3 +1,12 @@
+// PERINGATAN (INF-07, 22 Agu 2026): fungsi ini "get*" (terlihat baca-saja)
+// TAPI SENGAJA menulis lewat rpc('upsert_margin_threshold_alert') di bawah —
+// mengisi/menyelesaikan alert system_alerts setiap kali dilihat, karena tidak
+// ada cron terpisah untuk itu. Ini SAH selama tetap idempoten (upsert per
+// sales_order_line, auto-resolve saat margin pulih) dan tidak mengunci apa
+// pun secara ireversibel — beda kelas dari bug baseline lama (Sesi 0/0B/0C)
+// yang justru lahir dari penulisan tersembunyi yang TIDAK idempoten/ireversibel.
+// JANGAN ubah baris rpc itu jadi tidak-idempoten tanpa membaca HANDOFF.md
+// bagian "Fungsi baca yang sengaja menulis" dulu.
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
 import { canViewFinancialData } from '@/lib/roles';

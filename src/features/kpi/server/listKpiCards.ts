@@ -1,3 +1,11 @@
+// PERINGATAN (INF-07, 22 Agu 2026): fungsi ini "list*" (terlihat baca-saja)
+// TAPI SENGAJA menulis lewat .upsert ke kpi_snapshots di bawah — merekam
+// snapshot nilai KPI setiap kali halaman dibuka, karena proyek ini belum
+// punya penjadwal/cron terpisah (dicatat di docs/daftar-database-sederhana.md).
+// Ini SAH selama tetap idempoten (upsert per company+metric+periode, bukan
+// menambah baris duplikat) dan tidak mengunci/mengubah keputusan bisnis apa
+// pun secara ireversibel. JANGAN ubah baris upsert itu jadi tidak-idempoten
+// tanpa membaca HANDOFF.md bagian "Fungsi baca yang sengaja menulis" dulu.
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
 import { canViewKpi } from '@/lib/roles';

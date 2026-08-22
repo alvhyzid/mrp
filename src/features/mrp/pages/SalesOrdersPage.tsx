@@ -48,6 +48,7 @@ type SalesOrder = {
   so_number: string;
   customer_id: number;
   customer_name: string | null;
+  identity_predates_snapshot: boolean;
   customer_purchase_order_id: number | null;
   po_number: string | null;
   production_plant_id: number;
@@ -411,7 +412,18 @@ export default function SalesOrdersPage() {
           </div>
         )
       },
-      { id: 'customer', header: 'Client', cell: ({ row }) => row.original.customer_name ?? '-' },
+      {
+        id: 'customer',
+        header: 'Client',
+        cell: ({ row }) => (
+          <div className="flex flex-col gap-0.5">
+            <span>{row.original.customer_name ?? '-'}</span>
+            {row.original.identity_predates_snapshot ? (
+              <span className="text-xs text-muted-foreground">Terbit sebelum pembekuan identitas berlaku</span>
+            ) : null}
+          </div>
+        )
+      },
       { id: 'plant', header: 'Lokasi', cell: ({ row }) => row.original.production_plant_name ?? '-' },
       { accessorKey: 'status', header: 'Status', cell: ({ row }) => <Badge variant={statusBadgeVariant[row.original.status] ?? 'secondary'}>{statusLabels[row.original.status] ?? row.original.status}</Badge> },
       { id: 'lines', header: 'Jumlah Baris', cell: ({ row }) => row.original.lines.length },

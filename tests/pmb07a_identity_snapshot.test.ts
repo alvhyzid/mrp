@@ -136,6 +136,39 @@ describe('PMB-07a — Pembekuan Identitas Mitra di Dokumen Terbit (PO Supplier, 
 
     expect(po2.supplier_address).toBe('Alamat BARU No. 99');
     expect(po2.supplier_npwp).toBe('11.111.111.1-111.111');
+
+    // V.1 (22 Agu 2026) — PO baru (dengan snapshot) tidak ditandai "sebelum
+    // pembekuan", PO lama (tanpa snapshot) HARUS ditandai apa adanya.
+    expect(po1.identity_predates_snapshot).toBe(false);
+    expect(po2.identity_predates_snapshot).toBe(false);
+  });
+
+  it('V.1: PO Supplier LEGACY (dibuat langsung tanpa snapshot, meniru dokumen sebelum fitur ini ada) ditandai "terbit sebelum pembekuan identitas" -- BUKAN diisi dari data supplier hari ini', async () => {
+    const { data: supplier } = await adminClient
+      .from('suppliers')
+      .insert([{ company_id: companyId, name: 'Supplier Legacy PMB07a', address: 'Alamat Legacy', npwp: '99.999.999.9-999.999' }])
+      .select('supplier_id')
+      .single();
+    const supplierId = supplier!.supplier_id;
+
+    // Insert LANGSUNG lewat admin client TANPA kolom snapshot -- meniru baris
+    // yang benar-benar dibuat SEBELUM migrasi 20260827480000 ada.
+    const { data: legacyPo } = await adminClient
+      .from('purchase_orders')
+      .insert([{ company_id: companyId, supplier_id: supplierId, production_plant_id: plantId, status: 'ordered' }])
+      .select('purchase_order_id')
+      .single();
+
+    const listResult = await listPurchaseOrders(makeGetRequest('http://localhost/api/purchase-orders', adminToken));
+    const pos = (listResult.body as any).purchaseOrders as any[];
+    const legacy = pos.find((p) => p.purchase_order_id === legacyPo!.purchase_order_id);
+
+    expect(legacy.identity_predates_snapshot).toBe(true);
+    // Nama tetap ditemukan lewat join hidup (bukan snapshot) -- itu wajar,
+    // yang TIDAK boleh terjadi adalah alamat/NPWP diam-diam terisi seolah beku.
+    expect(legacy.supplier_name).toBe('Supplier Legacy PMB07a');
+    expect(legacy.supplier_address).toBeNull();
+    expect(legacy.supplier_npwp).toBeNull();
   });
 
   it('PO Klien + Sales Order: ubah alamat client setelah PO/SO terbit -> keduanya TIDAK berubah, PO baru pakai alamat baru', async () => {

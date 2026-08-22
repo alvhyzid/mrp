@@ -63,6 +63,10 @@ export async function listPurchaseOrders(request: NextRequest): Promise<ApiResul
       supplier_name: po.supplier_name_snapshot ?? suppliersById.get(po.supplier_id)?.name ?? null,
       supplier_address: po.supplier_address_snapshot ?? null,
       supplier_npwp: po.supplier_npwp_snapshot ?? null,
+      // V.1 (22 Agu 2026) — PO terbit sebelum kolom snapshot ada: TIDAK diisi
+      // dari data supplier hari ini (mengarang identitas saat terbit), ditandai
+      // apa adanya supaya layar bisa menjelaskan kenapa alamat/NPWP kosong.
+      identity_predates_snapshot: po.supplier_name_snapshot === null,
       production_plant_name: plantsById.get(po.production_plant_id)?.name ?? null,
       status: po.status,
       status_label: statusLabels[po.status] ?? po.status,

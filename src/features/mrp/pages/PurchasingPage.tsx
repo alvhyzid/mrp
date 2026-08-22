@@ -35,7 +35,7 @@ type Supplier = {
 type Plant = { production_plant_id: number; name: string };
 type ItemOption = { item_id: number; item_code: string | null; name: string; purchase_uom: string; type: string };
 type PoLine = { purchase_order_line_id: number; item_code: string | null; item_name: string | null; purchase_uom: string | null; qty_ordered: number; qty_received: number; unit_price: number | null };
-type PurchaseOrder = { purchase_order_id: number; supplier_name: string | null; production_plant_name: string | null; status: string; status_label: string; order_date: string; expected_date: string | null; lines: PoLine[] };
+type PurchaseOrder = { purchase_order_id: number; supplier_name: string | null; identity_predates_snapshot: boolean; production_plant_name: string | null; status: string; status_label: string; order_date: string; expected_date: string | null; lines: PoLine[] };
 type SupplierItemPrice = {
   supplier_item_price_id: number;
   supplier_id: number;
@@ -569,7 +569,18 @@ export default function PurchasingPage() {
   const poColumns = useMemo<ColumnDef<PurchaseOrder>[]>(
     () => [
       { id: 'po_number', header: 'No. PO', cell: ({ row }) => <span className="font-medium text-foreground">PO-{String(row.original.purchase_order_id).padStart(4, '0')}</span> },
-      { id: 'supplier', header: 'Supplier', cell: ({ row }) => row.original.supplier_name ?? '-' },
+      {
+        id: 'supplier',
+        header: 'Supplier',
+        cell: ({ row }) => (
+          <div className="flex flex-col gap-0.5">
+            <span>{row.original.supplier_name ?? '-'}</span>
+            {row.original.identity_predates_snapshot ? (
+              <span className="text-xs text-muted-foreground">Terbit sebelum pembekuan identitas berlaku</span>
+            ) : null}
+          </div>
+        )
+      },
       { id: 'plant', header: 'Lokasi', cell: ({ row }) => row.original.production_plant_name ?? '-' },
       { id: 'status', header: 'Status', cell: ({ row }) => <Badge variant={poStatusVariant[row.original.status] ?? 'secondary'}>{row.original.status_label}</Badge> },
       { id: 'order_date', header: 'Tanggal Pesan', cell: ({ row }) => row.original.order_date },

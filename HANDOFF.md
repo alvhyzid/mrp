@@ -2,6 +2,24 @@
 
 Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`). Tiap sesi Claude Code WAJIB baca ini dulu sebelum mulai, dan memperbarui bagian relevan begitu sesi selesai. Klaim di sini harus tetap diverifikasi ulang, bukan otomatis dipercaya — HANDOFF ini rangkuman, bukan pengganti bukti.
 
+## V.1 — Penanda "Terbit Sebelum Pembekuan Identitas" — 22 Agu 2026 — SELESAI
+
+PO Klien MLVT (`182/RND/SUMG/VI/2026`) dan Sales Order (`043/6-ITM/2026`) dikonfirmasi **NULL apa adanya** di kolom snapshot identitas (dibuat sebelum migrasi PMB-07a `20260827480000` ada) — **TIDAK diisi dari data pelanggan hari ini** (mengisinya sekarang = mengarang identitas saat terbit, persis kebohongan yang fiturnya dibangun untuk mencegah). Field turunan `identity_predates_snapshot` ditambahkan ke `listPurchaseOrders.ts`/`listCustomerPurchaseOrders.ts`/`listSalesOrders.ts`, dirender sebagai label "Terbit sebelum pembekuan identitas berlaku" di `PurchasingPage.tsx`/`CustomerPurchaseOrdersPage.tsx`/`SalesOrdersPage.tsx` — pola sama Sesi 6A ("tanpa snapshot, sebelum fitur ini"). Diverifikasi visual di Company B (fixture dibuat & dibersihkan) dan lewat test baru (`tests/pmb07a_identity_snapshot.test.ts`, +1 test: PO legacy tanpa snapshot ditandai benar, alamat/NPWP tetap null bukan diisi live).
+
+## V.2 — QA-01 Dinaikkan ke SUPER URGENT — 22 Agu 2026
+
+Ditetapkan pemilik produk (bukan Claude Code) — 3 kejadian pola sama dalam beberapa hari (7 company bekas test/INF-06, sisa bentrok suite 2x run, fixture bentrok PMB-07a) menunjukkan perbaikan per-file adalah tambalan lokal, akarnya belum tersentuh. **Dicatat saja, BELUM dikerjakan** sesuai instruksi eksplisit — menunggu giliran setelah Bagian 4-6.
+
+## Modul Baru HR (Sumber Daya Manusia) & PLT (Platform) — 22 Agu 2026 — DICATAT, BELUM DIKERJAKAN
+
+Sumber: `docs/benchmark-hcm-talenta.md` (benchmark FUNGSIONAL Mekari Talenta berdasarkan fitur publik — bukan untuk menyalin kode/UI/nama modul/aset visual, ditegaskan di catatan kepala berkas itu sendiri), diunggah pemilik produk. **35 task dicatat** (HR-01 s.d. HR-12 Tingkat A/B: 12 task; HR-20 s.d. HR-38 Tingkat C: 19 task; PLT-01 s.d. PLT-04: 4 task) — HANYA dicatat, TIDAK SATU PUN dikerjakan.
+
+**Keputusan strategis** (dicatat di `notes` HR-01 & HR-20, supaya tidak dibuka ulang tanpa sadar): FABRIX tidak bersaing sebagai HRIS umum — modul HR memperkuat akurasi biaya tenaga kerja produksi & kepatuhan BPOM/halal. Kemampuan HCM penuh (Tingkat C, 19 task) SEMUA berstatus **Ditunda Sadar** dengan pemicu tercatat (umum: tenant kedua yang membayar + keputusan HCM jadi produk tersendiri; beberapa punya pemicu tambahan spesifik — HR-21 kepatuhan pajak, HR-33 materi pelatihan harus ada dulu, HR-34/35 tinjauan hukum UU PDP, HR-37 tinjauan hukum & keuangan).
+
+Total Daftar Tugas Pembangunan PT ITM: **105 → 140 task** (+35), persentase selesai turun **52% → 39%** (bukan kemunduran nyata — cakupan baru masuk ke penyebut, wajar dan memang gambaran yang benar sesuai instruksi).
+
+**Test: tidak ada perubahan kode terkait modul ini** (murni pencatatan task) selain V.1 (lihat di atas).
+
 ## PMB-07a — Pembekuan Identitas Mitra di Dokumen Terbit — 22 Agu 2026 — SELESAI
 
 Arkeologi dikonfirmasi lewat baca skema: `purchase_orders`/`customer_purchase_orders`/`sales_orders` sebelum ini HANYA menyimpan referensi (`supplier_id`/`customer_id`) — sama kelas masalah dengan `shipments` sebelum Alur 1. Migrasi `20260827480000` menambah kolom snapshot (`supplier_name_snapshot`/`supplier_address_snapshot`/`supplier_npwp_snapshot` di `purchase_orders`; `customer_name_snapshot`/`customer_billing_address_snapshot`/`customer_npwp_snapshot` di `customer_purchase_orders` dan `sales_orders`). `createPurchaseOrder.ts`/`createCustomerPurchaseOrder.ts` mengisi snapshot saat dokumen terbit; `process_customer_purchase_order()` (RPC, signature TIDAK berubah — ACL tetap terjaga) **mewarisi** snapshot dari CPO ke SO, bukan query ulang `customers` — supaya SO konsisten dengan identitas yang tertulis di PO Klien aslinya. Jalur baca (`listPurchaseOrders.ts`/`listCustomerPurchaseOrders.ts`/`listSalesOrders.ts`) mengutamakan snapshot, fallback join hidup HANYA untuk dokumen lama (snapshot NULL).

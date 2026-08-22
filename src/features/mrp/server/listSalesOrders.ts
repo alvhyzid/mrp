@@ -95,6 +95,9 @@ export async function listSalesOrders(request: NextRequest): Promise<ApiResult> 
       customer_name: so.customer_name_snapshot ?? customersById.get(so.customer_id)?.name ?? null,
       customer_billing_address: so.customer_billing_address_snapshot ?? null,
       customer_npwp: so.customer_npwp_snapshot ?? null,
+      // V.1 (22 Agu 2026) — SO terbit sebelum kolom snapshot ada: TIDAK diisi
+      // dari data client hari ini, ditandai apa adanya.
+      identity_predates_snapshot: so.customer_name_snapshot === null,
       customer_purchase_order_id: so.customer_purchase_order_id,
       po_number: so.customer_purchase_order_id ? (posById.get(so.customer_purchase_order_id)?.po_number ?? null) : null,
       production_plant_id: so.production_plant_id,

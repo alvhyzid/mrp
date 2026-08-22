@@ -62,6 +62,7 @@ type PurchaseOrder = {
   customer_purchase_order_id: number;
   customer_id: number;
   customer_name: string | null;
+  identity_predates_snapshot: boolean;
   customer_type: string | null;
   po_number: string;
   po_date: string | null;
@@ -312,6 +313,9 @@ export default function CustomerPurchaseOrdersPage() {
           <div className="flex flex-col">
             <span className="font-medium text-foreground">{row.original.po_number}</span>
             <span className="text-xs text-muted-foreground">{row.original.customer_name}</span>
+            {row.original.identity_predates_snapshot ? (
+              <span className="text-xs text-muted-foreground">Terbit sebelum pembekuan identitas berlaku</span>
+            ) : null}
           </div>
         )
       },

@@ -92,6 +92,9 @@ export async function listCustomerPurchaseOrders(request: NextRequest): Promise<
         customer_name: po.customer_name_snapshot ?? customer?.name ?? null,
         customer_billing_address: po.customer_billing_address_snapshot ?? null,
         customer_npwp: po.customer_npwp_snapshot ?? null,
+        // V.1 (22 Agu 2026) — PO terbit sebelum kolom snapshot ada: TIDAK diisi
+        // dari data client hari ini, ditandai apa adanya.
+        identity_predates_snapshot: po.customer_name_snapshot === null,
         customer_type: customer?.customer_type ?? null,
         po_number: po.po_number,
         po_date: po.po_date,

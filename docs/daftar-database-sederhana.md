@@ -189,6 +189,13 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 - Alamat Penagihan (billing_address) · Alamat Pengiriman — boleh beda (shipping_address) · NPWP (npwp) · Nama/Telepon/Email PIC (pic_name/pic_phone/pic_email) · Termin Pembayaran (payment_terms) — Alur 1, 21 Agu 2026, semua opsional
 - Waktu Diarsipkan (archived_at) · Diarsipkan Oleh (archived_by) — Alur 1: pola sama Routing/Supplier, hapus permanen hanya kalau belum dipakai PO Client apa pun
 
+**Database Daftar Alamat Tujuan Kirim** (`customer_delivery_addresses`) — PMB-07b 22 Agu 2026, LAPISAN DATA & SERVER SAJA, belum ada halaman
+- ID Alamat (customer_delivery_address_id) · ID Perusahaan (company_id) · ID Client (customer_id)
+- Nama Panggilan (label, mis. "Distributor Surabaya") · Alamat (address) · Nama/Telepon PIC (pic_name/pic_phone)
+- Waktu Diarsipkan (archived_at) · Diarsipkan Oleh (archived_by) — hapus permanen hanya kalau belum dipakai pengiriman mana pun
+
+> Alamat tujuan kirim MILIK PENGIRIMAN, bukan milik pelanggan — dipilih manual saat pengiriman dibuat (atau diketik sekali-pakai), tidak pernah diwariskan otomatis dari daftar ini. `shipments` dapat kolom baru `delivery_address_id` (jejak alamat mana yang dipilih, nullable) — alamat yang benar-benar tampil di surat jalan tetap kolom teks `delivery_address` yang sudah ada, dibekukan saat itu juga.
+
 **Database Header PO dari Client** (`customer_purchase_orders`)
 - ID PO Client (customer_purchase_order_id) · ID Perusahaan (company_id) · ID Client (customer_id) · Nomor PO Client (po_number) · Tanggal PO (po_date) · Tanggal Kirim Diminta (requested_ship_date)
 - Nama PIC (pic_name) · Jabatan PIC (pic_position) · No HP PIC (pic_phone) · Email PIC (pic_email)

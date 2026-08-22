@@ -72,7 +72,14 @@ export async function createShipmentWithSignature(request: NextRequest): Promise
 
     const body = await request.json();
     const salesOrderId = Number(body.sales_order_id);
-    const deliveryAddress = String(body.delivery_address ?? '').trim();
+    // PMB-07b (22 Agu 2026) — alamat boleh dipilih dari daftar tersimpan
+    // (delivery_address_id) ATAU diketik langsung sekali-pakai (delivery_address
+    // apa adanya, seperti sebelumnya). Resolusi dilakukan DI SINI (TypeScript),
+    // BUKAN menambah parameter ke RPC create_shipment_with_signature — RPC itu
+    // pernah mengalami regresi grant akibat penambahan parameter, sengaja tidak
+    // diulang (lihat catatan migrasi 20260827520000).
+    const deliveryAddressId = body.delivery_address_id ? Number(body.delivery_address_id) : null;
+    let deliveryAddress = String(body.delivery_address ?? '').trim();
     const recipientName = body.recipient_name ? String(body.recipient_name).trim() : null;
     const recipientPhone = body.recipient_phone ? String(body.recipient_phone).trim() : null;
     const vehicleNumber = body.vehicle_number ? String(body.vehicle_number).trim() : null;
@@ -82,6 +89,25 @@ export async function createShipmentWithSignature(request: NextRequest): Promise
     if (!salesOrderId) {
       return { status: 400, body: { error: 'Sales Order wajib dipilih.' } };
     }
+
+    const adminClient = getAdminClient();
+    if (deliveryAddressId) {
+      const { data: savedAddress, error: savedAddressError } = await adminClient
+        .from('customer_delivery_addresses')
+        .select('customer_delivery_address_id, company_id, address, archived_at')
+        .eq('customer_delivery_address_id', deliveryAddressId)
+        .maybeSingle();
+      if (savedAddressError) return { status: 500, body: { error: savedAddressError.message } };
+      if (!savedAddress || savedAddress.company_id !== appUser.company_id) {
+        return { status: 400, body: { error: 'Alamat tujuan tersimpan tidak valid.' } };
+      }
+      if (savedAddress.archived_at) {
+        return { status: 400, body: { error: 'Alamat tujuan ini sudah diarsipkan — pilih alamat lain atau ketik alamat sekali pakai.' } };
+      }
+      // Alamat yang DIPILIH saat ini yang dibekukan — bukan diketik ulang manual.
+      deliveryAddress = savedAddress.address;
+    }
+
     if (!deliveryAddress) {
       return { status: 400, body: { error: 'Alamat tujuan wajib diisi.' } };
     }
@@ -91,8 +117,6 @@ export async function createShipmentWithSignature(request: NextRequest): Promise
     if (!Array.isArray(body.lines) || body.lines.length === 0) {
       return { status: 400, body: { error: 'Minimal 1 baris item wajib diisi.' } };
     }
-
-    const adminClient = getAdminClient();
 
     const { data: so, error: soError } = await adminClient
       .from('sales_orders')
@@ -168,6 +192,15 @@ export async function createShipmentWithSignature(request: NextRequest): Promise
     }
 
     const row = result as { out_shipment_id: number; out_shipment_number: string; out_document_signature_id: number };
+
+    // PMB-07b — jejak alamat mana yang dipilih, ditulis SETELAH transaksi RPC
+    // sukses (bukan parameter RPC — lihat catatan di atas). Kegagalan di sini
+    // TIDAK membatalkan shipment yang sudah tercipta -- delivery_address (teks
+    // beku) sudah benar apa pun hasilnya, kolom ini murni jejak referensi.
+    if (deliveryAddressId) {
+      await adminClient.from('shipments').update({ delivery_address_id: deliveryAddressId }).eq('shipment_id', row.out_shipment_id);
+    }
+
     return {
       status: 201,
       body: {

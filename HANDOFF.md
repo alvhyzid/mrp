@@ -24,6 +24,19 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 **Cara kerja praktis mengikuti aturan ini**: cek status CI (`https://api.github.com/repos/alvhyzid/mrp/actions/runs`) setelah SETIAP push, jangan menunggu diminta. Kalau menulis migrasi yang menyisipkan/mengubah data (bukan cuma DDL) dengan `company_id` tertentu, JANGAN hardcode literal — pakai pola aman (lookup dinamis + no-op kalau tidak ada), dan sekarang ada pengawas otomatis (`tests/migration_hardcoded_tenant_id_watchdog.test.ts`) yang akan menolak migrasi baru yang melanggar pola ini sebelum sempat mencapai CI.
 
 
+## BB.2 (Putaran 3) — Sapu HANDOFF.md Baris ~70-1894 — 22 Agu 2026 — SELESAI
+
+Lanjutan dari posisi berhenti putaran 1 (baris 1863). Menyapu ke ATAS sampai baris 1894 ("ATURAN BAKU MIGRASI", batas ronde putaran 1) — mencakup seluruh riwayat Sesi 0/0B/0C/5/6/6A/7, studi kasus MLVT, dan payroll data nyata (20-27 Agu 2026).
+
+**Hasil: hampir seluruh isi rentang ini SUDAH tercakup** sebagai task master per-sesi (`BSL-01/02/03`, `AUD-01/02/03`, `MLV-01/02/03`, `MRG-01..09`, `MST-05..08`, `SEC-04`, `AUD-05`, `DOC-02`, `PRD-08/09`, dst) atau **sudah KEDALUWARSA** karena keputusan sesudahnya (studi kasus Gummy Zala/Drinkme dibuang total oleh `MLV-01`; gerbang waktu SAS001/SAS005 & prasyarat KPI-1..4 sudah dicabut; GPM 35% dicabut; angka overhead Rp65.666.907 sudah dikoreksi).
+
+**3 temuan genap belum pernah jadi task, dicatat sekarang:**
+- `PRV-03` — Keputusan Struktur Panel Asal-Usul vs `docs/instruksi-d0-provenance.md` (konsultan lain) — konflik dilaporkan 25 Agu 2026, tidak pernah diputuskan/dicatat jadi task.
+- `MRG-10` — Rekonsiliasi metodologi biaya SDM AKTUAL (`compute_production_batch_labor_cost`, basis jam/shift lama) vs STANDAR (basis kru harian baru, MRG-02) — pemilik produk sendiri memperingatkan (20 Agu 2026) risiko selisih PALSU di Lapis 2 Margin Watch kategori SDM kalau ini tidak direkonsiliasi; tidak pernah jadi task meski MRG-02 sudah ditandai selesai.
+- `MRG-11` — Overhead SDM bulanan (`monthly_overhead_baseline`): apakah dihitung SISA otomatis atau tetap statis manual — pertanyaan yang sama diulang 2x (20 & 21 Agu) tanpa pernah jadi task.
+
+**Tidak ditutup (STOP condition >20 temuan TIDAK terpicu — cuma 3 ditemukan, jauh di bawah ambang).** Migrasi: `20260827820000_bb2_sweep_batch2_lines70_1863.sql`. Test: tidak ada perubahan kode (murni migrasi data) — tetap 45 file/275 test.
+
 ## BAGIAN 1-3 (Blok Kerja) — BB.2 Putaran 2, PRD-12, Fondasi PO Supplier — 22 Agu 2026
 
 **BAGIAN 2 (PRD-12) — SELESAI.** `work_orders.status` sekarang HIDUP: `planned→in_progress` OTOMATIS saat batch pertama dimulai (`startProductionBatch.ts`); `→completed/paused/cancelled` MANUAL lewat `setWorkOrderStatus.ts` baru (`paused`/`cancelled` wajib `status_reason`, digerbang `WORK_ORDER_STATUS_ROLES` = leadership+ppic_manager+production_manager, TIDAK termasuk staf). Pagar `createProductionBatch.ts` ("tolak batch baru pada WO selesai/batal") SUDAH ADA sejak lama tapi tidak pernah aktif — sekarang benar-benar menyala, BLOKIR KERAS (bukan peringatan) karena taruhannya konsumsi bahan sungguhan dari gudang. Jalan keluar: `reopenWorkOrder.ts`, digerbang HANYA `company_admin`/`production_manager` (bukan general_manager/ppic_manager — kata "manajer produksi" diambil literal), wajib alasan, riwayat APPEND-ONLY di tabel baru `work_order_reopen_log` (nol jalur update/delete, bahkan dari service-role). TIDAK ADA layar baru dibangun — kolom STATUS di `WorkOrdersPage.tsx`/`ProductionDashboardPage.tsx` ternyata SUDAH punya label+warna utk kelima status sejak awal, otomatis benar begitu field-nya hidup (diverifikasi visual `company.b@debug.mrp`, fixture dibersihkan). Bug tak terduga ditemukan+diperbaiki di jalan: watchdog `ui_raw_leak_watchdog.test.ts` sempat false-positive gara-gara badge status/label dipisah ke 2 baris JSX berbeda (kehilangan penanda "label" di baris yang sama) — dirapatkan lagi ke 1 baris.

@@ -22,7 +22,7 @@ type BuildTask = {
   module_name: string;
   description: string;
   effect_description: string;
-  urgency: 'super_urgent' | 'mendesak' | 'penting' | 'bisa_menunggu' | 'ditunda_sadar';
+  urgency: 'super_urgent' | 'mendesak' | 'penting' | 'bisa_menunggu' | 'tidak_mendesak';
   tags: string[];
   pic: string;
   status: 'menunggu' | 'sedang_dikerjakan' | 'menunggu_persetujuan' | 'selesai' | 'ditunda_sadar' | 'dibatalkan';
@@ -44,20 +44,23 @@ type BuildTask = {
   aman_paralel: boolean;
 };
 
-const URGENCY_ORDER = ['super_urgent', 'mendesak', 'penting', 'bisa_menunggu', 'ditunda_sadar'] as const;
+const URGENCY_ORDER = ['super_urgent', 'mendesak', 'penting', 'bisa_menunggu', 'tidak_mendesak'] as const;
 const URGENCY_LABELS: Record<string, string> = {
   super_urgent: 'SUPER URGENT',
   mendesak: 'Mendesak',
   penting: 'Penting',
   bisa_menunggu: 'Bisa Menunggu',
-  ditunda_sadar: 'Ditunda Sadar'
+  tidak_mendesak: 'Tidak Mendesak'
 };
-const URGENCY_BADGE: Record<string, 'critical' | 'warning' | 'info' | 'secondary'> = {
-  super_urgent: 'critical',
-  mendesak: 'warning',
-  penting: 'info',
-  bisa_menunggu: 'secondary',
-  ditunda_sadar: 'secondary'
+// Urgensi TIDAK dirender sebagai Badge sederajat status (lihat STATUS_BADGE) --
+// cuma dua tingkat teratas yang dapat garis tepi kiri kartu, supaya urgensi
+// terlihat tanpa bersaing visual dengan warna status.
+const URGENCY_BORDER: Record<string, string> = {
+  super_urgent: 'border-l-4 border-l-destructive',
+  mendesak: 'border-l-4 border-l-warning',
+  penting: '',
+  bisa_menunggu: '',
+  tidak_mendesak: ''
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -68,13 +71,26 @@ const STATUS_LABELS: Record<string, string> = {
   ditunda_sadar: 'Ditunda Sadar',
   dibatalkan: 'Dibatalkan'
 };
+// Satu sumber warna status (Y.3-style -- satu tempat, bukan disebar). Hijau =
+// selesai, biru = menunggu persetujuan, kuning = sedang dikerjakan, abu-abu
+// netral = menunggu, abu-abu pudar = ditunda sadar, abu-abu dicoret = dibatalkan.
 const STATUS_BADGE: Record<string, 'success' | 'warning' | 'info' | 'secondary' | 'critical'> = {
   menunggu: 'secondary',
-  sedang_dikerjakan: 'info',
-  menunggu_persetujuan: 'warning',
+  sedang_dikerjakan: 'warning',
+  menunggu_persetujuan: 'info',
   selesai: 'success',
   ditunda_sadar: 'secondary',
-  dibatalkan: 'critical'
+  dibatalkan: 'secondary'
+};
+// className tambahan di luar variant Badge, untuk status yang butuh nuansa
+// lebih (pudar/dicoret) yang tidak tersedia lewat variant warna biasa.
+const STATUS_EXTRA_CLASS: Record<string, string> = {
+  menunggu: '',
+  sedang_dikerjakan: '',
+  menunggu_persetujuan: '',
+  selesai: '',
+  ditunda_sadar: 'opacity-60',
+  dibatalkan: 'line-through opacity-70'
 };
 
 const ORIGIN_LABELS: Record<string, string> = {
@@ -315,6 +331,11 @@ export default function BuildTasksPage() {
           <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Apa yang Baru</p>
           <h1 className="text-2xl font-semibold text-foreground">Daftar Tugas Pembangunan</h1>
           <p className="mt-1 text-sm text-muted-foreground">Halaman ini hanya menampilkan (baca) — task dibuat/ditutup oleh Claude Code lewat migrasi, bukan dari layar ini.</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Tiap task punya 3 jenis label yang berbeda dan bisa bernilai berbeda-beda: <span className="font-medium text-foreground">status</span> (badge warna solid — progres pekerjaan),{' '}
+            <span className="font-medium text-foreground">urgensi</span> (badge outline kecil + garis tepi kiri kartu untuk 2 tingkat teratas — seberapa mendesak), dan{' '}
+            <span className="font-medium text-foreground">penanda otomatis</span> (teks kecil turunan tag — bukan dicatat manusia). Ketiganya bisa berbeda nilai pada task yang sama; itu bukan kontradiksi.
+          </p>
         </div>
 
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
@@ -507,14 +528,16 @@ export default function BuildTasksPage() {
                 const done = mod.tasks.filter((t) => isTaskDone(t.status)).length;
                 const pct = mod.tasks.length > 0 ? Math.round((done / mod.tasks.length) * 100) : 0;
                 const hasSuperUrgent = mod.tasks.some((t) => t.urgency === 'super_urgent' && isTaskUnresolved(t.status));
+                const allDone = mod.tasks.length > 0 && done === mod.tasks.length;
                 const open = isModuleOpen(mod.module_code, hasSuperUrgent);
                 return (
-                  <Card key={mod.module_code} className={hasSuperUrgent ? 'border-2 border-destructive' : undefined}>
+                  <Card key={mod.module_code} className={hasSuperUrgent ? 'border-2 border-destructive' : allDone ? 'border-2 border-success' : undefined}>
                     <button type="button" className="flex w-full items-center justify-between gap-3 p-4 text-left" onClick={() => toggleModule(mod.module_code)}>
                       <div className="flex items-center gap-3">
                         <span className="font-mono text-xs text-muted-foreground">{open ? '▾' : '▸'}</span>
                         <span className="font-semibold text-foreground">{mod.module_name}</span>
                         {hasSuperUrgent ? <Badge variant="critical">SUPER URGENT</Badge> : null}
+                        {!hasSuperUrgent && allDone ? <Badge variant="success">Semua Selesai</Badge> : null}
                       </div>
                       <div className="flex items-center gap-3 text-sm text-muted-foreground">
                         <span>{mod.tasks.length} task</span>
@@ -529,13 +552,24 @@ export default function BuildTasksPage() {
                           const history = taskHistory[t.build_task_id];
                           const isExpanded = expandedTaskId === t.build_task_id;
                           return (
-                            <div key={t.build_task_id} className="rounded-md border bg-background p-3 text-sm">
+                            <div key={t.build_task_id} className={`rounded-md border bg-background p-3 text-sm ${URGENCY_BORDER[t.urgency]}`}>
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="font-mono font-semibold text-foreground">{t.task_code}</span>
                                 <span className="font-medium text-foreground">{t.name}</span>
-                                <Badge variant={STATUS_BADGE[t.status]}>{STATUS_LABELS[t.status]}</Badge>
-                                <Badge variant={URGENCY_BADGE[t.urgency]}>{URGENCY_LABELS[t.urgency]}</Badge>
-                                {t.aman_paralel ? <Badge variant="success">Aman Paralel</Badge> : <Badge variant="secondary">Menunggu Cetakan UX</Badge>}
+                                {/* STATUS -- satu label paling menonjol, warna = sumber kebenaran status task ini. */}
+                                <Badge variant={STATUS_BADGE[t.status]} className={STATUS_EXTRA_CLASS[t.status]}>
+                                  {STATUS_LABELS[t.status]}
+                                </Badge>
+                                {/* URGENSI -- outline tipis + label kecil, SENGAJA tidak sederajat visual dengan status
+                                    (lihat garis tepi kiri kartu untuk 2 tingkat teratas). Skala berbeda dari status,
+                                    walau kebetulan salah satu nilai lama ('ditunda_sadar') pernah memakai istilah yang
+                                    sama persis dengan status -- sudah diganti 'tidak_mendesak' (DD.2). */}
+                                <Badge variant="outline" className="text-[10px] font-normal uppercase tracking-wide text-muted-foreground">
+                                  {URGENCY_LABELS[t.urgency]}
+                                </Badge>
+                                {/* Penanda otomatis dari tag -- teks kecil polos, BUKAN Badge, supaya jelas beda kelas
+                                    dari status/urgensi (bukan nilai yang dicatat manusia, murni turunan tag). */}
+                                <span className="text-[10px] text-muted-foreground">{t.aman_paralel ? '● Aman Paralel' : '○ Menunggu Cetakan UX'}</span>
                               </div>
                               <div className="mt-1.5 flex flex-wrap gap-1">
                                 {t.tags.map((tag) => (

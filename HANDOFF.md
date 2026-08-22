@@ -2,6 +2,12 @@
 
 Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`). Tiap sesi Claude Code WAJIB baca ini dulu sebelum mulai, dan memperbarui bagian relevan begitu sesi selesai. Klaim di sini harus tetap diverifikasi ulang, bukan otomatis dipercaya — HANDOFF ini rangkuman, bukan pengganti bukti.
 
+## Pelajaran Tetap: Periksa Kondisi NYATA di Database, Bukan Cuma Berkas Migrasi (22 Agu 2026)
+
+Memeriksa berkas migrasi TIDAK sama dengan memeriksa kondisi sungguhan di database. Tiga migrasi (`compute_production_batch_labor_cost`, lihat Bagian 2 Sapu Ulang REVOKE di bawah) pernah terlihat seperti celah keamanan terbuka (tidak ada baris `revoke` sama sekali) padahal aman. Sebaliknya, migrasi yang terlihat benar bisa saja sudah tertimpa jalur lain. **Setiap audit keamanan wajib memeriksa kondisi NYATA di database** (mis. lewat `debug_list_function_grants()`), bukan hanya isi berkas.
+
+**Catatan teknis**: Postgres mempertahankan hak akses lama bila sebuah fungsi ditulis ulang (`CREATE OR REPLACE FUNCTION`) dengan BENTUK (signature parameter) yang SAMA; hak akses tereset ke default hanya bila BENTUK fungsi berubah (jadi overload baru). Itu yang membedakan tiga migrasi `compute_production_batch_labor_cost` di atas (aman — signature tidak pernah berubah) dari insiden `create_shipment_with_signature` di Alur 1 (signature BERUBAH karena parameter baru ditambah, jadi overload baru dengan ACL default — inilah yang benar-benar menyebabkan regresi keamanan).
+
 ## Fungsi Baca yang Sengaja Menulis, Idempoten (daftar tetap — perbarui kalau ketemu yang baru, JANGAN hapus tanpa alasan tercatat)
 
 Ditemukan lewat sapuan INF-07 (22 Agu 2026). Kedua fungsi ini bernama seperti pembacaan murni (`get*`/`list*`) TAPI sengaja melakukan tulis sebagai efek samping, karena proyek ini belum punya penjadwal/cron terpisah — pembacaan halaman ITU SENDIRI yang jadi pemicu. Ini BERBEDA KELAS dari bug baseline Margin Watch lama (Sesi 0/0B/0C): bug lama menulis sesuatu yang **ireversibel** (mengunci baseline finansial permanen) tanpa disadari; kedua fungsi di bawah ini menulis sesuatu yang **idempoten dan reversibel** (upsert berdasar kunci unik, auto-resolve/auto-refresh), sengaja, dan sudah didokumentasikan sejak awal di kode/docs masing-masing.

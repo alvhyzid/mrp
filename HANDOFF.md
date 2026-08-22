@@ -2,6 +2,18 @@
 
 Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`). Tiap sesi Claude Code WAJIB baca ini dulu sebelum mulai, dan memperbarui bagian relevan begitu sesi selesai. Klaim di sini harus tetap diverifikasi ulang, bukan otomatis dipercaya — HANDOFF ini rangkuman, bukan pengganti bukti.
 
+## QA-01 — Pembersihan Mandiri Test Tidak Andal — 22 Agu 2026 — SELESAI (dikerjakan segera, W.2)
+
+**Akar masalah sebenarnya** (bukan tambalan per-file lagi, kejadian ke-4 dengan pola sama): setiap file test menulis TANGAN daftar `steps` cleanup-nya sendiri, dan manusia (Claude Code) berulang kali lupa satu tabel (PMB-07a lupa `status_transition_log`) atau salah nama kolom (PMB-07b). `tests/testCompanyCleanup.ts` (`cleanupCompanyCascade`) diperkuat generik, TIDAK bergantung pada `steps` manusia lengkap/benar:
+1. **Retry-until-fixed-point** — `steps` dijalankan berulang (maks 6 putaran), menyelesaikan kesalahan URUTAN otomatis.
+2. **Sapuan sisa generik** — RPC baru `debug_company_residual_scan(company_id)` (migrasi `20260827540000`, dynamic SQL atas `information_schema`, server-side) mencari SENDIRI tabel mana pun yang masih punya baris untuk company_id itu, TERLEPAS dari isi `steps`. Percobaan pertama (client-side, `Promise.all` lintas ~90 tabel) TERBUKTI tetap >30 detik (sampai hook timeout) — dipindah server-side, selesai ~1 detik.
+
+**Bukti (a) — 3x run penuh berturut-turut**: jumlah company selain PT ITM/Company B — **4 → 4 → 4** (identik ketiganya; run ke-2 sempat 2 test gagal karena sebab TIDAK TERKAIT/transient di bawah beban berkelanjutan, tanpa meninggalkan sisa apa pun).
+
+**Bukti (b) — dipaksa berhenti (SIGKILL) di tengah jalan**: suite penuh dibunuh paksa ~150 detik in → 1 company tersisa (`ProduksiNyataTestCorp`) — **tidak terhindarkan** (SIGKILL mencegah kode apa pun berjalan, batasan OS, bukan cacat mekanisme). File test yang sama dijalankan ULANG dengan sisa itu masih ada → **lulus bersih 12/12**, fixture barunya sendiri terbersihkan sempurna, TIDAK ADA tabrakan. Sisa SIGKILL dibersihkan manual (didokumentasikan lewat `debug_company_residual_scan` — butuh 3 putaran manual untuk menemukan seluruh tabel anak yang tidak py `company_id` langsung, bukti konkret KENAPA hand-written steps rawan lupa).
+
+**Kesimpulan jujur**: mekanisme baru menghilangkan akumulasi SENYAP saat operasi normal — TIDAK bisa (dan tidak ada mekanisme apa pun yang bisa) mencegah sisa dari SIGKILL paksa itu sendiri.
+
 ## PMB-07b — Alamat Tujuan Kirim sebagai Daftar (Lapisan Data & Server) — 22 Agu 2026 — SELESAI (layar menunggu cetakan UX)
 
 **Arkeologi (dilakukan SEBELUM membangun, temuan besar — sebagian besar mekanisme SUDAH benar):** blokir kelebihan-kirim (`enforce_shipment_line_qty_limit()`, migrasi `20260817150000`) dibaca langsung kodenya (bukan disimpulkan dari nama) — TERBUKTI SUDAH kumulatif per `sales_order_line_id` lintas SELURUH shipment (join ke `shipments` tanpa filter per-shipment), TIDAK PERLU diperbaiki. `delivery_address` SUDAH bebas-diisi & beku per shipment sejak Sesi 3A (komentar migrasi asli: "bisa beda per pengiriman meski SO/customer sama"). `pod_token` SUDAH `unique` sejak awal. `sales_order_lines.qty_shipped` SUDAH kolom hidup diinkremen trigger saat status `shipped`, dan `listSalesOrders.ts` SUDAH menghitung `qty_remaining_to_ship`. **Satu-satunya yang genuinely baru**: tabel `customer_delivery_addresses` (daftar alamat tersimpan per customer, pola arsip sama Supplier/Customer — `src/features/mrp/server/customerDeliveryAddresses.ts`) + kolom jejak `shipments.delivery_address_id`.

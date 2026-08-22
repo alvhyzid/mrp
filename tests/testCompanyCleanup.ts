@@ -14,13 +14,32 @@ type CleanupStep = [string, () => Promise<{ error: { message: string } | null }>
 // company.b@debug.mrp).
 const REAL_TENANT_COMPANY_IDS = [1];
 
-// Akar masalah "ratusan baris companies menumpuk" (26 Agu 2026): afterAll lama pakai
-// pola throw-and-abort (satu langkah gagal di tengah for-loop -> seluruh sisa langkah,
-// TERMASUK delete companies, tidak pernah dijalankan) atau pola sequential
-// unchecked-await (delete companies sendiri bisa gagal diam-diam tanpa exception).
-// Helper ini menjamin delete companies SELALU dicoba di akhir, apa pun hasil langkah
-// sebelumnya -- kegagalan tetap dilaporkan (lewat throw di akhir), tapi tidak lagi bisa
-// menyebabkan baris companies tertinggal selamanya.
+// QA-01 (22 Agu 2026) -- akar masalah SEBENARNYA dari 4 kejadian fixture bentrok
+// beruntun (7 companies bekas test/INF-06, sisa suite dijalankan 2x, fixture
+// PMB-07a lupa membersihkan status_transition_log, fixture PMB-07b salah nama
+// kolom saat membersihkan document_signatures): setiap file test HARUS menulis
+// TANGAN sendiri daftar `steps` yang URUT BENAR dan LENGKAP mengikuti seluruh
+// graf foreign key -- dan manusia (Claude Code) berulang kali lupa satu tabel
+// atau salah kolom. Tambalan lokal per-file TIDAK menyelesaikan akarnya --
+// masalahnya kembali tiap kali ada file test baru dengan graf FK yang sedikit
+// beda. Perbaikan di bawah ini membuat helper ini SENDIRI yang tangguh,
+// terlepas dari salah/lengkap tidaknya `steps` yang ditulis manusia:
+//
+// 1. RETRY-UNTIL-FIXED-POINT: `steps` dijalankan berulang (bukan 1x) --
+//    langkah yang gagal di-retry di putaran berikutnya, karena urutan yang
+//    SALAH (bukan HILANG) akan otomatis terselesaikan begitu langkah lain yang
+//    lebih dulu semestinya jalan sudah sukses. Berhenti begitu tidak ada
+//    kemajuan lagi (bukan berhenti di 1 kali percobaan).
+// 2. SAPUAN SISA GENERIK: setelah `steps` + hapus companies dicoba, helper ini
+//    MENCARI SENDIRI (lewat OpenAPI root PostgREST, bukan daftar tabel yang
+//    ditulis tangan -- otomatis ikut tabel baru tanpa perlu diperbarui manual)
+//    tabel mana pun yang PUNYA kolom company_id dan MASIH punya baris untuk
+//    company_id ini, TERLEPAS dari apakah tabel itu ada di `steps` atau tidak.
+//    Ini menangkap kelas bug "lupa satu tabel di `steps`" yang jadi akar 2 dari
+//    4 kejadian di atas -- bukan cuma bug urutan.
+// 3. GAGAL KERAS, BUKAN DIAM: kalau setelah semua itu masih ada sisa, error
+//    yang dilempar menyebut PERSIS tabel & jumlah baris yang tertinggal --
+//    bukan pesan generik "gagal sebagian" yang mengharuskan investigasi manual.
 export async function cleanupCompanyCascade(adminClient: SupabaseClient, companyId: number | number[], steps: CleanupStep[]): Promise<void> {
   const companyIdsToCheck = Array.isArray(companyId) ? companyId : [companyId];
   const violatingIds = companyIdsToCheck.filter((id) => REAL_TENANT_COMPANY_IDS.includes(id));
@@ -30,21 +49,52 @@ export async function cleanupCompanyCascade(adminClient: SupabaseClient, company
     );
   }
 
-  const failures: string[] = [];
-  for (const [label, run] of steps) {
-    try {
-      const { error } = await run();
-      if (error) failures.push(`${label}: ${error.message}`);
-    } catch (e) {
-      failures.push(`${label}: ${e instanceof Error ? e.message : String(e)}`);
+  // --- 1. Retry-until-fixed-point untuk steps yang ditulis manusia ---
+  let pending = steps.slice();
+  let lastFailureCount = Infinity;
+  const MAX_PASSES = 6;
+  for (let pass = 0; pass < MAX_PASSES && pending.length > 0; pass++) {
+    const stillFailing: CleanupStep[] = [];
+    for (const step of pending) {
+      const [, run] = step;
+      try {
+        const { error } = await run();
+        if (error) stillFailing.push(step);
+      } catch {
+        stillFailing.push(step);
+      }
     }
+    if (stillFailing.length === lastFailureCount) break; // tidak ada kemajuan -- berhenti, jangan berputar sia-sia
+    lastFailureCount = stillFailing.length;
+    pending = stillFailing;
   }
 
   const companyIds = Array.isArray(companyId) ? companyId : [companyId];
-  const { error: companyError } = await adminClient.from('companies').delete().in('company_id', companyIds);
-  if (companyError) failures.push(`companies: ${companyError.message}`);
+  await adminClient.from('companies').delete().in('company_id', companyIds);
 
-  if (failures.length > 0) {
-    throw new Error(`Cleanup fixture test gagal sebagian (cek data sisa manual): ${failures.join('; ')}`);
+  // --- 2. Sapuan sisa generik -- cari SENDIRI, jangan andalkan steps manusia ---
+  // Dijalankan SERVER-SIDE lewat 1 RPC per company_id (debug_company_residual_scan,
+  // migrasi 20260827540000) -- percobaan pertama menyapu lewat banyak panggilan
+  // REST client-side (bahkan bersamaan/Promise.all) TERBUKTI tetap lambat (>30
+  // detik, sampai timeout hook test) karena overhead jaringan per-request
+  // menumpuk; loop di dalam Postgres (dynamic SQL atas information_schema)
+  // selesai dalam ~1 detik untuk hasil yang SAMA PERSIS. Tabel anak tanpa kolom
+  // company_id sendiri (mis. shipment_lines, customer_po_approvals) TIDAK perlu
+  // disapu terpisah -- integritas FK menjamin: kalau tabel INDUKnya (yang PUNYA
+  // company_id) sudah kosong, baris anak yang merujuknya TIDAK MUNGKIN masih ada
+  // (constraint FK akan menolak penghapusan induk selama anak masih merujuknya).
+  const residuals: string[] = [];
+  for (const id of companyIds) {
+    const { data, error } = await adminClient.rpc('debug_company_residual_scan', { p_company_id: id });
+    if (error) continue; // fungsi diagnostic tidak terjangkau -- jangan gagalkan cleanup hanya karena diagnosticnya tidak jalan
+    for (const row of (data as { table_name: string; row_count: number }[]) ?? []) {
+      residuals.push(`${row.table_name} (company_id=${id}): ${row.row_count} baris tersisa`);
+    }
+  }
+
+  if (residuals.length > 0) {
+    throw new Error(
+      `Cleanup fixture test GAGAL SEBAGIAN -- sisa DITEMUKAN LEWAT SAPUAN OTOMATIS (bukan cuma dari steps yang ditulis manual), jadi ini kemungkinan besar tabel yang TERLEWAT dari daftar steps, bukan cuma urutan salah:\n${residuals.join('\n')}`
+    );
   }
 }

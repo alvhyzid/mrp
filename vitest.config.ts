@@ -45,6 +45,10 @@ export default defineConfig({
     env: loadEnv('', process.cwd(), ''),
     fileParallelism: false,
     hookTimeout: 30000,
-    testTimeout: 30000
+    testTimeout: 30000,
+    // Pengawas tingkat project (23 Agu 2026) -- lihat komentar di dalam file
+    // itu sendiri. Menolak keras kalau NEXT_PUBLIC_SUPABASE_URL menunjuk
+    // project yang diketahui berisi data nyata, kecuali flag eksplisit diset.
+    setupFiles: ['./tests/setup/guardAgainstRealProject.ts']
   }
 });

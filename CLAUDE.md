@@ -25,6 +25,13 @@ Baca KEDUA file ini secara penuh sebelum menulis kode apa pun. Semua keputusan d
 6. **Lot/batch traceability wajib** — setiap pergerakan stok tercatat by lot, dengan jejak genealogy (lot ini dibuat dari lot apa saja). Ini requirement compliance BPOM/halal, tidak boleh disederhanakan.
 7. **Konvensi penamaan primary key**: `nama_tabel_tunggal_id` (mis. tabel `employees` → primary key `employee_id`, BUKAN `id` generik). Ini WAJIB diikuti di semua tabel — sudah diterapkan konsisten di `docs/rancangan-skema-database-mrp.md`, ikuti persis seperti tertulis di sana.
 
+## Prinsip Standar Akuntansi Biaya — WAJIB Dipatuhi di Seluruh Perhitungan Keuangan (ditetapkan 23 Agu 2026)
+1. **Seluruh perhitungan keuangan dan biaya mengikuti STANDAR AKUNTANSI BIAYA yang lazim, bukan metode karangan sendiri.** Alasan: angkanya harus bisa dipertanggungjawabkan ke akuntan dan auditor tanpa diterjemahkan, dan berlaku universal untuk tenant lain (bukan cuma masuk akal untuk PT ITM).
+2. **Istilah memakai istilah baku akuntansi** (Direct Cost, Indirect Cost, Overhead, Variance, dst), BUKAN istilah karangan. Di layar TETAP ditampilkan dalam Bahasa Indonesia lewat kamus istilah (`src/lib/glossary.ts`/Kamus) — baku di dalam kode/skema, manusiawi di layar.
+3. **Bila standar membuka beberapa pilihan yang sama-sama sah** (metode penilaian persediaan, dasar pembebanan overhead, waktu pengakuan selisih, dst): JANGAN memilih sendiri dengan alasan "ini kan standar". Sodorkan pilihannya beserta konsekuensinya lewat `AskUserQuestion`, tunggu keputusan pemilik produk, catat pilihan yang diambil beserta alasannya di task terkait.
+4. **Bila pemilik produk meminta penyimpangan dari standar: boleh, itu haknya.** Yang WAJIB: alasan dan detailnya dicatat di task terkait, supaya berbulan-bulan kemudian masih bisa dijelaskan kenapa angkanya berbeda dari standar baku.
+5. **Setiap angka keuangan yang ditampilkan ke pengguna harus bisa menjawab "ini metode apa"** lewat panel Asal-Usul (`ProvenanceInfoButton`) atau Kamus istilah — bukan angka yang muncul tanpa jejak metodenya.
+
 ## Struktur Folder — WAJIB Dipatuhi di Semua Kode
 1. **`app/` hanya wrapper routing.** File di `app/**/page.tsx` dan `app/api/**/route.ts` tidak boleh berisi logic bisnis — isinya cuma routing Next.js (path, layout, re-export) yang memanggil kode dari `src/features/<domain>/`. Contoh yang benar: `app/login/page.tsx` cuma berisi `export { default } from '@/features/auth/pages/LoginPage';`.
 2. **Logic bisnis hidup di `src/features/<domain>/`**, dikelompokkan per domain (mis. `auth`, `team`, `mrp`), bukan per tipe file. Di dalam tiap domain: `pages/` untuk komponen halaman, `server/` untuk logic sisi server (query Supabase, validasi, dsb).

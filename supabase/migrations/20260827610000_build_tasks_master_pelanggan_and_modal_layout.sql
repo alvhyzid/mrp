@@ -5,11 +5,26 @@
 --    40px, konsisten lintas komponen, satu sumber ukuran) + aturan placeholder
 --    tidak boleh memuat instruksi penting.
 
+-- II.1 (22 Agu 2026) -- ditambal pola aman: cari company_id lewat nama,
+-- no-op kalau company belum ada (rebuild dari nol), sama seperti migrasi
+-- build_tasks yang lebih tua (20260827340000 dst). Sebelumnya company_id
+-- ditulis literal `1` tanpa pengaman -- akar penyebab CI merah, lihat
+-- migrasi 20260827605000/HANDOFF.md.
+do $$
+declare
+  v_company_id integer;
+begin
+  select company_id into v_company_id from companies where name = 'PT ITM' limit 1;
+  if v_company_id is null then
+    raise notice 'Perusahaan PT ITM tidak ditemukan -- seed build_tasks (migrasi ini) dilewati (no-op).';
+    return;
+  end if;
+
 insert into public.build_tasks
   (company_id, task_code, name, module_code, module_name, description, effect_description, urgency, tags, pic, status, link_url, origin, detail_pekerjaan, notes)
 values
 (
-  1, 'PMB-08', 'Cabut Form Tambah Client dari Modal Buat PO', 'PMB', 'Pembelian',
+  v_company_id, 'PMB-08', 'Cabut Form Tambah Client dari Modal Buat PO', 'PMB', 'Pembelian',
   'Modal "Buat PO client baru" saat ini memuat form mini untuk membuat client baru dengan hanya 3 isian: nama client, perusahaan, kontak.',
   'Data pelanggan yang lengkap butuh alamat penagihan, NPWP, termin pembayaran, PIC (nama/telepon/email), dan alamat tujuan kirim. Pelanggan yang lahir dari form mini ini akan selamanya kekurangan semuanya, dan tidak ada yang akan kembali melengkapinya. Dalam setahun, separuh master pelanggan berisi data setengah jadi — baru ketahuan saat PO atau surat jalan dicetak tanpa NPWP. Ini kelas masalah yang sama dengan yang sudah ditolak pada supplier: membuat master data sebagai EFEK SAMPING dari mengerjakan hal lain. Master data lahir HANYA dari tindakan sadar di halamannya sendiri.',
   'mendesak', array['Visual','Fungsi'], 'Claude Code', 'menunggu', '/customer-purchase-orders', 'pemilik_produk',
@@ -30,7 +45,7 @@ values
   'Usulan pemetaan (BELUM disetujui pemilik produk, konsisten dengan konstanta FINANCIAL_DATA_ROLES yang sudah ada di roles.ts): "Direktur" -> company_admin, "General Manager" -> general_manager (sudah persis ada), "Finance" -> finance_manager SAJA (finance_staff TIDAK termasuk, mengikuti pola FINANCIAL_DATA_ROLES yang sudah membedakan manager vs staff finance). Perlu konfirmasi pemilik produk sebelum dikerjakan.'
 ),
 (
-  1, 'PMB-09', 'Halaman Pelanggan: Riwayat Order & Performa', 'PMB', 'Pembelian',
+  v_company_id, 'PMB-09', 'Halaman Pelanggan: Riwayat Order & Performa', 'PMB', 'Pembelian',
   'Halaman Pelanggan sekarang baru berisi data mitra (identitas, alamat, PIC, dll). Belum ada riwayat order per pelanggan, harga terakhir per produk, atau ringkasan performa.',
   'Ini pintu masuk alami untuk fitur "Duplikat sebagai order baru" (sudah tercatat sebagai PJL-05) — keluhan harian pemilik produk soal mengetik ulang produk tiap repeat order. Tanpa riwayat order yang menggantung di satu pelanggan, tidak ada yang bisa diduplikat.',
   'bisa_menunggu', array['Visual','Fungsi'], 'Claude Code', 'menunggu', '/customers', 'pemilik_produk',
@@ -40,7 +55,7 @@ values
   null
 ),
 (
-  1, 'QA-02', 'Database Sekali Pakai untuk Test', 'AUD', 'Audit Kualitas',
+  v_company_id, 'QA-02', 'Database Sekali Pakai untuk Test', 'AUD', 'Audit Kualitas',
   'Alih-alih membersihkan data uji setelah test selesai, buat database kosong dari migrasi, jalankan test, lalu buang seluruhnya. Tidak ada yang perlu dibersihkan karena tidak ada yang tersisa.',
   'Menghapus SELURUH kelas masalah sisa data uji — empat kejadian dalam beberapa hari (7 perusahaan bekas test, sisa saat suite dijalankan 2x, fixture PMB-07a, fixture PMB-07b). Juga menghapus risiko test menyentuh data nyata, karena databasenya memang bukan yang itu. Modal yang sudah ada: rebuild-from-migrations sudah terbukti jalan di CI tiap push. Yang kurang tinggal menyambungkannya ke test lokal.',
   'bisa_menunggu', array['Integrasi','Data'], 'Claude Code', 'ditunda_sadar', null, 'pemilik_produk',
@@ -48,6 +63,8 @@ values
   E'"aman paralel" (Integrasi/Data, BUKAN Visual/Teks-Bahasa) DITETAPKAN EKSPLISIT oleh pemilik produk di pesan pencatatan task ini — sengaja dicatat di sini karena penanda otomatis berbasis tag TIDAK akan menyimpulkan ini sendiri (pola sama dengan catatan INF-01/INF-02 22 Agu 2026).\n'
   'KLARIFIKASI biaya waktu QA-01 (dicatat supaya tidak disalahpahami sebagai "pembersihan sisa data test butuh 2 hari"): pemilik produk menyampaikan penanganan sisa data uji terasa memakan ~2 hari. Sebagian besar waktu itu sebenarnya untuk MENYELIDIKI TIGA ANOMALI DATA (baris KPI hilang, baseline lahir sendiri, angka berubah tanpa pelaku), bukan pembersihan itu sendiri. Penyebab penyelidikan berlarut adalah TIDAK ADANYA AUDIT TRAIL — itu sebabnya AUD-07 sudah dinaikkan Mendesak.'
 );
+
+end $$;
 
 update public.build_tasks
 set ditunda_pemicu = 'PEMICU (jangan dibangun sebelum ini terjadi): bila dalam dua minggu ke depan masih ada SATU kejadian lagi soal sisa data uji. Alasan: perbaikan QA-01 mungkin sudah cukup; membangun ini butuh setengah sampai satu hari dan belum tentu impas bila masalahnya sudah mati.'

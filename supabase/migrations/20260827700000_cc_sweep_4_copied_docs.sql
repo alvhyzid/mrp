@@ -19,16 +19,29 @@ where task_code = 'RDM-02';
 -- BUKAN task yang sama dengan PJL-05 (PJL-05 = MENCEGAH duplikat entri,
 -- bukan MEMBUAT SALINAN order lama sebagai draf baru -- dua fitur yang
 -- berlawanan makna, sempat nyaris tertukar). Task baru:
+-- II.1 (22 Agu 2026) -- ditambal pola aman (lihat 20260827605000/HANDOFF.md).
+do $$
+declare
+  v_company_id integer;
+begin
+  select company_id into v_company_id from companies where name = 'PT ITM' limit 1;
+  if v_company_id is null then
+    raise notice 'Perusahaan PT ITM tidak ditemukan -- seed build_tasks (migrasi ini) dilewati (no-op).';
+    return;
+  end if;
+
 insert into public.build_tasks
   (company_id, task_code, name, module_code, module_name, description, effect_description, urgency, tags, pic, status, link_url, origin, detail_pekerjaan, notes)
 values (
-  1, 'PJL-06', 'Duplikat sebagai Order Baru (Repeat Order)', 'PJL', 'Penjualan',
+  v_company_id, 'PJL-06', 'Duplikat sebagai Order Baru (Repeat Order)', 'PJL', 'Penjualan',
   'Setiap repeat PO dari klien yang sama untuk produk yang sama, produk harus diketik ulang manual -- keluhan harian pemilik produk, gesekan di fitur inti yang sudah ada.',
   'Repeat order adalah norma bisnis contract manufacturer (klien sama, produk sama, berulang) -- tanpa jalan pintas, biaya pengetikan ulang ditanggung tiap hari.',
   'penting', array['Fungsi'], 'Claude Code', 'menunggu', '/customer-purchase-orders', 'pemilik_produk',
   'Audit alur PO klien->approval->SO dulu (read-only, temuan menentukan bentuk final -- jangan asumsikan). Tombol "Duplikat sebagai order baru" dari riwayat order klien: salin INPUT (produk, spesifikasi, catatan, harga terakhir sebagai draf berlabel "harga order sebelumnya -- periksa"), JANGAN salin HASIL (feasibility/kekurangan bahan/jadwal/biaya/margin dihitung baru dari kondisi hari ini). Rantai approval 3 departemen tetap penuh, tanpa jalan pintas. PINTU MASUK: halaman profil produk (PRD-11) atau riwayat order pelanggan (PMB-09) -- BUKAN PJL-05 (PJL-05 soal mencegah duplikat entri, arah berlawanan dari fitur ini). Bukti minimum: duplikat order lama saat harga bahan sudah berubah -> margin baru BERBEDA dari margin lama; duplikat tidak melompati approval; user tanpa akses klien itu tidak bisa menduplikat ordernya.',
   'Ditemukan lewat sinkronisasi CC.1 (22 Agu 2026, dari antrean-koreksi-fitur-ada.md Sesi S1) -- sempat berisiko dianggap sudah tercakup PJL-05 karena nama mirip, TERNYATA fitur berlawanan arah (PJL-05 mencegah, ini menyalin).'
 );
+
+end $$;
 
 -- S1(b) "halaman profil produk" -- SUDAH ada (PRD-11), dilengkapi rujukan.
 update public.build_tasks
@@ -51,23 +64,36 @@ where task_code = 'PRD-06';
 -- gerbang "12 September" persis seperti diberitahu pemilik produk (tidak
 -- kedaluwarsa, sudah sinkron). Yang belum: R4 (domain/email cutover) dan
 -- R5 (bersih-bersih identifier) -- 2 task baru.
+-- II.1 (22 Agu 2026) -- ditambal pola aman (lihat 20260827605000/HANDOFF.md).
+do $$
+declare
+  v_company_id integer;
+begin
+  select company_id into v_company_id from companies where name = 'PT ITM' limit 1;
+  if v_company_id is null then
+    raise notice 'Perusahaan PT ITM tidak ditemukan -- seed build_tasks (migrasi ini) dilewati (no-op).';
+    return;
+  end if;
+
 insert into public.build_tasks
   (company_id, task_code, name, module_code, module_name, description, effect_description, urgency, tags, pic, status, link_url, origin, detail_pekerjaan)
 values
 (
-  1, 'RBD-05', 'R4 -- Domain & Email Cutover', 'RBD', 'Rebrand FABRIX',
+  v_company_id, 'RBD-05', 'R4 -- Domain & Email Cutover', 'RBD', 'Rebrand FABRIX',
   'Setelah R3 (transfer kepemilikan) stabil >=3 hari: sambungkan domain fabrix, migrasi email pengirim, jaga kontrak eksternal (token POD lama) tetap hidup.',
   'Tanpa cutover terencana, token POD lama di QR surat jalan yang sudah dicetak bisa mati, dan email dari domain baru bisa masuk spam tanpa SPF/DKIM/DMARC diuji dulu.',
   'bisa_menunggu', array['Integrasi'], 'Claude Code', 'menunggu', null, 'pemilik_produk',
   'PRASYARAT KERAS: RBD-04 (R3) selesai DAN stabil minimal 3 hari sebelum mulai. Langkah: (1) tambah domain fabrix ke Vercel berdampingan dengan URL lama; (2) Supabase Auth site URL & redirect URLs memuat domain baru DAN lama; (3) SMTP pengirim -> no-reply@fabrix.<tld>, SPF/DKIM/DMARC dipasang & diuji ke Gmail/Yahoo/Outlook; (4) URL POD lama di QR surat jalan yang sudah dicetak WAJIB tetap hidup -- domain lama jadi redirect permanen minimal 12 bulan, token POD lama tetap tervalidasi; (5) setelah 2 minggu stabil, domain baru jadi kanonik.'
 ),
 (
-  1, 'RBD-06', 'R5 -- Bersih-Bersih Identifier Kode', 'RBD', 'Rebrand FABRIX',
+  v_company_id, 'RBD-06', 'R5 -- Bersih-Bersih Identifier Kode', 'RBD', 'Rebrand FABRIX',
   'Nama package, nama repo internal di docs, komentar kode, nama workflow CI -- masih menyebut nama lama (AMS) di lapisan internal (bukan tampilan pengguna, sudah selesai di R1).',
   'Kerapian internal murni -- tidak ada dampak pengguna, dikerjakan santai kapan saja setelah fase lain stabil.',
   'bisa_menunggu', array['Dokumentasi'], 'Claude Code', 'menunggu', null, 'pemilik_produk',
   'JANGAN rename schema/tabel database hanya demi branding -- nama internal DB bukan merek, migrasi rename massal adalah risiko tanpa nilai pengguna (instruksi eksplisit). Cukup nama package, nama repo internal di dokumen, komentar kode, nama workflow CI.'
 );
+
+end $$;
 
 -- 4) checklist-fase-spec-vs-fabrix.md -- 43 baris status assessment (bukan
 -- daftar temuan mentah). 2 prioritas "perlu tindakan dekat" yang disebut

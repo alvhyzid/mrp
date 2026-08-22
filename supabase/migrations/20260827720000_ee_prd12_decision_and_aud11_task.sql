@@ -18,13 +18,26 @@ set detail_pekerjaan = detail_pekerjaan || E'\n\n---\n\nKEPUTUSAN FINAL (22 Agu 
   'STATUS: siap dikerjakan. JANGAN MULAI sampai pemilik produk menyebut kode task ini secara eksplisit di instruksi kerja.'
 where task_code = 'PRD-12';
 
+-- II.1 (22 Agu 2026) -- ditambal pola aman (lihat 20260827605000/HANDOFF.md).
+do $$
+declare
+  v_company_id integer;
+begin
+  select company_id into v_company_id from companies where name = 'PT ITM' limit 1;
+  if v_company_id is null then
+    raise notice 'Perusahaan PT ITM tidak ditemukan -- seed build_tasks (migrasi ini) dilewati (no-op).';
+    return;
+  end if;
+
 insert into public.build_tasks
   (company_id, task_code, name, module_code, module_name, description, effect_description, urgency, tags, pic, status, origin, detail_pekerjaan, notes)
 values (
-  1, 'AUD-11', 'Sapu Ulang 41 Baris checklist-fase-spec-vs-fabrix.md', 'AUD', 'Audit Kualitas',
+  v_company_id, 'AUD-11', 'Sapu Ulang 41 Baris checklist-fase-spec-vs-fabrix.md', 'AUD', 'Audit Kualitas',
   'checklist-fase-spec-vs-fabrix.md menandai 41 baris sebagai status per 20 Agu 2026 (sebagian besar "ditunda sadar dengan pemicu") -- CC.1 (22 Agu) hanya menyapu 2 prioritas yang disebut eksplisit dokumen itu sendiri, 41 baris sisanya BELUM diperiksa satu per satu terhadap kondisi terkini maupun terhadap build_tasks.',
   'Sejak 20 Agu banyak yang berubah (Supplier & Pelanggan CRUD, snapshot routing/BOM, glossary UI, dst -- sudah dicatat sebagai catatan kedaluwarsa di header dokumen). Baris yang dulu "ditunda sadar" bisa jadi SEKARANG relevan, atau malah sudah terlanjur dikerjakan tanpa disadari sebagai penyelesaian baris itu. Ini kelas masalah yang sama dengan AUD-04/H.4: temuan yang benar tapi terkubur karena tidak ada yang menariknya jadi pekerjaan -- 7 baru ditemukan dari SATU dokumen (audit-infrastruktur-fabrix.md + checklist-audit-jalan-kaki.md), 41 baris dokumen ini belum diperiksa sama sekali.',
   'bisa_menunggu', array['Dokumentasi','Data'], 'Claude Code', 'menunggu', 'pemilik_produk',
   'Boleh dikerjakan BERTAHAP (per rentang Phase 1-7 di dokumen, atau per beberapa baris sekaligus) -- YANG TIDAK BOLEH: dinyatakan selesai padahal baru sebagian disapu. Untuk tiap baris: (1) cek apakah statusnya (SUDAH/SEBAGIAN/DIRANCANG/DITUNDA SADAR/BELUM-DITOLAK) masih akurat hari ini -- kalau sudah berubah, catat sebagai kedaluwarsa dengan alasan, JANGAN dijadikan task baru; (2) kalau masih akurat DAN memerlukan tindakan, cek apakah sudah ada task-nya di build_tasks -- kalau belum, catat task baru; (3) laporkan progres per giliran: sudah sampai baris/Phase berapa, berapa ditemukan kedaluwarsa, berapa jadi task baru.',
   'Ditemukan lewat EE.1 (22 Agu 2026) -- pemilik produk secara eksplisit meminta ini dicatat sebagai task terpisah, bukan dikerjakan langsung.'
 );
+
+end $$;

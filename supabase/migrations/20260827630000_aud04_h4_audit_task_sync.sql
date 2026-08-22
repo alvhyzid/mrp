@@ -55,11 +55,22 @@ set status = 'selesai', completed_at = now(),
     detail_pekerjaan = detail_pekerjaan || E'\n\n---\n\nDITUTUP 22 Agu 2026 -- akar penyebab BUKAN "dropdown dikira jalan masuk" seperti hipotesis awal. Baris `customers` di audit-lubang-ui.md SUDAH BENAR sejak Sesi 5 (git blame dicek langsung) dan TETAP benar di audit ulang Sesi 7 -- audit tidak pernah salah baca. Akar penyebab SEBENARNYA: (1) tidak ada jalur mekanis dari temuan-benar di audit-lubang-ui.md ke build_tasks -- PMB-03 (task yang akhirnya membangun halaman ini) origin=pemilik_produk, bukan promosi otomatis dari audit; (2) docs/checklist-audit-jalan-kaki.md disusun per alur-kerja-harian per peran, TIDAK ADA peran Sales/Pelanggan sama sekali -- master data yang jarang dipakai (bukan pekerjaan harian) struktural tidak akan pernah muncul di audit bergaya ini. Sinkronisasi manual audit-lubang-ui.md <-> build_tasks dijalankan sekali lagi sesi ini: 7 baris [MASTER]/[X] dengan Buat=ya+Keluar bermasalah TERNYATA belum pernah py task (DOC-03, ABS-03, ABS-04, PRD-12, PRD-13, PRD-14, KPI-03 -- lihat task masing-masing). docs/audit-lubang-ui.md diberi bagian baru menjelaskan mekanisme ini di bagian atas dokumen.'
 where task_code = 'AUD-04';
 
+-- II.1 (22 Agu 2026) -- ditambal pola aman (lihat 20260827605000/HANDOFF.md).
+do $$
+declare
+  v_company_id integer;
+begin
+  select company_id into v_company_id from companies where name = 'PT ITM' limit 1;
+  if v_company_id is null then
+    raise notice 'Perusahaan PT ITM tidak ditemukan -- seed build_tasks (migrasi ini) dilewati (no-op).';
+    return;
+  end if;
+
 insert into public.build_tasks
   (company_id, task_code, name, module_code, module_name, description, effect_description, urgency, tags, pic, status, link_url, origin, detail_pekerjaan, notes)
 values
 (
-  1, 'DOC-03', 'Sambungkan Tombol Hapus Dokumen', 'DOC', 'Master Dokumen',
+  v_company_id, 'DOC-03', 'Sambungkan Tombol Hapus Dokumen', 'DOC', 'Master Dokumen',
   'Fungsi hapus dokumen (`hardDeleteOrphanDocument.ts`) sudah lengkap termasuk cek keamanan & alasan wajib, tapi TIDAK ADA tombol di layar `/documents` yang memanggilnya.',
   'Dokumen salah upload/kadaluarsa tidak bisa dihapus lewat aplikasi sama sekali walau logic-nya sudah selesai dibangun sejak audit-lubang-ui.md (Sesi 5) -- ditemukan lolos dari Daftar Tugas selama ini (H.4/AUD-04).',
   'bisa_menunggu', array['Fungsi','Visual'], 'Claude Code', 'menunggu', '/documents', 'temuan_claude',
@@ -67,7 +78,7 @@ values
   'Ditemukan lewat sinkronisasi audit-lubang-ui.md <-> build_tasks (H.4/AUD-04, 22 Agu 2026) -- baris ini sudah tercatat di audit sejak Sesi 5 tapi belum pernah jadi task.'
 ),
 (
-  1, 'ABS-03', 'Alur Setuju/Cabut Perangkat Absensi', 'ABS', 'Absensi',
+  v_company_id, 'ABS-03', 'Alur Setuju/Cabut Perangkat Absensi', 'ABS', 'Absensi',
   '`attendance_devices` (perangkat QR self-register dari ABS-01) tidak punya alur approve/revoke -- perangkat baru macet permanen di status menunggu tanpa cara HRD menyetujuinya, dan tidak ada cara mencabut perangkat lama.',
   'Kalau karyawan ganti HP, perangkat baru macet permanen di status "menunggu persetujuan" tanpa cara HRD menyetujuinya lewat aplikasi.',
   'penting', array['Fungsi','Database'], 'Claude Code', 'menunggu', '/hr', 'temuan_claude',
@@ -75,7 +86,7 @@ values
   'Ditemukan lewat sinkronisasi audit-lubang-ui.md <-> build_tasks (H.4/AUD-04, 22 Agu 2026) -- baris ini sudah tercatat di audit sejak Sesi 5 tapi belum pernah jadi task.'
 ),
 (
-  1, 'ABS-04', 'Form Web Pengajuan Koreksi Absen & Cuti', 'ABS', 'Absensi',
+  v_company_id, 'ABS-04', 'Form Web Pengajuan Koreksi Absen & Cuti', 'ABS', 'Absensi',
   '`attendance_corrections` dan `leave_requests` sudah punya fungsi+API approve/reject lengkap, TAPI TIDAK ADA form pengajuan di layar manapun -- karyawan tidak bisa mengajukan koreksi absen atau cuti lewat aplikasi sama sekali, hanya sisi persetujuan HRD yang ada.',
   'Karyawan terpaksa mengajukan koreksi/cuti lewat cara di luar sistem (chat/kertas) karena tidak ada form pengajuan sama sekali, padahal sisi approve-nya sudah jadi.',
   'penting', array['Fungsi','Visual'], 'Claude Code', 'menunggu', '/hr', 'temuan_claude',
@@ -83,7 +94,7 @@ values
   'Ditemukan lewat sinkronisasi audit-lubang-ui.md <-> build_tasks (H.4/AUD-04, 22 Agu 2026) -- baris ini sudah tercatat di audit sejak Sesi 5 tapi belum pernah jadi task.'
 ),
 (
-  1, 'PRD-12', 'Work Order: Kolom Status Tidak Pernah Diperbarui Kode Manapun', 'PRD', 'Produksi',
+  v_company_id, 'PRD-12', 'Work Order: Kolom Status Tidak Pernah Diperbarui Kode Manapun', 'PRD', 'Produksi',
   'Dikonfirmasi lewat pencarian menyeluruh (TypeScript & SQL/RPC): `work_orders.status` TIDAK PERNAH di-UPDATE oleh kode manapun setelah baris dibuat -- tapi kolom ini TETAP ditampilkan apa adanya ke pengguna di kolom "STATUS" pada daftar Work Order (`listWorkOrders.ts` mengembalikan `status: wo.status` langsung). Field "Kesiapan/readiness" di kolom sebelahnya SUDAH benar dan dihitung live -- masalahnya spesifik ke kolom "STATUS".',
   'Sebuah Work Order akan tampak "Direncanakan" SELAMANYA di kolom Status walau seluruh batch di dalamnya sudah selesai diproduksi dan dikirim -- ini bukan cuma field mati di database, ini LABEL YANG MENYESATKAN yang benar-benar dibaca pengguna di layar.',
   'penting', array['Fungsi','Data'], 'Claude Code', 'menunggu', '/work-orders', 'temuan_claude',
@@ -91,7 +102,7 @@ values
   'Ditemukan lewat sinkronisasi audit-lubang-ui.md <-> build_tasks (H.4/AUD-04, 22 Agu 2026). Sebelumnya tercatat [I] "perlu klarifikasi" di audit -- diverifikasi ulang sesi ini (bukan cuma dugaan): benar 0 baris kode/migrasi yang meng-update kolom ini.'
 ),
 (
-  1, 'PRD-13', 'Edit Field Lain Batch Produksi (Bukan Cuma Tanggal)', 'PRD', 'Produksi',
+  v_company_id, 'PRD-13', 'Edit Field Lain Batch Produksi (Bukan Cuma Tanggal)', 'PRD', 'Produksi',
   'Batch Produksi hanya bisa dikoreksi tanggal rencananya (reschedule) -- field lain (planned_qty, dll) tidak bisa diedit lewat aplikasi setelah batch dibuat.',
   'Kesalahan input rencana batch (mis. salah ketik jumlah rencana) tidak bisa dikoreksi lewat aplikasi kecuali tanggalnya -- satu-satunya jalan adalah hapus & buat ulang (kalau belum ada progres tercatat) atau dibiarkan salah.',
   'bisa_menunggu', array['Fungsi'], 'Claude Code', 'menunggu', '/production', 'temuan_claude',
@@ -99,7 +110,7 @@ values
   'Ditemukan lewat sinkronisasi audit-lubang-ui.md <-> build_tasks (H.4/AUD-04, 22 Agu 2026) -- baris ini sudah tercatat di audit sejak Sesi 5 tapi belum pernah jadi task.'
 ),
 (
-  1, 'PRD-14', 'Pin/Override Manual Standar Produksi yang Usang', 'PRD', 'Produksi',
+  v_company_id, 'PRD-14', 'Pin/Override Manual Standar Produksi yang Usang', 'PRD', 'Produksi',
   '`production_standards` tidak punya fitur pin/override manual -- kalau PPIC tahu standar hasil belajar otomatis (K8) sudah usang/salah, tidak ada cara mengunci angka manual, harus menunggu batch baru terkumpul untuk standar baru terbentuk otomatis.',
   'Standar yang diketahui sudah usang tetap dipakai untuk hitung Kelayakan Jadwal & Margin Watch sampai cukup data batch baru terkumpul -- bisa berhari-hari/berminggu, selama itu semua proyeksi ikut salah walau PPIC sudah tahu angkanya keliru.',
   'bisa_menunggu', array['Fungsi','Database'], 'Claude Code', 'menunggu', '/ppic', 'temuan_claude',
@@ -107,10 +118,12 @@ values
   'Ditemukan lewat sinkronisasi audit-lubang-ui.md <-> build_tasks (H.4/AUD-04, 22 Agu 2026) -- baris ini sudah tercatat di audit sejak Sesi 5 tapi belum pernah jadi task.'
 ),
 (
-  1, 'KPI-03', 'Isi Target & Arsipkan KPI Lewat Aplikasi', 'KPI', 'KPI',
+  v_company_id, 'KPI-03', 'Isi Target & Arsipkan KPI Lewat Aplikasi', 'KPI', 'KPI',
   'Fungsi `updateKpiTarget.ts` dan `updateKpiVisibility.ts` sudah lengkap, tapi TIDAK ADA tombol/form di layar `/kpi` manapun yang memanggil keduanya -- target KPI tidak pernah bisa diisi, dan KPI yang sudah tidak relevan tidak bisa diarsipkan, lewat aplikasi.',
   'Seluruh desain KPI mengandalkan "baseline dulu, target menyusul" tapi tombol pengisi target tidak tersambung -- KPI selamanya tanpa target walau baseline sudah cukup lama terkumpul.',
   'penting', array['Fungsi','Visual'], 'Claude Code', 'menunggu', '/kpi', 'temuan_claude',
   'Sambungkan updateKpiTarget.ts dan updateKpiVisibility.ts (sudah ada, sudah teruji fungsinya) ke form/toggle di KpiPage.tsx. Bukan pekerjaan dari nol -- backend selesai, tinggal disambungkan. BEDA dari KPI-02 (KPI-2/3/4) yang soal MENAMBAH kartu KPI baru, bukan memperbaiki KPI yang sudah ada.',
   'Ditemukan lewat sinkronisasi audit-lubang-ui.md <-> build_tasks (H.4/AUD-04, 22 Agu 2026) -- baris ini sudah tercatat di audit sejak Sesi 5 (finding [P] #4, salah satu dari 12 finding [P]) tapi belum pernah jadi task.'
 );
+
+end $$;

@@ -8,7 +8,7 @@ import { learnFromBatch } from '../src/features/mrp/server/learnFromBatch';
 import { decideProductionStandardProposal } from '../src/features/mrp/server/decideProductionStandardProposal';
 import { getPlanningFeasibility } from '../src/features/mrp/server/getPlanningFeasibility';
 import { lockFeasibilityBaseline } from '../src/features/mrp/server/lockFeasibilityBaseline';
-import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { cleanupCompanyCascade, cleanupStaleFixtureByName } from './testCompanyCleanup';
 
 // Fase Produksi Nyata (19 Agu 2026), PEKERJAAN 1 (create/edit Karyawan lewat UI)
 // + PEKERJAAN 2 (pengerasan K8: proposal-approval, median, gerbang kelengkapan,
@@ -106,6 +106,12 @@ describe('Fase Produksi Nyata — Employee CRUD (B-1) & K8 standard proposal wor
   }
 
   beforeAll(async () => {
+    // QA-01 X.2 (22 Agu 2026) -- pembersihan-saat-MULAI: kalau run sebelumnya
+    // pernah dimatikan paksa (SIGKILL) di tengah file test ini, sisa dengan
+    // nama yang sama disapu bersih di sini SEBELUM fixture baru dibuat --
+    // jaminan yang tidak bergantung pada afterAll sempat berjalan atau tidak.
+    await cleanupStaleFixtureByName(adminClient, 'ProduksiNyataTestCorp');
+
     const { data: company, error: companyError } = await adminClient
       .from('companies')
       .insert([{ name: 'ProduksiNyataTestCorp', industry_type: 'manufacturing', status: 'trial' }])

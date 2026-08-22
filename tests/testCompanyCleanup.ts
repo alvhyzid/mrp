@@ -98,3 +98,20 @@ export async function cleanupCompanyCascade(adminClient: SupabaseClient, company
     );
   }
 }
+
+// QA-01 X.2 (22 Agu 2026) -- pembersihan-SAAT-KELUAR (di atas) TIDAK BISA
+// dijamin: proses yang dimatikan paksa (SIGKILL, mis. runner CI dihentikan
+// paksa, komputer mati, developer menekan Ctrl+C dua kali) TIDAK memberi
+// kesempatan kode apa pun berjalan -- itu batasan sistem operasi, bukan
+// cacat cleanupCompanyCascade. Jaminan KEDUA dipindah ke AWAL: panggil ini
+// di awal `beforeAll`, SEBELUM membuat fixture baru -- kalau company dengan
+// NAMA yang sama tertinggal dari run sebelumnya yang mati paksa, disapu
+// bersih dulu (lewat debug_force_delete_company(), migrasi 20260827570000/
+// 590000 -- generik penuh, termasuk tabel anak berlapis tanpa company_id
+// langsung, TIDAK butuh daftar tabel ditulis tangan sama sekali).
+export async function cleanupStaleFixtureByName(adminClient: SupabaseClient, companyName: string): Promise<void> {
+  const { data: existing } = await adminClient.from('companies').select('company_id').eq('name', companyName);
+  for (const row of existing ?? []) {
+    await adminClient.rpc('debug_force_delete_company', { p_company_id: row.company_id });
+  }
+}

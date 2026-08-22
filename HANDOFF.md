@@ -2,6 +2,16 @@
 
 Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`). Tiap sesi Claude Code WAJIB baca ini dulu sebelum mulai, dan memperbarui bagian relevan begitu sesi selesai. Klaim di sini harus tetap diverifikasi ulang, bukan otomatis dipercaya — HANDOFF ini rangkuman, bukan pengganti bukti.
 
+## X.1/X.2 — Penutup QA-01: Klasifikasi 4 Company Tersisa + Pembersihan-Saat-Mulai — 22 Agu 2026
+
+**X.1 — 4 company tersisa (`PlantConsolidationTestCorp`, `Sesi0BRoleTestCorp`, `BaselineLockSeparationTestCorp`, `RoutingBomSnapshotTestCorp`) DIKONFIRMASI SISA, bukan fixture tetap yang sengaja hidup.** Dibedakan dari 3 yang HILANG efek samping sesi ini (`MarginWatchTestCorp`/`BuildTasksTestCorp`/`AttendanceW1TestCorp`). Bukti: keempatnya dibuat 20-21 Agustus — **SEBELUM** QA-01 (22 Agu) ada, dan **TIDAK ADA baris baru** dengan nama-nama ini tercipta di sepanjang pengujian hari ini (3x full-suite run + banyak run individual, termasuk file yang justru membuat nama serupa) — mengonfirmasi QA-01 sudah benar mencegah AKUMULASI BARU; 4 baris ini murni sisa historis dari SEBELUM perbaikan. **Bukan gejala QA-01 gagal** — QA-01 TIDAK dibuka kembali. Task `INF-06` diperbarui (nama+detail) mencerminkan 4 (bukan 7 lagi) dengan akar penyebab bagian (1)-nya sudah terjawab lewat temuan ini — pembersihan aktualnya TETAP menunggu giliran INF-06 sendiri (belum dikerjakan, sesuai batas).
+
+**X.2 — Pembersihan-SAAT-MULAI ditambahkan** sebagai lapisan kedua (pembersihan-saat-keluar TIDAK BISA dijamin -- dibuktikan lewat SIGKILL sebelumnya). Fungsi baru `debug_force_delete_company()` (migrasi `20260827570000`, ditambal `20260827590000` setelah percobaan pertama gagal untuk rantai anak berlapis seperti `routing_steps`←`routings`) — generik penuh: membaca nama constraint FK langsung dari pesan error Postgres, mencari tabel+kolom anak SEBENARNYA lewat `information_schema` (bukan ditulis tangan), menghapus, retry — TIDAK butuh tahu struktur FK sebelumnya. Terbukti membersihkan fixture 14-tabel (yang SEBELUMNYA butuh 3 putaran trial-and-error manual) dalam **1 panggilan, <1 detik**.
+
+Helper baru `cleanupStaleFixtureByName()` (`tests/testCompanyCleanup.ts`) dipasang di `beforeAll` `tests/employee_crud_and_k8_standards.test.ts` (representatif, belum ke semua 42 file — **rollout ke file lain adalah pekerjaan mekanis lanjutan, belum dikerjakan**). **Dibuktikan**: sisa DITINGGALKAN SENGAJA dengan nama sama sebelum test dijalankan → test **menyapunya di awal** dan tetap lulus bersih 12/12, sisa (baik yang sengaja ditinggalkan maupun fixture baru test itu sendiri) sama-sama 0 setelahnya.
+
+Test: 5 file representatif (termasuk yang dipasangi X.2) dijalankan ulang, 33/33 lulus. Full-suite terakhir sedang/sudah dikonfirmasi terpisah.
+
 ## QA-01 — Pembersihan Mandiri Test Tidak Andal — 22 Agu 2026 — SELESAI (dikerjakan segera, W.2)
 
 **Akar masalah sebenarnya** (bukan tambalan per-file lagi, kejadian ke-4 dengan pola sama): setiap file test menulis TANGAN daftar `steps` cleanup-nya sendiri, dan manusia (Claude Code) berulang kali lupa satu tabel (PMB-07a lupa `status_transition_log`) atau salah nama kolom (PMB-07b). `tests/testCompanyCleanup.ts` (`cleanupCompanyCascade`) diperkuat generik, TIDAK bergantung pada `steps` manusia lengkap/benar:

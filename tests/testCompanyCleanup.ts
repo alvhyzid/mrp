@@ -70,6 +70,14 @@ export async function cleanupCompanyCascade(adminClient: SupabaseClient, company
   }
 
   const companyIds = Array.isArray(companyId) ? companyId : [companyId];
+
+  // AUD-07 (23 Agu 2026) -- data_change_audit_log SENGAJA tidak punya FK ke
+  // companies (audit trail harus bisa bertahan lewat penghapusan company
+  // sungguhan), jadi baris ini TIDAK ikut terhapus lewat cascade FK seperti
+  // tabel anak lain -- harus disapu eksplisit di sini, satu tempat, supaya
+  // tidak perlu menambah baris ini ke `steps` tiap file test.
+  await adminClient.from('data_change_audit_log').delete().in('company_id', companyIds);
+
   await adminClient.from('companies').delete().in('company_id', companyIds);
 
   // --- 2. Sapuan sisa generik -- cari SENDIRI, jangan andalkan steps manusia ---

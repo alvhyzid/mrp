@@ -59,6 +59,7 @@ const ALLOWED_BROAD_GRANT: Record<string, string> = {
   get_sales_order_margin: 'SECURITY DEFINER dengan jwt_company_id()+jwt_can_view_financial_data() internal',
   get_work_order_labor_cost_total: 'SECURITY DEFINER dengan jwt_company_id()+jwt_can_view_wages()/financial internal',
   process_customer_purchase_order: 'SECURITY DEFINER dengan jwt_company_id()+jwt_is_company_leadership() internal',
+  get_employee_cost_category: 'SECURITY DEFINER dengan jwt_company_id()+leadership/financial/hr_manager internal (MRG-11, 23 Agu 2026 -- diperbaiki setelah audit ini menangkap versi awal tanpa pemeriksaan)',
   // SEDANG (bukan RENDAH) -- terbukti dipakai di RLS policy sungguhan
   // (companies_insert_admin, subscription_plans admin policies) lewat
   // pg_policies -- revoke dari authenticated akan MEMATIKAN RLS itu untuk semua

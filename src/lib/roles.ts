@@ -120,6 +120,26 @@ export function canManageWorkOrder(role: string | undefined | null): boolean {
   return !!role && WORK_ORDER_MANAGE_ROLES.includes(role);
 }
 
+// PRD-12 (22 Agu 2026) — transisi status Work Order (selesai/jeda/batal) itu
+// keputusan supervisor/PPIC, SENGAJA lebih sempit dari WORK_ORDER_MANAGE_ROLES
+// (tidak termasuk *_staff) — pemilik produk menyebut "MANUAL oleh PPIC/
+// supervisor", bukan staf lantai produksi.
+export const WORK_ORDER_STATUS_ROLES = [...LEADERSHIP_ROLES, 'ppic_manager', 'production_manager'];
+
+export function canSetWorkOrderStatus(role: string | undefined | null): boolean {
+  return !!role && WORK_ORDER_STATUS_ROLES.includes(role);
+}
+
+// PRD-12 — membuka kembali Work Order completed/cancelled SENGAJA lebih
+// sempit lagi daripada WORK_ORDER_STATUS_ROLES: keputusan pemilik produk
+// eksplisit "company_admin atau manajer produksi" (BUKAN general_manager/
+// ppic_manager) karena taruhannya konsumsi bahan sungguhan dari gudang.
+export const WORK_ORDER_REOPEN_ROLES = ['company_admin', 'production_manager'];
+
+export function canReopenWorkOrder(role: string | undefined | null): boolean {
+  return !!role && WORK_ORDER_REOPEN_ROLES.includes(role);
+}
+
 // Role yang boleh mengelola karyawan & absensi (HR) — harus sinkron dengan policy
 // employees_write_hr / employee_attendance_write_hr di
 // supabase/migrations/20260812151500_company_settings_and_employees.sql dan

@@ -24,9 +24,10 @@ export async function createPurchaseOrder(request: NextRequest): Promise<ApiResu
 
     const adminClient = getAdminClient();
 
-    const { data: supplier, error: supplierError } = await adminClient.from('suppliers').select('supplier_id, company_id, name, address, npwp').eq('supplier_id', parsed.supplier_id).maybeSingle();
+    const { data: supplier, error: supplierError } = await adminClient.from('suppliers').select('supplier_id, company_id, name, address, npwp, archived_at').eq('supplier_id', parsed.supplier_id).maybeSingle();
     if (supplierError) return { status: 500, body: { error: supplierError.message } };
     if (!supplier || supplier.company_id !== appUser.company_id) return { status: 400, body: { error: 'Supplier tidak valid.' } };
+    if (supplier.archived_at) return { status: 400, body: { error: `Supplier "${supplier.name}" sudah diarsipkan — tidak bisa dipilih untuk PO baru.` } };
 
     const { data: plant, error: plantError } = await adminClient.from('production_plants').select('production_plant_id, company_id, name, is_active').eq('production_plant_id', parsed.production_plant_id).maybeSingle();
     if (plantError) return { status: 500, body: { error: plantError.message } };

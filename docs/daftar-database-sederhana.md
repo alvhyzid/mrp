@@ -273,12 +273,15 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 - ID Work Order (work_order_id) · ID Perusahaan (company_id) · ID Lokasi Pabrik (production_plant_id) · ID Item (item_id) · ID BOM (bom_id) · ID Routing (routing_id)
 - ID SO Line Asal — nullable, 1 SO line bisa banyak WO (sales_order_line_id)
 - Jumlah Rencana (planned_qty)
-- Status: rencana/berjalan/dijeda/selesai/batal (status)
+- Status: rencana/berjalan/dijeda/selesai/batal (status) — berpindah OTOMATIS ke berjalan saat batch pertama dimulai, ke selesai/dijeda/batal HANYA manual oleh PPIC/supervisor (dijeda/batal wajib alasan)
+- Alasan Dijeda/Batal — wajib diisi, ditimpa tiap transisi baru (status_reason)
 - Prioritas: rendah/normal/tinggi/mendesak (priority)
 - Jadwal Mulai (scheduled_start) · Jadwal Selesai (scheduled_end) · Waktu Aktual Mulai (actual_start_at) · Waktu Aktual Selesai (actual_completed_at)
 - ID Subkontraktor (subcontractor_id)
 
 > WO dianggap "siap mulai" kalau tidak ada `system_alerts` terbuka yang terkait WO itu (bahan kurang/SDM kurang/mesin rusak) — mekanisme dependency otomatis, bukan link manual antar-WO.
+
+> WO yang sudah selesai/batal TIDAK BISA dibuatkan batch baru (ditolak database) — supaya tidak ada bahan gudang yang diam-diam terpakai untuk order yang seharusnya sudah tuntas. Jalan keluarnya: Admin Perusahaan atau Manajer Produksi bisa "buka kembali" WO itu dengan alasan wajib, tercatat permanen di **Database Riwayat Buka Kembali WO** (`work_order_reopen_log`) — siapa, kapan, alasan, status sebelumnya; catatan ini tidak pernah bisa dihapus/ditimpa.
 
 **Database Batch Produksi** (`production_batches`)
 - ID Batch (production_batch_id) · ID Perusahaan (company_id) · ID Work Order (work_order_id) · Nomor Batch — rekomendasi otomatis, boleh ditimpa staf dengan format sendiri, unik per PERUSAHAAN (batch_number)

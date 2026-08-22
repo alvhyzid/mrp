@@ -557,9 +557,7 @@ export default function BuildTasksPage() {
                                 <span className="font-mono font-semibold text-foreground">{t.task_code}</span>
                                 <span className="font-medium text-foreground">{t.name}</span>
                                 {/* STATUS -- satu label paling menonjol, warna = sumber kebenaran status task ini. */}
-                                <Badge variant={STATUS_BADGE[t.status]} className={STATUS_EXTRA_CLASS[t.status]}>
-                                  {STATUS_LABELS[t.status]}
-                                </Badge>
+                                <Badge variant={STATUS_BADGE[t.status]} className={STATUS_EXTRA_CLASS[t.status]}>{STATUS_LABELS[t.status]}</Badge>
                                 {/* URGENSI -- outline tipis + label kecil, SENGAJA tidak sederajat visual dengan status
                                     (lihat garis tepi kiri kartu untuk 2 tingkat teratas). Skala berbeda dari status,
                                     walau kebetulan salah satu nilai lama ('ditunda_sadar') pernah memakai istilah yang

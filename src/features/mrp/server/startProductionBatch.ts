@@ -55,10 +55,21 @@ export async function startProductionBatch(request: NextRequest): Promise<ApiRes
 
     const { data: workOrder, error: woError } = await adminClient
       .from('work_orders')
-      .select('work_order_id, bom_id, routing_id')
+      .select('work_order_id, bom_id, routing_id, status')
       .eq('work_order_id', batch.work_order_id)
       .maybeSingle();
     if (woError) return { status: 500, body: { error: woError.message } };
+
+    // PRD-12 (22 Agu 2026) -- planned -> in_progress OTOMATIS saat batch
+    // PERTAMA di bawah WO ini dimulai. Hanya menyentuh WO yang masih
+    // 'planned' -- kalau sudah in_progress (batch kedua dst, atau habis
+    // dibuka kembali dari completed/cancelled), tidak ada yang perlu
+    // diubah. enforce_status_transition() di database yang menegakkan
+    // transisi ini sah (sudah terdaftar sejak awal di status_transition_rules).
+    if (workOrder?.status === 'planned') {
+      const { error: woStatusError } = await adminClient.from('work_orders').update({ status: 'in_progress' }).eq('work_order_id', batch.work_order_id);
+      if (woStatusError) return { status: 400, body: { error: woStatusError.message } };
+    }
 
     const snapshotFields: Record<string, unknown> = { status: 'in_progress', started_at: new Date().toISOString() };
 

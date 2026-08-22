@@ -277,7 +277,13 @@ Konfirmasi kedatangan barang oleh Warehouse — memicu stok bertambah dan otomat
 - Header: `goods_receipt_id`, `company_id`, `purchase_order_id`, `production_plant_id`, `received_date`, `received_by` (→ `user_id`), `status`
 - Line: `goods_receipt_line_id`, `goods_receipt_id`, `purchase_order_line_id`, `item_id`, `qty_received` (dalam `purchase_uom`, sistem otomatis konversi ke `base_uom` pakai `uom_conversion_factor` saat membuat `lot` baru), `lot_id` (lot baru yang tercipta dari penerimaan ini)
 
-> **Alur konversi satuan:** Purchasing input PO & terima invoice sesuai satuan beli (mis. "275kg, Rp 268.000/kg"). Saat Warehouse konfirmasi barang datang, sistem otomatis konversi ke satuan dasar (275.000 gram, Rp 268/gram) dan itulah yang tersimpan di `lots.unit_cost` — BOM & pemakaian produksi otomatis cocok karena sama-sama `base_uom`.
+> **Alur konversi satuan:** Purchasing input PO & terima invoice sesuai satuan beli (mis. "275kg, Rp 268.000/kg"). Saat Warehouse konfirmasi barang datang, sistem otomatis konversi ke satuan dasar (275.000 gram, Rp 268/gram) dan itulah yang tersimpan di `lots.unit_cost` — BOM & pemakaian produksi otomatis cocok karena sama-sama `base_uom`. Harga lot berasal dari `purchase_order_lines.unit_price` (harga TRANSAKSI PO sungguhan) — BUKAN dari `supplier_item_prices.reference_price` (harga acuan, cuma perkiraan sebelum PO terbit).
+
+> **Penerimaan melebihi qty dipesan (BAGIAN 3, 22 Agu 2026, keputusan pemilik produk):** DIIZINKAN, bukan gerbang keras — barang sudah ADA secara fisik di gudang saat sistem tahu, menolak di database cuma bikin kelebihan itu tidak tercatat (lebih berbahaya). Kelebihan tetap masuk stok penuh (lot dibuat sesuai qty yang BENAR-BENAR diterima) DAN dicatat tersendiri di `goods_receipt_overage_log` (siapa/kapan/qty dipesan/qty diterima total/qty lebih) — kelebihan menyangkut uang (tagihan supplier lebih besar dari PO), Finance perlu tahu sebelum membayar. Respons API menyertakan `warnings` menyebut angka persis. Layar untuk melihat daftar kelebihan ini BELUM dibangun (menunggu cetakan UX) — baru lapisan data & deteksi.
+
+### `goods_receipt_overage_log`
+Jejak tiap kali penerimaan barang melebihi qty dipesan pada 1 baris PO (lihat catatan di atas).
+- `goods_receipt_overage_log_id`, `company_id`, `goods_receipt_line_id`, `purchase_order_line_id`, `item_id`, `qty_ordered`, `qty_received_total`, `qty_over`, `received_by` (→ `user_id`), `received_at`
 
 ### `customers`
 Order bisa dari perusahaan (dengan PIC yang bisa beda-beda tiap order) atau perorangan langsung.
@@ -424,11 +430,18 @@ Perintah produksi (SPK) — jantung eksekusi MRP, level rencana besar (bisa dipe
 - `sales_order_line_id` (nullable — 1 SO line bisa dipecah jadi banyak WO)
 - `planned_qty`
 - `status` (planned / in_progress / paused / completed / cancelled) — `paused` dipakai saat WO dihentikan sementara (mis. dialihkan ke pekerjaan lain mendesak), bisa dilanjutkan lagi tanpa kehilangan progres
+- `status_reason` (nullable, PRD-12) — alasan WAJIB untuk transisi ke `paused`/`cancelled` (ditolak di server kalau kosong), ditimpa tiap transisi baru (bukan riwayat — kalau butuh jejak tak-boleh-ditimpa, lihat `work_order_reopen_log` di bawah, itu beda kelas kebutuhan)
 - `priority` (mis. low / normal / high / urgent — bantu PPIC tentukan mana yang didahulukan saat rebutan sumber daya)
 - `scheduled_start`, `scheduled_end`, `actual_start_at`, `actual_completed_at`
 - `subcontractor_id` (nullable, disiapkan untuk nanti)
 
+> **`status` sekarang HIDUP (PRD-12, 22 Agu 2026)** — sebelumnya kolom ini tidak pernah diperbarui kode manapun (frozen di `planned` sejak baris dibuat), padahal pagar keamanan `createProductionBatch.ts` ("tolak batch baru bila WO selesai/batal") sudah lama menunggu di sana, tidak pernah aktif. Sekarang: `planned→in_progress` OTOMATIS saat batch pertama WO ini dimulai (`startProductionBatch.ts`); `→completed`/`paused`/`cancelled` MANUAL oleh PPIC/supervisor (`setWorkOrderStatus.ts`, 2 target terakhir wajib `status_reason`). Pagar `createProductionBatch.ts` (tolak batch baru pada WO `completed`/`cancelled`) BLOKIR KERAS di database, bukan peringatan — sengaja beda dari pola peringatan+jejak yang biasa dipakai di tempat lain, karena taruhannya konsumsi bahan sungguhan dari gudang. Jalan keluar: `reopenWorkOrder.ts`, digerbang HANYA `company_admin`/`production_manager`, wajib alasan, riwayat di `work_order_reopen_log`.
+
 > **"Ready to Start" / dependency (ala Jira, tapi otomatis):** WO dianggap siap mulai HANYA kalau tidak ada `system_alerts` berstatus `open` yang terkait `work_order_id` itu (kekurangan bahan, SDM belum lengkap, mesin rusak). Kalau masih ada alert terbuka → WO otomatis "Blocked" dengan alasan spesifik ditampilkan. Ini TIDAK perlu link manual antar-WO seperti Jira — cukup pantau status alert yang sudah ada. Kasus WO saling bergantung (mis. WO Gummy butuh Base Gelatin dari WO lain yang belum selesai) otomatis tertangani lewat alert kekurangan bahan yang sama, tanpa perlu definisikan "WO A depends on WO B" secara eksplisit.
+
+### `work_order_reopen_log`
+Jejak APPEND-ONLY (PRD-12, 22 Agu 2026) tiap kali Work Order `completed`/`cancelled` dibuka kembali menjadi `in_progress` — tidak ada jalur update/delete sama sekali, bahkan dari service-role (berapa kali sebuah WO dibuka kembali adalah informasi berguna).
+- `work_order_reopen_log_id`, `company_id`, `work_order_id`, `previous_status` (completed / cancelled), `reopened_by` (→ `user_id`), `reopened_at`, `reason` (wajib, tidak boleh kosong)
 
 ### `work_order_outputs`
 Satu BATCH bisa menghasilkan lebih dari satu output (produk jadi + sisa reprocessable).

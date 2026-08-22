@@ -21,7 +21,7 @@ export async function listCustomerPurchaseOrders(request: NextRequest): Promise<
     const { data: pos, error: posError } = await adminClient
       .from('customer_purchase_orders')
       .select(
-        'customer_purchase_order_id, customer_id, po_number, po_date, requested_ship_date, pic_name, pic_position, pic_phone, pic_email, status, payment_terms, payment_status, processed_by, processed_at, created_at'
+        'customer_purchase_order_id, customer_id, po_number, po_date, requested_ship_date, pic_name, pic_position, pic_phone, pic_email, status, payment_terms, payment_status, processed_by, processed_at, created_at, customer_name_snapshot, customer_billing_address_snapshot, customer_npwp_snapshot'
       )
       .eq('company_id', appUser.company_id)
       .order('created_at', { ascending: false });
@@ -87,7 +87,11 @@ export async function listCustomerPurchaseOrders(request: NextRequest): Promise<
       return {
         customer_purchase_order_id: po.customer_purchase_order_id,
         customer_id: po.customer_id,
-        customer_name: customer?.name ?? null,
+        // PMB-07a — utamakan identitas beku saat PO terbit; fallback ke join hidup
+        // HANYA untuk PO lama yang dibuat sebelum kolom snapshot ada (snapshot null).
+        customer_name: po.customer_name_snapshot ?? customer?.name ?? null,
+        customer_billing_address: po.customer_billing_address_snapshot ?? null,
+        customer_npwp: po.customer_npwp_snapshot ?? null,
         customer_type: customer?.customer_type ?? null,
         po_number: po.po_number,
         po_date: po.po_date,

@@ -20,7 +20,7 @@ export async function listSalesOrders(request: NextRequest): Promise<ApiResult> 
 
     const { data: salesOrders, error: soError } = await adminClient
       .from('sales_orders')
-      .select('sales_order_id, so_number, customer_id, customer_purchase_order_id, production_plant_id, status, created_at')
+      .select('sales_order_id, so_number, customer_id, customer_purchase_order_id, production_plant_id, status, created_at, customer_name_snapshot, customer_billing_address_snapshot, customer_npwp_snapshot')
       .eq('company_id', appUser.company_id)
       .order('created_at', { ascending: false });
 
@@ -90,7 +90,11 @@ export async function listSalesOrders(request: NextRequest): Promise<ApiResult> 
       sales_order_id: so.sales_order_id,
       so_number: so.so_number,
       customer_id: so.customer_id,
-      customer_name: customersById.get(so.customer_id)?.name ?? null,
+      // PMB-07a — utamakan identitas beku saat SO terbit (diwarisi dari CPO);
+      // fallback ke join hidup HANYA untuk SO lama sebelum kolom snapshot ada.
+      customer_name: so.customer_name_snapshot ?? customersById.get(so.customer_id)?.name ?? null,
+      customer_billing_address: so.customer_billing_address_snapshot ?? null,
+      customer_npwp: so.customer_npwp_snapshot ?? null,
       customer_purchase_order_id: so.customer_purchase_order_id,
       po_number: so.customer_purchase_order_id ? (posById.get(so.customer_purchase_order_id)?.po_number ?? null) : null,
       production_plant_id: so.production_plant_id,

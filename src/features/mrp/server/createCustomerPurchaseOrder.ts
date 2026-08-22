@@ -47,7 +47,7 @@ export async function createCustomerPurchaseOrder(request: NextRequest): Promise
 
     const { data: customer, error: customerError } = await adminClient
       .from('customers')
-      .select('customer_id')
+      .select('customer_id, name, billing_address, npwp')
       .eq('customer_id', input.customer_id)
       .eq('company_id', appUser.company_id)
       .maybeSingle();
@@ -96,7 +96,11 @@ export async function createCustomerPurchaseOrder(request: NextRequest): Promise
           pic_email: input.pic_email,
           payment_terms: input.payment_terms,
           status: 'new',
-          idempotency_key: input.idempotency_key
+          idempotency_key: input.idempotency_key,
+          // PMB-07a — identitas mitra dibekukan saat PO terbit, pola sama shipments.
+          customer_name_snapshot: customer.name,
+          customer_billing_address_snapshot: customer.billing_address,
+          customer_npwp_snapshot: customer.npwp
         }
       ])
       .select('customer_purchase_order_id')

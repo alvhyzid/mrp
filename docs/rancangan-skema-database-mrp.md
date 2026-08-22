@@ -269,6 +269,7 @@ Daftar "bahan yang dipasok" — hubungan BANYAK-ke-BANYAK `suppliers` × `items`
 ### `purchase_orders` & `purchase_order_lines`
 PO KITA ke supplier (beda dari `customer_purchase_orders`). Form "Create PO" di dashboard Purchasing punya field **alamat kirim** berupa pilihan `production_plant_id` — begitu dipilih, sistem otomatis tahu barang ini nanti masuk gudang plant mana saat diterima.
 - Header: `purchase_order_id`, `company_id`, `supplier_id`, `production_plant_id` (alamat kirim/tujuan), `status`, `order_date`, `expected_date`
+- `supplier_name_snapshot`, `supplier_address_snapshot`, `supplier_npwp_snapshot` (nullable, PMB-07a, 22 Agu 2026) — **identitas supplier DIBEKUKAN PERSIS saat PO terbit** (`createPurchaseOrder.ts`), pola sama snapshot shipment Alur 1. NULL untuk PO lama dari sebelum kolom ini ada — `listPurchaseOrders.ts` fallback ke join hidup HANYA untuk kasus itu.
 - Line: `purchase_order_line_id`, `purchase_order_id`, `item_id`, `qty_ordered` (dalam `purchase_uom`), `qty_received`, `unit_price` (dalam `purchase_uom` — Purchasing boleh lihat & input ini, karena memang tugas mereka bertransaksi, lihat "Kontrol Akses Data Finansial")
 
 ### `goods_receipts` & `goods_receipt_lines`
@@ -294,6 +295,7 @@ PO dari client — TERPISAH dari `sales_orders`. Statusnya berjalan sebelum jadi
 - `payment_terms` (full / tempo), `payment_status` (pending / partial / confirmed)
 - `processed_by` (nullable, → `user_id`), `processed_at`
 - `notes` (nullable, 27 Agu 2026) — konteks non-finansial yang tidak tertampung kolom lain (mis. siapa yang mengajukan dari sisi internal, catatan penyesuaian tanggal dokumen). Ditambahkan saat kerangka studi kasus MLVT ETAWAFIT dibangun (`20260827120000_mlvt_case_study_skeleton.sql`).
+- `customer_name_snapshot`, `customer_billing_address_snapshot`, `customer_npwp_snapshot` (nullable, PMB-07a, 22 Agu 2026) — **identitas client DIBEKUKAN PERSIS saat PO client terbit** (`createCustomerPurchaseOrder.ts`), pola sama snapshot shipment Alur 1. NULL untuk PO lama dari sebelum kolom ini ada — `listCustomerPurchaseOrders.ts` fallback ke join hidup HANYA untuk kasus itu.
 - Line: `customer_purchase_order_line_id`, `customer_purchase_order_id`, `item_id` (SETIAP VARIAN kemasan/ukuran = `item_id` terpisah), `qty_ordered`, `unit_price` (harga jual disepakati — nilai sensitif, lihat "Kontrol Akses Data Finansial")
 
 ### `customer_po_approvals`
@@ -311,6 +313,7 @@ Tercipta OTOMATIS saat `customer_purchase_orders` diproses — komitmen produksi
 - Header: `sales_order_id`, `company_id`, `customer_purchase_order_id`, `customer_id`
 - `so_number` (nomor SO internal yang bisa dibaca manusia, format sesuai kebiasaan Anda mis. "020/2-ITM/2026" — auto-generated saat "Process" diklik; BEDA dari `customer_purchase_orders.po_number` yang merujuk nomor PO milik client)
 - `production_plant_id` (dipilih saat "Process"), `status` (confirmed / in_production / completed / cancelled), `created_at`
+- `customer_name_snapshot`, `customer_billing_address_snapshot`, `customer_npwp_snapshot` (nullable, PMB-07a, 22 Agu 2026) — **DIWARISI dari snapshot `customer_purchase_orders` yang sudah beku saat CPO terbit** (`process_customer_purchase_order()` RPC, migrasi `20260827480000`), BUKAN query ulang ke `customers` saat SO diproses — supaya SO konsisten dengan identitas yang tertulis di PO Klien aslinya. NULL untuk SO lama dari sebelum kolom ini ada.
 - Line: `sales_order_line_id`, `sales_order_id`, `item_id`, `qty_ordered`, `unit_price` (disalin dari PO)
 
 > **Satu SO line bisa punya BANYAK Work Order** — PPIC bebas memecah 1 SO line jadi beberapa WO (mis. per hari/per kapasitas produksi: WO day 1, day 2, day 3), tidak harus 1:1. Dashboard PO tetap menjumlahkan total progres dari semua WO yang terhubung ke SO line yang sama.

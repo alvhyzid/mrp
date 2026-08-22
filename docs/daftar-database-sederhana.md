@@ -170,6 +170,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 - ID PO (purchase_order_id) · ID Perusahaan (company_id) · ID Supplier (supplier_id)
 - ID Lokasi Pabrik — alamat kirim, tujuan gudang (production_plant_id)
 - Status (status) · Tanggal Order (order_date) · Tanggal Diharapkan (expected_date)
+- Nama/Alamat/NPWP Supplier — beku saat PO terbit, PMB-07a 22 Agu 2026 (supplier_name_snapshot/supplier_address_snapshot/supplier_npwp_snapshot)
 
 **Database Detail Item PO ke Supplier** (`purchase_order_lines`)
 - ID Baris (purchase_order_line_id) · ID PO (purchase_order_id) · ID Item (item_id) · Jumlah Dipesan dalam satuan beli (qty_ordered) · Jumlah Diterima (qty_received)
@@ -196,6 +197,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 - Diproses Oleh (processed_by) · Waktu Diproses (processed_at)
 - Kunci Anti-Duplikat — nullable, cegah submit ganda (idempotency_key)
 - Catatan — nullable, 27 Agu 2026, konteks non-finansial yang tidak tertampung kolom lain (mis. siapa yang mengajukan dari sisi internal) (notes)
+- Nama/Alamat/NPWP Client — beku saat PO terbit, PMB-07a 22 Agu 2026 (customer_name_snapshot/customer_billing_address_snapshot/customer_npwp_snapshot)
 
 **Database Detail Item PO dari Client** (`customer_purchase_order_lines`)
 - ID Baris (customer_purchase_order_line_id) · ID PO Client (customer_purchase_order_id) · ID Item (item_id) · Jumlah Dipesan (qty_ordered)
@@ -211,6 +213,7 @@ Dokumen pendamping dari `rancangan-skema-database-mrp.md`. Tiap tabel ditulis se
 - Nomor SO Internal — format sendiri, beda dari nomor PO client (so_number)
 - ID Lokasi Pabrik — dipilih wajib saat "Process" (production_plant_id)
 - Status (status) · Tanggal Dibuat (created_at)
+- Nama/Alamat/NPWP Client — diwarisi dari beku PO Client asal, PMB-07a 22 Agu 2026 (customer_name_snapshot/customer_billing_address_snapshot/customer_npwp_snapshot)
 - Kunci Anti-Duplikat — nullable, diisi otomatis server (bukan client) supaya double-click "Process" tidak bikin 2 SO untuk 1 PO yang sama (idempotency_key)
 
 **Database Detail Item SO** (`sales_order_lines`)

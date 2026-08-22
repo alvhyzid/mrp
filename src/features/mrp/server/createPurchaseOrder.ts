@@ -24,7 +24,7 @@ export async function createPurchaseOrder(request: NextRequest): Promise<ApiResu
 
     const adminClient = getAdminClient();
 
-    const { data: supplier, error: supplierError } = await adminClient.from('suppliers').select('supplier_id, company_id').eq('supplier_id', parsed.supplier_id).maybeSingle();
+    const { data: supplier, error: supplierError } = await adminClient.from('suppliers').select('supplier_id, company_id, name, address, npwp').eq('supplier_id', parsed.supplier_id).maybeSingle();
     if (supplierError) return { status: 500, body: { error: supplierError.message } };
     if (!supplier || supplier.company_id !== appUser.company_id) return { status: 400, body: { error: 'Supplier tidak valid.' } };
 
@@ -40,7 +40,17 @@ export async function createPurchaseOrder(request: NextRequest): Promise<ApiResu
 
     const { data: po, error: poError } = await adminClient
       .from('purchase_orders')
-      .insert([{ company_id: appUser.company_id, supplier_id: parsed.supplier_id, production_plant_id: parsed.production_plant_id, status: 'ordered', expected_date: parsed.expected_date }])
+      .insert([{
+        company_id: appUser.company_id,
+        supplier_id: parsed.supplier_id,
+        production_plant_id: parsed.production_plant_id,
+        status: 'ordered',
+        expected_date: parsed.expected_date,
+        // PMB-07a — identitas mitra dibekukan saat PO terbit, pola sama shipments.
+        supplier_name_snapshot: supplier.name,
+        supplier_address_snapshot: supplier.address,
+        supplier_npwp_snapshot: supplier.npwp
+      }])
       .select('purchase_order_id')
       .single();
     if (poError) return { status: 500, body: { error: poError.message } };

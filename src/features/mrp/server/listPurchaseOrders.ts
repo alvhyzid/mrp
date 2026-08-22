@@ -21,7 +21,7 @@ export async function listPurchaseOrders(request: NextRequest): Promise<ApiResul
 
     const { data: pos, error: poError } = await adminClient
       .from('purchase_orders')
-      .select('purchase_order_id, supplier_id, production_plant_id, status, order_date, expected_date')
+      .select('purchase_order_id, supplier_id, production_plant_id, status, order_date, expected_date, supplier_name_snapshot, supplier_address_snapshot, supplier_npwp_snapshot')
       .eq('company_id', appUser.company_id)
       .order('order_date', { ascending: false });
     if (poError) return { status: 500, body: { error: poError.message } };
@@ -58,7 +58,11 @@ export async function listPurchaseOrders(request: NextRequest): Promise<ApiResul
 
     const result = pos.map((po) => ({
       purchase_order_id: po.purchase_order_id,
-      supplier_name: suppliersById.get(po.supplier_id)?.name ?? null,
+      // PMB-07a — utamakan identitas beku saat PO terbit; fallback ke join hidup
+      // HANYA untuk PO lama yang dibuat sebelum kolom snapshot ada (snapshot null).
+      supplier_name: po.supplier_name_snapshot ?? suppliersById.get(po.supplier_id)?.name ?? null,
+      supplier_address: po.supplier_address_snapshot ?? null,
+      supplier_npwp: po.supplier_npwp_snapshot ?? null,
       production_plant_name: plantsById.get(po.production_plant_id)?.name ?? null,
       status: po.status,
       status_label: statusLabels[po.status] ?? po.status,

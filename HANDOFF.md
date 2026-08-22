@@ -2,6 +2,16 @@
 
 Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`). Tiap sesi Claude Code WAJIB baca ini dulu sebelum mulai, dan memperbarui bagian relevan begitu sesi selesai. Klaim di sini harus tetap diverifikasi ulang, bukan otomatis dipercaya — HANDOFF ini rangkuman, bukan pengganti bukti.
 
+## PMB-07a — Pembekuan Identitas Mitra di Dokumen Terbit — 22 Agu 2026 — SELESAI
+
+Arkeologi dikonfirmasi lewat baca skema: `purchase_orders`/`customer_purchase_orders`/`sales_orders` sebelum ini HANYA menyimpan referensi (`supplier_id`/`customer_id`) — sama kelas masalah dengan `shipments` sebelum Alur 1. Migrasi `20260827480000` menambah kolom snapshot (`supplier_name_snapshot`/`supplier_address_snapshot`/`supplier_npwp_snapshot` di `purchase_orders`; `customer_name_snapshot`/`customer_billing_address_snapshot`/`customer_npwp_snapshot` di `customer_purchase_orders` dan `sales_orders`). `createPurchaseOrder.ts`/`createCustomerPurchaseOrder.ts` mengisi snapshot saat dokumen terbit; `process_customer_purchase_order()` (RPC, signature TIDAK berubah — ACL tetap terjaga) **mewarisi** snapshot dari CPO ke SO, bukan query ulang `customers` — supaya SO konsisten dengan identitas yang tertulis di PO Klien aslinya. Jalur baca (`listPurchaseOrders.ts`/`listCustomerPurchaseOrders.ts`/`listSalesOrders.ts`) mengutamakan snapshot, fallback join hidup HANYA untuk dokumen lama (snapshot NULL).
+
+**Dibuktikan lewat test permanen baru** `tests/pmb07a_identity_snapshot.test.ts` (2 test): ubah alamat supplier/client SETELAH dokumen terbit → dokumen lama TIDAK berubah, dokumen baru pakai alamat baru — termasuk Sales Order yang diproses dari CPO (mewarisi snapshot CPO, bukan snapshot customer terkini).
+
+**Insiden selama pengerjaan (bukan bug PMB-07a)**: fixture test sempat bentrok antar-run (persis pola QA-01 — lihat entri INF-07 di atas) karena `afterAll` awal file test ini lupa membersihkan `status_transition_log` (FK dari `changed_by`→`users`) sebelum menghapus `users`, menyebabkan cleanup gagal sebagian dan meninggalkan fixture untuk run berikutnya. Sudah diperbaiki di file test itu sendiri; dijalankan ulang bersih 2x berturut-turut untuk konfirmasi.
+
+**Test: 40 file/250 test → 41 file/252 test** (+1 file, +2 test), semua hijau. Docs (`rancangan-skema-database-mrp.md`, `daftar-database-sederhana.md`) diperbarui untuk ketiga tabel.
+
 ## Pelajaran Tetap: Periksa Kondisi NYATA di Database, Bukan Cuma Berkas Migrasi (22 Agu 2026)
 
 Memeriksa berkas migrasi TIDAK sama dengan memeriksa kondisi sungguhan di database. Tiga migrasi (`compute_production_batch_labor_cost`, lihat Bagian 2 Sapu Ulang REVOKE di bawah) pernah terlihat seperti celah keamanan terbuka (tidak ada baris `revoke` sama sekali) padahal aman. Sebaliknya, migrasi yang terlihat benar bisa saja sudah tertimpa jalur lain. **Setiap audit keamanan wajib memeriksa kondisi NYATA di database** (mis. lewat `debug_list_function_grants()`), bukan hanya isi berkas.

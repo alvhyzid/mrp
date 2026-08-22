@@ -2,6 +2,14 @@
 
 Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`). Tiap sesi Claude Code WAJIB baca ini dulu sebelum mulai, dan memperbarui bagian relevan begitu sesi selesai. Klaim di sini harus tetap diverifikasi ulang, bukan otomatis dipercaya — HANDOFF ini rangkuman, bukan pengganti bukti.
 
+## FAKTA TERVERIFIKASI — Transfer Project Supabase Antar Organisasi Mempertahankan Project ID (23 Agu 2026, AA.6)
+
+**Dibuktikan LANGSUNG lewat transfer sungguhan hari ini** (project data nyata `kfvtrwuuqcjfkkuqizxt`, dari organisasi lama ke organisasi "FABRIX", paket Pro) — **BUKAN dari dokumentasi resmi**, karena halaman resmi [`supabase.com/docs/guides/platform/project-transfer`](https://supabase.com/docs/guides/platform/project-transfer) TIDAK menyatakan ini secara eksplisit (hanya menyiratkan lewat framing "downtime singkat 1-2 menit" + penagihan menempel ke project yang sama, kontras dengan halaman "migrating projects" yang eksplisit soal project BARU dengan ref/kunci baru).
+
+**Diverifikasi pasca-transfer, ketiganya LULUS**: (1) Project ID tetap `kfvtrwuuqcjfkkuqizxt` (dikonfirmasi pemilik produk langsung dari dashboard). (2) Jumlah baris SELURUH 19 tabel kunci identik persis sebelum→sesudah (companies 7→7, employees 30→30, users 8→8, dst — 0 perbedaan). (3) `anon key` dan `service role key` yang SAMA (dari `.env.local`, tidak diubah) TERBUKTI masih valid — login sungguhan sebagai tenant uji (`company.b@debug.mrp`) berhasil, query ber-RLS setelah login berhasil, query lewat service role key berhasil — semua tanpa mengubah satu kunci pun.
+
+**Berguna untuk masa depan**: transfer project staging (`mrp-rebuild-test-2A`) dan transfer project tenant lain kelak bisa mengikuti prosedur yang SAMA dengan keyakinan ini SUDAH TERBUKTI bekerja di project ini, bukan lagi cuma dugaan dari framing dokumentasi.
+
 ## PELAJARAN TETAP — Pengaman Baris vs Pengaman Project (23 Agu 2026, V.4)
 
 > "Sesi 0 menyimpulkan nol dari 32 file test menulis ke data PT ITM, dan kesimpulan itu BENAR. Justru karena benar, tidak ada yang bertanya apakah test-nya berjalan di PROJECT yang tepat. Pengaman melindungi BARIS, tidak ada yang melindungi PROJECT — dan pertanyaan itu tidak pernah diajukan selama tiga minggu.

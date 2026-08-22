@@ -2,6 +2,14 @@
 
 Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`). Tiap sesi Claude Code WAJIB baca ini dulu sebelum mulai, dan memperbarui bagian relevan begitu sesi selesai. Klaim di sini harus tetap diverifikasi ulang, bukan otomatis dipercaya — HANDOFF ini rangkuman, bukan pengganti bukti.
 
+## PELAJARAN TETAP — Pengaman Baris vs Pengaman Project (23 Agu 2026, V.4)
+
+> "Sesi 0 menyimpulkan nol dari 32 file test menulis ke data PT ITM, dan kesimpulan itu BENAR. Justru karena benar, tidak ada yang bertanya apakah test-nya berjalan di PROJECT yang tepat. Pengaman melindungi BARIS, tidak ada yang melindungi PROJECT — dan pertanyaan itu tidak pernah diajukan selama tiga minggu.
+>
+> Pelajaran: jawaban yang benar atas pertanyaan yang sempit bisa menutup pertanyaan yang lebih besar. Setelah sebuah pengaman terbukti bekerja, tanyakan apa yang TIDAK dilindunginya."
+
+Lihat entri "INF-05/INF-07" di bawah untuk kronologi lengkap temuan ini dan perbaikannya (`tests/setup/guardAgainstRealProject.ts`, INF-12).
+
 ## PELAJARAN PENTING — CI Merah 10 Commit Tanpa Disadari (22 Agu 2026), DITUTUP SEBAGAI KELAS (II.1-II.5)
 
 **Kejadian:** commit `f539cd6` s.d. `c328941` (10 commit, ~2,5 jam) membuat job CI "Rebuild Schema from Migrations" merah TANPA disadari — karena verifikasi sesi ini sepanjang itu HANYA mengandalkan `supabase db push --linked` (berhasil ke database yang SUDAH berjalan lama), TIDAK PERNAH mengecek apakah `supabase/migrations/` masih bisa membangun skema dari NOL (yang justru itulah yang diuji CI, lewat `supabase db start`). Kedua hal ini TERBUKTI bisa beda hasil.

@@ -32,7 +32,7 @@ type Supplier = {
   supplied_item_count: number;
   can_delete: boolean;
 };
-type Plant = { production_plant_id: number; name: string };
+type Plant = { production_plant_id: number; name: string; is_active: boolean };
 type ItemOption = { item_id: number; item_code: string | null; name: string; purchase_uom: string; type: string };
 type PoLine = { purchase_order_line_id: number; item_code: string | null; item_name: string | null; purchase_uom: string | null; qty_ordered: number; qty_received: number; unit_price: number | null };
 type PurchaseOrder = { purchase_order_id: number; supplier_name: string | null; identity_predates_snapshot: boolean; production_plant_name: string | null; status: string; status_label: string; order_date: string; expected_date: string | null; lines: PoLine[] };
@@ -919,11 +919,13 @@ export default function PurchasingPage() {
                       <SelectValue placeholder="Pilih lokasi..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {plants.map((p) => (
-                        <SelectItem key={p.production_plant_id} value={String(p.production_plant_id)}>
-                          {p.name}
-                        </SelectItem>
-                      ))}
+                      {plants
+                        .filter((p) => p.is_active)
+                        .map((p) => (
+                          <SelectItem key={p.production_plant_id} value={String(p.production_plant_id)}>
+                            {p.name}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>

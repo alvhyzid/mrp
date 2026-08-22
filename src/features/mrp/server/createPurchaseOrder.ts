@@ -28,9 +28,10 @@ export async function createPurchaseOrder(request: NextRequest): Promise<ApiResu
     if (supplierError) return { status: 500, body: { error: supplierError.message } };
     if (!supplier || supplier.company_id !== appUser.company_id) return { status: 400, body: { error: 'Supplier tidak valid.' } };
 
-    const { data: plant, error: plantError } = await adminClient.from('production_plants').select('production_plant_id, company_id').eq('production_plant_id', parsed.production_plant_id).maybeSingle();
+    const { data: plant, error: plantError } = await adminClient.from('production_plants').select('production_plant_id, company_id, name, is_active').eq('production_plant_id', parsed.production_plant_id).maybeSingle();
     if (plantError) return { status: 500, body: { error: plantError.message } };
     if (!plant || plant.company_id !== appUser.company_id) return { status: 400, body: { error: 'Lokasi pabrik tidak valid.' } };
+    if (!plant.is_active) return { status: 400, body: { error: `Pabrik "${plant.name}" tidak aktif — tidak bisa dipilih sebagai gudang penerima PO.` } };
 
     const itemIds = Array.from(new Set(parsed.lines.map((l) => l.item_id)));
     const { data: items, error: itemsError } = await adminClient.from('items').select('item_id, company_id').in('item_id', itemIds);

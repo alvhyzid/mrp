@@ -229,4 +229,33 @@ describe('PMB-07a — Pembekuan Identitas Mitra di Dokumen Terbit (PO Supplier, 
     expect(so1.customer_billing_address).toBe('Alamat Billing Lama');
     expect(so1.customer_npwp).toBe('22.222.222.2-222.222');
   });
+
+  it('PMB-07c: PO Supplier ke plant yang tidak aktif -> ditolak server dengan pesan jelas menyebut nama plant', async () => {
+    const { data: supplier } = await adminClient
+      .from('suppliers')
+      .insert([{ company_id: companyId, name: 'Supplier Uji PlantNonaktif', address: 'Alamat', npwp: '44.444.444.4-444.444' }])
+      .select('supplier_id')
+      .single();
+
+    const { data: inactivePlant } = await adminClient
+      .from('production_plants')
+      .insert([{ company_id: companyId, name: 'Plant Nonaktif Uji PMB07c', is_active: false, center_lat: -7.9, center_lng: 112.6, geofence_radius_meters: 150 }])
+      .select('production_plant_id')
+      .single();
+
+    const rejectedResult = await createPurchaseOrder(
+      makeRequest('http://localhost/api/purchase-orders', adminToken, 'POST', {
+        supplier_id: supplier!.supplier_id,
+        production_plant_id: inactivePlant!.production_plant_id,
+        expected_date: null,
+        lines: [{ item_id: itemId, qty_ordered: 1, unit_price: 1000 }]
+      })
+    );
+    expect(rejectedResult.status).toBe(400);
+    expect((rejectedResult.body as any).error).toContain('Plant Nonaktif Uji PMB07c');
+    expect((rejectedResult.body as any).error).toContain('tidak aktif');
+
+    await adminClient.from('production_plants').delete().eq('production_plant_id', inactivePlant!.production_plant_id);
+    await adminClient.from('suppliers').delete().eq('supplier_id', supplier!.supplier_id);
+  });
 });

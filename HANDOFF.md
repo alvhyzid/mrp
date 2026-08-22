@@ -24,6 +24,21 @@ Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`
 **Cara kerja praktis mengikuti aturan ini**: cek status CI (`https://api.github.com/repos/alvhyzid/mrp/actions/runs`) setelah SETIAP push, jangan menunggu diminta. Kalau menulis migrasi yang menyisipkan/mengubah data (bukan cuma DDL) dengan `company_id` tertentu, JANGAN hardcode literal — pakai pola aman (lookup dinamis + no-op kalau tidak ada), dan sekarang ada pengawas otomatis (`tests/migration_hardcoded_tenant_id_watchdog.test.ts`) yang akan menolak migrasi baru yang melanggar pola ini sebelum sempat mencapai CI.
 
 
+## AUD-11 — Sapu Penuh checklist-fase-spec-vs-fabrix.md (47 Baris) — 22 Agu 2026 — SELESAI
+
+Seluruh 47 baris tabel status (dokumen menghitung "43" di rekap ringkasnya sendiri — pengecekan baris-per-baris tabel menghasilkan 47, disapu semuanya) diperiksa satu per satu terhadap kondisi terkini dan `build_tasks`.
+
+**3 baris genuinely belum pernah jadi task, dicatat:**
+- `MST-14` — kolom `safety_stock` per item (Material Requirement) — sudah "disepakati sebagai tumpangan murah" sejak 20 Agu, tidak pernah dibangun/dicatat jadi task.
+- `MRG-12` — biaya mesin & overhead dalam Costing — keputusan ditunda-sadar (K3: dibuka setelah 2-3 bulan data) sudah tercatat di dokumen tapi tidak pernah jadi task berdiri sendiri (status `ditunda_sadar`, supaya bisa dibuka kembali sistematis begitu pemicunya terpenuhi, bukan terkubur di dokumen).
+- `FIN-01` — Invoice & Piutang (AR), roadmap FABRIX Finance — disebut eksplisit di dokumen, tidak pernah jadi task.
+
+**1 baris sudah dikerjakan sejak 20 Agu tanpa disadari (TIDAK dijadikan task baru):** "Operation" (`routing_step_standard_crew`) — checklist masih menulis "0 baris di semua tahap", padahal Bagian B (20 Agu) sudah mengisi kru gummy (routing_id 6) & serbuk (routing_id 61/62) — hanya premix yang masih 0 baris, sudah tercakup `MST-11`.
+
+**0 baris kedaluwarsa ditemukan** — dokumen ini sudah relatif mutakhir, keputusan "ditunda sadar"/"ditolak" di dalamnya masih berlaku. Sisanya (~43 baris) sudah tercakup task lain yang sudah ada.
+
+Migrasi: `20260827830000_aud11_sweep_checklist_fase_spec.sql`. Test: tidak ada perubahan kode — tetap 45 file/275 test.
+
 ## BB.2 (Putaran 3) — Sapu HANDOFF.md Baris ~70-1894 — 22 Agu 2026 — SELESAI
 
 Lanjutan dari posisi berhenti putaran 1 (baris 1863). Menyapu ke ATAS sampai baris 1894 ("ATURAN BAKU MIGRASI", batas ronde putaran 1) — mencakup seluruh riwayat Sesi 0/0B/0C/5/6/6A/7, studi kasus MLVT, dan payroll data nyata (20-27 Agu 2026).

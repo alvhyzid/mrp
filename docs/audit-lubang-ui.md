@@ -1,3 +1,19 @@
+# AUD-04/H.4 — Kenapa Halaman Pelanggan Lolos Audit 2 Kali (22 Agu 2026)
+
+**Hipotesis awal task ini SALAH ALAMAT.** Dugaan awal: "dropdown yang berfungsi membuat auditor menganggap sudah ada jalan masuk, padahal itu bukan halaman kelola." Diverifikasi lewat `git show` ke commit asli tiap versi dokumen ini — baris mentah `customers` **SUDAH BENAR sejak audit PERTAMA** (Sesi 5, commit `518bfff`): "hanya dropdown, tanpa halaman daftar" / Edit "TIDAK ADA". **TETAP benar** di audit ulang berbasis introspection skema (Sesi 7, commit `4dd117c`): ditandai `[MASTER]`, "TIDAK ADA halaman daftar", masuk daftar 5 layar master data yang perlu dibangun dari nol. Audit ini **tidak pernah salah membaca datanya** — di kedua versi.
+
+**Akar penyebab sebenarnya, DUA hal berbeda:**
+
+1. **Tidak ada jalur mekanis dari temuan-yang-benar di dokumen ini ke Daftar Tugas Pembangunan (`build_tasks`).** Task yang akhirnya membangun halaman Pelanggan (PMB-03, "Alur 1") punya `origin = 'pemilik_produk'` — lahir dari **permintaan langsung pemilik produk**, bukan dari promosi otomatis/manual atas baris yang sudah benar di dokumen ini. Sebuah baris audit bisa 100% akurat dan tetap tidak pernah jadi pekerjaan selama tidak ada manusia yang secara terpisah menariknya jadi permintaan — ini kelas masalah "audit tanpa gigi" (findings tanpa *forcing function*), bukan "audit yang keliru."
+2. **`docs/checklist-audit-jalan-kaki.md` (audit jalan-kaki per peran) disusun berbasis ALUR KERJA HARIAN per peran** (Gudang/Produksi SPV/Produksi Operator/PPIC/Purchasing) — **tidak ada satu pun bagian "PERAN: SALES/PELANGGAN."** Master data yang jarang dipakai (menambah pelanggan baru, bukan pekerjaan harian) secara struktural tidak akan pernah muncul di audit bergaya "jalan satu hari kerja penuh", karena disusun per-LANGKAH-KERJA, bukan per-TABEL/LAYAR. `suppliers` kebetulan lolos audit ini karena dipakai di langkah harian Purchasing (#5: "Daftarkan supplier baru") — `customers` tidak dipakai di alur harian peran manapun yang tercakup checklist itu.
+
+**Perbaikan yang dijalankan sesi ini (bukan proses otomatis permanen — itu butuh tooling terpisah):**
+- Audit per-tabel di bawah ini **sudah mekanis sejak Sesi 7** (introspection skema sungguhan, bukan ingatan) — bagian itu tidak perlu ditulis ulang lagi.
+- **Sinkronisasi manual satu kali**: setiap baris `[MASTER]`/`[X]` di bawah dengan Buat=ya DAN Keluar bermasalah/tidak ada, dicocokkan ke `build_tasks` (dicari per nama tabel/fungsi). Hasil: **7 baris ternyata belum pernah punya task sama sekali** — dicatat sebagai `DOC-03`, `ABS-03`, `ABS-04`, `PRD-12`, `PRD-13`, `PRD-14`, `KPI-03`. Detail tiap temuan ada di task masing-masing (Daftar Tugas Pembangunan).
+- `docs/checklist-audit-jalan-kaki.md` **tidak** ditambah bagian "PERAN: SALES/PELANGGAN" pada sesi ini (perubahan cakupan checklist itu di luar permintaan H.4) — tapi mekanismenya dicatat di sini supaya keputusan "audit jalan-kaki tidak menutup celah master-data yang jarang dipakai, harus selalu disandingkan dengan audit per-tabel di dokumen ini" tidak hilang untuk audit berikutnya.
+
+---
+
 # Audit Lengkap Tabel — Sesi 7 (21 Agu 2026, menggantikan cakupan Sesi 5)
 
 ## Kenapa dokumen ini ditulis ulang, bukan ditambal

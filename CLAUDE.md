@@ -32,6 +32,15 @@ Baca KEDUA file ini secara penuh sebelum menulis kode apa pun. Semua keputusan d
 4. **Bila pemilik produk meminta penyimpangan dari standar: boleh, itu haknya.** Yang WAJIB: alasan dan detailnya dicatat di task terkait, supaya berbulan-bulan kemudian masih bisa dijelaskan kenapa angkanya berbeda dari standar baku.
 5. **Setiap angka keuangan yang ditampilkan ke pengguna harus bisa menjawab "ini metode apa"** lewat panel Asal-Usul (`ProvenanceInfoButton`) atau Kamus istilah — bukan angka yang muncul tanpa jejak metodenya.
 
+## Aturan Responsive — WAJIB di Semua Halaman (ditetapkan 23 Agu 2026)
+1. **Seluruh halaman WAJIB responsive terhadap semua ukuran layar** — HP, tablet, laptop, monitor lebar. TIDAK ada layar HP terpisah: satu kode, satu halaman, susunannya menyesuaikan lebar layar.
+2. **Responsive BUKAN tampilan yang sama diperkecil.** Tabel 8 kolom yang diperkecil sampai muat di HP tetap tidak terbaca — yang benar, susunannya BERUBAH BENTUK saat layar menyempit (informasinya sama, penyajiannya berbeda). Pola yang dipakai: tabel banyak kolom → kartu bertumpuk di layar sempit (satu baris = satu kartu, kolom tersusun ke bawah); navigasi samping → menu buka-tutup; modal lebar → layar penuh di HP; field form → satu kolom penuh di layar sempit; kolom tidak penting boleh disembunyikan di layar sempit TAPI harus tetap bisa dibuka, jangan hilang tanpa jalan melihatnya.
+3. **Tidak boleh ada gulir menyamping (horizontal scroll) di lebar mana pun.**
+4. **Ukuran sentuh minimal 44×44 px** untuk seluruh elemen interaktif (tombol, checkbox+labelnya, field form) — tombol seukuran kursor mouse tidak bisa ditekan jari, apalagi jari bersarung tangan di lantai produksi.
+5. **Uji di EMPAT lebar setiap ada perubahan tampilan**: 360, 768, 1280, 1920 px — dengan bukti visual (screenshot) di keempatnya, bukan disimpulkan dari kode.
+6. **Berlaku surut ke seluruh halaman yang sudah ada**, dikerjakan bertahap sebagai pekerjaan tersendiri (task tercatat) — jangan diselipkan diam-diam sampai setengah-setengah di satu halaman.
+7. Prioritas pengerjaan (halaman mana lebih dulu) adalah soal URUTAN, bukan soal mana yang boleh dilewati — semua halaman pada akhirnya wajib patuh aturan ini.
+
 ## Struktur Folder — WAJIB Dipatuhi di Semua Kode
 1. **`app/` hanya wrapper routing.** File di `app/**/page.tsx` dan `app/api/**/route.ts` tidak boleh berisi logic bisnis — isinya cuma routing Next.js (path, layout, re-export) yang memanggil kode dari `src/features/<domain>/`. Contoh yang benar: `app/login/page.tsx` cuma berisi `export { default } from '@/features/auth/pages/LoginPage';`.
 2. **Logic bisnis hidup di `src/features/<domain>/`**, dikelompokkan per domain (mis. `auth`, `team`, `mrp`), bukan per tipe file. Di dalam tiap domain: `pages/` untuk komponen halaman, `server/` untuk logic sisi server (query Supabase, validasi, dsb).

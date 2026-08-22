@@ -2,6 +2,20 @@
 
 Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`). Tiap sesi Claude Code WAJIB baca ini dulu sebelum mulai, dan memperbarui bagian relevan begitu sesi selesai. Klaim di sini harus tetap diverifikasi ulang, bukan otomatis dipercaya — HANDOFF ini rangkuman, bukan pengganti bukti.
 
+## BLOK KERJA MANDIRI — Pasca-Transfer Infrastruktur (23 Agu 2026)
+
+Dikerjakan tanpa interaksi, mengumpulkan pertanyaan di task alih-alih berhenti. Ringkasan (detail lengkap ada di masing-masing task `build_tasks`):
+
+- **Verifikasi pasca-restart FABRIX-APP**: SELESAI. Project ID tetap, login+query sungguhan berhasil, dua CI-monitor loop LAMA (dari commit lama, terlupakan) ditemukan & dimatikan — kemungkinan penyebab rate-limit GitHub API yang persisten (belum terbukti sepenuhnya menghilang setelah dimatikan, dicatat sebagai dugaan bukan kepastian). URL POD "nyata" yang diminta diverifikasi TIDAK ADA di database (tabel `shipments` kosong total) — tidak bisa diuji, dilaporkan apa adanya.
+- **Supabase Advisor**: 6 view `*_secure` diperiksa via `pg_views` — SEMUA memfilter `company_id = jwt_company_id()` dengan benar (dikonfirmasi definisi + runtime test dengan login sungguhan sebagai Company B: 0 baris PT ITM bocor). Peringatan "Security Definer View" adalah **pengecualian disengaja**, bukan celah. 0 tabel tanpa RLS.
+- **Project Supabase terpisah untuk CI/test**: DIBUAT (`fabrix-ci-test`, ref `gzxrgbwhmjwiakcyjipd`, org FABRIX, region ap-southeast-2), skema penuh berhasil dibangun dari migrasi (bukti lain rebuild-from-migrations bekerja). **BELUM diarahkan** — mengganti GitHub Secrets di luar akses Claude Code (butuh token yang tidak boleh diminta). Dicatat `INF-17` dengan langkah manual persis.
+- **AUD-07 (jejak tulis terpusat)**: DIBANGUN — tabel `data_change_audit_log` + trigger generik `log_data_change()` di 9 tabel lingkup, dibuktikan menangkap INSERT/UPDATE/DELETE lewat SQL langsung DAN lewat pola yang sama seperti aplikasi. Keterbatasan jujur: identitas pasti hanya untuk sesi ber-JWT, mayoritas jalur aplikasi (service role) baru tercatat sebagai `service_role` bukan user manusia — dicatat `AUD-07B`.
+- **MRG-11 (lapisan data)**: DIBANGUN — `employee_cost_category_history` (3 golongan, bertanggal berlaku, append-only), TIDAK ADA golongan karyawan ditetapkan (menunggu Finance).
+- **MRG-10 (rekonsiliasi)**: ARKEOLOGI menemukan blocker struktural — fungsi AKTUAL (`compute_production_batch_labor_cost`) dan STANDAR (`computeStandardLaborCostPerUnit.ts`) sama-sama TIDAK cocok dengan model 3-golongan MRG-11 yang baru diputuskan. Rekonsiliasi sungguhan BUTUH data golongan karyawan terisi lebih dulu — urutan dependency TERBALIK dari yang diasumsikan semula. BELUM direkonsiliasi.
+- **PLT-05 (lapisan data)**: DIBANGUN — tabel generik `tenant_picklists`. Arkeologi (7.1, daftar apa saja yang tertanam di kode) BELUM tuntas.
+- **INF-06**: SELESAI — 6 company bekas test dihapus lewat migrasi idempoten, dibuktikan 2x jalan + baris company_id=1 byte-identik.
+- **BB.2**: sudah tuntas di putaran-putaran sebelumnya (baris 70-2691 sudah disapu semua) — tidak ada lanjutan.
+
 ## KOREKSI AUDIT INF-01 — "0 Snapshot" Keliru, Kejadian KETIGA dengan Pola Sama (23 Agu 2026, DD.1)
 
 **Klaim yang DIKOREKSI**: INF-01/INF-05 (22 Agu 2026) menyimpulkan "fitur backup asli Supabase (PITR) mati total" berdasarkan field `pitr_enabled=false` untuk kedua project. **Kesimpulan itu KELIRU** — dikonfirmasi 23 Agu 2026: backup harian otomatis Supabase TERNYATA sudah berjalan sejak 15 Agustus 2026, 7 titik pemulihan tersimpan (15-21 Agu), tipe PHYSICAL, tiap tengah malam waktu region.

@@ -36,6 +36,20 @@ Dikerjakan tanpa interaksi, mengumpulkan pertanyaan di task alih-alih berhenti. 
 
 **Yang TIDAK batal dari pekerjaan INF-05 kemarin (23 Agu, DD.2)**: backup manual (ekspor 92 tabel via Supabase JS client) **tetap satu-satunya backup yang PERNAH DIUJI PULIH sungguhan** (direstorasi ke project staging, dibuktikan identik, lalu dibersihkan). Backup bawaan Supabase (7 titik PHYSICAL) **belum pernah diuji restore-nya** — baru diketahui ADA, belum dibuktikan BISA DIPULIHKAN. Task baru dicatat untuk ini (lihat `INF-15`).
 
+## PELAJARAN TETAP — Saat Lokal Lulus tapi CI Gagal, Yang Berbeda Itu KONFIGURASI (23 Agu 2026)
+
+**Tiga hipotesis gugur berturut-turut** untuk satu kegagalan CI yang sama, dan ketiganya lahir dari cara berpikir yang sama — menyusun teori tentang **perilaku** sebelum membandingkan **konfigurasi**:
+
+1. **Timeout / cold start Edge Function** — gugur. Diuji dengan `--hookTimeout=10000` (sepertiga batas CI): suite tetap 45/45 lulus, nol "Hook timed out". Dipatahkan telak oleh satu angka: step CI berjalan **300 detik** sementara lokal **704 detik** — kalau timeout, CI akan lebih LAMA, bukan lebih CEPAT.
+2. **Secret key tersalin dalam keadaan tersamar** — gugur. Pemilik produk memeriksa layar GitHub: nilainya utuh, cocok persis dengan Secret key project.
+3. **Fungsi database hilang saat dibangun dari migrasi** (dugaan "kelas Auth Hook") — gugur. Dibandingkan langsung: **57 fungsi di kedua project, nol selisih** di kedua arah.
+
+**Yang akhirnya menemukannya bukan hipotesis keempat, melainkan MEMBANDINGKAN KONFIGURASI dua lingkungan baris per baris.** Ketahuan bahwa seluruh uji lokal memakai kunci `service_role` **legacy**, sementara CI memakai kunci generasi baru `sb_secret_` — perbedaan yang tidak pernah diuji karena tidak pernah dibandingkan. (Setelah diuji, kunci generasi baru ternyata bekerja normal — supabase-js 2.112.2 mendukung penuh — sehingga penyebabnya menyempit lagi ke **ketidaksinkronan antara URL dan kunci**.)
+
+**ATURAN**: bila kode yang SAMA lulus di lokal tapi gagal di CI, **jangan menyusun hipotesis tentang perilaku** (timeout, cold start, race condition). **Bandingkan dulu konfigurasi kedua lingkungan** — variabel lingkungan, generasi kunci, versi, target project — sampai daftar perbedaannya habis. Perilaku yang sama di atas konfigurasi yang berbeda akan selalu terlihat seperti bug yang misterius.
+
+**Cara cepat memastikan ketidaksinkronan URL vs kunci** (terbukti mereproduksi gejala CI persis): jalankan suite dengan URL satu project dan kunci project lain. Gejalanya sangat khas dan mudah dikenali — **hanya berkas TANPA `beforeAll` yang benar-benar GAGAL** (di proyek ini: `currency_formatter` 3 gagal + `function_grant_security_audit` 3 gagal), sementara **seluruh berkas ber-`beforeAll` tampil DILEWATI (↓)** karena fixture-nya tidak pernah terbentuk. Bila melihat pola itu lagi, langsung periksa kecocokan URL↔kunci, jangan menebak yang lain.
+
 ## VERIFIKASI INF-17 — CI Dipindah ke Project Test Terpisah (23 Agu 2026)
 
 Pemilik produk memperbarui 3 GitHub Secret (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` = Publishable key, `SUPABASE_SERVICE_ROLE_KEY` = Secret key) ke project `fabrix-ci-test` (`gzxrgbwhmjwiakcyjipd`). Tiga secret lain (`SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF`) SENGAJA tidak diubah — dipakai workflow backup dan memang menunjuk project berbeda.

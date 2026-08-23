@@ -36,6 +36,74 @@ Dikerjakan tanpa interaksi, mengumpulkan pertanyaan di task alih-alih berhenti. 
 
 **Yang TIDAK batal dari pekerjaan INF-05 kemarin (23 Agu, DD.2)**: backup manual (ekspor 92 tabel via Supabase JS client) **tetap satu-satunya backup yang PERNAH DIUJI PULIH sungguhan** (direstorasi ke project staging, dibuktikan identik, lalu dibersihkan). Backup bawaan Supabase (7 titik PHYSICAL) **belum pernah diuji restore-nya** — baru diketahui ADA, belum dibuktikan BISA DIPULIHKAN. Task baru dicatat untuk ini (lihat `INF-15`).
 
+## PELAJARAN TETAP — Pengaman yang Memeriksa Kebohongan Angka, Angkanya Sendiri Salah Arti (23 Agu 2026)
+
+Kalimat pemilik produk, dicatat apa adanya karena inilah inti pelajarannya:
+
+> "Pengawas ambang yang dipasang untuk menangkap test yang dilewati diam-diam, ternyata sejak awal menghitung hal yang salah — `numTotalTestSuites` adalah jumlah blok `describe` (104), bukan jumlah berkas (46). Pengaman yang dibuat untuk memeriksa kebohongan angka, angkanya sendiri salah arti."
+
+**ATURAN**: setiap angka yang dipakai sebagai **ambang** WAJIB diverifikasi ARTINYA terhadap kenyataan, bukan diambil dari nama field yang **terdengar** benar.
+
+Rinciannya: `scripts/check-test-threshold.js` dibuat untuk menutup lubang "berkas yang seluruh isinya di-skip tetap dihitung passed". Ambang jumlah berkasnya membaca `numTotalTestSuites` dari keluaran JSON vitest — nama yang terdengar persis seperti "jumlah berkas test". Ternyata field itu menghitung **blok `describe`**: 104 blok dari 46 berkas. Selama itu pula ambang `EXPECTED_FILES = 45` membandingkan dua besaran yang artinya berbeda, dan kebetulan tidak pernah ketahuan. Yang benar adalah panjang `testResults`.
+
+**Cara memverifikasi arti sebuah angka** (yang akhirnya dipakai di sini): hitung besaran itu dengan cara kedua yang independen, lalu bandingkan. `ls tests/*.test.ts | wc -l` memberi 46; field yang dipakai memberi 104. Selisih sebesar itu langsung menelanjangi salah arti — tanpa perlu membaca dokumentasi vitest sama sekali.
+
+**Kelas kesalahan yang sama, kejadian KEDUA — MENGUKUR DARI LOG, BUKAN DARI CATATAN**: penghitung "berapa kali pengulangan login terpakai" dipasang untuk memantau kemunduran. Angkanya **tiga kali salah dilaporkan** ke pemilik produk sebelum benar, dan ketiganya berakar pada satu kebiasaan: mengukur dengan `grep -c` atas **log konsol**, bukan membaca **berkas catatan**.
+
+Baris log pengulangan milik test yang menguji pengaman itu sendiri (yang memang SENGAJA memicu pengulangan terhadap koneksi tiruan) tidak bisa dibedakan dari pengulangan sungguhan. Akibatnya 7 baris tiruan dilaporkan sebagai patokan "7 pengulangan per run"; lalu penghitung yang sebenarnya BENAR (melaporkan 0) dituduh rusak karena tidak cocok dengan hitungan log itu; lalu satu baris ber-host project asli — yang ternyata milik test pencatatan dan dibersihkan sendiri sesudahnya — dikira bukti pengulangan nyata.
+
+**Kenyataannya: NOL pengulangan sungguhan pernah terjadi di run penuh mana pun.** Jaringnya berjaga, belum pernah terpakai.
+
+Dua hal yang menutup kelas ini:
+1. Tiap baris log kini menyebut **host** DAN menyebut apakah ia **dicatat** — log yang tidak bisa dibaca salah.
+2. Pengecualian uji-diri memakai **penanda pada permintaan itu sendiri**, bukan variabel lingkungan (bocor antar berkas karena vitest memakai satu proses pekerja) dan bukan pencocokan host. Kedua arahnya dikunci test: yang tak bertanda TERCATAT, yang bertanda TIDAK.
+
+**ATURAN**: (a) sebelum melaporkan patokan hasil pengukuran apa pun, pastikan pengukurannya tidak memuat aktivitas ALAT UKURNYA SENDIRI; (b) ukur dari catatan yang memang dirancang jadi sumber angka, JANGAN dari log yang kebetulan bisa di-`grep`; (c) bila sebuah pengaman bisa meleset, pilih rancangan yang melesetnya ke arah MELAPORKAN TERLALU BANYAK — meleset ke arah "terlalu sedikit" adalah persis kegagalan yang pemantau itu dibuat untuk mencegah.
+
+**Kelas kesalahan yang sama, ditemukan berbarengan**: pengaman pengulangan login (`retryAuthHookColdStart`) dipasang dengan 4 percobaan yang totalnya ~29,5 detik, sementara `hookTimeout` waktu itu 30 detik. Pengamannya **selalu kalah duluan** oleh batas lain — terlihat bekerja di log, tapi tidak pernah sempat menyelesaikan tugasnya. Pelajarannya sejenis: **sebuah pengaman tidak cukup benar sendirian, ia harus benar RELATIF terhadap batas-batas lain yang mengurungnya.** Sejak itu ketergantungan antar-angka ditulis eksplisit di kedua berkas.
+
+## PELAJARAN TETAP — Batas 5 Detik Auth Hook: Batas SERVER, Tidak Bisa Dinaikkan dari Test (23 Agu 2026)
+
+Setelah kegagalan URL↔kunci ditutup, CI masih merah — tapi dengan gejala yang **sama sekali berbeda** dan itulah kuncinya: step test berjalan **788 detik** (bukan berhenti di ~300 detik). Durasi panjang = test benar-benar dikerjakan; berarti sebabnya bukan konfigurasi kunci lagi.
+
+Direproduksi lokal terhadap `fabrix-ci-test` dengan konfigurasi identik CI:
+
+```
+FAIL tests/margin_watch.test.ts
+Error: Login failed for financemanager.marginwatchtest@debug.mrp:
+       Failed to reach hook within maximum time of 5.000000 seconds
+```
+
+**Penyebab**: setiap login memanggil Custom Access Token Hook — Edge Function `custom-access-token` yang menyuntikkan klaim `company_id`/`app_role` ke JWT (seluruh RLS bergantung padanya). Bila fungsi itu **dingin**, booting-nya bisa melewati batas **5 detik** yang dipatok **Supabase Auth sendiri**.
+
+**Yang penting dipahami**: batas 5 detik itu **milik server**, BUKAN milik vitest. Menaikkan `hookTimeout`/`testTimeout` di `vitest.config.ts` **tidak berpengaruh sama sekali** — dan itulah sebabnya percobaan menaikkan batas vitest dulu tidak pernah mengubah apa pun.
+
+**Kenapa terlihat acak**: berkas yang kena berganti-ganti (pernah `attendance_geo_qr_w1` 11 gagal, pernah `margin_watch`), dan commit yang isinya setara bisa hijau (`0fb2d9f`) lalu merah (`07eb257`). Yang menentukan bukan berkasnya, melainkan **login mana yang kebetulan jatuh saat fungsinya sedang dingin**. Project data nyata jarang kena karena fungsinya selalu hangat dipakai orang; project CI justru sering dingin karena hanya hidup saat CI jalan.
+
+**Penanganan (dua lapis, keduanya sudah terpasang)**:
+1. `tests/setup/assertUrlAndKeysMatch.ts` — memanggil Edge Function sekali di `globalSetup` untuk **membangunkannya sebelum test pertama**, jadi biaya cold start ditanggung di luar test (terukur ~1,1 detik saat hangat).
+2. `tests/setup/retryAuthHookColdStart.ts` — mencegat di lapis `fetch` dan **mengulang HANYA** balasan 5xx dari endpoint auth yang badannya menyebut kegagalan menjangkau hook. Sandi salah, pengguna tak ada, dan kunci ditolak **tidak** diulang, supaya pengaman ini tidak pernah menutupi bug dengan cara mengulanginya sampai kebetulan lolos. Batas cakupan itu diuji sendiri di `tests/auth_hook_cold_start_retry.test.ts` (5 test, tiga di antaranya membuktikan ia TIDAK mengulang).
+
+**Pelajaran yang bisa dibawa**: saat sebuah batas waktu terlampaui, tanyakan lebih dulu **BATAS SIAPA** yang terlampaui. Angka "5.000000 detik" di pesan galat itu tidak pernah muncul di konfigurasi proyek ini mana pun — itu petunjuk paling terang bahwa batasnya datang dari luar, dan mengutak-atik konfigurasi sendiri hanya membuang waktu.
+
+## PELAJARAN TETAP — LIMA Hipotesis Gugur; Yang Menemukannya REPRODUKSI, Bukan Hipotesis Keenam (23 Agu 2026)
+
+Satu kegagalan CI menghabiskan **lima hipotesis berturut-turut**, semuanya gugur:
+
+1. **Timeout / cold start Edge Function** — gugur. `--hookTimeout=10000` (sepertiga batas CI) tetap 45/45 lulus. Dipatahkan telak oleh satu angka: step CI **300 detik** vs lokal **704 detik** — kalau timeout, CI akan lebih LAMA.
+2. **Secret key tersalin tersamar** — gugur. Pemilik produk memeriksa layar GitHub: nilainya utuh.
+3. **Fungsi database hilang saat dibangun dari migrasi** — gugur. **57 fungsi di kedua project, nol selisih.**
+4. **Pustaka belum mendukung kunci `sb_secret_`** — gugur. Diuji dengan kunci generasi baru asli: **37/37 lulus**. supabase-js 2.112.2 mendukung penuh.
+5. **Generasi kunci berbeda (legacy vs baru)** — gugur sebagai *penyebab*, walau **menemukan asimetri nyata**: seluruh uji lokal ternyata memakai kunci `service_role` legacy sementara CI memakai `sb_secret_`.
+
+**Yang akhirnya menemukannya BUKAN hipotesis keenam, melainkan REPRODUKSI dengan konfigurasi sengaja dibuat salah**: menjalankan suite dengan URL satu project + kunci project lain, lalu mencocokkan gejalanya dengan log CI. Hasilnya identik sampai ke angka (`4 failed | 1 passed`, `6 failed | 19 passed | 12 skipped`). Penyebab sebenarnya sepele — **`NEXT_PUBLIC_SUPABASE_URL` dan kunci tidak menunjuk project yang sama.**
+
+**TANDA PENGENAL GEJALA (hafalkan ini, ia sangat menyesatkan)**: bila **hanya berkas TANPA `beforeAll` yang benar-benar GAGAL** sementara **seluruh berkas ber-`beforeAll` tampil DILEWATI (↓)** — itu khas **URL dan kunci tidak menunjuk project yang sama**. Sekilas terlihat seperti "masalah skip" atau "test dimatikan", padahal fixture-nya tidak pernah terbentuk karena kuncinya ditolak.
+
+**ATURAN**: bila kode yang SAMA lulus di lokal tapi gagal di CI — jangan menyusun hipotesis tentang **perilaku** (timeout, cold start, race condition). **Bandingkan KONFIGURASI kedua lingkungan baris per baris**, lalu **REPRODUKSI dugaan itu dengan sengaja merusak konfigurasi lokal**. Reproduksi yang cocok sampai ke angka jauh lebih murah daripada lima hipotesis.
+
+**Dua pengawas dipasang supaya ini tidak terulang**: `tests/setup/assertUrlAndKeysMatch.ts` (gagal keras sebelum satu test pun jalan bila URL↔kunci tidak sinkron) dan `scripts/check-test-threshold.js` (CI gagal bila test yang benar-benar berjalan turun di bawah ambang — karena berkas yang seluruh isinya di-skip tetap dihitung "passed" oleh vitest).
+
 ## PELAJARAN TETAP — Saat Lokal Lulus tapi CI Gagal, Yang Berbeda Itu KONFIGURASI (23 Agu 2026)
 
 **Tiga hipotesis gugur berturut-turut** untuk satu kegagalan CI yang sama, dan ketiganya lahir dari cara berpikir yang sama — menyusun teori tentang **perilaku** sebelum membandingkan **konfigurasi**:

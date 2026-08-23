@@ -27,3 +27,4 @@ tsconfig.tsbuildinfo
 .vercel
 .env*
 test-results.json
+retry-audit.log

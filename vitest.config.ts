@@ -44,12 +44,33 @@ export default defineConfig({
   test: {
     env: loadEnv('', process.cwd(), ''),
     fileParallelism: false,
-    hookTimeout: 30000,
-    testTimeout: 30000,
+    // 23 Agu 2026 — dinaikkan 30000 -> 300000/120000. BUKAN karena test melambat,
+    // melainkan karena pengaman cold start Auth Hook (tests/setup/retryAuthHookColdStart.ts)
+    // butuh ruang: tiap percobaan login yang gagal menghabiskan 5 detik penuh (batas
+    // Supabase Auth, bukan batas kita), dan enam percobaan berikut jedanya ~49 detik.
+    //
+    // ANGKANYA DIHITUNG DARI KASUS TERBURUK YANG NYATA, bukan dari kasus satu login:
+    // tests/kpi_module.test.ts melakukan 5 LOGIN dalam SATU beforeAll. Bila kelimanya
+    // sama-sama mentok, 5 x 49 = 245 detik. Batas 90 detik (versi sebelumnya) cuma
+    // memuat SATU login mentok — dua saja sudah jebol. 300 detik memuat kasus terburuk
+    // itu plus sisa ruang untuk pembuatan fixture-nya sendiri.
+    //
+    // Yang menahan supaya ini tidak berubah jadi "suite berjam-jam yang tetap hijau"
+    // adalah RETRY_BUDGET_MS di berkas pengaman itu: begitu total waktu mengulang
+    // melewati anggaran, pengulangan berhenti dan test dibiarkan gagal.
+    //
+    // Terikat pada MAX_ATTEMPTS/BACKOFF_MS/RETRY_BUDGET_MS di berkas itu — ubah salah
+    // satu, tinjau yang lain. Jumlah login terbanyak per beforeAll juga ikut menentukan;
+    // bila ada berkas baru yang login lebih dari 5 kali di satu hook, hitung ulang.
+    hookTimeout: 300000,
+    testTimeout: 120000,
     // Pengawas tingkat project (23 Agu 2026) -- lihat komentar di dalam file
     // itu sendiri. Menolak keras kalau NEXT_PUBLIC_SUPABASE_URL menunjuk
     // project yang diketahui berisi data nyata, kecuali flag eksplisit diset.
-    setupFiles: ['./tests/setup/guardAgainstRealProject.ts'],
+    // retryAuthHookColdStart (23 Agu 2026): mengulang HANYA login yang gagal karena
+    // Edge Function custom-access-token belum siap dalam batas 5 detik milik Supabase
+    // Auth. Batas itu milik server, tidak bisa dinaikkan dari sini -- lihat berkasnya.
+    setupFiles: ['./tests/setup/guardAgainstRealProject.ts', './tests/setup/retryAuthHookColdStart.ts'],
     // Pengawas URL<->kunci (23 Agu 2026): berjalan SEKALI sebelum test apa pun.
     // Gagal keras bila URL dan kunci tidak menunjuk project yang sama -- lihat
     // komentar di dalam berkasnya untuk kenapa gejalanya dulu menyesatkan.

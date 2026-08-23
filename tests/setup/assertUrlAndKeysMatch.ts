@@ -15,6 +15,9 @@
 //
 // Pengawas ini menggantikan seluruh tebakan itu dengan SATU pesan jelas, sebelum
 // satu test pun berjalan.
+import fs from 'node:fs';
+import path from 'node:path';
+
 export default async function assertUrlAndKeysMatch() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -63,4 +66,48 @@ export default async function assertUrlAndKeysMatch() {
 
   await check('SUPABASE_SERVICE_ROLE_KEY', serviceKey);
   await check('NEXT_PUBLIC_SUPABASE_ANON_KEY', anonKey);
+
+  // Catatan pemakaian pengulangan (TT.1) dikosongkan tiap awal run, supaya angka
+  // yang dilaporkan di akhir benar-benar milik run ini -- bukan tumpukan run lama.
+  try {
+    fs.writeFileSync(path.join(process.cwd(), 'retry-audit.log'), '');
+  } catch {
+    // tidak fatal
+  }
+
+  await warmUpAuthHook(url, serviceKey);
+}
+
+// PEMANASAN AUTH HOOK (23 Agu 2026).
+//
+// Setiap login di proyek ini memanggil Edge Function `custom-access-token`, dan
+// Supabase Auth memberinya batas KERAS 5 detik. Bila fungsi itu dingin, booting-nya
+// bisa lewat dari 5 detik dan login GAGAL -- inilah sebab test goyah yang membuat
+// commit setara kadang hijau kadang merah di CI.
+//
+// Satu panggilan di sini membangunkan fungsinya SEBELUM test pertama berjalan,
+// jadi biaya cold start ditanggung di luar test, bukan oleh salah satu test yang
+// kebetulan apes. Permintaan ini SENGAJA tanpa tanda tangan webhook yang sah:
+// tujuannya cuma membuat fungsinya boot -- ditolak 401 pun sudah berhasil, karena
+// penolakan itu baru terjadi SETELAH fungsinya hidup.
+//
+// Kegagalan pemanasan TIDAK dijadikan alasan menggagalkan test: bila fungsinya
+// memang bermasalah, jaring pengaman kedua (tests/setup/retryAuthHookColdStart.ts)
+// yang akan bekerja, dan pesan gagalnya lebih jelas dibaca dari sana.
+async function warmUpAuthHook(url: string, serviceKey: string) {
+  const started = Date.now();
+  try {
+    await fetch(`${url}/functions/v1/custom-access-token`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ warmup: true }),
+      signal: AbortSignal.timeout(20000)
+    });
+    console.log(`[pemanasan] Edge Function custom-access-token dibangunkan dalam ${Date.now() - started} ms.`);
+  } catch (e) {
+    console.warn(
+      `[pemanasan] Edge Function custom-access-token belum bisa dihubungi ` +
+        `(${e instanceof Error ? e.message : String(e)}). Test tetap dijalankan.`
+    );
+  }
 }

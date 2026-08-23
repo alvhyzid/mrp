@@ -37,7 +37,12 @@ jobs:
           DEBUG_SUPER_ADMIN_PASSWORD: ${{ secrets.DEBUG_SUPER_ADMIN_PASSWORD }}
           DEBUG_COMPANY_A_PASSWORD: ${{ secrets.DEBUG_COMPANY_A_PASSWORD }}
 
+      # `if: always()` DISENGAJA. Tanpa itu, langkah ini dilewati begitu step test gagal —
+      # padahal justru saat gagal kita paling butuh angkanya: "berapa test yang BENAR-BENAR
+      # berjalan?" membedakan kegagalan nyata (ratusan berjalan, sebagian gagal) dari
+      # kegagalan konfigurasi (hampir semuanya dilewati karena fixture tak terbentuk).
       - name: Pengawas ambang jumlah test (SS.1) -- CI hijau tidak cukup, test harus BENAR-BENAR berjalan
+        if: always()
         run: npm run check:threshold
 
   rebuild-migrations:

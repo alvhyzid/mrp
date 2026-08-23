@@ -8,9 +8,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const MIN_PASSED = 250;   // sekarang 268 -- ruang ~18 utk perubahan wajar
+const MIN_PASSED = 255;   // sekarang 275 -- ruang ~20 utk perubahan wajar
 const MAX_SKIPPED = 10;   // sekarang 7 dilewati sadar (2 pengawas data nyata)
-const EXPECTED_FILES = 45;
+const EXPECTED_FILES = 46;
 
 const arg = process.argv[2] || 'test-results.json';
 const file = path.isAbsolute(arg) ? arg : path.join(process.cwd(), arg);
@@ -23,15 +23,63 @@ const r = JSON.parse(fs.readFileSync(file, 'utf8'));
 const passed = r.numPassedTests ?? 0;
 const failed = r.numFailedTests ?? 0;
 const skipped = (r.numPendingTests ?? 0) + (r.numTodoTests ?? 0);
-const files = r.numTotalTestSuites ?? (r.testResults ? r.testResults.length : 0);
+// `numTotalTestSuites` TERLIHAT seperti jumlah berkas, tapi BUKAN -- itu jumlah blok
+// `describe` (terbukti: 104 blok dari 46 berkas). Yang benar-benar berarti "berkas test
+// yang berjalan" adalah panjang `testResults`. Salah pakai di versi pertama pengawas ini
+// membuat ambangnya membandingkan angka yang artinya bukan itu.
+const files = Array.isArray(r.testResults) ? r.testResults.length : 0;
+
+// PEMAKAIAN PENGULANGAN LOGIN (TT.1). Pengulangan itu obat yang bisa menutupi
+// penyakit: ia memang dipasang untuk menelan lonjakan latensi sesekali, tapi kalau
+// suatu hari login melambat karena sebab LAIN, ia akan menutupinya sampai parah.
+// Karena itu angkanya dilaporkan tiap run. Yang penting bukan angka hari ini,
+// melainkan ARAHNYA: naik terus dari run ke run = ada yang memburuk, bukan ragam biasa.
+//
+// PATOKAN 23 Agu 2026: NOL pengulangan sungguhan dalam run penuh mana pun yang sudah
+// diukur (46 berkas, 275 test, ~770 detik). Jaring pengulangan itu ada untuk berjaga,
+// dan sejauh ini memang belum pernah terpakai oleh login sungguhan.
+//
+// ANGKA INI DUA KALI SALAH DIBACA sebelum akhirnya benar, keduanya karena membaca LOG
+// KONSOL dengan `grep -c` alih-alih membaca catatan: baris pengulangan milik test
+// uji-diri tidak bisa dibedakan dari yang sungguhan, sehingga 7 baris tiruan sempat
+// dilaporkan sebagai patokan "7 pengulangan per run". Sejak itu tiap baris log menyebut
+// host DAN menyebut apakah ia dicatat. YANG SAH DIPAKAI SEBAGAI PATOKAN ADALAH ANGKA
+// DARI BERKAS CATATAN INI, BUKAN HASIL grep ATAS LOG.
+const MAX_RETRIES = 40;   // patokan 0; ambang dipasang longgar supaya yang tertangkap
+                          // adalah KEMUNDURAN NYATA, bukan ragam wajar hari ke hari
+let retries = 0;
+const auditFile = path.join(process.cwd(), 'retry-audit.log');
+if (fs.existsSync(auditFile)) {
+  retries = fs.readFileSync(auditFile, 'utf8').split('\n').filter((l) => l.trim()).length;
+}
 
 const problems = [];
 if (failed > 0) problems.push(`${failed} test GAGAL`);
+
+// LUBANG YANG BARU KETAHUAN 23 Agu 2026: sebuah berkas bisa MATI DI beforeAll dan
+// menyumbang NOL test gagal -- seluruh test-nya dilaporkan "dilewati", bukan "gagal".
+// Waktu itu process_mining.test.ts mati begitu, dan `numFailedTests` tetap 0. Yang
+// menangkapnya cuma ambang jumlah test dilewati; kalau kebetulan masih di bawah batas,
+// kematian itu lolos tanpa suara. Karena itu status BERKAS ikut diperiksa.
+const failedSuites = r.numFailedTestSuites ?? 0;
+if (failedSuites > 0) {
+  problems.push(
+    `${failedSuites} BERKAS test gagal (kemungkinan besar mati di beforeAll -- test di dalamnya ` +
+      `dilaporkan "dilewati", bukan "gagal", jadi tidak terhitung di angka test gagal)`
+  );
+}
+if (retries > MAX_RETRIES) {
+  problems.push(
+    `pengulangan login terpakai ${retries} kali, di atas batas ${MAX_RETRIES} (patokan sehat: 0). ` +
+      `Ini tanda login ke project CI benar-benar memburuk, bukan lonjakan biasa.`
+  );
+}
 if (passed < MIN_PASSED) problems.push(`test lulus ${passed}, di bawah ambang ${MIN_PASSED}`);
 if (skipped > MAX_SKIPPED) problems.push(`test dilewati ${skipped}, di atas batas ${MAX_SKIPPED}`);
 if (files !== EXPECTED_FILES) problems.push(`berkas berjalan ${files}, seharusnya ${EXPECTED_FILES}`);
 
 console.log(`\nPENGAWAS AMBANG -- lulus: ${passed} (min ${MIN_PASSED}) | dilewati: ${skipped} (maks ${MAX_SKIPPED}) | gagal: ${failed} | berkas: ${files} (harus ${EXPECTED_FILES})`);
+console.log(`PENGULANGAN LOGIN terpakai ${retries} kali run ini (patokan 23 Agu 2026: 0 | batas ${MAX_RETRIES}).`);
 
 if (problems.length > 0) {
   console.error(

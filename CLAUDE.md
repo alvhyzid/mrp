@@ -32,6 +32,16 @@ Baca KEDUA file ini secara penuh sebelum menulis kode apa pun. Semua keputusan d
 4. **Bila pemilik produk meminta penyimpangan dari standar: boleh, itu haknya.** Yang WAJIB: alasan dan detailnya dicatat di task terkait, supaya berbulan-bulan kemudian masih bisa dijelaskan kenapa angkanya berbeda dari standar baku.
 5. **Setiap angka keuangan yang ditampilkan ke pengguna harus bisa menjawab "ini metode apa"** lewat panel Asal-Usul (`ProvenanceInfoButton`) atau Kamus istilah — bukan angka yang muncul tanpa jejak metodenya.
 
+## ATURAN SEMENTARA — `main` = RILIS LANGSUNG ke Data Nyata (berlaku 23 Agu 2026, ada pemicu pencabutan)
+Sejak 23 Agu 2026, situs production (`mrp-staging-zeta.vercel.app`) **tersambung ke data nyata PT ITM** (FABRIX-APP), dan Vercel masih men-deploy production dari branch `main` (percobaan mengubahnya ke `staging` gagal dari semua jalur — lihat `INF-11`, menunggu dukungan Vercel). Konsekuensinya, sampai pemicu di bawah terpenuhi:
+1. **Setiap push ke `main` harus dianggap RILIS, bukan simpanan pekerjaan** — begitu terdorong, kode itu langsung dipakai orang di atas data sungguhan.
+2. **Pekerjaan yang belum siap dipakai TIDAK di-push ke `main`.** Simpan di branch lain, atau tahan sampai selesai.
+3. **Bila terpaksa mendorong sesuatu yang berisiko, kabari pemilik produk LEBIH DULU** — jangan mengandalkan dia menyadarinya sendiri dari situs yang tiba-tiba berubah.
+
+**PEMICU PENCABUTAN aturan ini**: begitu setelan Vercel "Production Branch" berhasil diubah dari `main` ke `staging`. Setelah itu, `main` kembali jadi tempat kerja biasa dan bagian ini dihapus dari CLAUDE.md.
+
+**Catatan**: pengaman data tetap berlapis dan sudah terbukti — login aplikasi (16 peran) + RLS ber-`company_id` (diuji langsung: tenant uji melihat 0 dari 30 karyawan PT ITM). Aturan di atas soal **kualitas rilis**, bukan kebocoran data.
+
 ## Aturan Responsive — WAJIB di Semua Halaman (ditetapkan 23 Agu 2026)
 1. **Seluruh halaman WAJIB responsive terhadap semua ukuran layar** — HP, tablet, laptop, monitor lebar. TIDAK ada layar HP terpisah: satu kode, satu halaman, susunannya menyesuaikan lebar layar.
 2. **Responsive BUKAN tampilan yang sama diperkecil.** Tabel 8 kolom yang diperkecil sampai muat di HP tetap tidak terbaca — yang benar, susunannya BERUBAH BENTUK saat layar menyempit (informasinya sama, penyajiannya berbeda). Pola yang dipakai: tabel banyak kolom → kartu bertumpuk di layar sempit (satu baris = satu kartu, kolom tersusun ke bawah); navigasi samping → menu buka-tutup; modal lebar → layar penuh di HP; field form → satu kolom penuh di layar sempit; kolom tidak penting boleh disembunyikan di layar sempit TAPI harus tetap bisa dibuka, jangan hilang tanpa jalan melihatnya.

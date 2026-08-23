@@ -36,6 +36,14 @@ Dikerjakan tanpa interaksi, mengumpulkan pertanyaan di task alih-alih berhenti. 
 
 **Yang TIDAK batal dari pekerjaan INF-05 kemarin (23 Agu, DD.2)**: backup manual (ekspor 92 tabel via Supabase JS client) **tetap satu-satunya backup yang PERNAH DIUJI PULIH sungguhan** (direstorasi ke project staging, dibuktikan identik, lalu dibersihkan). Backup bawaan Supabase (7 titik PHYSICAL) **belum pernah diuji restore-nya** — baru diketahui ADA, belum dibuktikan BISA DIPULIHKAN. Task baru dicatat untuk ini (lihat `INF-15`).
 
+## VERIFIKASI INF-17 — CI Dipindah ke Project Test Terpisah (23 Agu 2026)
+
+Pemilik produk memperbarui 3 GitHub Secret (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` = Publishable key, `SUPABASE_SERVICE_ROLE_KEY` = Secret key) ke project `fabrix-ci-test` (`gzxrgbwhmjwiakcyjipd`). Tiga secret lain (`SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF`) SENGAJA tidak diubah — dipakai workflow backup dan memang menunjuk project berbeda.
+
+**Angka pembanding SEBELUM push percobaan ini** (FABRIX-APP, `kfvtrwuuqcjfkkuqizxt`): companies **2** (hanya `PT ITM` + `Company B`, tanpa satu pun `*TestCorp`), users 8, employees 30, items 8, boms 6, bom_lines 7, routings 2, routing_steps 13, work_orders 0, production_batches 0, sales_orders 1, customer_purchase_orders 1, suppliers 2, customers 2, lots 0, build_tasks 198, data_change_audit_log 544. Pembanding sisi sebaliknya (`fabrix-ci-test`): companies 1, users 0, employees 0, items 0, build_tasks 50.
+
+Commit ini adalah **push percobaan tunggal** untuk membuktikan CI tidak lagi menyentuh FABRIX-APP. Bukti dicatat menyusul di entri ini.
+
 ## FAKTA TERVERIFIKASI — Transfer Project Supabase Antar Organisasi Mempertahankan Project ID (23 Agu 2026, AA.6)
 
 **Dibuktikan LANGSUNG lewat transfer sungguhan hari ini** (project data nyata `kfvtrwuuqcjfkkuqizxt`, dari organisasi lama ke organisasi "FABRIX", paket Pro) — **BUKAN dari dokumentasi resmi**, karena halaman resmi [`supabase.com/docs/guides/platform/project-transfer`](https://supabase.com/docs/guides/platform/project-transfer) TIDAK menyatakan ini secara eksplisit (hanya menyiratkan lewat framing "downtime singkat 1-2 menit" + penagihan menempel ke project yang sama, kontras dengan halaman "migrating projects" yang eksplisit soal project BARU dengan ref/kunci baru).

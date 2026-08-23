@@ -27,7 +27,11 @@
 // yang PERNAH/SEDANG jadi rumah data nyata PT ITM. Tambah entri baru di sini
 // SETELAH transfer organisasi (S.1-S.7) kalau project ref berubah, JANGAN
 // hapus entri lama kecuali project itu benar-benar dihapus permanen.
-const KNOWN_REAL_PROJECT_REFS = ['kfvtrwuuqcjfkkuqizxt'];
+// SATU SUMBER KEBENARAN: daftar project data nyata dibaca dari
+// scripts/guard-real-project.js (INF-14, 23 Agu 2026) -- supaya tidak ada dua
+// daftar terpisah yang bisa berbeda diam-diam saat salah satunya diperbarui.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { KNOWN_REAL_PROJECT_REFS } = require('../../scripts/guard-real-project');
 
 function extractProjectRef(supabaseUrl: string | undefined): string | null {
   if (!supabaseUrl) return null;

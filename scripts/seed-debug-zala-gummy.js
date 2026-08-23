@@ -3,6 +3,11 @@ const dotenv = require('dotenv');
 
 dotenv.config({ path: '.env.local' });
 
+
+// INF-14 (23 Agu 2026) -- pengawas tingkat project: skrip ini MENULIS data,
+// jadi WAJIB gagal keras bila diarahkan ke project berisi data nyata.
+require('./guard-real-project').assertNotRealProject('scripts/seed-debug-zala-gummy.js');
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 

@@ -18,7 +18,8 @@
     "attendance-access:test": "vitest run tests/employee_attendance_access.test.ts",
     "isolation-access:test": "vitest run tests/cross_company_isolation.test.ts",
     "shipments-physical:test": "vitest run tests/shipments_physical_stage.test.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:target": "node scripts/check-linked-project.js"
   },
   "dependencies": {
     "@carbon/icons-react": "^11.86.0",

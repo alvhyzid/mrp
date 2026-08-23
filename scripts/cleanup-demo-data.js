@@ -27,6 +27,11 @@ if (target !== 'staging' && target !== 'dev') {
 const ENV_FILE_BY_TARGET = { staging: '.env.staging.local', dev: '.env.local' };
 dotenv.config({ path: ENV_FILE_BY_TARGET[target] });
 
+
+// INF-14 (23 Agu 2026) -- pengawas tingkat project: skrip ini MENULIS data,
+// jadi WAJIB gagal keras bila diarahkan ke project berisi data nyata.
+require('./guard-real-project').assertNotRealProject('scripts/cleanup-demo-data.js');
+
 async function confirmDevOrExit() {
   if (target !== 'dev') return;
   console.log('\n!!! PERINGATAN: target = DEV (database produksi/riil, BUKAN staging) !!!');

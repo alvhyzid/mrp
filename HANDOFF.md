@@ -16,6 +16,16 @@ Dikerjakan tanpa interaksi, mengumpulkan pertanyaan di task alih-alih berhenti. 
 - **INF-06**: SELESAI — 6 company bekas test dihapus lewat migrasi idempoten, dibuktikan 2x jalan + baris company_id=1 byte-identik.
 - **BB.2**: sudah tuntas di putaran-putaran sebelumnya (baris 70-2691 sudah disapu semua) — tidak ada lanjutan.
 
+## PELAJARAN TETAP — "Menunjuk Project yang Benar" ≠ "Bisa Masuk" (23 Agu 2026, PP.6)
+
+**Kejadian**: penyambungan situs production ke data nyata dilaporkan SELESAI & TERVERIFIKASI dengan 4 bukti (bundle JS menunjuk project benar, isolasi tenant terbukti, POD terbuka, jumlah baris tidak berubah). **Pemilik produk mencoba login — GAGAL TOTAL**: "Legacy API keys are disabled".
+
+**Kenapa 4 bukti itu lolos padahal sistemnya tidak bisa dipakai**: verifikasi (b) "isolasi tenant" dijalankan dari mesin lokal memakai kunci dari `.env.local` — yang ternyata **kunci generasi BARU** (`sb_publishable_*`/`sb_secret_*`) — sementara yang saya pasang ke Vercel adalah **kunci generasi LAMA** (`anon`/`service_role` JWT). Jadi saya menguji **kunci yang berbeda dari yang saya deploy**. Kunci legacy project ini sudah **dinonaktifkan sejak 11 Agu 2026** (dibuktikan: `GET /rest/v1/companies` dengan kunci legacy → HTTP 401 "Legacy API keys are disabled"; dengan publishable → HTTP 200).
+
+**Akar kesalahannya bukan teknis, tapi metodologis**: seluruh 4 bukti memeriksa **konfigurasi** (alamat benar? isolasi benar? baris utuh?), tidak satu pun memeriksa **apakah orang bisa benar-benar memakainya**. "Menunjuk project yang benar" bukan hal yang sama dengan "bisa masuk" — dan hanya yang kedua yang berarti bagi pengguna.
+
+**ATURAN TETAP**: verifikasi penyambungan/deploy apa pun **WAJIB menyertakan LOGIN SUNGGUHAN DARI PERAMBAN** ke alamat yang sesungguhnya, bukan hanya pemeriksaan bundle, query lewat CLI, atau uji SDK dari mesin lokal. Uji dari mesin lokal **memakai kredensial lokal** — itu lingkungan yang berbeda dari yang di-deploy, dan perbedaan itu justru tempat bug ini bersembunyi. Ini sekelas dengan pelajaran "`db push` menguji di database yang sudah berisi, CI membangun dari nol" — pola yang sama: **diuji di jalur yang bukan jalur sesungguhnya.**
+
 ## KOREKSI AUDIT INF-01 — "0 Snapshot" Keliru, Kejadian KETIGA dengan Pola Sama (23 Agu 2026, DD.1)
 
 **Klaim yang DIKOREKSI**: INF-01/INF-05 (22 Agu 2026) menyimpulkan "fitur backup asli Supabase (PITR) mati total" berdasarkan field `pitr_enabled=false` untuk kedua project. **Kesimpulan itu KELIRU** — dikonfirmasi 23 Agu 2026: backup harian otomatis Supabase TERNYATA sudah berjalan sejak 15 Agustus 2026, 7 titik pemulihan tersimpan (15-21 Agu), tipe PHYSICAL, tiap tengah malam waktu region.

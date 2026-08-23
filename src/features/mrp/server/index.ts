@@ -55,6 +55,7 @@ export * from './listSuppliers';
 export * from './createSupplier';
 export * from './updateSupplier';
 export * from './deleteOrArchiveSupplier';
+export * from './deleteOrDeactivateItem';
 export * from './listSupplierItemPrices';
 export * from './upsertSupplierItemPrice';
 export * from './deleteSupplierItemPrice';

@@ -53,6 +53,29 @@ const POLA_KONVERSI: { dari: string; ke: string; faktor: number }[] = [
   { dari: 'sama', ke: 'sama', faktor: 1 }
 ];
 
+// MST-17 — HANYA tiga jenis ini yang bisa dilampirkan ke item, sesuai permintaan
+// pemilik produk. Bukan daftar dokumen perusahaan secara umum (SOP, kontrak, surat
+// jalan punya tempatnya sendiri di modul Dokumen).
+//
+// `requiresExpiry` mencerminkan sifat dokumennya, bukan aturan karangan: sertifikat
+// halal dan izin BPOM punya masa berlaku dan harus diperbarui; COA melekat pada satu
+// batch bahan dan tidak kedaluwarsa dengan cara yang sama.
+const DOC_TYPE_ITEM: { code: string; label: string; requiresExpiry: boolean }[] = [
+  { code: 'COA', label: 'COA (Certificate of Analysis)', requiresExpiry: false },
+  { code: 'SERTIFIKAT_HALAL', label: 'Sertifikat Halal', requiresExpiry: true },
+  { code: 'BPOM', label: 'Izin Edar BPOM', requiresExpiry: true }
+];
+
+type ItemDocument = {
+  document_id: number;
+  doc_type: string;
+  title: string;
+  doc_number: string | null;
+  expiry_date: string | null;
+  uploaded_at: string;
+  size_bytes: number;
+};
+
 const emptyForm = {
   item_code: '',
   name: '',
@@ -96,6 +119,19 @@ export default function ItemsPage() {
   // item yang sedang dilihat).
   const [suppliersForPicker, setSuppliersForPicker] = useState<{ supplier_id: number; name: string }[]>([]);
   const [expandedItemPricesId, setExpandedItemPricesId] = useState<number | null>(null);
+  // Pesan hasil aksi di panel Detail (hapus/nonaktifkan). Sengaja TIDAK memakai alert()
+  // browser: jawabannya bisa panjang (menyebut di mana saja item ini terpakai) dan perlu
+  // tetap terbaca sambil pengguna melihat datanya.
+  const [itemActionMessage, setItemActionMessage] = useState<{ kind: 'error' | 'success'; message: string } | null>(null);
+
+  // MST-17 — dokumen yang menempel pada item (COA, Sertifikat Halal, BPOM).
+  // KETIGANYA OPSIONAL: item tetap sah tanpa dokumen apa pun.
+  const [itemDocs, setItemDocs] = useState<ItemDocument[]>([]);
+  const [itemDocsLoading, setItemDocsLoading] = useState(false);
+  const [docForm, setDocForm] = useState({ doc_type: 'COA', title: '', doc_number: '', expiry_date: '' });
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [docStatus, setDocStatus] = useState<'idle' | 'uploading'>('idle');
+  const [docMessage, setDocMessage] = useState<{ kind: 'error' | 'success'; message: string } | null>(null);
   const [itemPrices, setItemPrices] = useState<
     { supplier_item_price_id: number; supplier_id: number; supplier_name: string | null; reference_price: number | null; price_valid_from: string | null; lead_time_days_override: number | null }[]
   >([]);
@@ -118,6 +154,65 @@ export default function ItemsPage() {
     },
     [getAccessToken]
   );
+
+  const loadItemDocs = useCallback(
+    async (itemId: number) => {
+      setItemDocsLoading(true);
+      const { ok, body } = await authedFetch(`/api/documents?entity_type=items&entity_id=${itemId}`);
+      setItemDocs(ok ? body.documents || [] : []);
+      setItemDocsLoading(false);
+    },
+    [authedFetch]
+  );
+
+  const handleUploadItemDoc = async (item: Item) => {
+    if (!docFile) {
+      setDocMessage({ kind: 'error', message: 'Pilih berkas dokumennya dulu.' });
+      return;
+    }
+    const jenis = DOC_TYPE_ITEM.find((d) => d.code === docForm.doc_type);
+    if (jenis?.requiresExpiry && !docForm.expiry_date) {
+      setDocMessage({ kind: 'error', message: `Tanggal berlaku sampai wajib diisi untuk ${jenis.label}.` });
+      return;
+    }
+    setDocStatus('uploading');
+    setDocMessage(null);
+    const fd = new FormData();
+    fd.append('file', docFile);
+    fd.append('doc_type', docForm.doc_type);
+    // Judul boleh dikosongkan pengguna -- diisikan otomatis dari jenis + nama item,
+    // supaya orang tidak dipaksa mengarang judul untuk sesuatu yang sudah jelas.
+    fd.append('title', docForm.title.trim() || `${jenis?.label ?? docForm.doc_type} — ${item.name}`);
+    if (docForm.doc_number.trim()) fd.append('doc_number', docForm.doc_number.trim());
+    if (docForm.expiry_date) fd.append('expiry_date', docForm.expiry_date);
+    // Penghubung ke item memakai document_links yang SUDAH ADA -- bukan kolom baru.
+    fd.append('entity_type', 'items');
+    fd.append('entity_id', String(item.item_id));
+    fd.append('link_role', docForm.doc_type);
+
+    const accessToken = await getAccessToken();
+    const response = await fetch('/api/documents', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: fd
+    });
+    const body = await response.json();
+    setDocStatus('idle');
+    if (!response.ok) {
+      setDocMessage({ kind: 'error', message: body.error || 'Gagal mengunggah dokumen.' });
+      return;
+    }
+    setDocMessage({ kind: 'success', message: 'Dokumen tersimpan.' });
+    setDocForm({ doc_type: 'COA', title: '', doc_number: '', expiry_date: '' });
+    setDocFile(null);
+    await loadItemDocs(item.item_id);
+  };
+
+  const bukaDokumen = async (documentId: number) => {
+    const { ok, body } = await authedFetch(`/api/documents/${documentId}/signed-url`);
+    if (ok && body.signedUrl) window.open(body.signedUrl, '_blank', 'noopener');
+    else setDocMessage({ kind: 'error', message: body.error || 'Gagal membuka dokumen.' });
+  };
 
   const loadItems = useCallback(async () => {
     const accessToken = await getAccessToken();
@@ -188,7 +283,7 @@ export default function ItemsPage() {
     [authedFetch]
   );
 
-  const toggleItemSuppliers = async (item: Item) => {
+  const toggleItemDetail = async (item: Item) => {
     if (expandedItemPricesId === item.item_id) {
       setExpandedItemPricesId(null);
       return;
@@ -196,7 +291,36 @@ export default function ItemsPage() {
     setExpandedItemPricesId(item.item_id);
     setNewSupplierPriceForm({ supplier_id: '', reference_price: '', price_valid_from: '' });
     setSupplierPriceFormMessage('');
-    await loadItemPrices(item.item_id);
+    setItemActionMessage(null);
+    setDocMessage(null);
+    setDocForm({ doc_type: 'COA', title: '', doc_number: '', expiry_date: '' });
+    setDocFile(null);
+    await loadItemDocs(item.item_id);
+    // Daftar pemasok hanya berarti untuk bahan yang memang dibeli. Untuk produk jadi
+    // dan WIP, bagian itu tidak ditampilkan sama sekali (lihat renderItemDetail).
+    if (item.type === 'raw_material' || item.type === 'packaging') {
+      await loadItemPrices(item.item_id);
+    }
+  };
+
+  const handleDeleteItem = async (item: Item) => {
+    // Konfirmasi menyebut NAMA item-nya. Konfirmasi yang cuma bertanya "yakin hapus?"
+    // tidak membantu orang yang salah menekan baris.
+    const confirmed = window.confirm(
+      `Hapus "${item.name}" (${item.item_code ?? 'tanpa kode'})?\n\n` +
+        'Bila item ini sudah dipakai di BOM, lot, atau dokumen pembelian, item TIDAK akan dihapus ' +
+        'melainkan dinonaktifkan, supaya riwayatnya tetap utuh.'
+    );
+    if (!confirmed) return;
+    setItemActionMessage(null);
+    const { ok, body } = await authedFetch(`/api/items/${item.item_id}`, { method: 'DELETE' });
+    if (!ok) {
+      setItemActionMessage({ kind: 'error', message: body.error || 'Gagal menghapus item.' });
+      return;
+    }
+    setItemActionMessage({ kind: 'success', message: String(body.message ?? 'Berhasil.') });
+    if (body.action === 'dihapus') setExpandedItemPricesId(null);
+    await loadItems();
   };
 
   const handleAddItemSupplierPrice = async () => {
@@ -375,20 +499,17 @@ export default function ItemsPage() {
       {
         id: 'actions',
         header: 'Aksi',
+        // MST-16 — SATU pintu masuk: "Detail". Sebelumnya kolom ini memuat "Edit" dan
+        // "Pemasok" berdampingan, dan "Pemasok" cuma muncul untuk sebagian tipe item
+        // sehingga barisnya tampak berbeda-beda tanpa alasan yang terbaca pengguna.
+        // Semua aksi (Ubah, Tambah Pemasok, Hapus) sekarang hidup DI DALAM Detail.
+        //
+        // HAPUS SENGAJA TIDAK ADA DI TABEL. Tombol hapus yang berjejer rapat di daftar
+        // panjang terlalu mudah tertekan pada baris yang salah — apalagi di layar sentuh.
         cell: ({ row }) => (
-          <div className="flex flex-wrap items-center gap-2">
-            {canManage ? (
-              <Button size="sm" variant="outline" onClick={() => startEdit(row.original)}>
-                Edit
-              </Button>
-            ) : null}
-            {row.original.type === 'raw_material' || row.original.type === 'packaging' ? (
-              <Button size="sm" variant="outline" onClick={() => toggleItemSuppliers(row.original)}>
-                {expandedItemPricesId === row.original.item_id ? 'Tutup' : 'Pemasok'}
-              </Button>
-            ) : null}
-            {!canManage && row.original.type !== 'raw_material' && row.original.type !== 'packaging' ? <span className="text-xs text-muted-foreground">-</span> : null}
-          </div>
+          <Button size="sm" variant="outline" onClick={() => toggleItemDetail(row.original)}>
+            {expandedItemPricesId === row.original.item_id ? 'Tutup' : 'Detail'}
+          </Button>
         )
       }
     );
@@ -396,6 +517,189 @@ export default function ItemsPage() {
     return baseColumns;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canManage, canViewCost, expandedItemPricesId]);
+
+  const detailRows = (item: Item): { label: string; nilai: React.ReactNode }[] => {
+    const atau = (v: string | null | undefined) => (v && String(v).trim() ? String(v) : '—');
+    const baris: { label: string; nilai: React.ReactNode }[] = [
+      { label: 'Kode Item', nilai: atau(item.item_code) },
+      { label: 'Nama', nilai: item.name },
+      { label: 'Tipe', nilai: <Badge variant={typeBadgeVariant[item.type]}>{typeLabels[item.type]}</Badge> },
+      { label: 'Satuan Dasar/Pakai', nilai: atau(item.base_uom) },
+      { label: 'Satuan Beli', nilai: atau(item.purchase_uom) },
+      {
+        label: 'Faktor Konversi',
+        nilai: `1 ${item.purchase_uom || 'satuan beli'} = ${formatNumberId(item.uom_conversion_factor ?? 1)} ${item.base_uom || 'satuan dasar'}`
+      },
+      { label: 'Shelf Life', nilai: item.shelf_life_days !== null ? `${formatNumberId(item.shelf_life_days)} hari` : '—' },
+      { label: 'Min Stock Level', nilai: formatNumberId(item.min_stock_level ?? 0, 2) },
+      { label: 'Reorder Point', nilai: item.reorder_point !== null ? formatNumberId(item.reorder_point, 2) : '—' },
+      { label: 'Reorder Qty', nilai: item.reorder_qty !== null ? formatNumberId(item.reorder_qty, 2) : '—' }
+    ];
+    if (canViewCost) {
+      baris.push({
+        label: 'Biaya Standar',
+        nilai: item.standard_cost !== null ? formatCurrency(item.standard_cost, { maxDecimals: 0 }) : '—'
+      });
+    }
+    baris.push(
+      { label: 'No. Registrasi BPOM', nilai: atau(item.bpom_registration_number) },
+      { label: 'Kode Halal', nilai: atau(item.halal_certificate_number) },
+      {
+        label: 'Status',
+        nilai: <Badge variant={item.is_active ? 'success' : 'critical'}>{item.is_active ? 'Aktif' : 'Nonaktif'}</Badge>
+      }
+    );
+    return baris;
+  };
+
+  // MST-16 — panel Detail: SELURUH informasi bahan + aksi Ubah / Tambah Pemasok / Hapus.
+  const renderItemDetail = (item: Item) => (
+    <div className="flex flex-col gap-5">
+      <div>
+        <h4 className="pb-2 text-sm font-semibold text-foreground">Detail &quot;{item.name}&quot;</h4>
+        <dl className="divide-y border bg-background">
+          {detailRows(item).map((baris) => (
+            <div key={baris.label} className="grid gap-1 px-4 py-2.5 sm:grid-cols-3 sm:gap-4">
+              <dt className="text-xs uppercase tracking-wide text-muted-foreground">{baris.label}</dt>
+              <dd className="min-w-0 break-words text-data sm:col-span-2">{baris.nilai}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+
+      {canManage ? (
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => startEdit(item)}>
+              Ubah
+            </Button>
+            {/* Hapus ditaruh TERPISAH di kanan, bukan berdempetan dengan Ubah --
+                jarak fisik mengurangi salah tekan pada aksi yang paling merusak. */}
+            <Button size="sm" variant="destructive" className="sm:ml-auto" onClick={() => handleDeleteItem(item)}>
+              Hapus
+            </Button>
+          </div>
+          {itemActionMessage ? (
+            <p className={`text-sm ${itemActionMessage.kind === 'error' ? 'text-destructive' : 'text-success'}`}>
+              {itemActionMessage.message}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {renderItemDocuments(item)}
+
+      {item.type === 'raw_material' || item.type === 'packaging' ? renderItemSuppliers(item) : null}
+    </div>
+  );
+
+  const renderItemDocuments = (item: Item) => (
+    <div className="flex flex-col gap-3">
+      <div>
+        <h4 className="text-sm font-semibold text-foreground">Dokumen</h4>
+        {/* Ditulis eksplisit di layar, bukan cuma diketahui di kode: banyak bahan
+            memang tidak punya dokumen sendiri, dan tanpa kalimat ini orang akan
+            mengira ada yang kurang. */}
+        <p className="text-xs text-muted-foreground">
+          COA, Sertifikat Halal, dan Izin Edar BPOM. Ketiganya opsional — item tetap sah tanpa dokumen apa pun.
+        </p>
+      </div>
+
+      {itemDocsLoading ? (
+        <p className="text-sm text-muted-foreground">Memuat dokumen...</p>
+      ) : itemDocs.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Belum ada dokumen dilampirkan.</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {itemDocs.map((d) => {
+            const jenis = DOC_TYPE_ITEM.find((t) => t.code === d.doc_type);
+            const kedaluwarsa = d.expiry_date ? new Date(`${d.expiry_date}T00:00:00`) < new Date() : false;
+            return (
+              <li key={d.document_id} className="flex flex-wrap items-center justify-between gap-2 border bg-background p-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">{d.title}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {jenis?.label ?? d.doc_type}
+                    {d.doc_number ? ` · ${d.doc_number}` : ''}
+                    {d.expiry_date ? ` · berlaku sampai ${d.expiry_date}` : ''}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {kedaluwarsa ? <Badge variant="critical">Kedaluwarsa</Badge> : null}
+                  <Button size="sm" variant="outline" onClick={() => bukaDokumen(d.document_id)}>
+                    Buka
+                  </Button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {canManage ? (
+        <div className="flex flex-col gap-3 border border-dashed p-3">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Lampirkan Dokumen</span>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1.5">
+              <FieldLabel help="Jenis dokumen menentukan apakah tanggal berlakunya wajib diisi. Sertifikat Halal dan Izin Edar BPOM punya masa berlaku; COA melekat pada satu batch bahan dan tidak kedaluwarsa dengan cara yang sama.">
+                Jenis Dokumen
+              </FieldLabel>
+              <Select value={docForm.doc_type} onValueChange={(v) => setDocForm((p) => ({ ...p, doc_type: v }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DOC_TYPE_ITEM.map((t) => (
+                    <SelectItem key={t.code} value={t.code}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-foreground">Nomor Dokumen (opsional)</span>
+              <Input value={docForm.doc_number} onChange={(e) => setDocForm((p) => ({ ...p, doc_number: e.target.value }))} />
+            </label>
+
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-foreground">
+                Berlaku Sampai{DOC_TYPE_ITEM.find((t) => t.code === docForm.doc_type)?.requiresExpiry ? '' : ' (opsional)'}
+              </span>
+              <Input type="date" value={docForm.expiry_date} onChange={(e) => setDocForm((p) => ({ ...p, expiry_date: e.target.value }))} />
+            </label>
+
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-foreground">Berkas</span>
+              <input
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.docx"
+                onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
+                className="min-h-11 border border-border bg-background px-3 py-2 text-sm file:mr-3 file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm"
+              />
+              <span className="text-xs text-muted-foreground">PDF, PNG, JPG, WEBP, XLSX, atau DOCX. Maksimal 20 MB.</span>
+            </label>
+          </div>
+
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-foreground">Judul (opsional)</span>
+            <Input value={docForm.title} onChange={(e) => setDocForm((p) => ({ ...p, title: e.target.value }))} />
+            <span className="text-xs text-muted-foreground">Bila dikosongkan, judulnya diisi otomatis dari jenis dokumen dan nama item.</span>
+          </label>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Button size="sm" disabled={docStatus === 'uploading'} onClick={() => handleUploadItemDoc(item)}>
+              {docStatus === 'uploading' ? 'Mengunggah...' : 'Unggah Dokumen'}
+            </Button>
+            {docMessage ? (
+              <span className={`text-sm ${docMessage.kind === 'error' ? 'text-destructive' : 'text-success'}`}>{docMessage.message}</span>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 
   const renderItemSuppliers = (item: Item) => (
     <div className="flex flex-col gap-3">
@@ -510,7 +814,7 @@ export default function ItemsPage() {
                 pageSize={15}
                 getRowId={(item) => String(item.item_id)}
                 expandedRowId={expandedItemPricesId !== null ? String(expandedItemPricesId) : null}
-                renderExpandedRow={renderItemSuppliers}
+                renderExpandedRow={renderItemDetail}
                 primaryAction={canManage ? { label: 'Tambah Item', onClick: () => { resetForm(); setIsFormModalOpen(true); } } : undefined}
               />
             )}

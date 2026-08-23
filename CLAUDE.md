@@ -62,8 +62,50 @@ Sejak 23 Agu 2026, situs production (`mrp-staging-zeta.vercel.app`) **tersambung
    **KEMUNGKINAN PENGECUALIAN, SENGAJA BELUM DIBANGUN**: perubahan yang berdampak ke **dokumen yang sudah terbit** (mis. alamat resmi atau NPWP supplier yang sudah tercetak di PO). Di situ ringkasan berguna karena menunjukkan **APA YANG BERUBAH**, bukan mengulang yang sudah terlihat. **Jangan dibangun sekarang** — tinjau kembali saat ada keluhan nyata.
 8. **Padding modal dipindahkan BERTAHAP, jangan "dirapikan" sekaligus** (ditetapkan 24 Agu 2026). Anatomi Carbon dipakai lewat kelas bersama `carbonModalContent` / `carbonModalHeader` / `DialogBody` di `src/components/ui/dialog.tsx`, dan padding SENGAJA tidak dijadikan bawaan `DialogHeader`/`DialogFooter`.
    **Alasan, supaya sesi berikutnya tidak "membereskan" ini dan malah merusak**: modal lama masih memakai `DialogContent` yang ber-padding sendiri. Begitu padding dipindah jadi bawaan komponen, **seluruh modal lama akan berpadding dobel sekaligus** — puluhan layar rusak dalam satu perubahan yang niatnya merapikan. Modal yang sudah dipindah memakai ketiga kelas itu; yang belum tetap seperti semula sampai gilirannya tiba.
+9. **Aksi merusak ditempatkan TERPISAH dan BERJAUHAN dari aksi biasa** (ditetapkan 24 Agu 2026). Tombol Hapus / Batalkan / Arsipkan **tidak boleh berdempetan** dengan Ubah / Simpan / Tambah. Alasannya bukan estetika: di layar sentuh jari jauh lebih besar daripada kursor mouse, dan aksi yang tidak bisa dibatalkan tidak boleh berjarak satu jari dari aksi sehari-hari. Contoh penerapannya di panel Detail Item (MST-16): `Ubah` di kiri, `Hapus` didorong ke kanan (`sm:ml-auto`), dengan seluruh lebar panel di antaranya.
+10. **Keputusan hapus-vs-nonaktifkan DIHITUNG SERVER, bukan ditawarkan sebagai pilihan ke pengguna** (ditetapkan 24 Agu 2026; pola ini sudah dipakai lebih dulu di Supplier dan Routing, MST-16 mengikutinya). Pengguna **tidak bisa tahu dari layar** apakah sebuah bahan pernah masuk BOM tiga bulan lalu, pernah punya lot, atau pernah tercantum di dokumen pembelian — jadi menawarkan pilihan itu berarti meminta keputusan dari orang yang tidak punya informasinya.
+    Yang benar: server memeriksa pemakaian, lalu **menghapus permanen bila belum dipakai** dan **menonaktifkan bila sudah dipakai**, sambil menjelaskan **di mana** item itu terpakai. Ketertelusuran lot adalah syarat kepatuhan BPOM/halal — memutus jejaknya bukan pilihan yang boleh diserahkan ke satu klik.
+    Berlaku untuk layar berikutnya juga: **jangan menawarkan pilihan yang seharusnya dihitung.**
 
 > Bagian ini ditulis lebih awal (sebelum `PMB-11` selesai) atas permintaan pemilik produk, karena aturan yang hanya hidup di percakapan terbukti hilang. Akan **dilengkapi**, bukan diganti, begitu modal Supplier tuntas jadi cetakan penuh.
+
+## Aturan Integritas Data Lintas Domain (SD-1..SD-13) — dari §38 Arsitektur Sales (dicatat 24 Agu 2026)
+
+Tiga belas aturan ini berasal dari `docs/FABRIX_Sales_Technical_Architecture_Fable5_v0_1.md` §38. Dicatat di sini **beserta STATUS masing-masing**, bukan disalin mentah — aturan tanpa status akan dikira sudah berlaku padahal belum.
+
+**PERINGATAN PENTING soal cara membaca status di bawah.** Ada perbedaan besar antara *"terbukti berlaku"* dan *"tidak mungkin dilanggar karena hal yang dilarangnya belum ada"*. Keduanya sama-sama "tidak dilanggar hari ini", tapi yang kedua **tidak memberi jaminan apa pun untuk besok** — begitu fiturnya dibangun, aturannya langsung berlaku dan belum ada satu pun test yang menjaganya. Status di bawah membedakan keduanya secara eksplisit.
+
+| Kode | Aturan (§38) | Status | Dasar |
+|---|---|---|---|
+| SD-1 | Sales Order terkonfirmasi tidak boleh mengubah riwayat Quotation | **BELUM RELEVAN** | Modul Quotation belum ada (SLS-02) |
+| SD-2 | Sales Order tidak boleh mengubah BOM produksi | **BERLAKU & TERBUKTI** | `tests/production_batch_routing_bom_snapshot.test.ts` — batch berjalan memakai snapshot BOM/routing; mengedit master TIDAK mengubah angka batch yang sudah jalan |
+| SD-3 | Sales tidak boleh membuat Work Order langsung | **KOSONG, BUKAN TERBUKTI** | **Tidak ada role `sales`** di `src/lib/roles.ts` (16 role, tak satu pun sales). Aturannya benar hari ini karena pelakunya belum ada — bukan karena dijaga |
+| SD-4 | Sales tidak boleh membuat Purchase Order langsung | **KOSONG, BUKAN TERBUKTI** | Sama seperti SD-3 |
+| SD-5 | Reservasi tidak boleh mengurangi stok fisik | **KOSONG, BUKAN TERBUKTI** | **Konsep reservasi/alokasi belum ada sama sekali** — nol kolom & nol tabel ber-nama `reserv*`/`alloc*` di seluruh skema |
+| SD-6 | Qty terkirim tidak boleh ditulis ulang demi menampung retur | **BELUM RELEVAN** | Modul retur belum ada (SLS-05) |
+| SD-7 | Retur wajib jadi transaksi terpisah | **BELUM RELEVAN** | Modul retur belum ada (SLS-05) |
+| SD-8 | Komplain tidak boleh menulis ulang data pengiriman historis | **BELUM RELEVAN** | Modul komplain belum ada (SLS-05) |
+| SD-9 | Forecast consumption wajib menjaga riwayat forecast | **TIDUR** | Forecast DITOLAK sebagai konsep (lihat SLS-90). Pemicu bangun: ada kontrak blanket berkomitmen volume |
+| SD-10 | Perubahan komersial wajib mencatat siapa / kapan / alasan | **SEBAGIAN** | Sudah berlaku di kunci-ulang baseline finansial dan buka-kembali Work Order; **belum menyeluruh** untuk perubahan komersial lain |
+| SD-11 | Konfigurasi pelanggan tidak boleh memutasi master produksi | **BELUM ADA → jadi task** | Aturan kandidat-BOM. Tercatat sebagai task tersendiri |
+| SD-12 | Nilai komersial terkonfirmasi wajib berversi atau beku | **BELUM ADA → jadi task** | Harga di Sales Order **belum dibekukan**, padahal identitas mitra sudah (PMB-07a). Tercatat sebagai task tersendiri |
+| SD-13 | Rujukan lintas domain yang kritis wajib tetap tertelusur | **BERLAKU & TERBUKTI** | `tests/shipments_physical_stage.test.ts` dan `tests/margin_v1_acceptance.test.ts` — jejak lot dari produksi sampai pengiriman |
+
+**Yang harus dilakukan saat membangun fitur yang menyentuh aturan ber-status KOSONG atau BELUM RELEVAN**: aturannya menjadi hidup pada saat itu juga, dan **test penjaganya harus lahir bersama fiturnya** — jangan menunda, karena setelah fiturnya jalan tidak akan ada yang mengingatkan.
+
+## Aturan Status/Alert/Tombol Baru — Hanya Bersama Pemicunya (ditetapkan 24 Agu 2026)
+
+**Status, alert, tombol, atau penanda baru HANYA ditambahkan bersama PEMICU dan AKIBATNYA. Menambahkan nilai enum yang tidak pernah dipicu kode mana pun adalah CACAT, bukan persiapan.**
+
+Ini sudah terjadi **TIGA KALI** di proyek ini, dan tiap kali menghasilkan hal yang sama: sesuatu yang terlihat berfungsi di layar padahal tidak pernah hidup —
+
+1. Tombol **Tunda/Batal** yang ada tapi tidak melakukan apa-apa.
+2. **Status Work Order** yang terdaftar tapi tidak pernah dicapai.
+3. Alert **low_stock** yang terdaftar dan ditampilkan tapi **tidak pernah dipicu kode mana pun** (baru akan dihidupkan lewat MST-19).
+
+Ketiganya lebih buruk daripada tidak ada sama sekali: pengguna melihatnya, mengira sistem memantau sesuatu, dan berhenti memantau sendiri.
+
+**Kasus yang sedang mengintai jadi kejadian KEEMPAT**: §5 arsitektur Sales mengusulkan 6 status pelanggan (ACTIVE, INACTIVE, BLOCKED, SUSPENDED, PROSPECT, ARCHIVED). **BLOCKED dan SUSPENDED TIDAK BOLEH ditambahkan** sampai ada kode yang benar-benar memicunya dan akibat yang benar-benar terjadi saat status itu aktif.
 
 ## Aturan Responsive — WAJIB di Semua Halaman (ditetapkan 23 Agu 2026)
 1. **Seluruh halaman WAJIB responsive terhadap semua ukuran layar** — HP, tablet, laptop, monitor lebar. TIDAK ada layar HP terpisah: satu kode, satu halaman, susunannya menyesuaikan lebar layar.

@@ -36,6 +36,38 @@ Dikerjakan tanpa interaksi, mengumpulkan pertanyaan di task alih-alih berhenti. 
 
 **Yang TIDAK batal dari pekerjaan INF-05 kemarin (23 Agu, DD.2)**: backup manual (ekspor 92 tabel via Supabase JS client) **tetap satu-satunya backup yang PERNAH DIUJI PULIH sungguhan** (direstorasi ke project staging, dibuktikan identik, lalu dibersihkan). Backup bawaan Supabase (7 titik PHYSICAL) **belum pernah diuji restore-nya** — baru diketahui ADA, belum dibuktikan BISA DIPULIHKAN. Task baru dicatat untuk ini (lihat `INF-15`).
 
+## PELAJARAN TETAP — TypeScript TIDAK Tahu Kolom Mana yang Ada di Database (24 Agu 2026)
+
+Kalimat pemilik produk, dicatat apa adanya:
+
+> "TypeScript tidak tahu kolom mana yang benar-benar ada di database. Typecheck lulus bersih bukan bukti kueri akan berjalan. Kode yang menyusun kueri dari daftar tabel WAJIB memverifikasi kolomnya ada — dan verifikasi di peramban tetap wajib, karena kelas kesalahan ini tidak tertangkap test mana pun yang tidak benar-benar menjalankannya."
+
+**KEJADIANNYA (MST-16)**: `deleteOrDeactivateItem.ts` menyusun kueri dari daftar 18 tabel yang menunjuk `items`, dan menyaring `.eq('company_id', ...)` di SEMUANYA. **7 dari 18 tabel tidak punya kolom itu.** Fitur Hapus gagal total di tabel pertama (`bom_lines`) dengan pesan "Gagal memeriksa pemakaian di bom_lines".
+
+**Typecheck LULUS BERSIH.** Nama tabel adalah string; TypeScript tidak punya cara tahu kolom apa yang ada di dalamnya. Yang menemukannya adalah **menekan tombolnya di peramban** — bukan typecheck, bukan test suite (tidak ada test yang menjalankan endpoint itu karena endpoint-nya memang baru).
+
+**KENAPA 7 TABEL ITU TIDAK PUNYA `company_id`, dan ini BUKAN kelalaian**: ketujuhnya tabel BARIS dari sebuah dokumen — `bom_lines`→`boms`, `customer_purchase_order_lines`→`customer_purchase_orders`, `goods_receipt_lines`→`goods_receipts`, `purchase_order_lines`→`purchase_orders`, `sales_order_lines`→`sales_orders`, `shipment_lines`→`shipments`, `work_order_outputs`→`work_orders`. Satu baris PO tidak mungkin berbeda perusahaan dari PO-nya, jadi menyimpan `company_id` lagi di baris hanya menciptakan dua sumber kebenaran yang bisa berselisih. RLS ketujuhnya memang sudah menyaring lewat induk.
+
+**ATURAN**: kode yang menyusun kueri dari DAFTAR nama tabel wajib memverifikasi kolom yang dipakainya ada di tiap tabel — tanyakan ke `information_schema`, jangan mengandalkan ingatan atau pola nama. Di `deleteOrDeactivateItem.ts` ini diwujudkan sebagai penanda `berCompanyId` per baris daftar, yang nilainya diukur dari database.
+
+**SAPUAN KELAS (0.1b)**: 13 kelompok kode diperiksa; **1 terdampak** — migrasi sekali-jalan `20260826100000_cleanup_orphaned_test_companies.sql` mematikan penegakan FK lalu menghapus induk lewat `company_id`, sehingga baris anak ketujuh tabel tertinggal yatim. Terukur: **1 baris yatim** di `work_order_outputs` FABRIX-APP (rujukannya ke work order, item, dan batch semuanya sudah hilang; tabel `work_orders` sendiri kosong), **0** di fabrix-ci-test. Pola BENARNYA sudah ada di repo: migrasi `20260826210000` memakai teknik yang sama tapi menghapus ketujuh tabel anak lebih dulu lewat join ke induk.
+
+## PELAJARAN TETAP — Kueri yang Saling Bebas Jangan Dijalankan Bergiliran (24 Agu 2026)
+
+`deleteOrDeactivateItem` memeriksa 18 tabel satu per satu dengan `await` di dalam loop. Waktu jawabnya **lebih dari 5 detik** — cukup lama untuk membuat pengguna mengira tombolnya tidak berfungsi lalu menekannya lagi. Ke-18 pemeriksaan itu saling bebas; setelah dijadikan `Promise.all`, jawabannya **1,4 detik**.
+
+**ATURAN**: `await` di dalam loop hanya sah bila tiap putaran BUTUH hasil putaran sebelumnya. Bila tidak, pakai `Promise.all`. Ini bukan optimasi prematur — selisihnya di sini 3,5x dan langsung terasa pengguna.
+
+**Catatan urutan**: saat memakai `Promise.all`, susun hasilnya kembali mengikuti urutan daftar aslinya, jangan mengikuti mana yang selesai duluan — pesan yang urutannya berubah-ubah tiap panggilan sulit dipercaya pembacanya.
+
+## PELAJARAN TETAP — "Tidak Muncul" yang Sebenarnya "Belum Sampai" (24 Agu 2026)
+
+Saat memverifikasi MST-16 di peramban, pesan hasil penghapusan tidak terlihat di layar. Kesimpulan pertama saya: bug tampilan. **Salah.** Jawaban server memang belum sampai saat layar diperiksa — endpoint-nya waktu itu masih butuh >5 detik, sementara skrip verifikasi cuma menunggu 5 detik.
+
+Kalau saya percaya kesimpulan pertama itu, perbaikannya akan diarahkan ke kode tampilan yang sebenarnya sudah benar, dan penyebab aslinya (endpoint lambat) tidak akan pernah tersentuh.
+
+**ATURAN**: saat memverifikasi di peramban, **tunggu prosesnya benar-benar selesai** sebelum menyimpulkan sesuatu tidak muncul — tunggu jawaban jaringannya (`waitForResponse`), bukan sekadar jeda beberapa detik. Kesimpulan "tidak tampil" yang diambil terlalu cepat mengirim perbaikan ke tempat yang salah.
+
 ## PELAJARAN TETAP — `toISOString()` di Test Adalah Bom Waktu (24 Agu 2026)
 
 `tests/production_batch_routing_bom_snapshot.test.ts` gagal dua run berturut-turut dengan `expected undefined to be truthy` — blok Gantt untuk batch yang baru saja dibuat tidak ketemu.

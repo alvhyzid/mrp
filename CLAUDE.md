@@ -51,6 +51,15 @@ Sejak 23 Agu 2026, situs production (`mrp-staging-zeta.vercel.app`) **tersambung
 
 **Catatan**: pengaman data tetap berlapis dan sudah terbukti — login aplikasi (16 peran) + RLS ber-`company_id` (diuji langsung: tenant uji melihat 0 dari 30 karyawan PT ITM). Aturan di atas soal **kualitas rilis**, bukan kebocoran data.
 
+## Aturan Komponen Form & Modal (ditetapkan 23 Agu 2026, dilengkapi saat PMB-11 tuntas)
+1. **Ukuran field: MEDIUM Carbon = 40px** (`h-10`). Berlaku untuk `Input` dan `SelectTrigger` di `src/components/ui/`. Sebelumnya 32px (`h-8`) dan pemilik produk melaporkan modal terasa sempit/tidak lega. **Jangan menurunkannya lagi tanpa alasan tertulis.**
+2. **Ketegangan yang disadari (bukan kelalaian)**: aturan responsive di bawah menetapkan target sentuh minimal **44px**, sedangkan Carbon medium **40px**. Selisih 4px ini diterima untuk sekarang — area sentuh efektif (label+field+helper) tetap di atas 44px. Bila kelak terbukti sulit ditekan di lantai produksi, naikkan ke `h-11` (44px); keputusan itu **belum** diambil karena belum ada keluhan nyata.
+3. **Anatomi modal mengikuti Carbon Design System** ([rujukan](https://carbondesignsystem.com/components/modal/usage/)): **Header** (judul, label opsional, ikon tutup ×) · **Body** (isi & kontrol) · **Footer** (tombol aksi **lebar penuh**, pakai komponen `DialogFooter` di `src/components/ui/dialog.tsx`). Ikon × menutup **tanpa menyimpan**. Overlay menggelapkan halaman di belakangnya.
+4. **Pembuatan data baru tidak langsung tersimpan** — tampilkan ringkasan draf lebih dulu, lalu konfirmasi.
+5. **Placeholder tidak boleh memuat instruksi** — instruksi masuk helper text di bawah field.
+
+> Bagian ini ditulis lebih awal (sebelum `PMB-11` selesai) atas permintaan pemilik produk, karena aturan yang hanya hidup di percakapan terbukti hilang. Akan **dilengkapi**, bukan diganti, begitu modal Supplier tuntas jadi cetakan penuh.
+
 ## Aturan Responsive — WAJIB di Semua Halaman (ditetapkan 23 Agu 2026)
 1. **Seluruh halaman WAJIB responsive terhadap semua ukuran layar** — HP, tablet, laptop, monitor lebar. TIDAK ada layar HP terpisah: satu kode, satu halaman, susunannya menyesuaikan lebar layar.
 2. **Responsive BUKAN tampilan yang sama diperkecil.** Tabel 8 kolom yang diperkecil sampai muat di HP tetap tidak terbaca — yang benar, susunannya BERUBAH BENTUK saat layar menyempit (informasinya sama, penyajiannya berbeda). Pola yang dipakai: tabel banyak kolom → kartu bertumpuk di layar sempit (satu baris = satu kartu, kolom tersusun ke bawah); navigasi samping → menu buka-tutup; modal lebar → layar penuh di HP; field form → satu kolom penuh di layar sempit; kolom tidak penting boleh disembunyikan di layar sempit TAPI harus tetap bisa dibuka, jangan hilang tanpa jalan melihatnya.

@@ -60,6 +60,15 @@ const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 )
 DialogHeader.displayName = "DialogHeader"
 
+// Carbon Design System -- FOOTER modal: tombol aksi LEBAR PENUH, dempet tanpa
+// jarak, membentang penuh lebar modal (bukan tombol kecil rata kanan). Dipakai
+// bersama DialogContent yang p-0 supaya footer benar-benar menempel di tepi.
+// Rujukan: https://carbondesignsystem.com/components/modal/usage/
+const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+  <div className={cn("mt-auto grid grid-cols-1 sm:grid-cols-2", className)} {...props} />
+)
+DialogFooter.displayName = "DialogFooter"
+
 const DialogTitle = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Title>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
@@ -92,6 +101,7 @@ export {
   DialogClose,
   DialogContent,
   DialogHeader,
+  DialogFooter,
   DialogTitle,
   DialogDescription,
 }

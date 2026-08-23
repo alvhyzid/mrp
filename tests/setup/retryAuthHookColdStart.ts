@@ -69,8 +69,17 @@ function looksLikeAuthEndpoint(url: string) {
   return url.includes('/auth/v1/');
 }
 
+// TIDAK menyaring berdasarkan kode status. Versi pertama mensyaratkan status >= 500,
+// dan akibatnya pengaman ini DIAM saat benar-benar dibutuhkan: satu run penuh gagal
+// dengan pesan "Failed to reach hook within maximum time of 5.000000 seconds" sementara
+// penghitung pengulangan tetap 0 -- artinya tidak sekali pun mencoba mengulang.
+//
+// Yang membuat pola ini khas BUKAN kode statusnya, melainkan KALIMAT di badan balasan.
+// Kalimat itu sangat spesifik dan tidak muncul untuk kegagalan login jenis lain, jadi
+// menyaring dengan kalimat saja tetap sempit -- sekaligus tidak lagi bergantung pada
+// tebakan soal kode status yang ternyata salah.
 async function isHookColdStart(res: Response) {
-  if (res.status < 500) return false;
+  if (res.ok) return false;
   try {
     const body = await res.clone().text();
     return /failed to reach hook|hook within maximum time/i.test(body);
@@ -141,8 +150,9 @@ const patchedFetch: typeof fetch = async (input, init) => {
       // pengulangan sungguhan. Pernah tertukar sungguhan: 7 baris log dibaca sebagai
       // pengulangan nyata dan sempat dilaporkan sebagai patokan, padahal ketujuhnya
       // milik test uji-diri. Membaca log dengan `grep -c` TIDAK cukup tanpa host ini.
-      `[cold start auth hook] host=${ambilHost(url) ?? '?'} percobaan ${attempt}/${MAX_ATTEMPTS - 1}: ` +
-        `Edge Function custom-access-token belum siap dalam 5 detik. Mengulang login dalam ${wait} ms.`
+      `[cold start auth hook] host=${ambilHost(url) ?? '?'} status=${res.status} ` +
+        `percobaan ${attempt}/${MAX_ATTEMPTS - 1}: Edge Function custom-access-token belum siap ` +
+        `dalam 5 detik. Mengulang login dalam ${wait} ms.`
     );
     // Test yang menguji pengaman INI SENDIRI sengaja memicu pengulangan terhadap fetch
     // tiruan; kalau ikut tercatat, patokan pemantauan kemunduran jadi bohong. Ia menandai

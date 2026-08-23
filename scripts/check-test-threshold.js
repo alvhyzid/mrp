@@ -35,9 +35,11 @@ const files = Array.isArray(r.testResults) ? r.testResults.length : 0;
 // Karena itu angkanya dilaporkan tiap run. Yang penting bukan angka hari ini,
 // melainkan ARAHNYA: naik terus dari run ke run = ada yang memburuk, bukan ragam biasa.
 //
-// PATOKAN 23 Agu 2026: NOL pengulangan sungguhan dalam run penuh mana pun yang sudah
-// diukur (46 berkas, 275 test, ~770 detik). Jaring pengulangan itu ada untuk berjaga,
-// dan sejauh ini memang belum pernah terpakai oleh login sungguhan.
+// PATOKAN 24 Agu 2026: 0-2 pengulangan sungguhan per run penuh (46 berkas, 275 test,
+// ~770 detik). Angka 2 tercatat pada run yang tetap HIJAU — artinya dua login yang
+// tadinya akan gagal berhasil diselamatkan oleh pengulangan. Itu bukti pertama jaring
+// ini bekerja pada login sungguhan, dan baru muncul SETELAH syarat "status >= 500"
+// dilepas: dengan syarat itu, pengaman ini DIAM justru saat dibutuhkan.
 //
 // ANGKA INI DUA KALI SALAH DIBACA sebelum akhirnya benar, keduanya karena membaca LOG
 // KONSOL dengan `grep -c` alih-alih membaca catatan: baris pengulangan milik test
@@ -45,7 +47,7 @@ const files = Array.isArray(r.testResults) ? r.testResults.length : 0;
 // dilaporkan sebagai patokan "7 pengulangan per run". Sejak itu tiap baris log menyebut
 // host DAN menyebut apakah ia dicatat. YANG SAH DIPAKAI SEBAGAI PATOKAN ADALAH ANGKA
 // DARI BERKAS CATATAN INI, BUKAN HASIL grep ATAS LOG.
-const MAX_RETRIES = 40;   // patokan 0; ambang dipasang longgar supaya yang tertangkap
+const MAX_RETRIES = 40;   // patokan 0-2; ambang dipasang longgar supaya yang tertangkap
                           // adalah KEMUNDURAN NYATA, bukan ragam wajar hari ke hari
 let retries = 0;
 const auditFile = path.join(process.cwd(), 'retry-audit.log');
@@ -61,7 +63,13 @@ if (failed > 0) problems.push(`${failed} test GAGAL`);
 // Waktu itu process_mining.test.ts mati begitu, dan `numFailedTests` tetap 0. Yang
 // menangkapnya cuma ambang jumlah test dilewati; kalau kebetulan masih di bawah batas,
 // kematian itu lolos tanpa suara. Karena itu status BERKAS ikut diperiksa.
-const failedSuites = r.numFailedTestSuites ?? 0;
+// SAMA SEPERTI numTotalTestSuites, `numFailedTestSuites` menghitung blok `describe`,
+// BUKAN berkas -- terbukti melaporkan 4 padahal vitest menyebut 2 berkas gagal. Kesalahan
+// yang PERSIS SAMA dengan yang sudah diperbaiki beberapa baris di atas, terulang karena
+// nama fieldnya sekali lagi terdengar benar. Yang sah adalah status di tiap testResults.
+const failedSuites = Array.isArray(r.testResults)
+  ? r.testResults.filter((t) => t.status === 'failed').length
+  : 0;
 if (failedSuites > 0) {
   problems.push(
     `${failedSuites} BERKAS test gagal (kemungkinan besar mati di beforeAll -- test di dalamnya ` +
@@ -70,7 +78,7 @@ if (failedSuites > 0) {
 }
 if (retries > MAX_RETRIES) {
   problems.push(
-    `pengulangan login terpakai ${retries} kali, di atas batas ${MAX_RETRIES} (patokan sehat: 0). ` +
+    `pengulangan login terpakai ${retries} kali, di atas batas ${MAX_RETRIES} (patokan sehat: 0-2). ` +
       `Ini tanda login ke project CI benar-benar memburuk, bukan lonjakan biasa.`
   );
 }
@@ -79,7 +87,7 @@ if (skipped > MAX_SKIPPED) problems.push(`test dilewati ${skipped}, di atas bata
 if (files !== EXPECTED_FILES) problems.push(`berkas berjalan ${files}, seharusnya ${EXPECTED_FILES}`);
 
 console.log(`\nPENGAWAS AMBANG -- lulus: ${passed} (min ${MIN_PASSED}) | dilewati: ${skipped} (maks ${MAX_SKIPPED}) | gagal: ${failed} | berkas: ${files} (harus ${EXPECTED_FILES})`);
-console.log(`PENGULANGAN LOGIN terpakai ${retries} kali run ini (patokan 23 Agu 2026: 0 | batas ${MAX_RETRIES}).`);
+console.log(`PENGULANGAN LOGIN terpakai ${retries} kali run ini (patokan 24 Agu 2026: 0-2 | batas ${MAX_RETRIES}).`);
 
 if (problems.length > 0) {
   console.error(

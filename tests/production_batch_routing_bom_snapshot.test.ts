@@ -249,7 +249,18 @@ describe('Sesi 6A — snapshot routing & BOM per batch (angka batch berjalan/sel
       })
     );
 
-    const today = new Date().toISOString().slice(0, 10);
+    // TANGGAL LOKAL, BUKAN toISOString(). toISOString() memberi tanggal UTC, dan di
+    // zona WIB (UTC+7) antara pukul 00:00-07:00 tanggal UTC masih KEMARIN. Kalau
+    // kemarin itu hari Minggu, batch terjadwal di MINGGU SEBELUMNYA, sementara Gantt
+    // menghitung minggu dari waktu LOKAL (lihat getWeekRange di weekRange.ts) -- jadi
+    // bloknya tidak ketemu dan test gagal.
+    //
+    // Bug laten ini tidur berbulan-bulan dan baru muncul saat suite kebetulan berjalan
+    // Senin dini hari 24 Agu 2026. Berkas weekRange.ts SUDAH memperingatkan hal ini
+    // persis di komentar dateToDateString ("bukan toISOString, yang bisa mundur/maju
+    // 1 hari"), tapi test ini tetap memakai toISOString.
+    const kini = new Date();
+    const today = `${kini.getFullYear()}-${String(kini.getMonth() + 1).padStart(2, '0')}-${String(kini.getDate()).padStart(2, '0')}`;
     const batchId = await makeBatch('RBSNAP-BATCH-D-GANTT', today);
     expect((await startProductionBatch(makeRequest('http://localhost/api/production-batches/start', adminToken, 'POST', { production_batch_id: batchId }))).status).toBe(200);
 

@@ -9,6 +9,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { FieldLabel } from '@/components/ui/field-help';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { canViewFinancialData, isCompanyLeadership } from '@/lib/roles';
@@ -31,7 +32,26 @@ type Item = {
   is_active: boolean;
   standard_cost: number | null;
   bpom_registration_number: string | null;
+  halal_certificate_number: string | null;
 };
+
+// MST-15 / B.1 — POLA KONVERSI UMUM.
+//
+// Keluhan pemilik produk: "Faktor Konversi" cuma kolom angka kosong, dan orang yang
+// mengisinya harus tahu sendiri bahwa 1 kg = 1000 gram HARUS ditulis sebagai 1000.
+// Salah arah (menulis 0,001) tidak ketahuan sampai angka biaya ikut salah.
+//
+// Daftar ini SENGAJA pendek dan berisi satuan yang benar-benar dipakai PT Indo Taste
+// hari ini, bukan tabel konversi universal. Kolom angkanya tetap ada dan tetap bisa
+// diisi bebas -- pola ini jalan pintas, bukan pembatas.
+const POLA_KONVERSI: { dari: string; ke: string; faktor: number }[] = [
+  { dari: 'kg', ke: 'g', faktor: 1000 },
+  { dari: 'ton', ke: 'kg', faktor: 1000 },
+  { dari: 'liter', ke: 'ml', faktor: 1000 },
+  { dari: 'dus', ke: 'pcs', faktor: 12 },
+  { dari: 'roll', ke: 'pcs', faktor: 1 },
+  { dari: 'sama', ke: 'sama', faktor: 1 }
+];
 
 const emptyForm = {
   item_code: '',
@@ -46,6 +66,7 @@ const emptyForm = {
   reorder_qty: '',
   standard_cost: '',
   bpom_registration_number: '',
+  halal_certificate_number: '',
   is_active: true
 };
 
@@ -232,6 +253,7 @@ export default function ItemsPage() {
       reorder_qty: item.reorder_qty === null ? '' : String(item.reorder_qty),
       standard_cost: item.standard_cost === null ? '' : String(item.standard_cost),
       bpom_registration_number: item.bpom_registration_number ?? '',
+      halal_certificate_number: item.halal_certificate_number ?? '',
       is_active: item.is_active
     });
     setFormStatus('idle');
@@ -264,6 +286,7 @@ export default function ItemsPage() {
       reorder_qty: form.reorder_qty,
       standard_cost: form.standard_cost,
       bpom_registration_number: form.bpom_registration_number,
+      halal_certificate_number: form.halal_certificate_number,
       is_active: form.is_active
     };
 
@@ -536,37 +559,57 @@ export default function ItemsPage() {
                 </label>
 
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">Satuan Dasar/Pakai</span>
+                  <FieldLabel help="Satuan yang dipakai saat bahan ini DIPAKAI di produksi dan dicatat stoknya. Biasanya satuan terkecil, mis. gram untuk bahan yang ditimbang.">
+                    Satuan Dasar/Pakai
+                  </FieldLabel>
                   <Input
-                    placeholder="mis. g, ml, pcs"
                     value={form.base_uom}
                     onChange={(event) => setForm((prev) => ({ ...prev, base_uom: event.target.value }))}
                     required
                   />
+                  <span className="text-xs text-muted-foreground">Contoh: g, ml, pcs.</span>
                 </label>
 
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">Satuan Beli</span>
+                  <FieldLabel help="Satuan yang tertulis di dokumen pembelian dari supplier. Boleh berbeda dari satuan pakai — selisihnya diisi di Faktor Konversi.">
+                    Satuan Beli
+                  </FieldLabel>
                   <Input
-                    placeholder="mis. kg, liter, dus"
                     value={form.purchase_uom}
                     onChange={(event) => setForm((prev) => ({ ...prev, purchase_uom: event.target.value }))}
                     required
                   />
+                  <span className="text-xs text-muted-foreground">Contoh: kg, liter, dus.</span>
                 </label>
 
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">Faktor Konversi (satuan beli → satuan dasar)</span>
+                <div className="flex flex-col gap-1.5 sm:col-span-2">
+                  <FieldLabel help="Berapa banyak satuan dasar yang didapat dari SATU satuan beli. Contoh: beli per kg, pakai per gram → isi 1000, karena 1 kg berisi 1000 g. Kalau satuan beli dan satuan pakai sama (mis. beli pcs, pakai pcs), isi 1.">
+                    Faktor Konversi (satuan beli → satuan dasar)
+                  </FieldLabel>
                   <Input
                     type="number"
                     min="0"
                     step="any"
-                    placeholder="mis. 1000 untuk kg -> gram"
                     value={form.uom_conversion_factor}
                     onChange={(event) => setForm((prev) => ({ ...prev, uom_conversion_factor: event.target.value }))}
                     required
                   />
-                </label>
+                  <div className="flex flex-wrap gap-2">
+                    {POLA_KONVERSI.map((pola) => (
+                      <button
+                        key={`${pola.dari}-${pola.ke}-${pola.faktor}`}
+                        type="button"
+                        onClick={() => setForm((prev) => ({ ...prev, uom_conversion_factor: String(pola.faktor) }))}
+                        className="min-h-11 border border-border px-3 py-2 text-xs text-foreground transition-colors hover:bg-muted focus:outline-none focus:outline-2 focus:outline-ring"
+                      >
+                        {pola.dari === 'sama' ? 'Satuannya sama (1)' : `1 ${pola.dari} = ${formatNumberId(pola.faktor)} ${pola.ke}`}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    Pilih pola yang cocok untuk mengisi cepat, atau ketik angkanya sendiri di atas.
+                  </span>
+                </div>
 
                 <label className="flex flex-col gap-1.5">
                   <span className="text-sm font-medium text-foreground">Shelf Life (hari)</span>
@@ -621,11 +664,23 @@ export default function ItemsPage() {
                 ) : null}
 
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">No. Registrasi BPOM</span>
+                  <FieldLabel help="Nomor izin edar dari BPOM untuk item ini. Boleh dikosongkan bila item ini belum/tidak punya izin edar sendiri, misalnya bahan baku.">
+                    No. Registrasi BPOM
+                  </FieldLabel>
                   <Input
-                    placeholder="mis. BPOM RI MD 023733999101561"
                     value={form.bpom_registration_number}
                     onChange={(event) => setForm((prev) => ({ ...prev, bpom_registration_number: event.target.value }))}
+                  />
+                  <span className="text-xs text-muted-foreground">Contoh: BPOM RI MD 023733999101561.</span>
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <FieldLabel help="Nomor sertifikat halal item ini. Diminta bersama nomor BPOM saat pengurusan izin, jadi disimpan berdampingan. Boleh dikosongkan — banyak bahan baku tidak punya sertifikat halal sendiri.">
+                    Kode Halal
+                  </FieldLabel>
+                  <Input
+                    value={form.halal_certificate_number}
+                    onChange={(event) => setForm((prev) => ({ ...prev, halal_certificate_number: event.target.value }))}
                   />
                 </label>
 

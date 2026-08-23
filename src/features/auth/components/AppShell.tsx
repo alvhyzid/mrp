@@ -25,7 +25,9 @@ import {
   Analytics,
   Meter,
   Time,
-  ChartBarTarget
+  ChartBarTarget,
+  Menu,
+  Close
 } from '@carbon/icons-react';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import {
@@ -191,6 +193,11 @@ const NAV_SECTIONS: NavSection[] = [
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  // RSP-01 — menu samping bisa dibuka/tutup di layar sempit. Di layar >= md menu
+  // selalu tampil dan nilai ini tidak berpengaruh.
+  const [menuTerbuka, setMenuTerbuka] = useState(false);
+  // Menu ditutup otomatis begitu pindah halaman. Tanpa ini, di HP menu tetap
+  // menutupi halaman tujuan setelah pengguna memilih -- terasa seperti tidak terjadi apa-apa.
   const [userName, setUserName] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [companyId, setCompanyId] = useState<number | null>(null);
@@ -202,6 +209,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // terisi (mencegah kesan patah/blank sesaat, dan mencegah konten header
   // "melompat" begitu logo muncul).
   const [meLoaded, setMeLoaded] = useState(false);
+
+  useEffect(() => {
+    setMenuTerbuka(false);
+  }, [pathname]);
 
   useEffect(() => {
     let cancelled = false;
@@ -277,7 +288,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-white">
       <header className="fixed inset-x-0 top-0 z-40 flex h-12 items-center justify-between border-b border-[#c6c6c6] bg-white px-4">
-        <div className="flex items-center gap-2.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          {/* RSP-01 (24 Agu 2026) — tombol buka/tutup menu, HANYA di layar sempit.
+              Sebelum ini menu samping selebar 256 px tetap terpasang di lebar berapa pun,
+              jadi di layar 360 px isi halaman cuma kebagian ~210 px dan teksnya patah
+              satu huruf per baris. 44x44 px mengikuti aturan target sentuh. */}
+          <button
+            type="button"
+            aria-label={menuTerbuka ? 'Tutup menu' : 'Buka menu'}
+            aria-expanded={menuTerbuka}
+            onClick={() => setMenuTerbuka((v) => !v)}
+            className="-ml-2 inline-flex h-11 w-11 shrink-0 items-center justify-center text-[#161616] md:hidden"
+          >
+            {menuTerbuka ? <Close size={20} /> : <Menu size={20} />}
+          </button>
           {!meLoaded ? (
             <span className="h-6 w-6 shrink-0 animate-pulse rounded-none bg-[#e0e0e0]" aria-hidden="true" />
           ) : companyLogoUrl ? (
@@ -291,13 +315,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               {getCompanyInitials(companyName)}
             </span>
           ) : null}
-          <span className="text-sm font-semibold text-[#161616]">
+          <span className="truncate text-sm font-semibold text-[#161616]">
             MRP{companyName ? ` — ${companyName}` : ''}
           </span>
         </div>
         <div className="flex items-center gap-4">
           {meLoaded ? <NotificationBell role={role} companyId={companyId} /> : null}
-          <span className="text-xs text-[#525252]">
+          {/* Nama & peran disembunyikan di layar paling sempit -- di 360 px teks ini
+              memakan tiga baris dan mendesak judul aplikasi jadi terpotong, padahal
+              informasinya tersedia di halaman Profil. */}
+          <span className="hidden text-xs text-[#525252] sm:inline">
             {userName ?? '…'}
             {role ? (
               <>
@@ -320,7 +347,23 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <nav aria-label="Navigasi utama" className="fixed bottom-0 left-0 top-12 z-30 flex w-64 flex-col border-r border-[#e0e0e0] bg-white">
+      {/* Overlay hanya di layar sempit saat menu terbuka -- menutup menu ketika
+          ditekan di luar, perilaku baku menu geser. */}
+      {menuTerbuka ? (
+        <button
+          type="button"
+          aria-label="Tutup menu"
+          onClick={() => setMenuTerbuka(false)}
+          className="fixed inset-0 top-12 z-20 bg-black/50 md:hidden"
+        />
+      ) : null}
+
+      <nav
+        aria-label="Navigasi utama"
+        className={`fixed bottom-0 left-0 top-12 z-30 flex w-64 flex-col border-r border-[#e0e0e0] bg-white transition-transform md:translate-x-0 ${
+          menuTerbuka ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
         <div className="flex-1 overflow-y-auto py-2">
           <ul className="pb-2">{renderNavLink(TOP_ITEM)}</ul>
           {visibleSections.map((section) => (
@@ -341,7 +384,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </nav>
 
-      <div className="ml-64 pt-12">{children}</div>
+      <div className="pt-12 md:ml-64">{children}</div>
     </div>
   );
 }

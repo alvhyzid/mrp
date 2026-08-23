@@ -36,6 +36,20 @@ Dikerjakan tanpa interaksi, mengumpulkan pertanyaan di task alih-alih berhenti. 
 
 **Yang TIDAK batal dari pekerjaan INF-05 kemarin (23 Agu, DD.2)**: backup manual (ekspor 92 tabel via Supabase JS client) **tetap satu-satunya backup yang PERNAH DIUJI PULIH sungguhan** (direstorasi ke project staging, dibuktikan identik, lalu dibersihkan). Backup bawaan Supabase (7 titik PHYSICAL) **belum pernah diuji restore-nya** — baru diketahui ADA, belum dibuktikan BISA DIPULIHKAN. Task baru dicatat untuk ini (lihat `INF-15`).
 
+## PELAJARAN TETAP — `toISOString()` di Test Adalah Bom Waktu (24 Agu 2026)
+
+`tests/production_batch_routing_bom_snapshot.test.ts` gagal dua run berturut-turut dengan `expected undefined to be truthy` — blok Gantt untuk batch yang baru saja dibuat tidak ketemu.
+
+**Penyebabnya jam dinding, bukan kode yang berubah.** Test menjadwalkan batch dengan `new Date().toISOString().slice(0, 10)`, yang memberi tanggal **UTC**. Aplikasi menghitung "minggu ini" dari waktu **LOKAL** (`getWeekRange` di `src/features/mrp/server/weekRange.ts`). Di WIB (UTC+7), antara pukul 00:00–07:00 tanggal UTC masih KEMARIN. Karena kemarin kebetulan hari Minggu, batch itu jatuh di **minggu sebelumnya** dan tidak muncul di jadwal minggu ini.
+
+**Syarat kegagalannya sempit** — dijalankan antara 00:00–07:00 WIB DAN hari lokalnya Senin — sehingga bug ini tidur berbulan-bulan dan kelihatan seperti "tiba-tiba rusak" padahal tidak ada yang menyentuhnya.
+
+**Bagian yang paling pahit**: `weekRange.ts` SUDAH memuat peringatan persis soal ini, tepat di komentar `dateToDateString` — *"bukan toISOString, yang bisa mundur/maju 1 hari kalau dikonversi ke UTC dulu"*. Peringatannya benar, ada di berkas yang tepat, dan tetap terlewat karena yang menulis test tidak membuka berkas itu.
+
+**ATURAN**: di test mana pun yang menyentuh tanggal, **JANGAN memakai `toISOString().slice(0, 10)` untuk "hari ini"** — pakai tanggal LOKAL, sama seperti yang dipakai kode yang sedang diuji. Ada **19 pemakaian `toISOString().slice(0,10)`** tersisa di berkas test lain; belum semuanya ditinjau, dan tiap satu yang dibandingkan dengan perhitungan berbasis waktu lokal adalah bom waktu yang sama.
+
+**Pelajaran yang lebih umum**: kegagalan yang muncul tanpa ada kode yang berubah hampir selalu berarti sesuatu DI LUAR kode yang berubah — jam, tanggal, zona waktu, kuota, atau keadaan lingkungan. Periksa itu sebelum menyalahkan perubahan terakhir.
+
 ## PELAJARAN TETAP — Pengaman yang Memeriksa Kebohongan Angka, Angkanya Sendiri Salah Arti (23 Agu 2026)
 
 Kalimat pemilik produk, dicatat apa adanya karena inilah inti pelajarannya:

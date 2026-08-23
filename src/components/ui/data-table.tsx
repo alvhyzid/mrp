@@ -83,13 +83,26 @@ export function DataTable<TData, TValue>({
     getCoreRowModel: getCoreRowModel()
   });
 
+  // Peta header per kolom, dipakai kartu layar sempit untuk menampilkan judul kolom
+  // yang SAMA PERSIS dengan yang tampil di kepala tabel layar lebar.
+  const headerByColumnId = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof table.getHeaderGroups>[number]['headers'][number]>();
+    table.getHeaderGroups().forEach((g) => g.headers.forEach((h) => map.set(h.column.id, h)));
+    return map;
+  }, [table]);
+
   const searchEnabled = !!searchPlaceholder && !!getSearchText;
   const showToolbar = searchEnabled || !!primaryAction;
 
   return (
     <div className="flex flex-col gap-0">
+      {/* RSP-01: di layar sempit toolbar BERTUMPUK (cari di atas, tombol di bawah).
+          Penyebab gulir menyamping di halaman Item Master ternyata BUKAN tabelnya,
+          melainkan baris ini: kolom cari + tombol aksi berdampingan butuh lebih dari
+          360 px, dan tombolnya `whitespace-nowrap` sehingga tidak bisa menyusut.
+          Tingginya juga dilepas dari h-12 tetap supaya dua baris tidak tergencet. */}
       {showToolbar ? (
-        <div className="flex h-12 items-stretch gap-0 border border-b-0">
+        <div className="flex flex-col items-stretch gap-0 border border-b-0 sm:h-12 sm:flex-row">
           {searchEnabled ? (
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -105,20 +118,86 @@ export function DataTable<TData, TValue>({
                   setPageIndex(0);
                 }}
                 placeholder={searchPlaceholder}
-                className="h-full border-0 pl-9"
+                className="h-12 border-0 pl-9 sm:h-full"
               />
             </div>
           ) : (
             <div className="flex-1 bg-background" />
           )}
           {primaryAction ? (
-            <Button className="h-full rounded-none px-4" onClick={primaryAction.onClick}>
+            <Button className="h-12 rounded-none px-4 sm:h-full" onClick={primaryAction.onClick}>
               {primaryAction.label}
             </Button>
           ) : null}
         </div>
       ) : null}
-      <div className="overflow-hidden rounded-none border">
+      {/* KARTU BERTUMPUK UNTUK LAYAR SEMPIT (RSP-01, 24 Agu 2026).
+          Aturan responsive proyek: tabel banyak kolom TIDAK diperkecil sampai muat --
+          susunannya BERUBAH BENTUK. Satu baris jadi satu kartu, kolomnya tersusun ke
+          bawah dengan label di kiri dan isinya di kanan.
+
+          DIPASANG DI KOMPONEN BERSAMA, bukan di satu halaman: seluruh tabel di aplikasi
+          ini memakai DataTable, dan semuanya punya penyakit yang sama di layar sempit.
+          Tampilan layar lebar TIDAK tersentuh sedikit pun -- yang berubah hanya apa yang
+          dirender di bawah breakpoint md, yang sebelumnya memang rusak (meluber ke
+          samping). Jadi ini bukan perubahan berisiko di layar besar, melainkan mengganti
+          sesuatu yang sudah rusak di layar kecil.
+
+          Tiap halaman TETAP perlu bukti visualnya sendiri di 4 lebar -- label kolom yang
+          masuk akal di header tabel belum tentu masuk akal sebagai label kartu. */}
+      <div className="flex flex-col gap-3 md:hidden">
+        {table.getRowModel().rows.length ? (
+          table.getRowModel().rows.map((row) => {
+            const rowId = getRowId?.(row.original);
+            const isExpanded = !!renderExpandedRow && rowId !== undefined && rowId === expandedRowId;
+            return (
+              <div key={row.id} className="border bg-background">
+                <dl className="divide-y">
+                  {row.getVisibleCells().map((cell) => {
+                    // Label kartu diambil dari HEADER SUNGGUHAN kolom itu, dirender apa
+                    // adanya. Versi pertama cuma menerima header bertipe string, dan
+                    // akibatnya kolom yang judulnya mengandung elemen (mis. "Biaya Standar"
+                    // yang bersanding dengan ikon Asal-Usul) muncul sebagai angka telanjang
+                    // tanpa keterangan apa pun -- Rp15.000 tanpa penjelasan itu angka yang
+                    // tidak bisa dibaca.
+                    const headerCell = headerByColumnId.get(cell.column.id);
+                    const label =
+                      cell.column.id === 'actions' || !headerCell || headerCell.isPlaceholder
+                        ? null
+                        : flexRender(headerCell.column.columnDef.header, headerCell.getContext());
+                    // Kolom aksi sengaja tanpa label -- memberi judul "Aksi" pada sebaris
+                    // tombol cuma menambah kata tanpa menambah arti.
+                    if (!label) {
+                      return (
+                        <div key={cell.id} className="px-4 py-3">
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={cell.id} className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 px-4 py-3">
+                        <dt className="text-xs uppercase tracking-wide text-muted-foreground">{label}</dt>
+                        <dd className="min-w-0 break-words text-data">
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </dd>
+                      </div>
+                    );
+                  })}
+                </dl>
+                {isExpanded ? <div className="border-t bg-muted/30 p-4">{renderExpandedRow!(row.original)}</div> : null}
+              </div>
+            );
+          })
+        ) : (
+          <div className="border bg-background px-4 py-8 text-center text-data text-muted-foreground">{emptyMessage}</div>
+        )}
+      </div>
+      {/* overflow-x-auto, BUKAN overflow-hidden. Sebelumnya kolom yang tidak muat
+          DIPOTONG diam-diam tanpa ada cara melihatnya -- di layar 768 px dengan menu
+          samping terpasang, itu berarti kolom paling kanan hilang tanpa jejak. Kini
+          tabel lebar menggulir DI DALAM wadahnya sendiri, jadi halamannya tetap tidak
+          bergulir menyamping tapi datanya tetap bisa dijangkau. */}
+      <div className="hidden overflow-x-auto rounded-none border md:block">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (

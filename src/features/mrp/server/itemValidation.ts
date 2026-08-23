@@ -14,6 +14,8 @@ export interface ItemInput {
   is_active: boolean;
   standard_cost: number | null;
   bpom_registration_number: string | null;
+  // MST-15/B.3 — sepasang dengan nomor BPOM, keduanya diminta saat pengurusan BPOM.
+  halal_certificate_number: string | null;
 }
 
 function parseOptionalNumber(value: unknown, fieldLabel: string): { value: number | null; error?: string } {
@@ -64,6 +66,7 @@ export function parseItemInput(body: Record<string, unknown>): { input?: ItemInp
   if (standardCost.error) return { error: standardCost.error };
 
   const bpomRegistrationNumber = String(body.bpom_registration_number ?? '').trim();
+  const halalCertificateNumber = String(body.halal_certificate_number ?? '').trim();
 
   return {
     input: {
@@ -79,7 +82,8 @@ export function parseItemInput(body: Record<string, unknown>): { input?: ItemInp
       reorder_qty: reorderQty.value,
       is_active: body.is_active === undefined ? true : Boolean(body.is_active),
       standard_cost: standardCost.value,
-      bpom_registration_number: bpomRegistrationNumber || null
+      bpom_registration_number: bpomRegistrationNumber || null,
+      halal_certificate_number: halalCertificateNumber || null
     }
   };
 }

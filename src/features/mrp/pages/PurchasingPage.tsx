@@ -11,7 +11,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency, formatNumberId } from '@/lib/currency';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogBody,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+  carbonModalContent,
+  carbonModalHeader
+} from '@/components/ui/dialog';
 import { canManagePurchasing } from '@/lib/roles';
 
 type Supplier = {
@@ -130,6 +140,9 @@ export default function PurchasingPage() {
   // pindah dari section inline di bawah tabel ke modal, dipicu tombol toolbar.
   // Field, validasi, handleCreateSupplier/handleCreatePo TIDAK diubah, cuma wadahnya.
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
+  // PMB-11: modal Supplier punya DUA tahap untuk pembuatan data baru -- 'isian' lalu
+  // 'ringkasan' (draf ditampilkan, baru dikonfirmasi). Lihat handleLanjutKeRingkasan.
+  const [tahapSupplier, setTahapSupplier] = useState<'isian' | 'ringkasan'>('isian');
   const [isPoModalOpen, setIsPoModalOpen] = useState(false);
   const [expandedPoId, setExpandedPoId] = useState<number | null>(null);
 
@@ -212,6 +225,7 @@ export default function PurchasingPage() {
   }, [showArchivedSuppliers]);
 
   const resetSupplierForm = () => {
+    setTahapSupplier('isian');
     setEditingSupplierId(null);
     setSupplierForm(emptySupplierForm);
   };
@@ -240,6 +254,45 @@ export default function PurchasingPage() {
     setSupplierFormStatus('idle');
     setSupplierFormMessage('');
     setIsSupplierModalOpen(true);
+  };
+
+  // Ringkasan draf yang ditampilkan sebelum menyimpan. Field kosong DITAMPILKAN sebagai
+  // "belum diisi", bukan disembunyikan -- supaya pengguna melihat apa yang TIDAK jadi
+  // tersimpan, bukan cuma apa yang jadi tersimpan.
+  const ringkasanDrafSupplier = useMemo(() => {
+    const atau = (v: string) => (v.trim() ? v.trim() : 'belum diisi');
+    const pic = [supplierForm.pic_name, supplierForm.pic_phone, supplierForm.pic_email]
+      .map((v) => v.trim())
+      .filter(Boolean)
+      .join(' · ');
+    return [
+      { label: 'Nama Supplier', nilai: atau(supplierForm.name) },
+      { label: 'Jenis Supplier', nilai: supplierTypeLabels[supplierForm.supplier_type] || supplierForm.supplier_type },
+      { label: 'Alamat', nilai: atau(supplierForm.address) },
+      { label: 'NPWP', nilai: atau(supplierForm.npwp) },
+      {
+        label: 'Lead Time Umum',
+        nilai: supplierForm.lead_time_days.trim() ? `${supplierForm.lead_time_days} hari` : 'belum diisi'
+      },
+      { label: 'Termin Pembayaran', nilai: atau(supplierForm.payment_terms) },
+      { label: 'Kontak Person (PIC)', nilai: pic || 'belum diisi' },
+      { label: 'Kontak Lain', nilai: atau(supplierForm.contact_info) }
+    ];
+  }, [supplierForm]);
+
+  // PMB-11 / aturan modal #4: pembuatan data BARU tidak langsung tersimpan -- pengguna
+  // melihat ringkasan draf lebih dulu, lalu mengonfirmasi. Perubahan data yang SUDAH ADA
+  // tidak lewat langkah ini: penggunanya sudah melihat nilai lama di form, jadi ringkasan
+  // draf cuma menambah satu klik tanpa menambah kejelasan.
+  const handleLanjutKeRingkasan = () => {
+    if (!supplierForm.name.trim()) {
+      setSupplierFormStatus('error');
+      setSupplierFormMessage('Nama supplier wajib diisi.');
+      return;
+    }
+    setSupplierFormStatus('idle');
+    setSupplierFormMessage('');
+    setTahapSupplier('ringkasan');
   };
 
   const handleSaveSupplier = async () => {
@@ -272,6 +325,7 @@ export default function PurchasingPage() {
     }
     setSupplierFormStatus('success');
     setSupplierFormMessage(editingSupplierId ? 'Supplier berhasil diperbarui.' : 'Supplier baru berhasil ditambahkan.');
+    setTahapSupplier('isian');
     setEditingSupplierId(null);
     setSupplierForm(emptySupplierForm);
     await loadSuppliers(showArchivedSuppliers);
@@ -700,75 +754,131 @@ export default function PurchasingPage() {
               if (!open) resetSupplierForm();
             }}
           >
-            <DialogContent className="max-w-lg">
-              <DialogHeader>
+            <DialogContent className={`max-w-lg ${carbonModalContent}`}>
+              {/* HEADER Carbon: label opsional di atas judul, judul, ikon tutup (x)
+                  disediakan DialogContent. Ikon x menutup TANPA menyimpan. */}
+              <DialogHeader className={carbonModalHeader}>
+                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {editingSupplierId ? 'Ubah data' : 'Data baru'}
+                </span>
                 <DialogTitle>{editingSupplierId ? `Ubah Supplier — ${supplierForm.name}` : 'Tambah Supplier Baru'}</DialogTitle>
+                <DialogDescription>
+                  {tahapSupplier === 'ringkasan'
+                    ? 'Periksa ringkasan di bawah. Data belum tersimpan sampai Anda menekan Simpan Supplier.'
+                    : 'Nama supplier wajib diisi. Sisanya boleh menyusul dan bisa diubah kapan saja.'}
+                </DialogDescription>
               </DialogHeader>
-              <div className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto pr-1">
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">Nama Supplier</span>
-                  <Input placeholder="mis. PT Sumber Bahan Jaya" value={supplierForm.name} onChange={(e) => setSupplierForm((prev) => ({ ...prev, name: e.target.value }))} />
-                </label>
 
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">Alamat</span>
-                  <Input placeholder="Alamat lengkap supplier" value={supplierForm.address} onChange={(e) => setSupplierForm((prev) => ({ ...prev, address: e.target.value }))} />
-                </label>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">NPWP</span>
-                    <Input placeholder="01.234.567.8-901.000" value={supplierForm.npwp} onChange={(e) => setSupplierForm((prev) => ({ ...prev, npwp: e.target.value }))} />
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">Lead Time Umum (hari)</span>
-                    <Input type="number" min={0} placeholder="mis. 7" value={supplierForm.lead_time_days} onChange={(e) => setSupplierForm((prev) => ({ ...prev, lead_time_days: e.target.value }))} />
-                  </label>
-                </div>
-                <span className="-mt-2 text-xs text-muted-foreground">Lead time bisa ditimpa per bahan lewat "Bahan yang Dipasok".</span>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">Termin Pembayaran</span>
-                  <Input placeholder="mis. 30 hari setelah terima barang" value={supplierForm.payment_terms} onChange={(e) => setSupplierForm((prev) => ({ ...prev, payment_terms: e.target.value }))} />
-                </label>
-
-                <div className="flex flex-col gap-1">
-                  <span className="text-sm font-medium text-foreground">Kontak Person (PIC)</span>
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <Input placeholder="Nama PIC" value={supplierForm.pic_name} onChange={(e) => setSupplierForm((prev) => ({ ...prev, pic_name: e.target.value }))} />
-                    <Input placeholder="Telepon PIC" value={supplierForm.pic_phone} onChange={(e) => setSupplierForm((prev) => ({ ...prev, pic_phone: e.target.value }))} />
-                    <Input placeholder="Email PIC" value={supplierForm.pic_email} onChange={(e) => setSupplierForm((prev) => ({ ...prev, pic_email: e.target.value }))} />
+              <DialogBody>
+                {tahapSupplier === 'ringkasan' ? (
+                  <div className="flex flex-col gap-4">
+                    <p className="text-sm text-muted-foreground">
+                      Supplier berikut akan ditambahkan. Tekan Kembali bila masih ada yang perlu diperbaiki.
+                    </p>
+                    <dl className="divide-y border">
+                      {ringkasanDrafSupplier.map((baris) => (
+                        <div key={baris.label} className="grid gap-1 px-4 py-3 sm:grid-cols-3 sm:gap-4">
+                          <dt className="text-sm text-muted-foreground">{baris.label}</dt>
+                          <dd className="text-sm font-medium text-foreground sm:col-span-2">{baris.nilai}</dd>
+                        </div>
+                      ))}
+                    </dl>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Nama Supplier</span>
+                      <Input value={supplierForm.name} onChange={(e) => setSupplierForm((prev) => ({ ...prev, name: e.target.value }))} />
+                      {/* Aturan modal #5: placeholder TIDAK memuat instruksi/contoh --
+                          contoh dan penjelasan turun ke helper text seperti ini. */}
+                      <span className="text-xs text-muted-foreground">Contoh: PT Sumber Bahan Jaya.</span>
+                    </label>
 
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">Jenis Supplier</span>
-                  <Select value={supplierForm.supplier_type} onValueChange={(v) => setSupplierForm((prev) => ({ ...prev, supplier_type: v }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="material_supplier">Pemasok Bahan</SelectItem>
-                      <SelectItem value="subcontractor">Subkontraktor</SelectItem>
-                      <SelectItem value="both">Keduanya</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Alamat</span>
+                      <Input value={supplierForm.address} onChange={(e) => setSupplierForm((prev) => ({ ...prev, address: e.target.value }))} />
+                      <span className="text-xs text-muted-foreground">Alamat lengkap supplier, dipakai di dokumen pembelian.</span>
+                    </label>
 
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">Kontak Lain (opsional)</span>
-                  <Input placeholder="Catatan kontak tambahan" value={supplierForm.contact_info} onChange={(e) => setSupplierForm((prev) => ({ ...prev, contact_info: e.target.value }))} />
-                </label>
-              </div>
-              {supplierFormMessage ? <p className={`text-sm ${supplierFormStatus === 'error' ? 'text-destructive' : 'text-success'}`}>{supplierFormMessage}</p> : null}
-              <div className="flex items-center gap-3">
-                <Button disabled={supplierFormStatus === 'saving'} onClick={handleSaveSupplier}>
-                  {supplierFormStatus === 'saving' ? 'Menyimpan...' : editingSupplierId ? 'Simpan Perubahan' : 'Tambah Supplier'}
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-sm font-medium text-foreground">NPWP</span>
+                        <Input value={supplierForm.npwp} onChange={(e) => setSupplierForm((prev) => ({ ...prev, npwp: e.target.value }))} />
+                        <span className="text-xs text-muted-foreground">Contoh: 01.234.567.8-901.000.</span>
+                      </label>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-sm font-medium text-foreground">Lead Time Umum (hari)</span>
+                        <Input type="number" min={0} value={supplierForm.lead_time_days} onChange={(e) => setSupplierForm((prev) => ({ ...prev, lead_time_days: e.target.value }))} />
+                        <span className="text-xs text-muted-foreground">Bisa ditimpa per bahan lewat &quot;Bahan yang Dipasok&quot;.</span>
+                      </label>
+                    </div>
+
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Termin Pembayaran</span>
+                      <Input value={supplierForm.payment_terms} onChange={(e) => setSupplierForm((prev) => ({ ...prev, payment_terms: e.target.value }))} />
+                      <span className="text-xs text-muted-foreground">Contoh: 30 hari setelah terima barang.</span>
+                    </label>
+
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Kontak Person (PIC)</span>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <Input aria-label="Nama PIC" value={supplierForm.pic_name} onChange={(e) => setSupplierForm((prev) => ({ ...prev, pic_name: e.target.value }))} />
+                        <Input aria-label="Telepon PIC" value={supplierForm.pic_phone} onChange={(e) => setSupplierForm((prev) => ({ ...prev, pic_phone: e.target.value }))} />
+                        <Input aria-label="Email PIC" value={supplierForm.pic_email} onChange={(e) => setSupplierForm((prev) => ({ ...prev, pic_email: e.target.value }))} />
+                      </div>
+                      <span className="text-xs text-muted-foreground">Berurutan: nama, telepon, email orang yang dihubungi di supplier ini.</span>
+                    </div>
+
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Jenis Supplier</span>
+                      <Select value={supplierForm.supplier_type} onValueChange={(v) => setSupplierForm((prev) => ({ ...prev, supplier_type: v }))}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="material_supplier">Pemasok Bahan</SelectItem>
+                          <SelectItem value="subcontractor">Subkontraktor</SelectItem>
+                          <SelectItem value="both">Keduanya</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </label>
+
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Kontak Lain (opsional)</span>
+                      <Input value={supplierForm.contact_info} onChange={(e) => setSupplierForm((prev) => ({ ...prev, contact_info: e.target.value }))} />
+                      <span className="text-xs text-muted-foreground">Catatan kontak tambahan, mis. nomor kantor atau alamat surel umum.</span>
+                    </label>
+                  </div>
+                )}
+
+                {supplierFormMessage ? (
+                  <p className={`mt-4 text-sm ${supplierFormStatus === 'error' ? 'text-destructive' : 'text-success'}`}>{supplierFormMessage}</p>
+                ) : null}
+              </DialogBody>
+
+              {/* FOOTER Carbon: tombol aksi LEBAR PENUH membentang tepi ke tepi. */}
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  className="h-16 rounded-none border-0 border-t"
+                  onClick={() => (tahapSupplier === 'ringkasan' ? setTahapSupplier('isian') : setIsSupplierModalOpen(false))}
+                >
+                  {tahapSupplier === 'ringkasan' ? 'Kembali' : 'Batal'}
                 </Button>
-                <Button variant="outline" onClick={() => setIsSupplierModalOpen(false)}>
-                  Batal
+                <Button
+                  className="h-16 rounded-none"
+                  disabled={supplierFormStatus === 'saving'}
+                  onClick={editingSupplierId || tahapSupplier === 'ringkasan' ? handleSaveSupplier : handleLanjutKeRingkasan}
+                >
+                  {supplierFormStatus === 'saving'
+                    ? 'Menyimpan...'
+                    : editingSupplierId
+                      ? 'Simpan Perubahan'
+                      : tahapSupplier === 'ringkasan'
+                        ? 'Simpan Supplier'
+                        : 'Lanjut: Periksa Ringkasan'}
                 </Button>
-              </div>
+              </DialogFooter>
             </DialogContent>
           </Dialog>
         ) : null}

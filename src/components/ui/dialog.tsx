@@ -60,6 +60,34 @@ const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 )
 DialogHeader.displayName = "DialogHeader"
 
+// ANATOMI MODAL CARBON (PMB-11) — Header / Body / Footer.
+// Rujukan: https://carbondesignsystem.com/components/modal/usage/
+//
+// Dipakai BERSAMA-SAMA: DialogContent memakai carbonModalContent (menghapus padding
+// bawaan supaya footer benar-benar menempel di tepi), lalu padding dikembalikan
+// per bagian lewat carbonModalHeader / DialogBody. Tanpa carbonModalContent, footer
+// lebar penuh akan tampak menggantung di tengah dengan sisa padding di kiri-kanan.
+//
+// Padding TIDAK dijadikan bawaan DialogHeader/DialogFooter karena modal lama di
+// aplikasi ini masih memakai DialogContent ber-padding; mengubah bawaannya akan
+// membuat SEMUA modal lama berpadding dobel sekaligus. Migrasinya bertahap: modal
+// yang sudah pindah memakai ketiga kelas ini, yang belum tetap seperti semula.
+const carbonModalContent =
+  // max-sm: layar penuh di HP (aturan responsive: modal lebar -> layar penuh di HP),
+  // bukan modal kecil di tengah yang isinya tergencet.
+  "flex flex-col gap-0 p-0 max-sm:h-full max-sm:max-h-none max-sm:w-full max-sm:max-w-none"
+
+// pr-12 memberi ruang untuk ikon tutup (x) di pojok kanan atas supaya judul panjang
+// tidak tertimpa ikonnya.
+const carbonModalHeader = "border-b px-6 pb-4 pr-12 pt-6"
+
+// Body: satu-satunya bagian yang menggulir. Header & footer tetap terlihat, jadi
+// tombol aksi tidak pernah "hilang ke bawah" pada form panjang.
+const DialogBody = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+  <div className={cn("flex-1 overflow-y-auto px-6 py-5", className)} {...props} />
+)
+DialogBody.displayName = "DialogBody"
+
 // Carbon Design System -- FOOTER modal: tombol aksi LEBAR PENUH, dempet tanpa
 // jarak, membentang penuh lebar modal (bukan tombol kecil rata kanan). Dipakai
 // bersama DialogContent yang p-0 supaya footer benar-benar menempel di tepi.
@@ -101,7 +129,10 @@ export {
   DialogClose,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogFooter,
   DialogTitle,
   DialogDescription,
+  carbonModalContent,
+  carbonModalHeader,
 }

@@ -32,6 +32,13 @@ Baca KEDUA file ini secara penuh sebelum menulis kode apa pun. Semua keputusan d
 4. **Bila pemilik produk meminta penyimpangan dari standar: boleh, itu haknya.** Yang WAJIB: alasan dan detailnya dicatat di task terkait, supaya berbulan-bulan kemudian masih bisa dijelaskan kenapa angkanya berbeda dari standar baku.
 5. **Setiap angka keuangan yang ditampilkan ke pengguna harus bisa menjawab "ini metode apa"** lewat panel Asal-Usul (`ProvenanceInfoButton`) atau Kamus istilah — bukan angka yang muncul tanpa jejak metodenya.
 
+## Aturan Bukti: "Jumlah Baris Identik" TIDAK LAGI Sah (ditetapkan 23 Agu 2026)
+Sejak situs production tersambung ke data nyata dan pemilik produk mulai MEMAKAI sistem, **jumlah baris memang berubah karena pemakaian yang sah**. Karena itu:
+
+- **JANGAN** memakai "jumlah baris tabel X sama sebelum & sesudah" sebagai bukti bahwa CI, skrip, atau proses lain tidak menyentuh data nyata. Bukti itu sekarang bisa salah ke DUA arah: berubah padahal aman (pemilik produk memakai sistem), atau kebetulan sama padahal ada yang tertulis lalu terhapus.
+- **YANG BENAR**: buktikan lewat **ADA atau TIDAKNYA baris BERPOLA FIXTURE** — nama company `*TestCorp`, email `@debug.mrp` yang baru, nomor dokumen berpola uji, dan sejenisnya. **Sebutkan polanya, bukan totalnya.**
+- Contoh nyata yang melahirkan aturan ini (23 Agu 2026): setelah satu run CI, `items` di FABRIX-APP naik 8 → 9. Terlihat seperti CI menulis — ternyata item `PMGM-0001/ITM` (PREMIX GUMMY) dibuat pemilik produk lewat aplikasi, 2 menit SETELAH CI selesai. Yang membuktikan CI bersih bukan angkanya, melainkan **nol company `*TestCorp` baru**.
+
 ## ATURAN SEMENTARA — `main` = RILIS LANGSUNG ke Data Nyata (berlaku 23 Agu 2026, ada pemicu pencabutan)
 Sejak 23 Agu 2026, situs production (`mrp-staging-zeta.vercel.app`) **tersambung ke data nyata PT ITM** (FABRIX-APP), dan Vercel masih men-deploy production dari branch `main` (percobaan mengubahnya ke `staging` gagal dari semua jalur — lihat `INF-11`, menunggu dukungan Vercel). Konsekuensinya, sampai pemicu di bawah terpenuhi:
 1. **Setiap push ke `main` harus dianggap RILIS, bukan simpanan pekerjaan** — begitu terdorong, kode itu langsung dipakai orang di atas data sungguhan.
@@ -39,6 +46,8 @@ Sejak 23 Agu 2026, situs production (`mrp-staging-zeta.vercel.app`) **tersambung
 3. **Bila terpaksa mendorong sesuatu yang berisiko, kabari pemilik produk LEBIH DULU** — jangan mengandalkan dia menyadarinya sendiri dari situs yang tiba-tiba berubah.
 
 **PEMICU PENCABUTAN aturan ini**: begitu setelan Vercel "Production Branch" berhasil diubah dari `main` ke `staging`. Setelah itu, `main` kembali jadi tempat kerja biasa dan bagian ini dihapus dari CLAUDE.md.
+
+**ANJURAN (bukan aturan keras)**: tunggu CI selesai sebelum push berikutnya. Push tumpang tindih pernah membuat beberapa run CI berjalan bersamaan di atas satu database yang sama, dan fixture-nya bertabrakan (dua company bernama kembar dibuat berjarak 7 detik, 23 Agu 2026). Sejak CI punya project database sendiri risiko itu jauh berkurang, tapi menunggu tetap lebih rapi dan bikin penyebab kegagalan gampang dibaca.
 
 **Catatan**: pengaman data tetap berlapis dan sudah terbukti — login aplikasi (16 peran) + RLS ber-`company_id` (diuji langsung: tenant uji melihat 0 dari 30 karyawan PT ITM). Aturan di atas soal **kualitas rilis**, bukan kebocoran data.
 

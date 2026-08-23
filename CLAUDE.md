@@ -93,6 +93,14 @@ Tiga belas aturan ini berasal dari `docs/FABRIX_Sales_Technical_Architecture_Fab
 
 **Yang harus dilakukan saat membangun fitur yang menyentuh aturan ber-status KOSONG atau BELUM RELEVAN**: aturannya menjadi hidup pada saat itu juga, dan **test penjaganya harus lahir bersama fiturnya** — jangan menunda, karena setelah fiturnya jalan tidak akan ada yang mengingatkan.
 
+## Daftar Tugas — Modul ber-SUPER URGENT SENGAJA Terbuka Otomatis (ditetapkan 24 Agu 2026)
+
+Aturan tampilan Daftar Tugas: **default seluruh modul TERTUTUP**, KECUALI modul yang memuat task SUPER URGENT yang belum selesai — modul itu **terbuka otomatis**.
+
+**Pengecualian ini DISENGAJA, bukan cacat.** Menyembunyikan hal yang paling genting di balik baris yang harus diklik dulu melawan tujuan penandaan SUPER URGENT itu sendiri: gunanya justru supaya terlihat tanpa dicari.
+
+**JANGAN "memperbaikinya" jadi seragam tertutup.** Keputusan D.2 tidak dicabut, dan sudah ditegaskan ulang oleh pemilik produk pada 24 Agu 2026 setelah melihat hasilnya. Modul yang cocok dengan saringan aktif juga tetap terbuka otomatis (F.2), dengan alasan sejenis: hasil saringan yang tersembunyi sama saja dengan saringan yang tidak bekerja.
+
 ## Aturan Status/Alert/Tombol Baru — Hanya Bersama Pemicunya (ditetapkan 24 Agu 2026)
 
 **Status, alert, tombol, atau penanda baru HANYA ditambahkan bersama PEMICU dan AKIBATNYA. Menambahkan nilai enum yang tidak pernah dipicu kode mana pun adalah CACAT, bukan persiapan.**

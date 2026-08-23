@@ -36,6 +36,22 @@ Dikerjakan tanpa interaksi, mengumpulkan pertanyaan di task alih-alih berhenti. 
 
 **Yang TIDAK batal dari pekerjaan INF-05 kemarin (23 Agu, DD.2)**: backup manual (ekspor 92 tabel via Supabase JS client) **tetap satu-satunya backup yang PERNAH DIUJI PULIH sungguhan** (direstorasi ke project staging, dibuktikan identik, lalu dibersihkan). Backup bawaan Supabase (7 titik PHYSICAL) **belum pernah diuji restore-nya** — baru diketahui ADA, belum dibuktikan BISA DIPULIHKAN. Task baru dicatat untuk ini (lihat `INF-15`).
 
+## PELAJARAN TETAP — Test yang Mengukur Hal yang SALAH Akan Selalu Lulus (24 Agu 2026)
+
+Kalimat pemilik produk, dicatat apa adanya:
+
+> "Test yang mengukur hal yang SALAH akan selalu lulus, dan tidak pernah menampakkan diri sebagai kegagalan. Contoh: pemilih `button:has-text('Urgensi')` mengenai dropdown saringan, bukan judul kolom — sehingga yang terukur adalah urutan default, bukan hasil sortir."
+
+**ATURAN**: setelah menulis test yang memverifikasi sebuah interaksi, **buktikan test itu BISA GAGAL** — ubah sementara yang diuji, pastikan merah, lalu kembalikan. **Test yang tidak pernah dilihat merah belum terbukti menguji apa pun.**
+
+**Aturan ini langsung dijalankan pada test yang lahir hari itu juga** (`tests/build_task_sorting.test.ts`): aturan urutan sengaja diganti jadi abjad, 2 test langsung gagal, dan pesan gagalnya menampilkan persis urutan terlarang itu (`bisa_menunggu` di posisi pertama, `super_urgent` tergeser). Dikembalikan, 10/10 hijau. Barulah test itu boleh dipercaya.
+
+**KESALAHAN KEDUA di episode yang sama, kelasnya berbeda**: urutan diukur dengan mengumpulkan seluruh baris dari SEMUA tabel yang terbuka, padahal sorting berlaku **di dalam tiap modul**. Hasilnya urutan tampak kacau (`SUPER URGENT, PENTING, TIDAK MENDESAK, MENDESAK…`) padahal tiap modul sudah benar — dua daftar yang benar, disambung, menghasilkan satu daftar yang salah.
+
+**ATURAN KEDUA**: saat memverifikasi urutan, pastikan **cakupan yang diukur sama dengan cakupan yang diurutkan**. Mengukur lebih luas dari cakupan pengurutan akan memfitnah kode yang benar; mengukur lebih sempit akan meloloskan kode yang salah.
+
+**Kenapa dua kesalahan ini berbahaya bersama**: yang pertama membuat test HIJAU padahal tidak menguji apa-apa, yang kedua membuat test MERAH padahal kodenya benar. Keduanya sama-sama memutus hubungan antara warna test dan keadaan sebenarnya — dan begitu hubungan itu putus, seluruh suite kehilangan artinya.
+
 ## PELAJARAN TETAP — TypeScript TIDAK Tahu Kolom Mana yang Ada di Database (24 Agu 2026)
 
 Kalimat pemilik produk, dicatat apa adanya:

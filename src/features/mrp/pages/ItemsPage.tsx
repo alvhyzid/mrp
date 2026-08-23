@@ -10,6 +10,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FieldLabel } from '@/components/ui/field-help';
+import {
+  SHELF_LIFE_UNITS,
+  shelfLifeToDays,
+  daysToShelfLife,
+  formatShelfLife,
+  type ShelfLifeUnit
+} from '@/features/mrp/shelfLife';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { canViewFinancialData, isCompanyLeadership } from '@/lib/roles';
@@ -27,6 +34,7 @@ type Item = {
   uom_conversion_factor: number;
   shelf_life_days: number | null;
   min_stock_level: number;
+  min_stock_percent: number | null;
   reorder_point: number | null;
   reorder_qty: number | null;
   is_active: boolean;
@@ -85,6 +93,7 @@ const emptyForm = {
   uom_conversion_factor: '1',
   shelf_life_days: '',
   min_stock_level: '0',
+  min_stock_percent: '',
   reorder_point: '',
   reorder_qty: '',
   standard_cost: '',
@@ -123,6 +132,9 @@ export default function ItemsPage() {
   // browser: jawabannya bisa panjang (menyebut di mana saja item ini terpakai) dan perlu
   // tetap terbaca sambil pengguna melihat datanya.
   const [itemActionMessage, setItemActionMessage] = useState<{ kind: 'error' | 'success'; message: string } | null>(null);
+  // MST-18 — satuan shelf life hanya hidup di FORMULIR. Yang disimpan tetap jumlah hari
+  // di kolom shelf_life_days, supaya FEFO tidak kehilangan dasarnya.
+  const [shelfLifeUnit, setShelfLifeUnit] = useState<ShelfLifeUnit>('hari');
 
   // MST-17 — dokumen yang menempel pada item (COA, Sertifikat Halal, BPOM).
   // KETIGANYA OPSIONAL: item tetap sah tanpa dokumen apa pun.
@@ -362,6 +374,7 @@ export default function ItemsPage() {
   };
 
   const startEdit = (item: Item) => {
+    setShelfLifeUnit(daysToShelfLife(item.shelf_life_days).satuan);
     setIsFormModalOpen(true);
     setEditingItemId(item.item_id);
     setForm({
@@ -371,8 +384,9 @@ export default function ItemsPage() {
       base_uom: item.base_uom,
       purchase_uom: item.purchase_uom,
       uom_conversion_factor: String(item.uom_conversion_factor ?? 1),
-      shelf_life_days: item.shelf_life_days === null ? '' : String(item.shelf_life_days),
+      shelf_life_days: daysToShelfLife(item.shelf_life_days).nilai,
       min_stock_level: String(item.min_stock_level),
+      min_stock_percent: item.min_stock_percent === null || item.min_stock_percent === undefined ? '' : String(item.min_stock_percent),
       reorder_point: item.reorder_point === null ? '' : String(item.reorder_point),
       reorder_qty: item.reorder_qty === null ? '' : String(item.reorder_qty),
       standard_cost: item.standard_cost === null ? '' : String(item.standard_cost),
@@ -404,8 +418,11 @@ export default function ItemsPage() {
       base_uom: form.base_uom,
       purchase_uom: form.purchase_uom,
       uom_conversion_factor: form.uom_conversion_factor,
-      shelf_life_days: form.shelf_life_days,
+      // Dikirim SELALU dalam hari. Satuan tidak ikut dikirim -- database tidak perlu
+      // tahu pengguna mengetiknya sebagai bulan atau minggu.
+      shelf_life_days: form.shelf_life_days.trim() ? String(shelfLifeToDays(Number(form.shelf_life_days), shelfLifeUnit)) : '',
       min_stock_level: form.min_stock_level,
+      min_stock_percent: form.min_stock_percent,
       reorder_point: form.reorder_point,
       reorder_qty: form.reorder_qty,
       standard_cost: form.standard_cost,
@@ -530,8 +547,14 @@ export default function ItemsPage() {
         label: 'Faktor Konversi',
         nilai: `1 ${item.purchase_uom || 'satuan beli'} = ${formatNumberId(item.uom_conversion_factor ?? 1)} ${item.base_uom || 'satuan dasar'}`
       },
-      { label: 'Shelf Life', nilai: item.shelf_life_days !== null ? `${formatNumberId(item.shelf_life_days)} hari` : '—' },
-      { label: 'Min Stock Level', nilai: formatNumberId(item.min_stock_level ?? 0, 2) },
+      { label: 'Shelf Life', nilai: formatShelfLife(item.shelf_life_days) },
+      {
+        label: 'Min Stock Level',
+        nilai:
+          item.min_stock_percent !== null && item.min_stock_percent !== undefined
+            ? `${formatNumberId(item.min_stock_percent, 2)}% dari total yang pernah masuk`
+            : formatNumberId(item.min_stock_level ?? 0, 2)
+      },
       { label: 'Reorder Point', nilai: item.reorder_point !== null ? formatNumberId(item.reorder_point, 2) : '—' },
       { label: 'Reorder Qty', nilai: item.reorder_qty !== null ? formatNumberId(item.reorder_qty, 2) : '—' }
     ];
@@ -915,25 +938,75 @@ export default function ItemsPage() {
                   </span>
                 </div>
 
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">Shelf Life (hari)</span>
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel help="Berapa lama bahan atau produk ini masih layak sejak diproduksi/diterima. Isi angkanya, lalu pilih satuannya — sistem menyimpannya dalam hari, karena tanggal kedaluwarsa tiap lot dihitung dari angka itu (dasar aturan FEFO: yang lebih dulu kedaluwarsa, lebih dulu dikeluarkan). Kosongkan bila bahan ini tidak punya masa simpan.">
+                    Shelf Life
+                  </FieldLabel>
+                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                    <Input
+                      type="number"
+                      min="0"
+                      aria-label="Angka shelf life"
+                      value={form.shelf_life_days}
+                      onChange={(event) => setForm((prev) => ({ ...prev, shelf_life_days: event.target.value }))}
+                    />
+                    <Select value={shelfLifeUnit} onValueChange={(v) => setShelfLifeUnit(v as ShelfLifeUnit)}>
+                      <SelectTrigger aria-label="Satuan shelf life">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SHELF_LIFE_UNITS.map((u) => (
+                          <SelectItem key={u} value={u}>
+                            {u.charAt(0).toUpperCase() + u.slice(1)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {/* Hasil konversinya DITAMPILKAN, bukan disembunyikan: angka inilah yang
+                      dipakai menghitung tanggal kedaluwarsa tiap lot. Menyembunyikannya akan
+                      membuat pengguna tidak punya cara memeriksa apakah sistem memahami
+                      maksudnya. */}
+                  <span className="text-xs text-muted-foreground">
+                    {form.shelf_life_days.trim() && Number(form.shelf_life_days) > 0
+                      ? `Tersimpan sebagai ${shelfLifeToDays(Number(form.shelf_life_days), shelfLifeUnit)} hari.`
+                      : 'Boleh dikosongkan bila bahan ini tidak punya masa simpan.'}
+                  </span>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel help="Ambang stok minimum sebagai PERSEN dari jumlah yang PERNAH MASUK untuk item ini (semua penerimaan dan hasil produksi, dijumlah). SENGAJA bukan persen dari stok saat ini: ambang yang dihitung dari stok saat ini ikut turun setiap kali stok turun, jadi justru menghilang ketika stok menipis. Kosongkan bila item ini memakai angka mutlak di bawah.">
+                    Min Stock Level (persen)
+                  </FieldLabel>
                   <Input
                     type="number"
                     min="0"
-                    value={form.shelf_life_days}
-                    onChange={(event) => setForm((prev) => ({ ...prev, shelf_life_days: event.target.value }))}
+                    max="100"
+                    step="any"
+                    value={form.min_stock_percent}
+                    onChange={(event) => setForm((prev) => ({ ...prev, min_stock_percent: event.target.value }))}
                   />
-                </label>
+                  <span className="text-xs text-muted-foreground">
+                    Contoh: isi 10 berarti diperingatkan saat sisa stok kurang dari 10% dari total yang pernah masuk.
+                  </span>
+                </div>
 
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">Min Stock Level</span>
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel help="Ambang stok minimum dalam ANGKA MUTLAK. Dipertahankan untuk item lama yang belum dipindah ke persen. Bila kolom persen di atas terisi, kolom persen yang MENANG dan angka ini diabaikan.">
+                    Min Stock Level (angka mutlak)
+                  </FieldLabel>
                   <Input
                     type="number"
                     min="0"
                     value={form.min_stock_level}
                     onChange={(event) => setForm((prev) => ({ ...prev, min_stock_level: event.target.value }))}
                   />
-                </label>
+                  {form.min_stock_percent.trim() && Number(form.min_stock_percent) > 0 ? (
+                    <span className="text-xs text-warning">
+                      Diabaikan: kolom persen di atas sedang terisi, dan persen yang menang.
+                    </span>
+                  ) : null}
+                </div>
 
                 <label className="flex flex-col gap-1.5">
                   <span className="text-sm font-medium text-foreground">Reorder Point</span>

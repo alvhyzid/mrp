@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { Fragment, useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
@@ -8,6 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+// Aturan urutan hidup di modul tersendiri supaya bisa diuji tanpa merender halaman --
+// lihat src/features/mrp/buildTaskSorting.ts dan tests/build_task_sorting.test.ts.
+import { sortBuildTasks, URGENCY_RANK, type SortKey } from '@/features/mrp/buildTaskSorting';
 
 // Halaman Daftar Tugas Pembangunan (21 Agu 2026) — HALAMAN HANYA BACA (A.2).
 // Tidak ada tombol tambah/ubah/hapus di sini sama sekali — task hanya dibuat/
@@ -101,6 +104,19 @@ const ORIGIN_LABELS: Record<string, string> = {
 
 const ALL_TAGS = ['Visual', 'Teks/Bahasa', 'Fungsi', 'Database', 'Formula', 'Keamanan', 'Data', 'Integrasi', 'Dokumentasi'];
 
+// II.1 — Kode dan Status paling kiri: itu yang paling sering dicari. Kolom tanpa `key`
+// tidak bisa disortir (Tag berisi banyak nilai, Aksi bukan data).
+const KOLOM_TABEL: { key: SortKey | null; label: string }[] = [
+  { key: 'task_code', label: 'Kode' },
+  { key: 'name', label: 'Nama' },
+  { key: 'status', label: 'Status' },
+  { key: 'urgency', label: 'Urgensi' },
+  { key: 'pic', label: 'PIC' },
+  { key: null, label: 'Tag' },
+  { key: 'age', label: 'Menggantung' },
+  { key: null, label: 'Aksi' }
+];
+
 // D.3 — ambang jumlah SUPER URGENT belum selesai sebelum keterangan penjaga
 // muncul. Keputusan teknis (bisa diubah kapan saja): 3.
 const AMBANG_SUPER_URGENT = 3;
@@ -152,6 +168,10 @@ export default function BuildTasksPage() {
 
   const [openModules, setOpenModules] = useState<Set<string>>(new Set());
   const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null);
+  // II.3 — sortKey null berarti URUTAN DEFAULT (bukan "belum disortir"): urgensi dari
+  // atas, belum selesai lebih dulu, SUPER URGENT selalu paling atas.
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [taskHistory, setTaskHistory] = useState<Record<number, { urgencyHistory: any[]; approvalHistory: any[] }>>({});
 
   const getAccessToken = useCallback(async () => {
@@ -207,6 +227,78 @@ export default function BuildTasksPage() {
       if (ok) setTaskHistory((prev) => ({ ...prev, [task.build_task_id]: body }));
     }
   };
+
+  // Isi baris yang DIMEKARKAN. Satu fungsi dipakai tabel (layar lebar) dan kartu
+  // (layar sempit) supaya isinya tidak pernah berbeda antar bentuk.
+  const renderDetailTask = (t: BuildTask) => {
+    const history = taskHistory[t.build_task_id];
+    return (
+      <div className="flex flex-col gap-2 text-xs">
+        <p>
+          <span className="font-medium text-foreground">Penjelasan:</span> {t.description}
+        </p>
+        <p>
+          <span className="font-medium text-foreground">Pengaruh ke sistem:</span> {t.effect_description}
+        </p>
+        <p>
+          <span className="font-medium text-foreground">Detail pekerjaan:</span> {t.detail_pekerjaan}
+        </p>
+        {t.notes ? (
+          <p>
+            <span className="font-medium text-foreground">Catatan:</span> {t.notes}
+          </p>
+        ) : null}
+        <p>
+          <span className="font-medium text-foreground">Asal task:</span> {ORIGIN_LABELS[t.origin]}
+        </p>
+        {history ? (
+          <>
+            {history.urgencyHistory.length > 0 ? (
+              <div>
+                <p className="font-medium text-foreground">Riwayat perubahan urgensi:</p>
+                <ul className="list-disc pl-4">
+                  {history.urgencyHistory.map((h: any, i: number) => (
+                    <li key={i}>
+                      {URGENCY_LABELS[h.old_urgency] ?? h.old_urgency ?? '(baru dibuat)'} &rarr; {URGENCY_LABELS[h.new_urgency] ?? h.new_urgency} — {new Date(h.changed_at).toLocaleDateString('id-ID')} atas permintaan {h.requested_by}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {history.approvalHistory.length > 0 ? (
+              <div>
+                <p className="font-medium text-foreground">Riwayat persetujuan:</p>
+                <ul className="list-disc pl-4">
+                  {history.approvalHistory.map((h: any, i: number) => (
+                    <li key={i}>
+                      {h.action} — {new Date(h.at).toLocaleDateString('id-ID')}
+                      {h.note ? `: ${h.note}` : ''}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </>
+        ) : null}
+      </div>
+    );
+  };
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setSortKey(key);
+    setSortDir('asc');
+  };
+  const resetSort = () => {
+    setSortKey(null);
+    setSortDir('asc');
+  };
+
+  // Satu tempat untuk seluruh aturan urutan. Dipakai di dalam TIAP modul.
+  const sortTasks = useCallback((list: BuildTask[]) => sortBuildTasks(list, sortKey, sortDir), [sortKey, sortDir]);
 
   const clearFilters = () => {
     setFilterPic('');
@@ -280,9 +372,22 @@ export default function BuildTasksPage() {
     return counts;
   }, [tasks]);
 
+  // PENGECUALIAN YANG DISENGAJA — JANGAN "dirapikan" jadi seragam tertutup.
+  //
+  // Aturan tampilan: default seluruh modul TERTUTUP (II.2). Dua pengecualian di bawah
+  // bukan kelalaian, dan keduanya ditegaskan ulang oleh pemilik produk 24 Agu 2026
+  // setelah melihat hasilnya:
+  //
+  // - Modul ber-SUPER URGENT terbuka otomatis (D.2). Menyembunyikan hal yang paling
+  //   genting di balik baris yang harus diklik dulu melawan tujuan penandaan itu sendiri.
+  // - Modul yang cocok dengan saringan aktif terbuka otomatis (F.2). Hasil saringan yang
+  //   tersembunyi sama saja dengan saringan yang tidak bekerja.
+  //
+  // Lihat juga bagian "Daftar Tugas — Modul ber-SUPER URGENT SENGAJA Terbuka Otomatis"
+  // di CLAUDE.md.
   const isModuleOpen = (moduleCode: string, hasSuperUrgent: boolean) => {
-    if (filtersActive) return true; // F.2: modul yang cocok OTOMATIS TERBUKA saat saringan aktif.
-    if (hasSuperUrgent) return true; // D.2: modul berisi SUPER URGENT OTOMATIS TERBUKA.
+    if (filtersActive) return true;
+    if (hasSuperUrgent) return true;
     return openModules.has(moduleCode);
   };
   const toggleModule = (moduleCode: string) => {
@@ -511,7 +616,25 @@ export default function BuildTasksPage() {
 
             {/* Buka/Tutup semua */}
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">{modules.length} modul{filtersActive ? ' (mengikuti saringan)' : ''}</span>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-sm text-muted-foreground">
+                  {modules.length} modul{filtersActive ? ' (mengikuti saringan)' : ''}
+                </span>
+                {/* II.3 — tombol ini HANYA muncul saat pengguna menyortir manual. Tanpa
+                    penanda ini, urutan yang tidak biasa terlihat seperti urutan biasa, dan
+                    SUPER URGENT yang tidak lagi di atas bisa terlewat. */}
+                {sortKey ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-warning">
+                      Urutan diubah manual ({KOLOM_TABEL.find((k) => k.key === sortKey)?.label}
+                      {sortDir === 'asc' ? ', naik' : ', turun'}) — SUPER URGENT tidak lagi otomatis di atas.
+                    </span>
+                    <Button size="sm" variant="outline" onClick={resetSort}>
+                      Kembali ke Urutan Default
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" onClick={openAll}>
                   Buka Semua
@@ -546,88 +669,166 @@ export default function BuildTasksPage() {
                       </div>
                     </button>
                     {open ? (
-                      <CardContent className="flex flex-col gap-3 border-t pt-4">
-                        {mod.tasks.map((t) => {
-                          const age = ageInCurrentStatus(t);
-                          const history = taskHistory[t.build_task_id];
-                          const isExpanded = expandedTaskId === t.build_task_id;
-                          return (
-                            <div key={t.build_task_id} className={`rounded-md border bg-background p-3 text-sm ${URGENCY_BORDER[t.urgency]}`}>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="font-mono font-semibold text-foreground">{t.task_code}</span>
-                                <span className="font-medium text-foreground">{t.name}</span>
-                                {/* STATUS -- satu label paling menonjol, warna = sumber kebenaran status task ini. */}
-                                <Badge variant={STATUS_BADGE[t.status]} className={STATUS_EXTRA_CLASS[t.status]}>{STATUS_LABELS[t.status]}</Badge>
-                                {/* URGENSI -- outline tipis + label kecil, SENGAJA tidak sederajat visual dengan status
-                                    (lihat garis tepi kiri kartu untuk 2 tingkat teratas). Skala berbeda dari status,
-                                    walau kebetulan salah satu nilai lama ('ditunda_sadar') pernah memakai istilah yang
-                                    sama persis dengan status -- sudah diganti 'tidak_mendesak' (DD.2). */}
-                                <Badge variant="outline" className="text-[10px] font-normal uppercase tracking-wide text-muted-foreground">
-                                  {URGENCY_LABELS[t.urgency]}
-                                </Badge>
-                                {/* Penanda otomatis dari tag -- teks kecil polos, BUKAN Badge, supaya jelas beda kelas
-                                    dari status/urgensi (bukan nilai yang dicatat manusia, murni turunan tag). */}
-                                <span className="text-[10px] text-muted-foreground">{t.aman_paralel ? '● Aman Paralel' : '○ Menunggu Cetakan UX'}</span>
-                              </div>
-                              <div className="mt-1.5 flex flex-wrap gap-1">
-                                {t.tags.map((tag) => (
-                                  <Badge key={tag} variant="outline">
-                                    {tag}
-                                  </Badge>
+                      <CardContent className="border-t p-0">
+                        {/* II.1 — BENTUK TABEL, satu baris satu task. Penjelasan, pengaruh,
+                            dan detail pekerjaan TIDAK ikut di baris — itu yang membuat bentuk
+                            kartu terasa panjang. Semuanya pindah ke baris yang dimekarkan.
+
+                            II.8 — tabel menggulir DI DALAM wadahnya (overflow-x-auto), BUKAN
+                            membuat halaman bergulir menyamping. overflow-hidden DILARANG:
+                            itu memotong kolom tanpa ada cara melihatnya. */}
+                        <div className="hidden overflow-x-auto md:block">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b bg-muted/40 text-left">
+                                {KOLOM_TABEL.map((k) => (
+                                  <th key={k.key ?? k.label} className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                    {k.key ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleSort(k.key as SortKey)}
+                                        className="inline-flex items-center gap-1 hover:text-foreground"
+                                      >
+                                        {k.label}
+                                        <span aria-hidden="true" className="text-[10px]">
+                                          {sortKey === k.key ? (sortDir === 'asc' ? '\u25B2' : '\u25BC') : '\u21C5'}
+                                        </span>
+                                      </button>
+                                    ) : (
+                                      k.label
+                                    )}
+                                  </th>
                                 ))}
-                              </div>
-                              <p className="mt-1.5 text-muted-foreground">{t.description}</p>
-                              <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                                <span>PIC: {t.pic}</span>
-                                {age ? <span>Menggantung di status ini: {age}</span> : null}
-                                {t.link_url ? (
-                                  <Link href={t.link_url} className="text-primary underline">
-                                    Buka layar
-                                  </Link>
-                                ) : null}
-                                <button type="button" className="text-primary underline" onClick={() => toggleTaskDetail(t)}>
-                                  {isExpanded ? 'Tutup Detail' : 'Detail'}
-                                </button>
-                              </div>
-                              {isExpanded ? (
-                                <div className="mt-2 flex flex-col gap-2 border-t pt-2 text-xs">
-                                  <p><span className="font-medium text-foreground">Pengaruh ke sistem:</span> {t.effect_description}</p>
-                                  <p><span className="font-medium text-foreground">Detail pekerjaan:</span> {t.detail_pekerjaan}</p>
-                                  {t.notes ? <p><span className="font-medium text-foreground">Catatan:</span> {t.notes}</p> : null}
-                                  <p><span className="font-medium text-foreground">Asal task:</span> {ORIGIN_LABELS[t.origin]}</p>
-                                  {history ? (
-                                    <>
-                                      {history.urgencyHistory.length > 0 ? (
-                                        <div>
-                                          <p className="font-medium text-foreground">Riwayat perubahan urgensi:</p>
-                                          <ul className="list-disc pl-4">
-                                            {history.urgencyHistory.map((h: any, i: number) => (
-                                              <li key={i}>
-                                                {URGENCY_LABELS[h.old_urgency] ?? h.old_urgency ?? '(baru dibuat)'} → {URGENCY_LABELS[h.new_urgency] ?? h.new_urgency} — {new Date(h.changed_at).toLocaleDateString('id-ID')} atas permintaan {h.requested_by}
-                                              </li>
-                                            ))}
-                                          </ul>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {sortTasks(mod.tasks).map((t) => {
+                                const isExpanded = expandedTaskId === t.build_task_id;
+                                return (
+                                  <Fragment key={t.build_task_id}>
+                                    <tr className="border-b align-top">
+                                      {/* II.6 — garis tepi kiri urgensi dipertahankan, dipindah ke sel
+                                          pertama karena baris tabel tidak punya "tepi kartu". */}
+                                      <td className={`px-3 py-2.5 font-mono font-semibold text-foreground ${URGENCY_BORDER[t.urgency]}`}>
+                                        {t.task_code}
+                                      </td>
+                                      <td className="px-3 py-2.5 text-foreground">{t.name}</td>
+                                      <td className="px-3 py-2.5">
+                                        {/* Teks status WAJIB tetap ada — warna tidak boleh jadi satu-satunya penanda. */}
+                                        {/* Label DISENGAJA di baris yang SAMA dengan Badge, mengikuti konvensi yang sudah ada.
+                                            Pengawas kebocoran identifier (tests/ui_raw_leak_watchdog.test.ts) memeriksa PER BARIS:
+                                            bila STATUS_LABELS pindah ke baris lain, baris ini kehilangan penanda amannya dan
+                                            dilaporkan sebagai kebocoran, padahal t.status di sini cuma kunci pencarian warna.
+                                            Lihat AUD-23. */}
+                                        <Badge variant={STATUS_BADGE[t.status]} className={STATUS_EXTRA_CLASS[t.status]}>{STATUS_LABELS[t.status]}</Badge>
+                                      </td>
+                                      <td className="px-3 py-2.5 text-xs uppercase tracking-wide text-muted-foreground">
+                                        {URGENCY_LABELS[t.urgency]}
+                                      </td>
+                                      <td className="px-3 py-2.5 text-muted-foreground">{t.pic}</td>
+                                      <td className="px-3 py-2.5">
+                                        <div className="flex flex-wrap gap-1">
+                                          {t.tags.map((tag) => (
+                                            <Badge key={tag} variant="outline" className="text-[10px]">
+                                              {tag}
+                                            </Badge>
+                                          ))}
                                         </div>
-                                      ) : null}
-                                      {history.approvalHistory.length > 0 ? (
-                                        <div>
-                                          <p className="font-medium text-foreground">Riwayat persetujuan:</p>
-                                          <ul className="list-disc pl-4">
-                                            {history.approvalHistory.map((h: any, i: number) => (
-                                              <li key={i}>
-                                                {h.action} — {new Date(h.at).toLocaleDateString('id-ID')}{h.note ? `: ${h.note}` : ''}
-                                              </li>
-                                            ))}
-                                          </ul>
-                                        </div>
-                                      ) : null}
-                                    </>
-                                  ) : null}
-                                </div>
-                              ) : null}
-                            </div>
-                          );
-                        })}
+                                        <span className="text-[10px] text-muted-foreground">
+                                          {t.aman_paralel ? '\u25CF Aman Paralel' : '\u25CB Menunggu Cetakan UX'}
+                                        </span>
+                                      </td>
+                                      <td className="whitespace-nowrap px-3 py-2.5 text-muted-foreground">{ageInCurrentStatus(t) ?? '\u2014'}</td>
+                                      <td className="whitespace-nowrap px-3 py-2.5">
+                                        <button type="button" className="text-primary underline" onClick={() => toggleTaskDetail(t)}>
+                                          {isExpanded ? 'Tutup' : 'Detail'}
+                                        </button>
+                                        {t.link_url ? (
+                                          <Link href={t.link_url} className="ml-3 text-primary underline">
+                                            Buka layar
+                                          </Link>
+                                        ) : null}
+                                      </td>
+                                    </tr>
+                                    {isExpanded ? (
+                                      <tr className="border-b bg-muted/30">
+                                        <td colSpan={KOLOM_TABEL.length} className="px-3 py-3">
+                                          {renderDetailTask(t)}
+                                        </td>
+                                      </tr>
+                                    ) : null}
+                                  </Fragment>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* II.8 — di layar sempit baris menjadi KARTU BERTUMPUK, dan labelnya
+                            mengambil judul kolom yang sesungguhnya. */}
+                        <div className="flex flex-col gap-3 p-3 md:hidden">
+                          {sortTasks(mod.tasks).map((t) => {
+                            const isExpanded = expandedTaskId === t.build_task_id;
+                            return (
+                              <div key={t.build_task_id} className={`border bg-background ${URGENCY_BORDER[t.urgency]}`}>
+                                <dl className="divide-y">
+                                  <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 px-3 py-2">
+                                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Kode</dt>
+                                    <dd className="font-mono font-semibold text-foreground">{t.task_code}</dd>
+                                  </div>
+                                  <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 px-3 py-2">
+                                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Nama</dt>
+                                    <dd className="min-w-0 break-words text-foreground">{t.name}</dd>
+                                  </div>
+                                  <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 px-3 py-2">
+                                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Status</dt>
+                                    <dd>
+                                      {/* Label DISENGAJA di baris yang SAMA dengan Badge, mengikuti konvensi yang sudah ada.
+                                          Pengawas kebocoran identifier (tests/ui_raw_leak_watchdog.test.ts) memeriksa PER BARIS:
+                                          bila STATUS_LABELS pindah ke baris lain, baris ini kehilangan penanda amannya dan
+                                          dilaporkan sebagai kebocoran, padahal t.status di sini cuma kunci pencarian warna.
+                                          Lihat AUD-23. */}
+                                      <Badge variant={STATUS_BADGE[t.status]} className={STATUS_EXTRA_CLASS[t.status]}>{STATUS_LABELS[t.status]}</Badge>
+                                    </dd>
+                                  </div>
+                                  <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 px-3 py-2">
+                                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Urgensi</dt>
+                                    <dd className="text-xs uppercase tracking-wide text-muted-foreground">{URGENCY_LABELS[t.urgency]}</dd>
+                                  </div>
+                                  <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 px-3 py-2">
+                                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">PIC</dt>
+                                    <dd className="text-muted-foreground">{t.pic}</dd>
+                                  </div>
+                                  <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 px-3 py-2">
+                                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Tag</dt>
+                                    <dd className="flex flex-wrap gap-1">
+                                      {t.tags.map((tag) => (
+                                        <Badge key={tag} variant="outline" className="text-[10px]">
+                                          {tag}
+                                        </Badge>
+                                      ))}
+                                    </dd>
+                                  </div>
+                                  <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 px-3 py-2">
+                                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Menggantung</dt>
+                                    <dd className="text-muted-foreground">{ageInCurrentStatus(t) ?? '\u2014'}</dd>
+                                  </div>
+                                  <div className="px-3 py-2">
+                                    <button type="button" className="text-primary underline" onClick={() => toggleTaskDetail(t)}>
+                                      {isExpanded ? 'Tutup Detail' : 'Detail'}
+                                    </button>
+                                    {t.link_url ? (
+                                      <Link href={t.link_url} className="ml-3 text-primary underline">
+                                        Buka layar
+                                      </Link>
+                                    ) : null}
+                                  </div>
+                                </dl>
+                                {isExpanded ? <div className="border-t bg-muted/30 p-3">{renderDetailTask(t)}</div> : null}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </CardContent>
                     ) : null}
                   </Card>

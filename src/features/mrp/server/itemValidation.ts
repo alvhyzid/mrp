@@ -9,6 +9,8 @@ export interface ItemInput {
   uom_conversion_factor: number;
   shelf_life_days: number | null;
   min_stock_level: number;
+  // MST-19 — persen dari jumlah yang PERNAH MASUK. Null = pakai angka mutlak lama.
+  min_stock_percent: number | null;
   reorder_point: number | null;
   reorder_qty: number | null;
   is_active: boolean;
@@ -56,6 +58,14 @@ export function parseItemInput(body: Record<string, unknown>): { input?: ItemInp
   const minStock = parseOptionalNumber(body.min_stock_level, 'Min stock level');
   if (minStock.error) return { error: minStock.error };
 
+  const minStockPercent = parseOptionalNumber(body.min_stock_percent, 'Min stock level (persen)');
+  if (minStockPercent.error) return { error: minStockPercent.error };
+  // Batas atas 100 ditegakkan DI SINI juga, bukan cuma lewat CHECK database: pesan dari
+  // database berbunyi seperti galat teknis, sedangkan ini bisa dibaca pengguna.
+  if (minStockPercent.value !== null && (minStockPercent.value <= 0 || minStockPercent.value > 100)) {
+    return { error: 'Min stock level (persen) harus di atas 0 dan maksimal 100.' };
+  }
+
   const reorderPoint = parseOptionalNumber(body.reorder_point, 'Reorder point');
   if (reorderPoint.error) return { error: reorderPoint.error };
 
@@ -78,6 +88,7 @@ export function parseItemInput(body: Record<string, unknown>): { input?: ItemInp
       uom_conversion_factor: conversionFactor.value ?? 1,
       shelf_life_days: shelfLife.value,
       min_stock_level: minStock.value ?? 0,
+      min_stock_percent: minStockPercent.value,
       reorder_point: reorderPoint.value,
       reorder_qty: reorderQty.value,
       is_active: body.is_active === undefined ? true : Boolean(body.is_active),

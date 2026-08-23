@@ -64,4 +64,12 @@ function assertNotRealProject(scriptName) {
   }
 }
 
-module.exports = { assertNotRealProject, extractProjectRef, KNOWN_REAL_PROJECT_REFS, ALLOW_ENV };
+
+// Dipakai test yang SENGAJA membaca data nyata company_id=1 (pengawas
+// integritas). Test semacam itu tidak bisa -- dan tidak seharusnya -- lulus
+// di project kosong: yang dijaganya memang baris PT ITM yang sungguhan.
+function isRealDataProject() {
+  return KNOWN_REAL_PROJECT_REFS.includes(extractProjectRef(process.env.NEXT_PUBLIC_SUPABASE_URL));
+}
+
+module.exports = { assertNotRealProject, isRealDataProject, extractProjectRef, KNOWN_REAL_PROJECT_REFS, ALLOW_ENV };

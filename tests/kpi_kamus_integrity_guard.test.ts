@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { isRealDataProject } = require('../scripts/guard-real-project');
+// INF-19 (23 Agu 2026): pengawas ini menjaga BARIS NYATA company_id=1. Di project
+// CI yang kosong, baris itu memang tidak ada -- jadi menjalankannya di sana bukan
+// "gagal", melainkan tidak berlaku. DILEWATI dengan sadar, dan dicatat sebagai
+// pemeriksaan terpisah yang WAJIB tetap dijalankan terhadap data nyata (lihat
+// task AUD-13) supaya jaminannya tidak hilang diam-diam.
 
 // Sesi 5 (0.4, 21 Agu 2026) — pengawas ringan untuk anomali hilangnya baris
 // kpi_registry/kamus_terms yang diselidiki di Sesi 0/0B/0C dan TETAP TIDAK
@@ -68,7 +75,7 @@ async function findMissingKamusMetricKeys(client: SupabaseClient, companyId: num
   return expectedKeys.filter((k) => !present.has(k));
 }
 
-describe('Pengawas integritas kpi_registry/kamus_terms company_id=1 (anomali Sesi 0, belum terlacak penyebabnya)', () => {
+describe.skipIf(!isRealDataProject())('Pengawas integritas kpi_registry/kamus_terms company_id=1 (anomali Sesi 0, belum terlacak penyebabnya)', () => {
   it('6 KPI kategori A (kpi_registry) company_id=1 harus tetap lengkap', async () => {
     const missing = await findMissingKpiRegistryKeys(adminClient, 1, EXPECTED_KATEGORI_A_METRIC_KEYS);
     expect(missing, `Baris kpi_registry (company_id=1) hilang untuk metric_key: ${missing.join(', ')}`).toEqual([]);

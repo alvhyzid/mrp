@@ -24,7 +24,13 @@ if (!supabaseUrl || !anonKey || !serviceRoleKey || !roleTestPassword) {
 
 const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
-describe('Kerangka Studi Kasus MLVT ETAWAFIT (Bagian D) — data company_id=1', () => {
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { isRealDataProject } = require('../scripts/guard-real-project');
+// INF-19 (23 Agu 2026): blok ini memeriksa data MLVT NYATA di company_id=1.
+// Di project CI kosong data itu memang tidak ada -- dilewati dengan sadar,
+// bukan dimatikan. Lihat AUD-13.
+
+describe.skipIf(!isRealDataProject())('Kerangka Studi Kasus MLVT ETAWAFIT (Bagian D) — data company_id=1', () => {
   let companyId: number;
   let itemBoxId: number;
   let itemSachetId: number;

@@ -19,7 +19,9 @@
     "isolation-access:test": "vitest run tests/cross_company_isolation.test.ts",
     "shipments-physical:test": "vitest run tests/shipments_physical_stage.test.ts",
     "test": "vitest run",
-    "check:target": "node scripts/check-linked-project.js"
+    "check:target": "node scripts/check-linked-project.js",
+    "test:ci": "vitest run --reporter=default --reporter=json --outputFile=test-results.json",
+    "check:threshold": "node scripts/check-test-threshold.js"
   },
   "dependencies": {
     "@carbon/icons-react": "^11.86.0",

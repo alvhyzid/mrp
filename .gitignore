@@ -26,3 +26,4 @@ pnpm-debug.log*
 tsconfig.tsbuildinfo
 .vercel
 .env*
+test-results.json

@@ -49,6 +49,10 @@ export default defineConfig({
     // Pengawas tingkat project (23 Agu 2026) -- lihat komentar di dalam file
     // itu sendiri. Menolak keras kalau NEXT_PUBLIC_SUPABASE_URL menunjuk
     // project yang diketahui berisi data nyata, kecuali flag eksplisit diset.
-    setupFiles: ['./tests/setup/guardAgainstRealProject.ts']
+    setupFiles: ['./tests/setup/guardAgainstRealProject.ts'],
+    // Pengawas URL<->kunci (23 Agu 2026): berjalan SEKALI sebelum test apa pun.
+    // Gagal keras bila URL dan kunci tidak menunjuk project yang sama -- lihat
+    // komentar di dalam berkasnya untuk kenapa gejalanya dulu menyesatkan.
+    globalSetup: ['./tests/setup/assertUrlAndKeysMatch.ts']
   }
 });

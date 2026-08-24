@@ -5,6 +5,7 @@ import { createBom } from '../src/features/mrp/server/createBom';
 import { updateBom } from '../src/features/mrp/server/updateBom';
 import { listBoms } from '../src/features/mrp/server/listBoms';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // Perbaikan tampilan BOM (21 Agu 2026) -- pemilik produk bingung membaca
 // "FG-GUMMY-ZALA-N200 - v1 (56.6667 pcs)" (item CONTOH nyata saat itu, sejak
@@ -58,12 +59,13 @@ describe('BOM yield display — satuan asli item + keterangan asal angka (bukan 
       .single();
     companyId = company!.company_id;
 
-    const { data: authUser, error: authUserError } = await adminClient.auth.admin.createUser({
-      email: 'admin.bomyieldtest@debug.mrp',
-      password: roleTestPassword,
-      email_confirm: true,
-      user_metadata: { full_name: 'Admin BomYieldTest' }
-    });
+    // AUD-21 (25 Agu 2026): pembuatan pengguna auth SELALU lewat ensureAuthUser.
+    // Bentuk hasilnya sengaja dipertahankan supaya kode di bawahnya tidak ikut berubah;
+    // `error` selalu null karena ensureAuthUser sudah menangani "sudah terdaftar" sendiri.
+    const { data: authUser, error: authUserError } = {
+      data: { user: { id: await ensureAuthUser(adminClient, 'admin.bomyieldtest@debug.mrp', roleTestPassword, { full_name: 'Admin BomYieldTest' }) } },
+      error: null as { message: string } | null
+    };
     let authUid: string;
     if (authUserError && !authUserError.message.includes('already been registered')) throw new Error(authUserError.message);
     if (authUser?.user) {

@@ -5,6 +5,7 @@ import { createEmployee } from '../src/features/hr/server/createEmployee';
 import { updateEmployee } from '../src/features/hr/server/updateEmployee';
 import { listEmployees } from '../src/features/hr/server/listEmployees';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // Perintah Gabungan A-F, Bagian C (21 Agu 2026) -- kolom payroll nyata baru di
 // employees (kode karyawan pabrik, status kepegawaian, PTKP, TER, tunjangan
@@ -58,12 +59,13 @@ describe('Employee real payroll fields (Bagian C) — validasi + privasi data fi
       ['hrmanager.payrollfieldstest@debug.mrp', 'hr_manager', 'HR Manager PayrollFieldsTest'],
       ['prodstaff.payrollfieldstest@debug.mrp', 'production_staff', 'Prod Staff PayrollFieldsTest']
     ] as const) {
-      const { data: authUser, error: authUserError } = await adminClient.auth.admin.createUser({
-        email,
-        password: roleTestPassword,
-        email_confirm: true,
-        user_metadata: { full_name: fullName }
-      });
+      // AUD-21 (25 Agu 2026): pembuatan pengguna auth SELALU lewat ensureAuthUser.
+      // Bentuk hasilnya sengaja dipertahankan supaya kode di bawahnya tidak ikut berubah;
+      // `error` selalu null karena ensureAuthUser sudah menangani "sudah terdaftar" sendiri.
+      const { data: authUser, error: authUserError } = {
+        data: { user: { id: await ensureAuthUser(adminClient, email, roleTestPassword, { full_name: fullName }) } },
+        error: null as { message: string } | null
+      };
       let authUid: string;
       if (authUserError && !authUserError.message.includes('already been registered')) throw new Error(authUserError.message);
       if (authUser?.user) {

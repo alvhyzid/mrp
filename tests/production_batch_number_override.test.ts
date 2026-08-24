@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createProductionBatch } from '../src/features/mrp/server/createProductionBatch';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // Nomor batch -- pola "rekomendasi + bisa diubah" (keputusan pemilik produk, 20
 // Agu 2026, mengikuti format pabrik "3TM13082601"): staf boleh menimpa nomor
@@ -57,12 +58,13 @@ describe('Nomor batch produksi — rekomendasi otomatis + boleh ditimpa manual',
     if (plantError) throw new Error(plantError.message);
     plantId = plant.production_plant_id;
 
-    const { data: authUser, error: authUserError } = await adminClient.auth.admin.createUser({
-      email: 'ppicmanager.batchnumbertest@debug.mrp',
-      password: roleTestPassword,
-      email_confirm: true,
-      user_metadata: { full_name: 'PPIC Manager BatchNumberTest' }
-    });
+    // AUD-21 (25 Agu 2026): pembuatan pengguna auth SELALU lewat ensureAuthUser.
+    // Bentuk hasilnya sengaja dipertahankan supaya kode di bawahnya tidak ikut berubah;
+    // `error` selalu null karena ensureAuthUser sudah menangani "sudah terdaftar" sendiri.
+    const { data: authUser, error: authUserError } = {
+      data: { user: { id: await ensureAuthUser(adminClient, 'ppicmanager.batchnumbertest@debug.mrp', roleTestPassword, { full_name: 'PPIC Manager BatchNumberTest' }) } },
+      error: null as { message: string } | null
+    };
     if (authUserError && !authUserError.message.includes('already been registered')) throw new Error(authUserError.message);
     if (authUser?.user) {
       ppicManagerAuthUid = authUser.user.id;

@@ -4,6 +4,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { explodeBomRequirements } from '../src/features/mrp/server/explodeBomRequirements';
 import { getPlanningFeasibility } from '../src/features/mrp/server/getPlanningFeasibility';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // Fase Produksi Nyata — perbaikan model kelayakan SADAR-TAHAP (20 Agu 2026).
 // Sebelum ini SEMUA komponen BOM (termasuk kemasan yang baru dipakai di tahap
@@ -80,12 +81,13 @@ describe('Fase Produksi Nyata — kelayakan sadar-tahap (bom_lines.routing_step_
     if (plantError) throw new Error(plantError.message);
     plantId = plant.production_plant_id;
 
-    const { data: authUser, error: authUserError } = await adminClient.auth.admin.createUser({
-      email: 'ppicmanager.stageawaretest@debug.mrp',
-      password: roleTestPassword,
-      email_confirm: true,
-      user_metadata: { full_name: 'PPIC Manager StageAwareTest' }
-    });
+    // AUD-21 (25 Agu 2026): pembuatan pengguna auth SELALU lewat ensureAuthUser.
+    // Bentuk hasilnya sengaja dipertahankan supaya kode di bawahnya tidak ikut berubah;
+    // `error` selalu null karena ensureAuthUser sudah menangani "sudah terdaftar" sendiri.
+    const { data: authUser, error: authUserError } = {
+      data: { user: { id: await ensureAuthUser(adminClient, 'ppicmanager.stageawaretest@debug.mrp', roleTestPassword, { full_name: 'PPIC Manager StageAwareTest' }) } },
+      error: null as { message: string } | null
+    };
     if (authUserError && !authUserError.message.includes('already been registered')) throw new Error(authUserError.message);
     if (authUser?.user) {
       ppicManagerAuthUid = authUser.user.id;

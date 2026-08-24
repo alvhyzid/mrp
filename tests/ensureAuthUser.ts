@@ -28,9 +28,16 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 export async function ensureAuthUser(
   adminClient: SupabaseClient,
   email: string,
-  password: string,
+  password: string | undefined,
   userMetadata?: Record<string, unknown>
 ): Promise<string> {
+  // Password diterima dalam bentuk yang mungkin kosong karena ia datang dari environment.
+  // Ditolak DI SINI dengan pesan yang menyebut sebabnya -- lebih baik daripada setiap berkas test
+  // memakai tanda seru non-null, yaitu kelas cacat yang justru sedang diberantas (AUD-21).
+  if (!password) {
+    throw new Error(`ensureAuthUser dipanggil untuk ${email} tanpa password. Periksa DEBUG_*_PASSWORD di environment.`);
+  }
+
   const { data, error } = await adminClient.auth.admin.createUser({
     email,
     password,

@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getMonthlyOperatingProfit } from '../src/features/mrp/server/getMonthlyOperatingProfit';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // Perintah Gabungan A-F, Bagian E (21 Agu 2026) -- keputusan pemilik produk:
 // Laba Operasional bulanan IKUT periode gajian (26 bulan sebelumnya s/d 25
@@ -107,12 +108,13 @@ describe('get_monthly_operating_profit — periode gajian (payroll_period_start_
     const { data: customer } = await adminClient.from('customers').insert([{ company_id: companyId, name: 'Customer Uji Periode' }]).select('customer_id').single();
     customerId = customer!.customer_id;
 
-    const { data: authUser, error: authUserError } = await adminClient.auth.admin.createUser({
-      email: 'admin.periodtest@debug.mrp',
-      password: process.env.DEBUG_ROLE_TEST_PASSWORD,
-      email_confirm: true,
-      user_metadata: { full_name: 'Admin PeriodTest' }
-    });
+    // AUD-21 (25 Agu 2026): pembuatan pengguna auth SELALU lewat ensureAuthUser.
+    // Bentuk hasilnya sengaja dipertahankan supaya kode di bawahnya tidak ikut berubah;
+    // `error` selalu null karena ensureAuthUser sudah menangani "sudah terdaftar" sendiri.
+    const { data: authUser, error: authUserError } = {
+      data: { user: { id: await ensureAuthUser(adminClient, 'admin.periodtest@debug.mrp', process.env.DEBUG_ROLE_TEST_PASSWORD, { full_name: 'Admin PeriodTest' }) } },
+      error: null as { message: string } | null
+    };
     if (authUserError && !authUserError.message.includes('already been registered')) throw new Error(authUserError.message);
     if (authUser?.user) {
       adminAuthUid = authUser.user.id;

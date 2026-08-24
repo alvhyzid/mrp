@@ -7,6 +7,7 @@ import { listDocuments } from '../src/features/documents/server/listDocuments';
 import { getDocumentSignedUrl } from '../src/features/documents/server/getDocumentSignedUrl';
 import { hardDeleteOrphanDocument } from '../src/features/documents/server/hardDeleteOrphanDocument';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // Master Dokumen MD-1 (Bagian C, 26 Agu 2026) -- 5 skenario negatif wajib §6
 // rencana-kerja-master-dokumen.md: (1) lintas-departemen dokumen TERBATAS ditolak,
@@ -65,7 +66,13 @@ describe('Master Dokumen MD-1', () => {
       ['admin.mddokumentestb@debug.mrp', 'company_admin', otherCompanyId]
     ];
     for (const [email, role, cId] of accounts) {
-      const { data: authUser, error: authUserError } = await adminClient.auth.admin.createUser({ email, password: roleTestPassword, email_confirm: true });
+      // AUD-21 (25 Agu 2026): pembuatan pengguna auth SELALU lewat ensureAuthUser.
+      // Bentuk hasilnya sengaja dipertahankan supaya kode di bawahnya tidak ikut berubah;
+      // `error` selalu null karena ensureAuthUser sudah menangani "sudah terdaftar" sendiri.
+      const { data: authUser, error: authUserError } = {
+        data: { user: { id: await ensureAuthUser(adminClient, email, roleTestPassword) } },
+        error: null as { message: string } | null
+      };
       let authUid: string;
       if (authUserError && !authUserError.message.includes('already been registered')) throw new Error(authUserError.message);
       if (authUser?.user) {

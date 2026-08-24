@@ -7,6 +7,7 @@ import { toggleAiProjectChecklistItem } from '../src/features/ai-project/server/
 import { setAiProjectTaskManualPercent } from '../src/features/ai-project/server/setAiProjectTaskManualPercent';
 import { takeAiProjectSnapshot } from '../src/features/ai-project/server/takeAiProjectSnapshot';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // Dashboard Proyek AI (K1b, docs/instruksi-dashboard-proyek-ai.md). PRINSIP
 // UTAMA yang diuji: (1) progres AUTO_QUERY dihitung dari data NYATA (kamus_terms),
@@ -58,12 +59,13 @@ describe('Dashboard Proyek AI (K1b) — seed, progres AUTO_QUERY dari data nyata
       ['admin.aiprojecttest@debug.mrp', 'company_admin', 'Admin AiProjectTest'],
       ['production.aiprojecttest@debug.mrp', 'production_staff', 'Produksi AiProjectTest']
     ] as const) {
-      const { data: authUser, error: authUserError } = await adminClient.auth.admin.createUser({
-        email,
-        password: roleTestPassword,
-        email_confirm: true,
-        user_metadata: { full_name: fullName }
-      });
+      // AUD-21 (25 Agu 2026): pembuatan pengguna auth SELALU lewat ensureAuthUser.
+      // Bentuk hasilnya sengaja dipertahankan supaya kode di bawahnya tidak ikut berubah;
+      // `error` selalu null karena ensureAuthUser sudah menangani "sudah terdaftar" sendiri.
+      const { data: authUser, error: authUserError } = {
+        data: { user: { id: await ensureAuthUser(adminClient, email, roleTestPassword, { full_name: fullName }) } },
+        error: null as { message: string } | null
+      };
       let authUid: string;
       if (authUserError && !authUserError.message.includes('already been registered')) throw new Error(authUserError.message);
       if (authUser?.user) {

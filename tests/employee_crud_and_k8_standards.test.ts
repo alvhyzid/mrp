@@ -9,6 +9,7 @@ import { decideProductionStandardProposal } from '../src/features/mrp/server/dec
 import { getPlanningFeasibility } from '../src/features/mrp/server/getPlanningFeasibility';
 import { lockFeasibilityBaseline } from '../src/features/mrp/server/lockFeasibilityBaseline';
 import { cleanupCompanyCascade, cleanupStaleFixtureByName } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // Fase Produksi Nyata (19 Agu 2026), PEKERJAAN 1 (create/edit Karyawan lewat UI)
 // + PEKERJAAN 2 (pengerasan K8: proposal-approval, median, gerbang kelengkapan,
@@ -88,12 +89,13 @@ describe('Fase Produksi Nyata — Employee CRUD (B-1) & K8 standard proposal wor
   async function getOrCreateAuthUser(email: string, fullName: string) {
     const existing = await findAuthUserByEmail(email);
     if (existing) return existing;
-    const { data, error } = await adminClient.auth.admin.createUser({
-      email,
-      password: roleTestPassword,
-      email_confirm: true,
-      user_metadata: { full_name: fullName }
-    });
+    // AUD-21 (25 Agu 2026): pembuatan pengguna auth SELALU lewat ensureAuthUser.
+    // Bentuk hasilnya sengaja dipertahankan supaya kode di bawahnya tidak ikut berubah;
+    // `error` selalu null karena ensureAuthUser sudah menangani "sudah terdaftar" sendiri.
+    const { data, error } = {
+      data: { user: { id: await ensureAuthUser(adminClient, email, roleTestPassword, { full_name: fullName }) } },
+      error: null as { message: string } | null
+    };
     if (error) throw new Error(`Failed to create auth user ${email}: ${error.message}`);
     return data.user;
   }

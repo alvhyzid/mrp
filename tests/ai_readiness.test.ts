@@ -5,6 +5,7 @@ import { recomputeAiReadiness, isCapabilityUnlocked } from '../src/features/ai-r
 import { createAiCapabilityOverride } from '../src/features/ai-readiness/server/createAiCapabilityOverride';
 import { getAiReadinessDashboard } from '../src/features/ai-readiness/server/getAiReadinessDashboard';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // Kesiapan AI (Tenant-Facing) -- docs/spesifikasi-kesiapan-ai-tenant.md BAGIAN 2.
 // PRINSIP UTAMA yang diuji: (1) TIDAK ADA angka kesiapan yang diketik manual --
@@ -54,12 +55,13 @@ describe('Kesiapan AI (Tenant-Facing) — gerbang per kemampuan dari data nyata'
       .single();
     companyBId = companyB!.company_id;
 
-    const { data: authUser, error: authUserError } = await adminClient.auth.admin.createUser({
-      email: 'admin.aireadinesstest@debug.mrp',
-      password: roleTestPassword,
-      email_confirm: true,
-      user_metadata: { full_name: 'Admin AiReadinessTest' }
-    });
+    // AUD-21 (25 Agu 2026): pembuatan pengguna auth SELALU lewat ensureAuthUser.
+    // Bentuk hasilnya sengaja dipertahankan supaya kode di bawahnya tidak ikut berubah;
+    // `error` selalu null karena ensureAuthUser sudah menangani "sudah terdaftar" sendiri.
+    const { data: authUser, error: authUserError } = {
+      data: { user: { id: await ensureAuthUser(adminClient, 'admin.aireadinesstest@debug.mrp', roleTestPassword, { full_name: 'Admin AiReadinessTest' }) } },
+      error: null as { message: string } | null
+    };
     let authUid: string;
     if (authUserError && !authUserError.message.includes('already been registered')) throw new Error(authUserError.message);
     if (authUser?.user) {

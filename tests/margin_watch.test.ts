@@ -5,6 +5,7 @@ import { getMarginWatch } from '../src/features/mrp/server/getMarginWatch';
 import { updateMarginFloorThreshold } from '../src/features/mrp/server/updateMarginFloorThreshold';
 import { lockMarginBaseline } from '../src/features/mrp/server/lockMarginBaseline';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // Margin Watch Lapis 1 (baseline margin per order, dikunci sekali) + Lapis 2
 // (pembongkaran selisih margin AKTUAL jadi 5 kategori). PRINSIP UTAMA yang
@@ -74,12 +75,13 @@ describe('Margin Watch — baseline (Lapis 1) + selisih 5 kategori (Lapis 2)', (
     if (plantError) throw new Error(plantError.message);
     plantId = plant.production_plant_id;
 
-    const { data: authUser, error: authUserError } = await adminClient.auth.admin.createUser({
-      email: 'financemanager.marginwatchtest@debug.mrp',
-      password: roleTestPassword,
-      email_confirm: true,
-      user_metadata: { full_name: 'Finance Manager MarginWatchTest' }
-    });
+    // AUD-21 (25 Agu 2026): pembuatan pengguna auth SELALU lewat ensureAuthUser.
+    // Bentuk hasilnya sengaja dipertahankan supaya kode di bawahnya tidak ikut berubah;
+    // `error` selalu null karena ensureAuthUser sudah menangani "sudah terdaftar" sendiri.
+    const { data: authUser, error: authUserError } = {
+      data: { user: { id: await ensureAuthUser(adminClient, 'financemanager.marginwatchtest@debug.mrp', roleTestPassword, { full_name: 'Finance Manager MarginWatchTest' }) } },
+      error: null as { message: string } | null
+    };
     if (authUserError && !authUserError.message.includes('already been registered')) throw new Error(authUserError.message);
     if (authUser?.user) {
       financeManagerAuthUid = authUser.user.id;
@@ -355,11 +357,12 @@ describe('Margin Watch — baseline (Lapis 1) + selisih 5 kategori (Lapis 2)', (
   });
 
   it('(NEGATIF) role di luar akses finansial ditolak 403', async () => {
-    const { data: authUser } = await adminClient.auth.admin.createUser({
-      email: 'ppicstaff.marginwatchtest@debug.mrp',
-      password: roleTestPassword,
-      email_confirm: true
-    });
+    // AUD-21 (25 Agu 2026): pembuatan pengguna auth SELALU lewat ensureAuthUser.
+    // Bentuk hasilnya sengaja dipertahankan supaya kode di bawahnya tidak ikut berubah;
+    // `error` selalu null karena ensureAuthUser sudah menangani "sudah terdaftar" sendiri.
+    const { data: authUser } = {
+      data: { user: { id: await ensureAuthUser(adminClient, 'ppicstaff.marginwatchtest@debug.mrp', roleTestPassword) } }
+    };
     const uid = authUser!.user!.id;
     await adminClient.from('users').upsert([{ auth_uid: uid, company_id: companyId, name: 'PPIC Staff MarginWatchTest', email: 'ppicstaff.marginwatchtest@debug.mrp', role: 'ppic_staff', status: 'active' }], { onConflict: 'auth_uid' });
     const token = await loginToken('ppicstaff.marginwatchtest@debug.mrp');

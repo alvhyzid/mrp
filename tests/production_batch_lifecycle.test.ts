@@ -4,6 +4,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { startProductionBatch } from '../src/features/mrp/server/startProductionBatch';
 import { completeProductionBatch } from '../src/features/mrp/server/completeProductionBatch';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // Fase Produksi Nyata, P1 — "Selesaikan Batch" lewat state machine yang SUDAH ADA
 // (status_transition_rules + trigger enforce_status_transition, migration
@@ -61,7 +62,13 @@ describe('Fase Produksi Nyata P1 — Mulai/Selesaikan Batch (state machine + K8 
       if (!data?.nextPage) break;
       page += 1;
     }
-    const { data, error } = await adminClient.auth.admin.createUser({ email, password: roleTestPassword, email_confirm: true, user_metadata: { full_name: fullName } });
+    // AUD-21 (25 Agu 2026): pembuatan pengguna auth SELALU lewat ensureAuthUser.
+    // Bentuk hasilnya sengaja dipertahankan supaya kode di bawahnya tidak ikut berubah;
+    // `error` selalu null karena ensureAuthUser sudah menangani "sudah terdaftar" sendiri.
+    const { data, error } = {
+      data: { user: { id: await ensureAuthUser(adminClient, email, roleTestPassword, { full_name: fullName }) } },
+      error: null as { message: string } | null
+    };
     if (error) throw new Error(error.message);
     return data.user;
   }

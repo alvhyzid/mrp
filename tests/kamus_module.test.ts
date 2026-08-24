@@ -7,6 +7,7 @@ import { answerKamusTerm } from '../src/features/kamus/server/answerKamusTerm';
 import { confirmKamusTerm } from '../src/features/kamus/server/confirmKamusTerm';
 import { exportKamusMarkdown } from '../src/features/kamus/server/exportKamusMarkdown';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // Modul Kamus (K1, docs/rencana-modul-kamus-paralel.md BAGIAN 2). PRINSIP
 // UTAMA yang diuji: (1) generator IDEMPOTEN (dijalankan 2x tidak menambah
@@ -59,12 +60,13 @@ describe('Modul Kamus (K1) — generator backlog, antrean jawab/konfirmasi, eksp
       ['admin.kamustest@debug.mrp', 'company_admin', 'Admin KamusTest'],
       ['staff.kamustest@debug.mrp', 'warehouse_staff', 'Staff Gudang KamusTest']
     ] as const) {
-      const { data: authUser, error: authUserError } = await adminClient.auth.admin.createUser({
-        email,
-        password: roleTestPassword,
-        email_confirm: true,
-        user_metadata: { full_name: fullName }
-      });
+      // AUD-21 (25 Agu 2026): pembuatan pengguna auth SELALU lewat ensureAuthUser.
+      // Bentuk hasilnya sengaja dipertahankan supaya kode di bawahnya tidak ikut berubah;
+      // `error` selalu null karena ensureAuthUser sudah menangani "sudah terdaftar" sendiri.
+      const { data: authUser, error: authUserError } = {
+        data: { user: { id: await ensureAuthUser(adminClient, email, roleTestPassword, { full_name: fullName }) } },
+        error: null as { message: string } | null
+      };
       let authUid: string;
       if (authUserError && !authUserError.message.includes('already been registered')) throw new Error(authUserError.message);
       if (authUser?.user) {

@@ -2,6 +2,44 @@
 
 Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`). Tiap sesi Claude Code WAJIB baca ini dulu sebelum mulai, dan memperbarui bagian relevan begitu sesi selesai. Klaim di sini harus tetap diverifikasi ulang, bukan otomatis dipercaya — HANDOFF ini rangkuman, bukan pengganti bukti.
 
+## TT — PERBAIKAN YANG MENYISIR SEBAGIAN (25 Agu 2026)
+
+### Apa yang terjadi
+
+`AUD-21` diperbaiki dengan mengganti 15 titik rapuh di 10 berkas, lalu **dinyatakan selesai**. Ternyata **23 berkas lain** masih memanggil `auth.admin.createUser` langsung. Satu di antaranya — `margin_watch.test.ts:358` — tidak memeriksa error sama sekali, dan meledak persis seperti kejadian aslinya:
+
+```
+TypeError: Cannot read properties of null (reading 'id')
+```
+
+Akibatnya **tiga CI merah berturut-turut**, yang sempat dikira kemunduran menyeluruh.
+
+**ATURAN**: perbaikan atas sebuah **kelas** cacat belum selesai sampai ada **pengawas** yang menjamin (a) tidak ada yang tersisa dan (b) tidak ada yang lahir baru. **Menyisir dengan mata bukan penutup.**
+
+Yang membuat ini lebih berbahaya daripada tidak diperbaiki sama sekali: **orang berhenti mencurigainya.** Task-nya tertutup, dan gejala berikutnya dibaca sebagai masalah baru — bukan sebagai sisa masalah lama.
+
+Ditutup dengan `tests/auth_user_lewat_helper_watchdog.test.ts`, terbukti merah lalu hijau.
+
+### Tiga dugaan gugur sebelum satu baris galat dibaca
+
+Urutannya penting, karena ini polanya:
+
+1. **"Dua CI bertabrakan"** — gugur: `76300aa` berjalan sendirian dan tetap gagal.
+2. **"Ada kemunduran nyata"** — gugur: yang gagal **1 test dari 318**, bukan tumbang berjamaah.
+3. **"Kemungkinan batas waktu di Margin Watch"** — gugur: penyebabnya sisa pengguna auth, bukan waktu.
+
+**Yang menemukan penyebabnya bukan hipotesis keempat, melainkan MEMBACA LOG.** Tiga dugaan dibuang sebelum satu baris galat benar-benar dibaca. Ini memperkuat aturan yang sudah tercatat: **baca gejalanya persis dulu, baru susun hipotesis** — bukan sebaliknya.
+
+### "CI merah" tanpa angka menghasilkan kecemasan yang tidak sebanding
+
+Dugaan "ada kemunduran nyata" **terlalu besar**. Kenyataannya satu test gagal dari 318. Membaca "CI merah" tanpa melihat **berapa** yang gagal membuat Bagian 3 tertahan lebih lama dari perlunya.
+
+Yang membuat perbedaan itu terlihat adalah **pengawas ambang** (`scripts/check-test-threshold.js`): ia menyebut angkanya — 317 lulus, 1 gagal, 7 dilewati, 52 berkas — sehingga kegagalannya bisa dibaca sebagai "1 dari 318", bukan sebagai "CI merah" yang menakutkan.
+
+**Ini pertama kalinya pengawas itu berbunyi di luar pengujian sengaja.** Ia menangkap kegagalan sungguhan, menyebut angkanya, dan menjelaskan sendiri kenapa "CI hijau" tidak cukup. Nilainya terbukti di keadaan nyata, bukan cuma di uji.
+
+---
+
 ## OO — PELONGGARAN YANG TIDAK DIKEMBALIKAN (24 Agu 2026)
 
 ### Kelas cacat: pelonggaran demi memeriksa sesuatu, tanpa langkah pengembalian

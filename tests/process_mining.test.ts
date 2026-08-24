@@ -4,6 +4,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { computeProcessMiningInsights } from '../src/features/process-mining/server/computeProcessMiningInsights';
 import { getProcessMiningDashboard } from '../src/features/process-mining/server/getProcessMiningDashboard';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // Process Mining (Fase 0.4, docs/langkah-membangun-fitur-ai.md) -- TANPA LLM,
 // query & agregasi atas status_transition_log yang SUDAH ADA. PRINSIP UTAMA
@@ -50,12 +51,13 @@ describe('Process Mining — insight dari status_transition_log nyata, jujur soa
       ['admin.processminingtest@debug.mrp', 'company_admin', 'Admin ProcessMiningTest'],
       ['warehouse.processminingtest@debug.mrp', 'warehouse_staff', 'Gudang ProcessMiningTest']
     ] as const) {
-      const { data: authUser, error: authUserError } = await adminClient.auth.admin.createUser({
-        email,
-        password: roleTestPassword,
-        email_confirm: true,
-        user_metadata: { full_name: fullName }
-      });
+      // AUD-21 (25 Agu 2026): pembuatan pengguna auth SELALU lewat ensureAuthUser.
+      // Bentuk hasilnya sengaja dipertahankan supaya kode di bawahnya tidak ikut berubah;
+      // `error` selalu null karena ensureAuthUser sudah menangani "sudah terdaftar" sendiri.
+      const { data: authUser, error: authUserError } = {
+        data: { user: { id: await ensureAuthUser(adminClient, email, roleTestPassword, { full_name: fullName }) } },
+        error: null as { message: string } | null
+      };
       let authUid: string;
       if (authUserError && !authUserError.message.includes('already been registered')) throw new Error(authUserError.message);
       if (authUser?.user) {

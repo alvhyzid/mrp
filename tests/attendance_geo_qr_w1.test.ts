@@ -7,6 +7,7 @@ import { requestAttendanceCorrection, decideAttendanceCorrection } from '../src/
 import { createLeaveRequest, decideLeaveRequest } from '../src/features/attendance/server/leaveRequests';
 import { closeStaleOpenAttendanceDays } from '../src/features/attendance/server/closeStaleOpenAttendanceDays';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // Absensi Geo-QR — GELOMBANG 1 (docs/rancangan-absensi-geo-qr.md). PRINSIP
 // UTAMA yang diuji sesuai §8 kriteria selesai: (1) client_event_id sama 2x ->
@@ -70,12 +71,13 @@ describe('Absensi Geo-QR — Gelombang 1 (skema, RLS, state machine, geofence, l
       ['staffa.attendancew1test@debug.mrp', 'production_staff', 'Staff A AttendanceW1Test'],
       ['staffb.attendancew1test@debug.mrp', 'production_staff', 'Staff B AttendanceW1Test']
     ] as const) {
-      const { data: authUser, error: authUserError } = await adminClient.auth.admin.createUser({
-        email,
-        password: roleTestPassword,
-        email_confirm: true,
-        user_metadata: { full_name: fullName }
-      });
+      // AUD-21 (25 Agu 2026): pembuatan pengguna auth SELALU lewat ensureAuthUser.
+      // Bentuk hasilnya sengaja dipertahankan supaya kode di bawahnya tidak ikut berubah;
+      // `error` selalu null karena ensureAuthUser sudah menangani "sudah terdaftar" sendiri.
+      const { data: authUser, error: authUserError } = {
+        data: { user: { id: await ensureAuthUser(adminClient, email, roleTestPassword, { full_name: fullName }) } },
+        error: null as { message: string } | null
+      };
       let authUid: string;
       if (authUserError && !authUserError.message.includes('already been registered')) throw new Error(authUserError.message);
       if (authUser?.user) {

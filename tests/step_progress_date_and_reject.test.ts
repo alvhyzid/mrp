@@ -5,6 +5,7 @@ import { recordWorkOrderStepProgress } from '../src/features/mrp/server/recordWo
 import { getBatchYieldSummary } from '../src/features/mrp/server/getBatchYieldSummary';
 import { learnFromBatchCore } from '../src/features/mrp/server/learnFromBatchCore';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // Investigasi laporan produksi harian nyata (20 Agu 2026) menemukan 2 gap
 // blocker pemakaian harian:
@@ -76,12 +77,13 @@ describe('Progres Tahap — tanggal kejadian bisa dipilih (gap a) + reject per t
     if (plantError) throw new Error(plantError.message);
     plantId = plant.production_plant_id;
 
-    const { data: authUser, error: authUserError } = await adminClient.auth.admin.createUser({
-      email: 'ppicmanager.stepprogresstest@debug.mrp',
-      password: roleTestPassword,
-      email_confirm: true,
-      user_metadata: { full_name: 'PPIC Manager StepProgressTest' }
-    });
+    // AUD-21 (25 Agu 2026): pembuatan pengguna auth SELALU lewat ensureAuthUser.
+    // Bentuk hasilnya sengaja dipertahankan supaya kode di bawahnya tidak ikut berubah;
+    // `error` selalu null karena ensureAuthUser sudah menangani "sudah terdaftar" sendiri.
+    const { data: authUser, error: authUserError } = {
+      data: { user: { id: await ensureAuthUser(adminClient, 'ppicmanager.stepprogresstest@debug.mrp', roleTestPassword, { full_name: 'PPIC Manager StepProgressTest' }) } },
+      error: null as { message: string } | null
+    };
     if (authUserError && !authUserError.message.includes('already been registered')) throw new Error(authUserError.message);
     if (authUser?.user) {
       ppicManagerAuthUid = authUser.user.id;

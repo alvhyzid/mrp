@@ -16,9 +16,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const MIN_PASSED = 298;   // sekarang 318 (+2 dari tests/backup_table_list_lengkap.test.ts, LL) -- ruang ~20
+const MIN_PASSED = 300;   // sekarang 320 (+2 dari tests/auth_user_lewat_helper_watchdog.test.ts, TT) -- ruang ~20
 const MAX_SKIPPED = 10;   // sekarang 7 dilewati sadar (2 pengawas data nyata)
-const EXPECTED_FILES = 52;  // +1 storage_ikut_terhapus (JJ.1), +1 backup_table_list_lengkap (LL) -- 24 Agu 2026
+const EXPECTED_FILES = 53;  // +storage_ikut_terhapus (JJ.1), +backup_table_list_lengkap (LL), +auth_user_lewat_helper_watchdog (TT)
 
 const arg = process.argv[2] || 'test-results.json';
 const file = path.isAbsolute(arg) ? arg : path.join(process.cwd(), arg);

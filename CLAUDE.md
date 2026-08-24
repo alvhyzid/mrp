@@ -247,6 +247,20 @@ Sudah terjadi berulang di proyek ini, dan tiap kali cacatnya tak terlihat dari m
 
 Konsekuensinya untuk cara kerja: skrip atau alur yang akan menyentuh data sungguhan **wajib dijalankan lebih dulu terhadap fixture di tenant uji**, dengan keadaan yang menyerupai kenyataan — termasuk keadaan yang "seharusnya tidak terjadi", seperti nama kembar.
 
+## Reset Penghitung Nomor: Aman SEKARANG, Tidak Akan Aman Lagi Nanti (ditetapkan 25 Agu 2026)
+
+**Reset penghitung nomor aman dilakukan hari ini karena BELUM ADA satu pun dokumen yang terbit ke luar** — nol surat jalan, nol PO tercetak, nol dokumen di tangan siapa pun.
+
+Begitu dokumen bernomor beredar di luar sistem — di tangan pelanggan, di tangan supplier, atau tertempel di kemasan untuk keperluan BPOM — **mengulang penghitung akan MELAHIRKAN NOMOR GANDA untuk dokumen yang berbeda**. Dan itu tidak bisa diperbaiki tanpa menarik dokumen yang sudah beredar.
+
+**Reset setelah titik itu WAJIB lewat keputusan pemilik produk dengan alasan tertulis.**
+
+**CARA KERJA NOMOR DI SISTEM INI, supaya tidak salah dicari** (diperiksa 25 Agu 2026): tidak ada penghitung tersimpan sama sekali — tidak ada sequence Postgres, tidak ada kolom di `company_settings`. Nomor **dihitung ulang setiap kali dokumen dibuat**, dari jumlah baris tahun berjalan. Jadi "mereset penghitung" sebenarnya berarti "menghapus barisnya"; tidak ada tombol reset yang terpisah.
+
+**HANYA EMPAT dokumen yang bernomor**: SO, nomor batch produksi, dan nomor surat jalan (ketiganya dibangkitkan sistem), serta nomor PO klien (**diketik pengguna**, milik pelanggan — tidak pernah direset). PO ke supplier dan Work Order **tidak punya nomor sama sekali**.
+
+**CACAT YANG SUDAH DIKETAHUI pada cara hitung ini**: karena nomor = jumlah baris + 1, menghapus satu dokumen di tengah tahun membuat nomor berikutnya menabrak nomor yang masih ada. Keempat kolom punya kekangan unik, jadi yang terjadi **bukan nomor ganda yang lolos, melainkan pembuatan dokumen yang GAGAL** tanpa penjelasan yang berguna bagi pengguna. Aman saat menghapus semuanya sekaligus; menggigit saat menghapus satu dari kumpulan yang masih hidup.
+
 ## Aturan Responsive — WAJIB di Semua Halaman (ditetapkan 23 Agu 2026)
 1. **Seluruh halaman WAJIB responsive terhadap semua ukuran layar** — HP, tablet, laptop, monitor lebar. TIDAK ada layar HP terpisah: satu kode, satu halaman, susunannya menyesuaikan lebar layar.
 2. **Responsive BUKAN tampilan yang sama diperkecil.** Tabel 8 kolom yang diperkecil sampai muat di HP tetap tidak terbaca — yang benar, susunannya BERUBAH BENTUK saat layar menyempit (informasinya sama, penyajiannya berbeda). Pola yang dipakai: tabel banyak kolom → kartu bertumpuk di layar sempit (satu baris = satu kartu, kolom tersusun ke bawah); navigasi samping → menu buka-tutup; modal lebar → layar penuh di HP; field form → satu kolom penuh di layar sempit; kolom tidak penting boleh disembunyikan di layar sempit TAPI harus tetap bisa dibuka, jangan hilang tanpa jalan melihatnya.

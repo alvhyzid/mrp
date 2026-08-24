@@ -22,6 +22,7 @@ customer_po_approvals
 customer_purchase_order_lines
 customer_purchase_orders
 customers
+data_change_audit_log
 delivery_confirmations
 document_access_log
 document_links
@@ -29,6 +30,7 @@ document_signatures
 document_types
 documents
 employee_attendance
+employee_cost_category_history
 employees
 formula_templates
 goods_receipt_lines
@@ -77,6 +79,7 @@ subscription_plans
 supplier_item_prices
 suppliers
 system_alerts
+tenant_picklists
 users
 work_centers
 work_order_assignments

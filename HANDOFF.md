@@ -2,6 +2,82 @@
 
 Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`). Tiap sesi Claude Code WAJIB baca ini dulu sebelum mulai, dan memperbarui bagian relevan begitu sesi selesai. Klaim di sini harus tetap diverifikasi ulang, bukan otomatis dipercaya — HANDOFF ini rangkuman, bukan pengganti bukti.
 
+## LL / BAGIAN 2 — JARING PENGAMAN SEBELUM PEMBERSIHAN DATA (24 Agu 2026)
+
+### Cara memulihkan dari cadangan Supabase, bila kelak diperlukan
+
+Supabase menyediakan **"Restore to new project"** di halaman Backups. Ini yang membuat pembersihan data bisa dibatalkan tanpa mengganggu sistem yang sedang berjalan: cadangan dipulihkan ke project **baru dan terpisah**, isinya dilihat, dan hanya data yang benar-benar dibutuhkan yang dipindahkan kembali.
+
+Langkahnya: buka Supabase Dashboard → project **FABRIX-APP** → **Database → Backups** → pilih tanggal cadangan → **Restore to new project** → beri nama project sementara → tunggu selesai → buka Table Editor project baru itu untuk melihat isinya.
+
+**Yang WAJIB diketahui sebelum mengandalkannya:**
+- **PITR (pemulihan titik-waktu) TIDAK aktif.** Yang tersedia hanya cadangan **harian**, dibuat sekitar pukul **04:00 WIB**. Artinya bila data terhapus keliru siang hari, titik pemulihan terdekat adalah pagi hari itu — pekerjaan sepanjang pagi ikut hilang.
+- **Cadangan Supabase TIDAK mencakup Storage.** Foto dan tanda tangan tidak ada di dalamnya sama sekali. Itu ditutup terpisah lewat ekspor manual (lihat di bawah).
+- Tersimpan **8 cadangan harian**, terlama 17 Agu.
+
+### Ekspor manual sekarang ikut menyalin berkas Storage
+
+`scripts/backup-export-json.js` diperluas: selain 90 tabel, ia menelusuri seluruh bucket secara rekursif dan **menyalin isi berkasnya**. Diverifikasi pada cadangan hari ini — tanda tangan tulisan tangan asli tersalin utuh, 818×198 piksel, 11.928 byte, sama persis dengan aslinya.
+
+Alasannya bukan kehati-hatian: foto profil akun admin PT ITM hilang permanen hari ini justru karena tidak ada satu pun salinannya.
+
+### Daftar tabel yang dicadangkan ternyata tertinggal tiga
+
+`backup-table-list.txt` memuat 87 nama; database punya 90 tabel dasar. Tiga tidak pernah ikut tercadangkan, dua di antaranya justru yang paling tidak boleh hilang: **`data_change_audit_log`** dan **`employee_cost_category_history`** (menurut CLAUDE.md itu JEJAK WAJIB pengganti alur persetujuan Finance).
+
+Kegagalan ini **tidak berisik**: pencadangan tetap berjalan, tetap melapor sukses, dan baru terasa saat data yang hilang dicari. Ditutup dengan `tests/backup_table_list_lengkap.test.ts` + fungsi `debug_list_base_tables()` — daftarnya sekarang **diperiksa terhadap database**, bukan diingat manusia. Terbukti merah lalu hijau.
+
+### 562 baris yatim di data nyata, dan akarnya ditemukan
+
+Saat mencetak angka pembanding, ketahuan **561 baris `customer_po_approvals` dan 1 baris `work_order_outputs` menunjuk induk yang sudah tidak ada** — padahal kunci asingnya ada dan sah. Diverifikasi dua cara (`NOT IN` dan `LEFT JOIN`).
+
+Akarnya: migrasi `20260826100000_cleanup_orphaned_test_companies.sql` menyalakan `session_replication_role = replica` lalu menghapus baris **hanya dari tabel yang punya kolom `company_id`**. Tabel anak tanpa kolom itu tidak pernah tersentuh, sementara induknya terhapus tanpa perlawanan.
+
+Komentar di migrasi itu menyatakan *"aman karena yang dihapus adalah seluruh subtree data uji"*. **Anggapan itulah yang keliru** — perulangannya tidak bisa melihat tabel tanpa `company_id`, jadi yang terhapus bukan seluruh subtree. Tercatat sebagai `AUD-31`, dan ini **langsung mengenai rencana Bagian 3**: pola yang sama akan melahirkan angkatan yatim baru.
+
+### Koreksi atas laporan Bagian 1: jejak audit ADA dan bekerja
+
+Saya melaporkan "jejak perubahan data PT ITM berisi tepat satu baris" dan membiarkan itu terbaca seolah mekanismenya tidak ada. Angkanya benar; sebabnya bukan itu.
+
+`data_change_audit_log` berisi **544 baris** dan pemicunya bekerja di **9 tabel**. PT ITM hanya punya 1 baris karena dua sebab yang **keduanya masih berlaku**:
+
+1. Pemicunya baru dipasang **22–23 Agu**; seluruh data PT ITM dibuat 19–20 Agu, dan insidennya 17 Agu.
+2. **Hanya 9 dari 90 tabel terpantau, dan `users` bukan salah satunya** — padahal justru `users` yang tertimpa pada 17 Agu.
+
+Artinya kejadian yang sama persis, **bila terulang hari ini, tetap tidak meninggalkan jejak**. Pekerjaan AUD-07 karena itu bukan "bangun jejak audit" melainkan **"perluas cakupannya"**, dimulai dari tabel identitas dan berkas pengguna.
+
+---
+
+### Pemeriksaan yang SELALU melaporkan berhasil (24 Agu 2026)
+
+Pola yang dipakai berulang kali sesi ini untuk memeriksa typecheck:
+
+```
+npx tsc --noEmit 2>&1 | head -5 && echo "TYPECHECK: bersih"
+```
+
+**Ia mencetak "bersih" bahkan ketika ada error.** Sebabnya: dalam pipa, yang menentukan
+keberhasilan adalah perintah TERAKHIR — yaitu `head`, yang praktis selalu berhasil. Kode
+keluar `tsc` tidak pernah dilihat siapa pun.
+
+Akibat nyatanya bukan sekadar salah cetak: pada satu jalankan, error TypeScript muncul di
+layar, kata "bersih" tercetak persis di bawahnya, dan **suite penuh tidak pernah berjalan** —
+tapi laporannya terlihat seperti langkah yang sudah dikerjakan.
+
+**Bentuk yang benar** membaca kode keluarnya, bukan keluaran pipanya:
+
+```
+if npx tsc --noEmit; then echo "BERSIH"; else echo "ADA ERROR"; fi
+```
+
+Ini contoh lain dari kelas yang sudah berkali-kali muncul di proyek ini: **pemeriksa yang
+mengukur hal yang salah selalu lulus.** Sebelumnya ia berbentuk `numTotalTestSuites` yang
+menghitung blok `describe` alih-alih berkas, dan `on conflict do nothing` yang menelan
+penyisipan yang gagal. Bentuknya berbeda, akibatnya sama: sesuatu yang terlihat terperiksa,
+padahal tidak.
+
+---
+
 ## JJ / BAGIAN 1 — PRIVASI BERKAS & PEMBERSIHAN STORAGE (24 Agu 2026)
 
 ### Kelas cacat: "berkas Storage tidak punya pemilik yang menghapusnya"

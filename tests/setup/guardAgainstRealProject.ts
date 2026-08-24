@@ -39,6 +39,26 @@
 //   - Hanya menjaga proses Node yang membaca NEXT_PUBLIC_SUPABASE_URL. Perintah CLI
 //     (`supabase db push`, `db reset`) tidak melewatinya sama sekali.
 //   - Tidak menjaga panggilan ke Management API yang menyebut project ref langsung.
+//
+// BATAS PEMAKAIAN FLAG ALLOW_TESTS_AGAINST_REAL_PROJECT (ditetapkan pemilik produk,
+// 24 Agu 2026 — LL.3):
+//
+//   FLAG INI HANYA UNTUK PROSES YANG *MEMBACA* DATA NYATA.
+//   SETIAP PEMAKAIAN UNTUK MENULIS ADALAH PELANGGARAN.
+//
+// Satu-satunya pemakaian sah yang diketahui hari ini: pengawas integritas AUD-13
+// (tests/kpi_kamus_integrity_guard.test.ts dan tests/mlvt_case_study_skeleton.test.ts),
+// yang murni SELECT terhadap company_id=1 dan tidak pernah insert/update/delete.
+// Itu sebabnya flag ini SENGAJA tidak dicabut walau CI sudah punya project sendiri.
+//
+// KELEMAHAN YANG DISADARI, BUKAN DIABAIKAN: flag ini tidak bisa membedakan test yang
+// membaca dari test yang menulis. Ia bergantung pada DISIPLIN orang yang menyalakannya,
+// dan disiplin adalah pengaman paling lemah yang tersedia. Penggantinya yang benar adalah
+// KREDENSIAL BACA-SAJA: bila pengawas integritas dijalankan dengan kunci yang secara
+// struktural tidak bisa menulis, flag ini tidak perlu ada sama sekali dan kesalahan
+// manusia berhenti jadi kemungkinan. Kelayakannya sedang ditinjau (lihat task SEC-13);
+// JANGAN mencabut flag ini sebelum penggantinya benar-benar bekerja, atau pengawas
+// integritas mati diam-diam.
 const { KNOWN_REAL_PROJECT_REFS } = require('../../scripts/guard-real-project');
 
 function extractProjectRef(supabaseUrl: string | undefined): string | null {

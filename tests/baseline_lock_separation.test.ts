@@ -6,6 +6,7 @@ import { getPlanningFeasibility } from '../src/features/mrp/server/getPlanningFe
 import { lockMarginBaseline } from '../src/features/mrp/server/lockMarginBaseline';
 import { lockFeasibilityBaseline } from '../src/features/mrp/server/lockFeasibilityBaseline';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // Sesi 0C (21 Agu 2026) — pisahkan MEMBACA dari MENGUNCI baseline. Sebelum ini,
 // getMarginWatch/getPlanningFeasibility mengunci baseline secara *lazy* pada
@@ -113,18 +114,15 @@ describe('Sesi 0C — pisahkan membaca dari mengunci baseline (Margin Watch + Ke
       .single();
     noStandardSoLineId = noStandardSoLine!.sales_order_line_id;
 
-    const financeUser = await adminClient.auth.admin.createUser({ email: 'finance.baselinelocktest@debug.mrp', password: roleTestPassword, email_confirm: true });
-    financeAuthUid = financeUser.data.user!.id;
+        financeAuthUid = await ensureAuthUser(adminClient, 'finance.baselinelocktest@debug.mrp', roleTestPassword);
     await adminClient.from('users').insert([{ auth_uid: financeAuthUid, company_id: companyId, name: 'Finance BaselineLockTest', email: 'finance.baselinelocktest@debug.mrp', role: 'finance_manager', status: 'active' }]);
     financeToken = await loginToken('finance.baselinelocktest@debug.mrp');
 
-    const adminUser = await adminClient.auth.admin.createUser({ email: 'admin.baselinelocktest@debug.mrp', password: roleTestPassword, email_confirm: true });
-    adminAuthUid = adminUser.data.user!.id;
+        adminAuthUid = await ensureAuthUser(adminClient, 'admin.baselinelocktest@debug.mrp', roleTestPassword);
     await adminClient.from('users').insert([{ auth_uid: adminAuthUid, company_id: companyId, name: 'Admin BaselineLockTest', email: 'admin.baselinelocktest@debug.mrp', role: 'company_admin', status: 'active' }]);
     adminToken = await loginToken('admin.baselinelocktest@debug.mrp');
 
-    const ppicUser = await adminClient.auth.admin.createUser({ email: 'ppic.baselinelocktest@debug.mrp', password: roleTestPassword, email_confirm: true });
-    ppicAuthUid = ppicUser.data.user!.id;
+        ppicAuthUid = await ensureAuthUser(adminClient, 'ppic.baselinelocktest@debug.mrp', roleTestPassword);
     await adminClient.from('users').insert([{ auth_uid: ppicAuthUid, company_id: companyId, name: 'PPIC BaselineLockTest', email: 'ppic.baselinelocktest@debug.mrp', role: 'ppic_staff', status: 'active' }]);
     ppicToken = await loginToken('ppic.baselinelocktest@debug.mrp');
   });

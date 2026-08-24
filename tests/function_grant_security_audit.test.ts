@@ -1,3 +1,12 @@
+
+// DI LUAR JANGKAUAN PENGAWAS INI (aturan II.2 -- cara sebuah pengaman MENCARI menentukan
+// apa yang TIDAK AKAN PERNAH ia temukan):
+//   - Hanya memeriksa izin EXECUTE pada FUNGSI di schema `public`. Fungsi di schema lain
+//     (auth, storage, extensions) tidak pernah dilihat.
+//   - TIDAK memeriksa izin pada TABEL, VIEW, atau KOLOM -- hanya fungsi.
+//   - TIDAK memeriksa isi kebijakan RLS. Fungsi yang izinnya rapat tetap bisa membocorkan
+//     data bila RLS tabel yang dibacanya longgar; itu wilayah pengawas lain.
+//   - TIDAK memeriksa apakah fungsinya BENAR, hanya siapa yang boleh menjalankannya.
 import { describe, it, expect } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 

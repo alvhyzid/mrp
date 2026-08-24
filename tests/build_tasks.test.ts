@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getBuildTasks, getBuildTaskHistory } from '../src/features/mrp/server/getBuildTasks';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // Halaman Daftar Tugas Pembangunan (21 Agu 2026) — HANYA BACA (A.2). Bukti
 // yang diuji di sini: (b)/(d) tidak ada jalur tulis yang bisa dipanggil
@@ -46,8 +47,7 @@ describe('Halaman Daftar Tugas Pembangunan (hanya baca, riwayat, gerbang E.3)', 
     const { data: company } = await adminClient.from('companies').insert([{ name: 'BuildTasksTestCorp', industry_type: 'manufacturing', status: 'trial' }]).select('company_id').single();
     companyId = company!.company_id;
 
-    const adminUser = await adminClient.auth.admin.createUser({ email: 'admin.buildtaskstest@debug.mrp', password: roleTestPassword, email_confirm: true });
-    adminAuthUid = adminUser.data.user!.id;
+        adminAuthUid = await ensureAuthUser(adminClient, 'admin.buildtaskstest@debug.mrp', roleTestPassword);
     await adminClient.from('users').insert([{ auth_uid: adminAuthUid, company_id: companyId, name: 'Admin BuildTasksTest', email: 'admin.buildtaskstest@debug.mrp', role: 'company_admin', status: 'active' }]);
     adminToken = await loginToken('admin.buildtaskstest@debug.mrp');
 

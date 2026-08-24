@@ -15,6 +15,12 @@
 //
 // Pengawas ini menggantikan seluruh tebakan itu dengan SATU pesan jelas, sebelum
 // satu test pun berjalan.
+// DI LUAR JANGKAUAN PENGAWAS INI (aturan II.2):
+//   - Hanya memeriksa bahwa URL dan kunci menunjuk project yang SAMA. TIDAK memeriksa
+//     apakah project itu project yang BENAR untuk pekerjaan ini -- URL dan kunci yang
+//     kompak-tapi-salah-project akan lolos (itu tugas guardAgainstRealProject).
+//   - Berjalan SEKALI di awal. Perubahan env di tengah run tidak terlihat.
+//   - TIDAK memeriksa cakupan izin kunci, hanya bahwa ia diterima project itu.
 import fs from 'node:fs';
 import path from 'node:path';
 

@@ -42,8 +42,14 @@ export async function createCustomerDeliveryAddress(request: NextRequest): Promi
       .select('customer_delivery_address_id')
       .single();
     if (error) return { status: 500, body: { error: error.message } };
+    // Tanpa penjaga ini, baris yang tidak kembali (bisa terjadi bila RLS menolak SELECT
+    // setelah INSERT berhasil) akan meledak sebagai galat tanpa pesan yang menjelaskan
+    // apa pun. Tanda seru non-null cuma menyuruh TypeScript diam, tidak membuat barisnya ada.
+    if (!data) {
+      return { status: 500, body: { error: 'Alamat tersimpan tetapi barisnya tidak bisa dibaca kembali. Muat ulang halaman untuk memastikan.' } };
+    }
 
-    return { status: 201, body: { customer_delivery_address_id: data!.customer_delivery_address_id } };
+    return { status: 201, body: { customer_delivery_address_id: data.customer_delivery_address_id } };
   } catch (error) {
     return { status: 401, body: { error: error instanceof Error ? error.message : String(error) } };
   }

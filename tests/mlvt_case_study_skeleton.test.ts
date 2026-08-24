@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { computeStandardCostPerUnit } from '../src/features/mrp/server/computeStandardCostPerUnit';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // Kerangka studi kasus MLVT ETAWAFIT (Bagian D, migrasi
 // 20260827120000_mlvt_case_study_skeleton.sql) -- describe pertama BACA SAJA data
@@ -135,8 +136,7 @@ describe('process_customer_purchase_order() — proses ulang PO yang sudah proce
       { customer_purchase_order_id: cpoId, department: 'manager', status: 'approved' }
     ]);
 
-    const adminUser = await adminClient.auth.admin.createUser({ email: 'admin.mlvtreproctest@debug.mrp', password: roleTestPassword, email_confirm: true, user_metadata: { full_name: 'Admin MlvtReprocessTest' } });
-    adminAuthUid = adminUser.data.user!.id;
+        adminAuthUid = await ensureAuthUser(adminClient, 'admin.mlvtreproctest@debug.mrp', roleTestPassword, { full_name: 'Admin MlvtReprocessTest' });
     await adminClient.from('users').insert([{ auth_uid: adminAuthUid, company_id: fixtureCompanyId, name: 'Admin MlvtReprocessTest', email: 'admin.mlvtreproctest@debug.mrp', role: 'company_admin', status: 'active' }]);
   });
 

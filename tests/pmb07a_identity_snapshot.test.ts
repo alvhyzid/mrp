@@ -9,6 +9,7 @@ import { listCustomerPurchaseOrders } from '../src/features/mrp/server/listCusto
 import { listSalesOrders } from '../src/features/mrp/server/listSalesOrders';
 import { updateCustomer } from '../src/features/mrp/server/updateCustomer';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // PMB-07a (22 Agu 2026) — Pembekuan Identitas Mitra di Dokumen Terbit. Bukti
 // wajib: ubah alamat resmi supplier/client SETELAH dokumen terbit -> dokumen
@@ -51,8 +52,7 @@ describe('PMB-07a — Pembekuan Identitas Mitra di Dokumen Terbit (PO Supplier, 
       .single();
     plantId = plant!.production_plant_id;
 
-    const adminUser = await adminClient.auth.admin.createUser({ email: 'admin.pmb07atest@debug.mrp', password: roleTestPassword, email_confirm: true, user_metadata: { full_name: 'Admin Pmb07aTest' } });
-    adminAuthUid = adminUser.data.user!.id;
+        adminAuthUid = await ensureAuthUser(adminClient, 'admin.pmb07atest@debug.mrp', roleTestPassword, { full_name: 'Admin Pmb07aTest' });
     await adminClient.from('users').insert([{ auth_uid: adminAuthUid, company_id: companyId, name: 'Admin Pmb07aTest', email: 'admin.pmb07atest@debug.mrp', role: 'company_admin', status: 'active' }]);
 
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;

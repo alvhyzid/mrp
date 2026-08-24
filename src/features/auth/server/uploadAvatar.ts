@@ -1,6 +1,8 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
 import { ALLOWED_IMAGE_MIME_TO_EXT, EXT_TO_IMAGE_MIME, detectImageExtFromBytes, isContentLengthTooLarge } from '@/lib/imageUpload';
+import { appUserUntukClient, ambilPathStorage } from '@/lib/storageSignedUrl';
+import { hapusBerkasStorage } from '@/lib/storageCleanup';
 
 interface ApiResult {
   status: number;
@@ -62,7 +64,20 @@ export async function uploadAvatar(request: NextRequest): Promise<ApiResult> {
       return { status: 500, body: { error: updateError.message } };
     }
 
-    return { status: 200, body: { success: true, avatar_url: avatarUrl, user: { ...appUser, avatar_url: avatarUrl } } };
+    // Nama berkas ikut EKSTENSI (avatar.png / avatar.jpg), dan upsert hanya menimpa nama
+    // yang sama persis. Jadi mengganti foto PNG dengan JPG meninggalkan avatar.png yatim
+    // selamanya. Berkas lama dengan ekstensi berbeda dibereskan di sini (INF-22 / JJ.1.3).
+    if (appUser.avatar_url) {
+      const pathLama = ambilPathStorage(appUser.avatar_url, 'user-avatars');
+      if (pathLama && pathLama !== path) {
+        await hapusBerkasStorage(adminClient, 'user-avatars', [appUser.avatar_url]);
+      }
+    }
+
+    return {
+      status: 200,
+      body: { success: true, avatar_url: avatarUrl, user: await appUserUntukClient(adminClient, { ...appUser, avatar_url: avatarUrl }) }
+    };
   } catch (error) {
     return { status: 401, body: { error: error instanceof Error ? error.message : String(error) } };
   }

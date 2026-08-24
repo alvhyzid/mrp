@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
+import { buatSignedUrlBanyak, BUCKET_FOTO_KIRIM } from '@/lib/storageSignedUrl';
 
 interface ApiResult {
   status: number;
@@ -72,7 +73,11 @@ export async function listShipments(request: NextRequest): Promise<ApiResult> {
       linesByShipmentId.set(line.shipment_id, list);
     }
 
-    const result = shipments.map((shipment) => {
+    // Bucket foto pengeluaran barang PRIVAT sejak JJ.1 — ditandatangani sekali untuk
+    // seluruh daftar (createSignedUrls), bukan satu panggilan jaringan per baris.
+    const fotoKirim = await buatSignedUrlBanyak(adminClient, BUCKET_FOTO_KIRIM, shipments.map((s) => s.dispatch_photo_url));
+
+    const result = shipments.map((shipment, urutan) => {
       const so = soById.get(shipment.sales_order_id);
       return {
         shipment_id: shipment.shipment_id,
@@ -84,7 +89,7 @@ export async function listShipments(request: NextRequest): Promise<ApiResult> {
         recipient_phone: shipment.recipient_phone,
         vehicle_number: shipment.vehicle_number,
         driver_name: shipment.driver_name,
-        dispatch_photo_url: shipment.dispatch_photo_url,
+        dispatch_photo_url: fotoKirim[urutan],
         created_at: shipment.created_at,
         sales_order_id: shipment.sales_order_id,
         so_number: so?.so_number ?? null,

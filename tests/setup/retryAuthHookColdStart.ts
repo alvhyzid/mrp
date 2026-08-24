@@ -41,6 +41,13 @@
 // ~29,5 detik -- praktis seluruh hookTimeout 30 detik waktu itu. Jadi test bisa
 // gagal karena hook-nya kehabisan waktu, BUKAN karena login-nya benar-benar
 // menyerah: pengaman yang seolah-olah bekerja, padahal kalah oleh batas lain.
+// DI LUAR JANGKAUAN PENGAMAN INI (aturan II.2):
+//   - Hanya mencegat permintaan yang melewati globalThis.fetch. Pustaka yang memakai
+//     mekanisme jaringan lain tidak tersentuh.
+//   - Hanya endpoint /auth/v1/. Kelambatan di endpoint lain tidak diulang.
+//   - Hanya pola "gagal menjangkau hook". Kegagalan login lain SENGAJA tidak diulang.
+//   - TIDAK memperbaiki sebabnya, hanya menahan akibatnya. Bila pengulangan makin sering
+//     terpakai, itu tanda ada yang memburuk -- lihat penghitung di check-test-threshold.js.
 const MAX_ATTEMPTS = 6;
 const BACKOFF_MS = [1000, 2000, 3000, 5000, 8000];
 

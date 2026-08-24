@@ -6,6 +6,7 @@ import { startProductionBatch } from '../src/features/mrp/server/startProduction
 import { setWorkOrderStatus } from '../src/features/mrp/server/setWorkOrderStatus';
 import { reopenWorkOrder } from '../src/features/mrp/server/reopenWorkOrder';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // PRD-12 (22 Agu 2026) -- Work Order status jadi hidup. Keputusan final:
 // planned->in_progress OTOMATIS saat batch pertama dimulai; ->completed
@@ -67,12 +68,10 @@ describe('PRD-12 — Siklus Hidup Status Work Order', () => {
       .single();
     bomId = bom!.bom_id;
 
-    const adminUser = await adminClient.auth.admin.createUser({ email: 'admin.prd12test@debug.mrp', password: roleTestPassword, email_confirm: true });
-    adminAuthUid = adminUser.data.user!.id;
+        adminAuthUid = await ensureAuthUser(adminClient, 'admin.prd12test@debug.mrp', roleTestPassword);
     await adminClient.from('users').insert([{ auth_uid: adminAuthUid, company_id: companyId, name: 'Admin Prd12Test', email: 'admin.prd12test@debug.mrp', role: 'company_admin', status: 'active' }]);
 
-    const staffUser = await adminClient.auth.admin.createUser({ email: 'staff.prd12test@debug.mrp', password: roleTestPassword, email_confirm: true });
-    staffAuthUid = staffUser.data.user!.id;
+        staffAuthUid = await ensureAuthUser(adminClient, 'staff.prd12test@debug.mrp', roleTestPassword);
     await adminClient.from('users').insert([{ auth_uid: staffAuthUid, company_id: companyId, name: 'Staff Prd12Test', email: 'staff.prd12test@debug.mrp', role: 'production_staff', status: 'active' }]);
 
     adminToken = await loginAs('admin.prd12test@debug.mrp');

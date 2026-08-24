@@ -11,6 +11,7 @@ import {
   deleteOrArchiveCustomerDeliveryAddress
 } from '../src/features/mrp/server/customerDeliveryAddresses';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // PMB-07b (22 Agu 2026, Bagian 4) — Alamat Tujuan Kirim sebagai Daftar.
 // Arkeologi SUDAH dilakukan sebelum menulis test ini (dicatat di migrasi
@@ -76,8 +77,7 @@ describe('PMB-07b — Alamat Tujuan Kirim sebagai Daftar (lapisan data & server)
     const { data: sol } = await adminClient.from('sales_order_lines').insert([{ sales_order_id: soId, item_id: itemId, qty_ordered: 2500, unit_price: 1000 }]).select('sales_order_line_id').single();
     solId = sol!.sales_order_line_id;
 
-    const adminUser = await adminClient.auth.admin.createUser({ email: 'admin.pmb07btest@debug.mrp', password: roleTestPassword, email_confirm: true, user_metadata: { full_name: 'Admin Pmb07bTest' } });
-    adminAuthUid = adminUser.data.user!.id;
+        adminAuthUid = await ensureAuthUser(adminClient, 'admin.pmb07btest@debug.mrp', roleTestPassword, { full_name: 'Admin Pmb07bTest' });
     await adminClient.from('users').insert([{ auth_uid: adminAuthUid, company_id: companyId, name: 'Admin Pmb07bTest', email: 'admin.pmb07btest@debug.mrp', role: 'company_admin', status: 'active', signature_url: 'https://example.com/fake-signature-pmb07b.png' }]);
 
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;

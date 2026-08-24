@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
+import { appUserUntukClient } from '@/lib/storageSignedUrl';
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
       company = data || null;
     }
 
-    return NextResponse.json({ user: appUser, company });
+    return NextResponse.json({ user: await appUserUntukClient(adminClient, appUser), company });
   } catch (error) {
     return NextResponse.json(
       {

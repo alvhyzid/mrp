@@ -2,6 +2,84 @@
 
 Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`). Tiap sesi Claude Code WAJIB baca ini dulu sebelum mulai, dan memperbarui bagian relevan begitu sesi selesai. Klaim di sini harus tetap diverifikasi ulang, bukan otomatis dipercaya — HANDOFF ini rangkuman, bukan pengganti bukti.
 
+## JJ / BAGIAN 1 — PRIVASI BERKAS & PEMBERSIHAN STORAGE (24 Agu 2026)
+
+### Kelas cacat: "berkas Storage tidak punya pemilik yang menghapusnya"
+
+Penyisiran Storage FABRIX-APP menemukan 16 berkas; **12 tidak dirujuk baris database mana pun**, dan **dua di antaranya tanda tangan tulisan tangan asli yang bisa diunduh utuh dari internet tanpa login** (dibuktikan: HTTP 200, 11.928 byte). Bucket tanda tangan, foto konfirmasi penerimaan, dan foto pengeluaran barang semuanya publik sejak dibuat.
+
+**Akarnya bukan kelalaian sekali, melainkan dua lubang struktural:**
+
+1. **Pembersihan fixture test tidak pernah menyentuh Storage.** `cleanupCompanyCascade` menghapus baris; berkasnya tertinggal selamanya karena begitu barisnya hilang, tidak ada lagi cara mengetahui berkas itu milik siapa.
+2. **Penggantian tanda tangan tidak pernah menghapus yang lama.** Path-nya sengaja unik per unggahan (supaya dokumen terbit tetap menunjukkan tanda tangan saat itu) — maksudnya benar, sisi buruknya tidak pernah ditangani.
+
+### Pelajaran: menghapus berkas Storage MUSTAHIL lewat SQL
+
+Rancangan pertama adalah trigger database yang menghapus baris `storage.objects`. **Postgres menolaknya keras:**
+
+```
+ERROR: 42501: Direct deletion from storage tables is not allowed.
+       Use the Storage API instead.
+```
+
+Dan sebelum larangan itu terbaca, percobaan yang sama menunjukkan berkasnya **masih bisa diunduh** setelah barisnya "dihapus" — jadi walau larangannya kelak dicabut, menghapus baris pun tidak melenyapkan berkas.
+
+**Konsekuensi yang harus diingat setiap kali menulis migrasi pembersihan data:** migrasi SQL tidak bisa ikut membersihkan Storage. Barisnya lewat migrasi, berkasnya lewat skrip pendamping yang memanggil `src/lib/storageCleanup.ts` — dan **daftarnya harus dikumpulkan DULU selagi barisnya masih ada.** Tercatat sebagai `INF-23`.
+
+### Pelajaran: urutan pembersihan menentukan, dan test-nya yang menemukan
+
+Percobaan pertama menaruh pembersihan Storage **sesudah** langkah-langkah cleanup. Test langsung merah: langkah itu sudah menghapus baris `users`, jadi tidak ada lagi `auth_uid` untuk menemukan berkasnya — berkasnya selamat, justru jadi yatim. Dipindahkan ke langkah **paling awal**, sebelum satu baris pun dihapus.
+
+Ini contoh test yang bekerja sebagaimana mestinya: cacatnya tidak terlihat dari membaca kode, hanya dari menjalankannya.
+
+### Tanda seru non-null menggigit lagi — di kode yang saya tulis pada hari yang sama saya menulis aturannya
+
+Fixture test baru memakai `cpo!.customer_purchase_order_id`. Kolomnya salah nama (`order_date`, seharusnya `po_date`), tapi yang muncul di layar adalah `Cannot read properties of null` — pesan yang menyembunyikan sebab sebenarnya. Persis kelas cacat yang sedang diberantas lewat `AUD-28`, dilakukan lagi beberapa jam setelah aturannya dicatat.
+
+**Yang membuat aturan ini gampang dilanggar:** tanda seru terasa seperti "saya tahu ini pasti ada", padahal artinya "jangan beri tahu saya kalau ternyata tidak ada". Di fixture test, yang tidak ada BUKAN barisnya melainkan **alasan kenapa insert-nya gagal** — dan itulah satu-satunya informasi yang dibutuhkan.
+
+### Menutup bucket TIDAK seketika menutup URL yang sudah tersinggah
+
+Sesudah ketiga bucket jadi privat, URL tanda tangan yang sempat diambil saat penyelidikan **masih mengirim isinya**: `cf-cache-status: HIT`, `cache-control: public, max-age=3600`. URL yang sama dengan pembatal singgahan, dan URL tanda tangan lain yang belum pernah diambil, keduanya HTTP 400 — jadi asalnya memang sudah menolak.
+
+**Jendelanya sampai satu jam, dan tidak ada tombol pembersih singgahan dari sisi kita.** Bila kelak ada kebocoran sungguhan: berkasnya harus DIHAPUS, menutup bucket saja tidak cukup. Tercatat sebagai `SEC-12`.
+
+### Arkeologi 1.4c dan batas yang jujur
+
+Yang bisa dibuktikan: satu-satunya data PT ITM yang terbukti tertimpa adalah `avatar_url` dan `signature_url` akun `company.a@debug.mrp`, tertimpa piksel 1×1 pada 17 Agu 2026 pukul 16:11. Tanda tangan aslinya **berhasil dipulihkan** (berkas lama selamat karena penamaannya unik). Foto profilnya **tidak bisa dipulihkan** — namanya tetap dan diunggah dengan upsert, jadi aslinya benar-benar hilang.
+
+**Batas yang tidak boleh disembunyikan:** `data_change_audit_log` untuk `company_id=1` berisi **tepat satu baris** (INSERT supplier, 23 Agu). Artinya arkeologi ini hanya bisa melihat apa yang masih tersisa di baris dan jalur berkas hari ini. **Ia tidak bisa membuktikan tidak ada hal lain yang pernah tertimpa** — tidak ada jejak untuk diperiksa.
+
+Yang bisa dikatakan dengan yakin: seluruh isi PT ITM hari ini (9 item, 1 pelanggan, 1 supplier, 3 pabrik, 1 SO, 30 karyawan) **nol berpola fixture**, dan hanya ada dua company di seluruh project (PT ITM dan Company B) — nol sisa `*TestCorp`.
+
+### Kejadian KEEMPAT: menyebut akibat lebih gawat daripada yang bisa dibuktikan
+
+Pemilik produk mencatat ini sebagai kejadian **keempat** dari kelas yang sama. Contoh terakhirnya: tiga tanda seru non-null di kode aplikasi disebut "akan meledak jadi 500 telanjang" — padahal membaca beberapa baris di atasnya menunjukkan ketiganya sudah didahului pemeriksaan error, sehingga kegagalan yang saya sebutkan tidak mungkin terjadi.
+
+**Aturannya sekarang keras**: sebelum menulis satu kalimat pun tentang apa yang *akan* terjadi akibat sebuah cacat, baca jalur kode yang harus dilalui supaya akibat itu terjadi, termasuk penjaga-penjaga di atasnya. Laporkan yang terbukti; tandai yang belum terbukti sebagai belum terbukti.
+
+**Kenapa ini lebih berat di proyek ini daripada di proyek lain**: pemilik produk tidak bisa membuka kode untuk memeriksa sendiri. Akibat yang dilebih-lebihkan sampai ke dia sebagai fakta, dan menggerakkan keputusan nyata. Lebih buruk lagi, sekali ketahuan dilebihkan, seluruh angka lain di laporan yang sama ikut harus diperiksa ulang.
+
+### Alamat halaman POD akan MENGIKAT begitu surat jalan pertama tercetak
+
+Selama ini kehati-hatian "jangan mengubah URL POD" diucapkan seolah aturan internal. Sebenarnya bukan: begitu satu surat jalan tercetak membawa alamat/QR halaman POD, **alamat itu berubah jadi janji ke pihak luar** — pelanggan memegang kertasnya, dan kertas tidak ikut ter-deploy ulang.
+
+Hari ini belum mengikat: `shipments` di FABRIX-APP masih **nol baris**, jadi belum ada satu pun kertas beredar. Tapi ia akan mengikat pada surat jalan PERTAMA, tanpa pemberitahuan.
+
+**Daftar janji ke pihak luar yang sudah diketahui** (perlu dijaga terpisah dari kode internal):
+1. **Alamat halaman POD** `/pod/<token>` — tercetak di surat jalan. Mengikat sejak surat jalan pertama terbit.
+2. **Token POD itu sendiri** — satu-satunya kontrol akses halaman itu. Mengubah cara pembangkitannya membuat kertas lama tidak bisa dipakai.
+
+---
+
+### Pengawas project TERBUKTI menutup jalur test
+
+Dicoba langsung, bukan disimpulkan dari kode: menjalankan test terhadap FABRIX-APP dengan env lengkap → **ditolak keras, nol test berjalan**; diulang dengan `ALLOW_TESTS_AGAINST_REAL_PROJECT=true` → berjalan normal. Jadi yang menolak memang pengawasnya.
+
+**Flag itu SENGAJA tidak dicabut**: ia dipakai menjalankan pengawas integritas yang murni membaca data nyata (`AUD-13`). Mencabutnya akan merusak pemakaian yang sah. Yang tersisa sebagai risiko: flag itu tidak membedakan test yang membaca dari test yang menulis.
+
+---
+
 ## BLOK KERJA MANDIRI — Pasca-Transfer Infrastruktur (23 Agu 2026)
 
 Dikerjakan tanpa interaksi, mengumpulkan pertanyaan di task alih-alih berhenti. Ringkasan (detail lengkap ada di masing-masing task `build_tasks`):
@@ -35,6 +113,75 @@ Dikerjakan tanpa interaksi, mengumpulkan pertanyaan di task alih-alih berhenti. 
 **Ini kejadian KETIGA dengan pola sama** (temuan diambil dari sudut/sinyal terbatas, lalu dipakai sebagai dasar keputusan besar): (1) REVOKE yang terlihat hilang di berkas migrasi tapi aman di database (Postgres mempertahankan ACL lama bila signature fungsi tidak berubah); (2) `db push` yang menguji migrasi di atas database yang sudah berisi, sementara CI membangun dari nol; (3) **`pitr_enabled=false` yang diekstrapolasi jadi "nol backup", padahal Daily Backups adalah mekanisme terpisah yang tetap berjalan.** **Pelajaran yang sama berlaku berulang**: satu sinyal negatif yang benar secara sempit bisa menutup pertanyaan yang lebih besar — setelah memeriksa SATU field/jalur dan hasilnya negatif, periksa apakah ada jalur/mekanisme LAIN yang bisa memberi hasil berbeda sebelum menyimpulkan sesuatu "mati total".
 
 **Yang TIDAK batal dari pekerjaan INF-05 kemarin (23 Agu, DD.2)**: backup manual (ekspor 92 tabel via Supabase JS client) **tetap satu-satunya backup yang PERNAH DIUJI PULIH sungguhan** (direstorasi ke project staging, dibuktikan identik, lalu dibersihkan). Backup bawaan Supabase (7 titik PHYSICAL) **belum pernah diuji restore-nya** — baru diketahui ADA, belum dibuktikan BISA DIPULIHKAN. Task baru dicatat untuk ini (lihat `INF-15`).
+
+## PELAJARAN TETAP — Cara Sebuah Pengaman MENCARI Menentukan Apa yang TIDAK AKAN PERNAH Ia Temukan (24 Agu 2026)
+
+`tests/testCompanyCleanup.ts` dibangun justru agar tangguh terhadap kelas *"lupa satu tabel"*: ia **mencari sendiri** seluruh tabel ber-`company_id` lewat PostgREST, bukan memakai daftar tulis tangan. Rancangan itu benar dan sudah menyelamatkan beberapa kali.
+
+**Tapi CARA ia mencari membuatnya BUTA SECARA STRUKTURAL** terhadap apa pun yang tidak punya kolom itu — dan `auth.users`, penyebab AUD-21, justru salah satunya. Bukan terlewat. **Tidak akan pernah ditemukan**, berapa kali pun dijalankan.
+
+**ATURAN**: cara sebuah pengaman **MENCARI** menentukan apa yang **TIDAK AKAN PERNAH** ia temukan. Setiap pengaman wajib menyebutkan secara eksplisit **apa yang berada DI LUAR jangkauannya** — bukan hanya apa yang ia jaga.
+
+**Bahayanya bukan pengaman yang gagal, melainkan pengaman yang NAMANYA menjanjikan menyeluruh sementara jangkauannya tidak.** Pengaman yang gagal akan terlihat; pengaman yang jangkauannya lebih sempit dari namanya justru menghasilkan rasa aman.
+
+**DITERAPKAN 24 Agu 2026 ke seluruh pengawas.** Enam dari sembilan belum menyebut batasnya, dan dua di antaranya ternyata punya kebutaan struktural sejenis:
+- `guardAgainstRealProject.ts` — daftar project data nyata **ditulis tangan**. Project data nyata BARU (mis. saat tenant kedua dapat project sendiri) **tidak akan dikenali** sampai ada yang menambahkannya. Ia tidak bisa menemukan sendiri "project mana yang berisi data sungguhan".
+- `check-test-threshold.js` — menghitung **berapa** test berjalan, bukan **apa** yang diuji. Test yang berjalan tanpa menegaskan apa pun tetap dihitung lulus; **angka yang naik tidak berarti jaminannya bertambah**.
+
+## PELAJARAN TETAP — Mengira Sesuatu Belum/Sudah Terjadi, Lalu Memperlakukannya Sebagai Fakta (24 Agu 2026)
+
+Dua kejadian dalam dua hari, dua-duanya dari arsitek, dan **arahnya berlawanan**:
+1. Arsitek menyatakan MST-21 "lupa panel Detail" — padahal MST-21 **belum pernah dikerjakan sama sekali**. (mengira **sudah**, padahal **belum**)
+2. Arsitek menyatakan GG.1 dan GG.2 belum dilaporkan — padahal **sudah**, di giliran sebelumnya. (mengira **belum**, padahal **sudah**)
+
+Kelasnya sama: **mengira sesuatu tentang keadaan, lalu memperlakukannya sebagai fakta tanpa memeriksa.** Dan ini bukan kelemahan orangnya — percakapan yang panjang memang melampaui kapasitas ingatan siapa pun.
+
+**Ini memperkuat aturan yang sudah dicatat**: setiap laporan wajib memuat **daftar apa yang dilaporkan di giliran itu**, supaya arsitek **MEMERIKSA, bukan MENGINGAT**. Daftar yang eksplisit mengubah pertanyaan dari "apakah saya ingat ini sudah dilaporkan?" menjadi "apakah ini ada di daftar?" — dan yang kedua bisa dijawab dengan benar setiap kali.
+
+## PELAJARAN TETAP — Tanda Seru Non-Null Menutupi Kegagalan Sampai Meledak di Tempat Lain (24 Agu 2026)
+
+```ts
+const u = await adminClient.auth.admin.createUser({ email, ... });
+authUid = u.data.user!.id;      // error TIDAK PERNAH diperiksa
+```
+
+Tanda seru itu memberi tahu TypeScript **"percaya saja ini ada"**, dan TypeScript menurut. Galat yang sesungguhnya — *"email already registered"* — **tidak pernah terbaca**, dan kegagalannya baru muncul beberapa baris kemudian sebagai `Cannot read properties of null (reading 'id')`, di tempat yang tidak menjelaskan apa-apa tentang sebabnya.
+
+**ATURAN**: hasil pemanggilan yang **bisa gagal** WAJIB diperiksa galatnya. **Tanda seru non-null pada hasil pemanggilan jaringan atau database adalah CACAT, bukan keringkasan.**
+
+**HASIL SAPUAN (24 Agu 2026)** — cara menghitungnya: mencari pola `data.X!`, `data!.`, `body.X!`, dan `.user!.` di seluruh `tests/`, `src/`, dan `app/`. Yang mungkin luput: penulisan lain yang membungkus hasil lebih dulu (mis. destructuring lalu `!` di variabel), dan `as` casting yang menyembunyikan hal serupa tanpa tanda seru.
+- **Test: 32 pemakaian** (terbanyak `prd12_work_order_status_lifecycle` 6, `role_hierarchy_financial_access` 3).
+- **Kode aplikasi: 3 pemakaian** — `customerDeliveryAddresses.ts:46`, `computeMetric.ts:18` dan `:73`.
+
+Ketiga yang di kode aplikasi lebih penting daripada yang di test: bila kueri gagal, `data!` akan meledak sebagai galat 500 tanpa pesan yang berguna, dan pengguna melihat layar rusak tanpa keterangan. **Belum diperbaiki** — dicatat sebagai daftar, sesuai batas "jangan perbaiki sekaligus".
+
+## PELAJARAN TETAP — "Kadang Merah" Hampir Selalu Berarti "Ada Keadaan yang Belum Terlihat" (24 Agu 2026)
+
+Kegoyahan AUD-21 **tidak acak**. Ia bergantung pada apakah run **sebelumnya** sempat membersihkan dirinya — karena itu **selalu** hilang saat berkas dijalankan sendiri di mesin bersih, dan muncul di suite penuh yang panjang. Justru keteraturan itulah yang membuatnya **terlihat seperti nasib**.
+
+**ATURAN**: sebelum menyebut sebuah test goyah, cari **APA YANG BERBEDA** antara run yang lulus dan yang gagal. *"Kadang merah"* hampir selalu berarti *"ada keadaan yang belum terlihat"*, bukan *"tidak bisa diandalkan"*.
+
+Cara yang berhasil di sini: **reproduksi keadaannya dengan sengaja** — pengguna auth yatim dibuat manual, dan galat yang muncul sama persis. Setelah itu tidak ada lagi yang perlu ditebak.
+
+## FAKTA TERVERIFIKASI — Pembersihan Mandiri Test BUTA terhadap Pengguna Auth (24 Agu 2026)
+
+`tests/testCompanyCleanup.ts` dibangun khusus agar tangguh terhadap kelas "lupa satu tabel": ia menyapu sendiri **tabel mana pun yang punya kolom `company_id`**, terlepas dari lengkap tidaknya daftar yang ditulis manusia.
+
+**Tapi ia sama sekali tidak menyentuh `auth.users`** — dan tidak bisa, karena tabel itu **tidak punya `company_id`**. Jadi helper yang dirancang untuk menutup kelas "ada yang terlewat" **secara struktural buta** terhadap justru sisa yang menyebabkan AUD-21.
+
+Pembersihan pengguna auth sepenuhnya bergantung pada `afterAll` masing-masing berkas. Bila sebuah run terputus di tengah, pengguna auth tertinggal — dan run berikutnya jatuh.
+
+## PELAJARAN TETAP — Lokal Hijau Bukan Jaminan Selama `main` Berarti Rilis (24 Agu 2026)
+
+Suite lokal **HIJAU** (49 berkas, 301 lulus). Di-push sesuai prosedur. CI **MERAH**. Dan pekerjaan itu **sudah tayang** ke situs berisi data nyata sebelum siapa pun tahu ada yang gagal.
+
+**Prosedurnya diikuti dengan benar.** Yang punya celah adalah prosedurnya sendiri: selama Vercel menerbitkan production dari `main`, **push = rilis**, dan tidak ada jeda antara "menyimpan pekerjaan" dan "menyerahkannya ke pengguna". Menjalankan suite lokal lebih dulu mengurangi risikonya, tapi tidak menghapusnya — lingkungan CI berbeda dari lokal, dan perbedaan itulah yang justru dicari CI.
+
+**Yang menyelamatkan hari itu cuma kebetulan**: PT ITM belum punya satu pun lot, jadi perubahan aturan stok tidak menyentuh angka siapa pun. Kalau kejadiannya dua minggu lagi setelah gudang mulai mengisi, akibatnya berbeda.
+
+**Ini memperkuat INF-18** (tiket Vercel agar production menerbitkan dari `staging`, bukan `main`) — dinaikkan ke SUPER URGENT karena alasannya berhenti menjadi teoretis.
+
+**ATURAN sementara INF-18 belum beres**: perlakukan setiap push ke `main` sebagai rilis yang tidak bisa ditarik. Untuk perubahan yang menyentuh **aturan data** (bukan tampilan), periksa lebih dulu apakah ada data nyata yang tunduk pada aturan itu — dan bila ada, kabari pemilik produk **sebelum** push, bukan sesudah.
 
 ## PELAJARAN TETAP — Aturan di CLAUDE.md TIDAK CUKUP untuk Kelas yang Bisa Disapu Mesin (24 Agu 2026)
 

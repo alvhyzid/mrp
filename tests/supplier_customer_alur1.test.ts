@@ -12,6 +12,7 @@ import { createShipmentWithSignature } from '../src/features/mrp/server/createSh
 import { getShipmentDetail } from '../src/features/mrp/server/getShipmentDetail';
 import { lockMarginBaseline } from '../src/features/mrp/server/lockMarginBaseline';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // Alur 1 (21 Agu 2026) — Supplier & Pelanggan: CRUD lengkap + jalan keluar
 // (pola sama persis dengan Routing, Sesi 7 bagian 1), daftar bahan yang
@@ -62,15 +63,13 @@ describe('Alur 1 — Supplier & Pelanggan (CRUD, jalan keluar, bahan dipasok, sn
     const { data: plant } = await adminClient.from('production_plants').insert([{ company_id: companyId, name: 'Plant Alur1Test', is_active: true }]).select('production_plant_id').single();
     plantId = plant!.production_plant_id;
 
-    const adminUser = await adminClient.auth.admin.createUser({ email: 'admin.alur1test@debug.mrp', password: roleTestPassword, email_confirm: true });
-    adminAuthUid = adminUser.data.user!.id;
+        adminAuthUid = await ensureAuthUser(adminClient, 'admin.alur1test@debug.mrp', roleTestPassword);
     await adminClient
       .from('users')
       .insert([{ auth_uid: adminAuthUid, company_id: companyId, name: 'Admin Alur1Test', email: 'admin.alur1test@debug.mrp', role: 'company_admin', status: 'active', signature_url: 'https://example.com/fake-signature.png' }]);
     adminToken = await loginToken('admin.alur1test@debug.mrp');
 
-    const staffUser = await adminClient.auth.admin.createUser({ email: 'staff.alur1test@debug.mrp', password: roleTestPassword, email_confirm: true });
-    staffAuthUid = staffUser.data.user!.id;
+        staffAuthUid = await ensureAuthUser(adminClient, 'staff.alur1test@debug.mrp', roleTestPassword);
     await adminClient.from('users').insert([{ auth_uid: staffAuthUid, company_id: companyId, name: 'Staf Alur1Test', email: 'staff.alur1test@debug.mrp', role: 'production_staff', status: 'active' }]);
     staffToken = await loginToken('staff.alur1test@debug.mrp');
 

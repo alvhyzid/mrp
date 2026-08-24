@@ -1,4 +1,19 @@
+
+// DI LUAR JANGKAUAN HELPER INI (aturan II.2, ditemukan lewat AUD-21 pada 24 Agu 2026):
+//   - KEBUTAAN STRUKTURAL: sapuan generiknya mencari tabel lewat KEBERADAAN KOLOM
+//     `company_id`. Konsekuensinya, apa pun yang TIDAK punya kolom itu berada di luar
+//     jangkauannya SELAMANYA -- bukan karena terlewat, melainkan karena cara ia mencari.
+//     Contoh yang sudah menggigit: `auth.users`. Pengguna auth yatim dari run yang
+//     terputus TIDAK PERNAH tersapu helper ini, dan itulah penyebab AUD-21.
+//   - Tabel BARIS (bom_lines, sales_order_lines, dst) juga tidak punya company_id; mereka
+//     terhapus lewat foreign key induknya, bukan lewat sapuan ini.
+//   - Berkas di Storage IKUT DIBERSIHKAN sejak 24 Agu 2026 (INF-22/JJ.1.3), tapi hanya
+//     yang bisa ditemukan lewat baris yang masih ada saat cleanup dipanggil. Berkas yang
+//     barisnya sudah lenyap lebih dulu berada di luar jangkauan -- ia sudah yatim sebelum
+//     helper ini sempat melihatnya.
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { hapusBerkasStorage, hapusFolderStorage } from '../src/lib/storageCleanup';
+import { BUCKET_TANDA_TANGAN, BUCKET_FOTO_KIRIM, BUCKET_FOTO_TERIMA } from '../src/lib/storageSignedUrl';
 
 type CleanupStep = [string, () => Promise<{ error: { message: string } | null }>];
 
@@ -48,6 +63,22 @@ export async function cleanupCompanyCascade(adminClient: SupabaseClient, company
       `PELANGGARAN INVARIAN 9: cleanupCompanyCascade dipanggil dengan company_id tenant NYATA (${violatingIds.join(', ')}) -- pengujian tidak boleh menulis/menghapus data company_id=1 (PT ITM). Batalkan cleanup ini dan perbaiki fixture test supaya memakai company barunya sendiri.`
     );
   }
+
+  // --- 0. BERKAS STORAGE DULU, SEBELUM SATU BARIS PUN DIHAPUS (INF-22 / JJ.1.3, 24 Agu 2026) ---
+  //
+  // URUTAN INI BUKAN SELERA, DAN SUDAH TERBUKTI SALAH SEKALI. Percobaan pertama menaruh
+  // langkah ini SETELAH `steps`, dan test tests/storage_ikut_terhapus.test.ts langsung
+  // merah: `steps` sudah menghapus baris `users`, sehingga tidak ada lagi auth_uid yang
+  // bisa dipakai menemukan berkas tanda tangannya. Berkasnya selamat, justru jadi yatim.
+  //
+  // Jejak menuju berkas hanya hidup selama barisnya hidup. Begitu barisnya hilang, berkas
+  // itu yatim PERMANEN -- tidak ada lagi cara mengetahui ia milik tenant yang mana.
+  //
+  // Inilah asal-usul 12 berkas yatim yang ditemukan 24 Agu 2026 di FABRIX-APP: fixture test
+  // membuat foto & tanda tangan, cleanup menghapus barisnya, berkasnya tertinggal -- lima di
+  // antaranya di bucket yang waktu itu masih publik.
+  const companyIdsUntukStorage = Array.isArray(companyId) ? companyId : [companyId];
+  await hapusBerkasStorageMilikCompany(adminClient, companyIdsUntukStorage);
 
   // --- 1. Retry-until-fixed-point untuk steps yang ditulis manusia ---
   let pending = steps.slice();
@@ -121,5 +152,45 @@ export async function cleanupStaleFixtureByName(adminClient: SupabaseClient, com
   const { data: existing } = await adminClient.from('companies').select('company_id').eq('name', companyName);
   for (const row of existing ?? []) {
     await adminClient.rpc('debug_force_delete_company', { p_company_id: row.company_id });
+  }
+}
+
+// Mengumpulkan berkas milik company SELAGI barisnya masih ada, lalu menghapusnya lewat
+// Storage API. Kegagalan di sini SENGAJA tidak melempar error: cleanup fixture tidak boleh
+// menggagalkan test karena satu berkas bandel.
+async function hapusBerkasStorageMilikCompany(adminClient: SupabaseClient, companyIds: number[]): Promise<void> {
+  try {
+    const { data: pengguna } = await adminClient.from('users').select('auth_uid').in('company_id', companyIds);
+    for (const u of pengguna ?? []) {
+      if (!u.auth_uid) continue;
+      await hapusFolderStorage(adminClient, BUCKET_TANDA_TANGAN, u.auth_uid);
+      await hapusFolderStorage(adminClient, 'user-avatars', u.auth_uid);
+    }
+
+    const { data: kirim } = await adminClient
+      .from('shipments')
+      .select('shipment_id, dispatch_photo_url')
+      .in('company_id', companyIds);
+    await hapusBerkasStorage(adminClient, BUCKET_FOTO_KIRIM, (kirim ?? []).map((s) => s.dispatch_photo_url));
+
+    const shipmentIds = (kirim ?? []).map((s) => s.shipment_id);
+    if (shipmentIds.length > 0) {
+      const { data: terima } = await adminClient
+        .from('delivery_confirmations')
+        .select('photo_url')
+        .in('shipment_id', shipmentIds);
+      await hapusBerkasStorage(adminClient, BUCKET_FOTO_TERIMA, (terima ?? []).map((t) => t.photo_url));
+    }
+
+    const { data: dokumen } = await adminClient.from('documents').select('storage_path').in('company_id', companyIds);
+    const pathDokumen = (dokumen ?? []).map((d) => d.storage_path).filter(Boolean);
+    if (pathDokumen.length > 0) await adminClient.storage.from('documents').remove(pathDokumen);
+
+    const { data: logo } = await adminClient.from('companies').select('company_id, logo_url').in('company_id', companyIds);
+    for (const c of logo ?? []) {
+      if (c.logo_url) await hapusFolderStorage(adminClient, 'company-logos', String(c.company_id));
+    }
+  } catch {
+    // berkas yatim merepotkan, tapi tidak sepadan menggagalkan cleanup fixture
   }
 }

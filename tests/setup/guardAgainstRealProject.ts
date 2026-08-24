@@ -31,6 +31,14 @@
 // scripts/guard-real-project.js (INF-14, 23 Agu 2026) -- supaya tidak ada dua
 // daftar terpisah yang bisa berbeda diam-diam saat salah satunya diperbarui.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
+// DI LUAR JANGKAUAN PENGAWAS INI (aturan II.2):
+//   - KEBUTAAN STRUKTURAL: daftar project data nyata DITULIS TANGAN
+//     (KNOWN_REAL_PROJECT_REFS). Project data nyata BARU -- mis. saat tenant kedua dapat
+//     project sendiri -- TIDAK AKAN dikenali sampai ada yang menambahkannya. Pengawas ini
+//     tidak bisa menemukan sendiri "project mana yang berisi data sungguhan".
+//   - Hanya menjaga proses Node yang membaca NEXT_PUBLIC_SUPABASE_URL. Perintah CLI
+//     (`supabase db push`, `db reset`) tidak melewatinya sama sekali.
+//   - Tidak menjaga panggilan ke Management API yang menyebut project ref langsung.
 const { KNOWN_REAL_PROJECT_REFS } = require('../../scripts/guard-real-project');
 
 function extractProjectRef(supabaseUrl: string | undefined): string | null {

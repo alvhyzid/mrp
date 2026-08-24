@@ -1,6 +1,8 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
 import { ALLOWED_IMAGE_MIME_TO_EXT, EXT_TO_IMAGE_MIME, detectImageExtFromBytes, isContentLengthTooLarge } from '@/lib/imageUpload';
+import { buatSignedUrl, ambilPathStorage, BUCKET_TANDA_TANGAN } from '@/lib/storageSignedUrl';
+import { hapusBerkasStorage } from '@/lib/storageCleanup';
 
 interface ApiResult {
   status: number;
@@ -17,6 +19,13 @@ const MAX_SIZE_BYTES = 2 * 1024 * 1024;
 // signature_url_snapshot). Jadi path di sini SELALU unik per upload (timestamp +
 // nama asli file), tidak pernah upsert ke path yang sama, dan bucket user-signatures
 // (migration 20260817160000) sengaja TIDAK PUNYA policy delete sama sekali.
+//
+// TAMBAHAN 24 Agu 2026 (INF-22 / JJ.1.3) — path unik itu punya sisi buruk yang baru
+// ketahuan: setiap penggantian tanda tangan meninggalkan berkas lama yang tidak dirujuk
+// siapa pun, selamanya. Sejak sekarang berkas lama DIHAPUS, TAPI hanya bila tidak satu
+// pun baris document_signatures merujuknya — jadi maksud asli di atas (dokumen terbit
+// tetap menunjukkan tanda tangan saat itu) tetap utuh. Penghapusan dilakukan admin client
+// (service_role) yang melewati RLS, jadi ketiadaan policy delete di atas tidak berubah.
 export async function uploadSignature(request: NextRequest): Promise<ApiResult> {
   try {
     const { appUser, authUser } = await getCurrentUser(request);
@@ -68,7 +77,37 @@ export async function uploadSignature(request: NextRequest): Promise<ApiResult> 
       return { status: 500, body: { error: updateError.message } };
     }
 
-    return { status: 200, body: { success: true, signature_url: signatureUrl, user: { ...appUser, signature_url: signatureUrl } } };
+    // BERKAS LAMA DIBERESKAN DI SINI (INF-22 / JJ.1.3). Setiap unggahan memakai nama baru
+    // ber-timestamp, jadi tanpa langkah ini setiap penggantian tanda tangan meninggalkan satu
+    // berkas yatim selamanya — persis asal-usul 4 berkas yatim yang ditemukan 24 Agu 2026.
+    //
+    // TAPI TIDAK SEMUA YANG LAMA BOLEH DIHAPUS. `document_signatures.signature_url_snapshot`
+    // menunjuk berkas tanda tangan PERSIS seperti saat dokumen itu ditandatangani. Menghapusnya
+    // berarti surat jalan yang sudah terbit kehilangan gambar tanda tangannya — memutus
+    // ketertelusuran dokumen, hal yang justru dijaga sistem ini. Jadi yang lama hanya dihapus
+    // bila TIDAK SATU PUN dokumen terbit merujuknya.
+    if (appUser.signature_url && appUser.signature_url !== signatureUrl) {
+      const pathLama = ambilPathStorage(appUser.signature_url, BUCKET_TANDA_TANGAN);
+      if (pathLama) {
+        const { data: dipakaiDokumen } = await adminClient
+          .from('document_signatures')
+          .select('document_signature_id')
+          .like('signature_url_snapshot', `%${pathLama}%`)
+          .limit(1);
+
+        if (!dipakaiDokumen || dipakaiDokumen.length === 0) {
+          await hapusBerkasStorage(adminClient, BUCKET_TANDA_TANGAN, [appUser.signature_url]);
+        }
+      }
+    }
+
+    // Yang DISIMPAN tetap bentuk URL seperti sedia kala; yang DIKIRIM ke peramban adalah
+    // signed URL berumur pendek, karena bucket ini privat sejak JJ.1 (24 Agu 2026).
+    const signatureUrlTampil = await buatSignedUrl(adminClient, BUCKET_TANDA_TANGAN, signatureUrl);
+    return {
+      status: 200,
+      body: { success: true, signature_url: signatureUrlTampil, user: { ...appUser, signature_url: signatureUrlTampil } }
+    };
   } catch (error) {
     return { status: 401, body: { error: error instanceof Error ? error.message : String(error) } };
   }

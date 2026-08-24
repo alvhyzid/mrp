@@ -10,6 +10,7 @@ import { updateBom } from '../src/features/mrp/server/updateBom';
 import { getWorkCenterGantt } from '../src/features/mrp/server/getWorkCenterGantt';
 import { getWorkCenterCapacity } from '../src/features/mrp/server/getWorkCenterCapacity';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // Sesi 6A (21 Agu 2026) — snapshot routing & BOM per batch. Arkeologi (6A.1)
 // membuktikan updateRouting.ts/updateBom.ts menimpa LANGSUNG baris routing_id/
@@ -73,8 +74,7 @@ describe('Sesi 6A — snapshot routing & BOM per batch (angka batch berjalan/sel
     const { data: plant } = await adminClient.from('production_plants').insert([{ company_id: companyId, name: 'Plant RoutingBomSnapshotTest', is_active: true }]).select('production_plant_id').single();
     plantId = plant!.production_plant_id;
 
-    const adminUser = await adminClient.auth.admin.createUser({ email: 'admin.routingbomsnapshottest@debug.mrp', password: roleTestPassword, email_confirm: true });
-    adminAuthUid = adminUser.data.user!.id;
+        adminAuthUid = await ensureAuthUser(adminClient, 'admin.routingbomsnapshottest@debug.mrp', roleTestPassword);
     await adminClient.from('users').insert([{ auth_uid: adminAuthUid, company_id: companyId, name: 'Admin RoutingBomSnapshotTest', email: 'admin.routingbomsnapshottest@debug.mrp', role: 'company_admin', status: 'active' }]);
     adminToken = await loginToken('admin.routingbomsnapshottest@debug.mrp');
 

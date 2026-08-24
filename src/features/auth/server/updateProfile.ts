@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
+import { appUserUntukClient } from '@/lib/storageSignedUrl';
 
 interface ApiResult {
   status: number;
@@ -9,7 +10,7 @@ interface ApiResult {
 export async function getProfile(request: NextRequest): Promise<ApiResult> {
   try {
     const { appUser } = await getCurrentUser(request);
-    return { status: 200, body: { user: appUser } };
+    return { status: 200, body: { user: await appUserUntukClient(getAdminClient(), appUser) } };
   } catch (error) {
     return { status: 401, body: { error: error instanceof Error ? error.message : String(error) } };
   }
@@ -39,7 +40,7 @@ export async function updateProfile(request: NextRequest): Promise<ApiResult> {
       }
     });
 
-    return { status: 200, body: { success: true, user: { ...appUser, name } } };
+    return { status: 200, body: { success: true, user: await appUserUntukClient(adminClient, { ...appUser, name }) } };
   } catch (error) {
     return { status: 401, body: { error: error instanceof Error ? error.message : String(error) } };
   }

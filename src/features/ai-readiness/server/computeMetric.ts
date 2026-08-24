@@ -13,9 +13,12 @@ async function kamusConfirmedRatio(adminClient: SupabaseClient, companyId: numbe
   query = extra(query);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
-  const total = data?.length ?? 0;
+  // Narrowing lewat variabel, bukan tanda seru: `data` yang sudah dipastikan ada dipakai
+  // langsung, sehingga TypeScript tahu alasannya dan pembaca ikut tahu.
+  const baris = data ?? [];
+  const total = baris.length;
   if (total === 0) return 0;
-  const confirmed = data!.filter((row: { status: string }) => row.status === 'DIKONFIRMASI').length;
+  const confirmed = baris.filter((row: { status: string }) => row.status === 'DIKONFIRMASI').length;
   return (confirmed / total) * 100;
 }
 
@@ -68,9 +71,10 @@ export const metricComputers: Record<string, MetricComputer> = {
   'quality.downtime_classified': async (adminClient, companyId) => {
     const { data, error } = await adminClient.from('production_disruptions').select('disruption_type').eq('company_id', companyId);
     if (error) throw new Error(error.message);
-    const total = data?.length ?? 0;
+    const baris = data ?? [];
+    const total = baris.length;
     if (total === 0) return 0;
-    const classified = data!.filter((row: { disruption_type: string }) => row.disruption_type !== 'other').length;
+    const classified = baris.filter((row: { disruption_type: string }) => row.disruption_type !== 'other').length;
     return (classified / total) * 100;
   }
 };

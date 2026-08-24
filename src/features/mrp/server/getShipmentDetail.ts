@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
+import { buatSignedUrl, BUCKET_TANDA_TANGAN } from '@/lib/storageSignedUrl';
 
 interface ApiResult {
   status: number;
@@ -102,7 +103,9 @@ export async function getShipmentDetail(request: NextRequest, shipmentId: number
         company: companyRes.data,
         signature: signatureRes.data
           ? {
-              signature_url_snapshot: signatureRes.data.signature_url_snapshot,
+              // Nilai TERSIMPAN tidak diubah (ia snapshot untuk ketertelusuran dokumen
+              // terbit); yang dikirim ke layar adalah signed URL berumur pendek.
+              signature_url_snapshot: await buatSignedUrl(adminClient, BUCKET_TANDA_TANGAN, signatureRes.data.signature_url_snapshot),
               signer_role_at_signing: signatureRes.data.signer_role_at_signing,
               signer_name: signerRes.data?.name ?? null,
               signed_at: signatureRes.data.signed_at

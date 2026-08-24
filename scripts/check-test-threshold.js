@@ -5,12 +5,20 @@
 // `describe.skipIf` tetap dihitung PASSED -- artinya CI bisa "hijau" sementara
 // hampir tidak ada yang benar-benar diuji. Pengawas ini menutup lubang itu:
 // bukan cuma "tidak ada yang gagal", tapi "cukup banyak yang benar-benar jalan".
+// DI LUAR JANGKAUAN PENGAWAS INI (aturan II.2):
+//   - KEBUTAAN STRUKTURAL: ia menghitung BERAPA test berjalan, bukan APA yang diuji.
+//     Test yang berjalan tapi tidak menegaskan apa pun (atau menegaskan hal yang salah)
+//     tetap dihitung LULUS. Angka yang naik tidak berarti jaminannya bertambah.
+//   - TIDAK melihat cakupan kode. Berkas yang tidak pernah diuji sama sekali tidak
+//     menurunkan angka mana pun.
+//   - Ambangnya ditulis tangan; menaikkannya saat test dihapus akan meloloskan penurunan
+//     yang sesungguhnya. Itu sebabnya perubahan ambang wajib disertai alasan tertulis.
 const fs = require('fs');
 const path = require('path');
 
-const MIN_PASSED = 289;   // sekarang 309 -- ruang ~20 utk perubahan wajar
+const MIN_PASSED = 296;   // sekarang 316 (+7 dari tests/storage_ikut_terhapus.test.ts, JJ.1) -- ruang ~20
 const MAX_SKIPPED = 10;   // sekarang 7 dilewati sadar (2 pengawas data nyata)
-const EXPECTED_FILES = 50;
+const EXPECTED_FILES = 51;  // +1: tests/storage_ikut_terhapus.test.ts (JJ.1, 24 Agu 2026)
 
 const arg = process.argv[2] || 'test-results.json';
 const file = path.isAbsolute(arg) ? arg : path.join(process.cwd(), arg);

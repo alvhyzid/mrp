@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createPurchaseOrder } from '../src/features/mrp/server/createPurchaseOrder';
 import { createGoodsReceipt } from '../src/features/mrp/server/createGoodsReceipt';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // BAGIAN 3 (22 Agu 2026) — Fondasi PO Supplier (lapisan data & server saja).
 // Arkeologi SEBELUM menulis test ini menemukan alur ini SUDAH LENGKAP sejak
@@ -50,8 +51,7 @@ describe('BAGIAN 3 — Fondasi PO Supplier: Penerimaan Barang & Harga Lot', () =
     const { data: plant } = await adminClient.from('production_plants').insert([{ company_id: companyId, name: 'Plant Bagian3', is_active: true }]).select('production_plant_id').single();
     plantId = plant!.production_plant_id;
 
-    const adminUser = await adminClient.auth.admin.createUser({ email: 'admin.bagian3test@debug.mrp', password: roleTestPassword, email_confirm: true });
-    adminAuthUid = adminUser.data.user!.id;
+        adminAuthUid = await ensureAuthUser(adminClient, 'admin.bagian3test@debug.mrp', roleTestPassword);
     await adminClient.from('users').insert([{ auth_uid: adminAuthUid, company_id: companyId, name: 'Admin Bagian3Test', email: 'admin.bagian3test@debug.mrp', role: 'company_admin', status: 'active' }]);
     adminToken = await loginAs('admin.bagian3test@debug.mrp');
   });

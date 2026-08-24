@@ -5,6 +5,7 @@ import { deleteRouting, archiveRouting, restoreRouting } from '../src/features/m
 import { listRoutings } from '../src/features/mrp/server/listRoutings';
 import { startProductionBatch } from '../src/features/mrp/server/startProductionBatch';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
+import { ensureAuthUser } from './ensureAuthUser';
 
 // Sesi 7 (21 Agu 2026, 7.3/7.4/7.6) — keluhan nyata pemilik produk: "routing
 // bisa dibuat & diedit, tidak bisa dihapus". Server yang MEMUTUSKAN hapus vs
@@ -87,13 +88,11 @@ describe('Sesi 7 — jalan keluar Routing (hapus permanen vs arsipkan, dihitung 
     const { data: plant } = await adminClient.from('production_plants').insert([{ company_id: companyId, name: 'Plant RoutingArchiveTest', is_active: true }]).select('production_plant_id').single();
     plantId = plant!.production_plant_id;
 
-    const adminUser = await adminClient.auth.admin.createUser({ email: 'admin.routingarchivetest@debug.mrp', password: roleTestPassword, email_confirm: true });
-    adminAuthUid = adminUser.data.user!.id;
+        adminAuthUid = await ensureAuthUser(adminClient, 'admin.routingarchivetest@debug.mrp', roleTestPassword);
     await adminClient.from('users').insert([{ auth_uid: adminAuthUid, company_id: companyId, name: 'Admin RoutingArchiveTest', email: 'admin.routingarchivetest@debug.mrp', role: 'company_admin', status: 'active' }]);
     adminToken = await loginToken('admin.routingarchivetest@debug.mrp');
 
-    const staffUser = await adminClient.auth.admin.createUser({ email: 'staff.routingarchivetest@debug.mrp', password: roleTestPassword, email_confirm: true });
-    staffAuthUid = staffUser.data.user!.id;
+        staffAuthUid = await ensureAuthUser(adminClient, 'staff.routingarchivetest@debug.mrp', roleTestPassword);
     await adminClient.from('users').insert([{ auth_uid: staffAuthUid, company_id: companyId, name: 'Staf RoutingArchiveTest', email: 'staff.routingarchivetest@debug.mrp', role: 'production_staff', status: 'active' }]);
     staffToken = await loginToken('staff.routingarchivetest@debug.mrp');
 

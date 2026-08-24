@@ -124,20 +124,35 @@ async function kumpulkan(companyId) {
 async function main() {
   const ref = (supabaseUrl.match(/^https:\/\/([a-z0-9]+)\./) || [])[1] || '(tidak dikenali)';
 
-  const { data: perusahaan, error: errPerusahaan } = await admin
+  // Dicocokkan lewat NAMA, bukan id literal, supaya skrip ini sama benarnya di project mana pun.
+  // Nama TIDAK dijamin unik, jadi hasilnya diperiksa: NOL berarti salah project atau salah nama;
+  // LEBIH DARI SATU berarti ada kembar dan skrip ini TIDAK BOLEH menebak yang mana -- salah tebak
+  // berarti menghapus berkas milik perusahaan lain. Percobaan pertama memakai `.maybeSingle()` dan
+  // pesan gagalnya keluar sebagai jargon Postgres ("JSON object requested, multiple (or no) rows
+  // returned") yang tidak memberi tahu apa pun tentang apa yang harus dilakukan.
+  const { data: kandidat, error: errPerusahaan } = await admin
     .from('companies')
     .select('company_id, name')
-    .eq('name', namaPerusahaan)
-    .maybeSingle();
+    .eq('name', namaPerusahaan);
 
   if (errPerusahaan) {
     console.error('Gagal membaca companies:', errPerusahaan.message);
     process.exit(1);
   }
-  if (!perusahaan) {
-    console.error(`Perusahaan "${namaPerusahaan}" tidak ditemukan di project ${ref}. Tidak melakukan apa pun.`);
+  if (!kandidat || kandidat.length === 0) {
+    console.error(`Perusahaan "${namaPerusahaan}" tidak ditemukan di project ${ref}.`);
+    console.error('Tidak melakukan apa pun. Periksa nama perusahaan dan project yang sedang dituju.');
     process.exit(1);
   }
+  if (kandidat.length > 1) {
+    console.error(`Ada ${kandidat.length} perusahaan bernama "${namaPerusahaan}" di project ${ref}:`);
+    for (const k of kandidat) console.error(`    company_id=${k.company_id}`);
+    console.error('Skrip ini TIDAK menebak yang mana -- salah tebak berarti menghapus berkas milik');
+    console.error('perusahaan lain. Bereskan kembarannya dulu, atau pakai --perusahaan= dengan nama');
+    console.error('yang benar-benar membedakan keduanya.');
+    process.exit(1);
+  }
+  const perusahaan = kandidat[0];
 
   console.log(`Project     : ${ref}`);
   console.log(`Perusahaan  : ${perusahaan.name} (company_id=${perusahaan.company_id})`);
@@ -179,7 +194,15 @@ async function main() {
     terhapus += (data || []).length;
   }
 
-  console.log(`\nTerhapus: ${terhapus} dari ${total}`);
+  // "Terhapus 1 dari 2" gampang terbaca sebagai KEGAGALAN, padahal biasanya berarti berkasnya
+  // memang sudah tidak ada (mis. skrip ini dijalankan dua kali). Storage API hanya mengembalikan
+  // berkas yang BENAR-BENAR dihapusnya, jadi selisihnya dijelaskan terpisah dari kegagalan.
+  const sudahTidakAda = total - terhapus - 0;
+  console.log(`\nDiminta  : ${total} berkas`);
+  console.log(`Terhapus : ${terhapus}`);
+  if (sudahTidakAda > 0 && gagal.length === 0) {
+    console.log(`Sudah tidak ada sebelumnya: ${sudahTidakAda} (bukan kegagalan -- mis. skrip dijalankan ulang)`);
+  }
   if (gagal.length > 0) {
     console.log('GAGAL:');
     for (const g of gagal) console.log(`    ${g}`);

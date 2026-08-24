@@ -10,10 +10,10 @@ export default function HomePage() {
             Fondasi platform MRP multi-tenant untuk manufaktur. Login dulu untuk melanjutkan.
           </p>
           <div className="mt-8 flex flex-col gap-4 sm:flex-row">
-            <Link href="/login" className="inline-flex items-center justify-center rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-slate-700">
+            <Link href="/login" className="inline-flex items-center justify-center rounded-none bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-slate-700">
               Masuk
             </Link>
-            <Link href="/register" className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-50">
+            <Link href="/register" className="inline-flex items-center justify-center rounded-none border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-50">
               Daftar
             </Link>
           </div>

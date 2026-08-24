@@ -308,12 +308,23 @@ Yang boleh ditanyakan ke pemilik produk hanya hal yang **TIDAK dijawab Carbon**:
 
 Daftar halaman rujukan per jenis layar: `docs/governance/rujukan-carbon.md`.
 
-**KELAS CACAT YANG SUDAH TIGA KALI TERJADI di pilot pertama — "berhasil tanpa berlaku":**
+**KELAS CACAT YANG SUDAH EMPAT KALI TERJADI di pilot pertama — "berhasil tanpa berlaku":**
 1. Tema dikonfigurasi lewat cara yang terlihat benar; build lulus, token `:root` tetap putih.
 2. Kelas `cds--type-productive-heading-04` dipakai untuk tipografi; **Carbon memancarkan NOL kelas utilitas tipografi**, jadi kelas itu tidak pernah berlaku dan heading jatuh ke bawaan peramban. Yang benar: mixin Sass `type-style`.
 3. `<Tag>` dipakai menandai field "belum diisi"; Tag Carbon **memang berbentuk pil** — komponennya salah pilih, bukan Carbon yang ditimpa. Yang benar: `warn`/`warnText` bawaan kontrolnya.
+4. Sudut membulat dinyatakan "sudah nol" setelah **membaca** `tailwind.config.ts`; nyatanya config hanya menimpa 3 dari 9 anak tangga `borderRadius`, dan kode memakai 4 anak tangga yang **tidak** ditimpa di 34 tempat. Yang benar: **menjalankan** Tailwind dan mengukur CSS yang dipancarkan.
 
-Ketiganya lolos build, lolos typecheck, dan terlihat bekerja. **Satu-satunya yang menangkapnya adalah MENGUKUR hasil yang benar-benar keluar** — nilai token yang dipancarkan, kelas yang benar-benar ada di CSS, radius yang benar-benar berlaku.
+Keempatnya lolos build, lolos typecheck, dan terlihat bekerja. **Satu-satunya yang menangkapnya adalah MENGUKUR hasil yang benar-benar keluar** — nilai token yang dipancarkan, kelas yang benar-benar ada di CSS, radius yang benar-benar berlaku.
+
+### Memeriksa yang TERTULIS tidak bisa menemukan yang TIDAK tertulis (ditetapkan 25 Agu 2026)
+
+Cacat nomor 4 di atas layak jadi aturannya sendiri, karena bentuknya paling licin: **pemeriksaannya benar, kesimpulannya yang kelewat luas.**
+
+Membaca config dan mendapati setiap nilai di sana bernilai `0px` adalah pengamatan yang **akurat**. Yang keliru adalah melompat dari *"semua yang tertulis di sini nol"* ke *"semuanya nol"* — padahal kerangka bawaan (Tailwind, Carbon, pustaka apa pun) menyumbang nilai yang **tidak muncul di berkas mana pun di repo ini**.
+
+**Aturannya**: sebelum menyatakan sebuah nilai "sudah benar di mana-mana", tanyakan **berapa banyak kemungkinan yang ada seluruhnya**, lalu bandingkan dengan berapa yang benar-benar diperiksa. Bila jumlahnya tidak diketahui, jawabannya belum boleh berbentuk "semuanya".
+
+**Dan perbaikannya menimpa SELURUH anak tangga, bukan hanya yang dipakai hari ini** — anak tangga yang belum dipakai sekarang adalah lubang untuk besok, dan tidak akan ada yang mengingatkan.
 
 ## Huruf Kapital Hanya di Awal Kalimat (ditetapkan 25 Agu 2026)
 

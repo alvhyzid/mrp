@@ -80,9 +80,29 @@ const config: Config = {
         // globals.css sebagai token, tapi di-hardcode 0px di sini (bukan
         // calc(var(--radius) - Npx)) supaya tidak menghasilkan nilai negatif
         // yang jadi invalid CSS kalau --radius diset 0.
-        lg: '0px',
+        //
+        // SELURUH anak tangga ditimpa, bukan hanya lg/md/sm — inilah akar sudut membulat
+        // yang bertahan setelah "perbaikan" 25 Agu 2026. Skala bawaan Tailwind punya
+        // SEMBILAN anak tangga; versi sebelumnya menimpa TIGA, dan enam sisanya diam-diam
+        // tetap memakai nilai Tailwind. Diukur dari CSS yang benar-benar dipancarkan:
+        //   .rounded 0.25rem | .rounded-xl 0.75rem | .rounded-2xl 1rem | .rounded-3xl 1.5rem
+        // Kode ini memakai empat di antaranya di 34 tempat, terbanyak di halaman
+        // login/daftar/lupa-sandi — layar yang paling sering dilihat.
+        //
+        // PELAJARANNYA, supaya tidak terulang: memeriksa anak tangga yang DIPAKAI lalu
+        // menyimpulkan seluruh skalanya nol adalah kesimpulan yang lebih luas daripada
+        // buktinya. Yang membuktikan bukan membaca config, melainkan MENGUKUR CSS keluaran.
+        //
+        // `full` SENGAJA tidak ditimpa: dipakai foto profil dan titik lonceng notifikasi,
+        // yang memang bulat dan bukan kontrol bersudut. Tombol berbentuk pil BUKAN termasuk
+        // itu — sembilan tombol/tautan pil sudah diubah jadi bersudut tajam.
+        DEFAULT: '0px',
+        sm: '0px',
         md: '0px',
-        sm: '0px'
+        lg: '0px',
+        xl: '0px',
+        '2xl': '0px',
+        '3xl': '0px'
       },
       fontSize: {
         // Dense/tabular data size — a notch below the default `sm` (14px), for table

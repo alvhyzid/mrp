@@ -70,6 +70,42 @@ yang bisa diubah untuk mengganti tema.
 **Diselesaikan Carbon secara struktural**: token Carbon jadi satu-satunya sumber, 88 heks
 itu dicabut, dan tema Gray 10 (D-2) berlaku dengan mengganti satu nilai.
 
+### A.3 Sudut membulat — utang yang bertahan melewati satu "perbaikan"
+
+**Ditemukan 25 Agu 2026, setelah pemilik produk melaporkan sudut masih membulat pada
+pemeriksaan kedua.** Dicatat di sini bukan sebagai temuan biasa, melainkan sebagai contoh
+**cara memeriksa yang salah** — bagian yang paling mudah terulang.
+
+Skala `borderRadius` bawaan Tailwind punya **sembilan** anak tangga. `tailwind.config.ts`
+menimpa **tiga** (`lg`, `md`, `sm`) jadi `0px`. Enam sisanya diam-diam tetap memakai nilai
+Tailwind, dan kode memakai empat di antaranya:
+
+| Kelas | Yang dipancarkan | Dipakai |
+|---|---|---:|
+| `rounded-3xl` | 1.5rem (24px) | 16 |
+| `rounded-full` | 9999px | 11 |
+| `rounded` | 0.25rem (4px) | 4 |
+| `rounded-2xl` | 1rem (16px) | 3 |
+
+Terbanyak di **halaman login, daftar, lupa sandi, dan undangan** — layar yang paling sering
+dilihat, dan layar pertama yang dilihat orang baru.
+
+**Kenapa pemeriksaan pertama meleset**: ia membaca `tailwind.config.ts`, melihat tiga anak
+tangga bernilai `0px`, lalu menyimpulkan seluruh skalanya nol. Kesimpulannya **lebih luas
+daripada buktinya** — dan yang salah justru ada di bagian yang **tidak tertulis** di config.
+Membaca berkas tidak bisa menemukan sesuatu yang tidak ada di berkas itu.
+
+**Yang membuktikan**: menjalankan Tailwind dan **mengukur CSS yang benar-benar dipancarkan**.
+Sesudah diperbaiki, diukur lagi dari peramban sungguhan pada lima halaman × dua lebar
+(360px dan 1280px): **nol elemen bersudut membulat**.
+
+**Penjaganya**: `tests/sudut_tajam_carbon.test.ts` menjalankan Tailwind atas SELURUH anak
+tangga dan membaca hasilnya. Sudah dibuktikan merah→hijau: dikembalikan ke config lama, ia
+menyebut keempat kelas yang bocor satu per satu.
+
+`rounded-full` **sengaja dibiarkan** untuk foto profil dan titik hitung lonceng notifikasi —
+keduanya memang bulat. Sembilan tombol/tautan berbentuk pil sudah diubah jadi bersudut tajam.
+
 ### A.2 Sebelas varian kelas warna Tailwind mentah
 
 Di luar 88 heks itu, masih ada 11 varian `bg-`/`text-`/`border-` berbasis palet Tailwind

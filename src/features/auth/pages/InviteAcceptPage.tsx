@@ -73,7 +73,7 @@ export default function InviteAcceptPage({ token }: InviteAcceptPageProps) {
           <button
             type="button"
             onClick={() => router.push('/dashboard')}
-            className="mt-6 inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
+            className="mt-6 inline-flex items-center justify-center rounded-none bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
           >
             Kembali ke Dashboard
           </button>

@@ -93,7 +93,7 @@ export default function ResetPasswordPage() {
           <p className="mt-4 text-slate-600">Silakan minta tautan reset baru.</p>
           <a
             href="/forgot-password"
-            className="mt-6 inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
+            className="mt-6 inline-flex items-center justify-center rounded-none bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
           >
             Minta Tautan Baru
           </a>
@@ -141,7 +141,7 @@ export default function ResetPasswordPage() {
             <button
               type="button"
               onClick={() => router.push('/dashboard')}
-              className="inline-flex justify-center rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
+              className="inline-flex justify-center rounded-none bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
             >
               Lanjut ke Dashboard
             </button>
@@ -149,7 +149,7 @@ export default function ResetPasswordPage() {
             <button
               type="submit"
               disabled={status === 'pending'}
-              className="inline-flex justify-center rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+              className="inline-flex justify-center rounded-none bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
             >
               {status === 'pending' ? 'Menyimpan...' : 'Simpan Kata Sandi Baru'}
             </button>

@@ -61,7 +61,7 @@ export default function ForgotPasswordPage() {
           <button
             type="submit"
             disabled={status === 'pending'}
-            className="inline-flex justify-center rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+            className="inline-flex justify-center rounded-none bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
           >
             {status === 'pending' ? 'Mengirim...' : 'Kirim Tautan Reset'}
           </button>

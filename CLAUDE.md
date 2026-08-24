@@ -261,6 +261,26 @@ Begitu dokumen bernomor beredar di luar sistem — di tangan pelanggan, di tanga
 
 **CACAT YANG SUDAH DIKETAHUI pada cara hitung ini**: karena nomor = jumlah baris + 1, menghapus satu dokumen di tengah tahun membuat nomor berikutnya menabrak nomor yang masih ada. Keempat kolom punya kekangan unik, jadi yang terjadi **bukan nomor ganda yang lolos, melainkan pembuatan dokumen yang GAGAL** tanpa penjelasan yang berguna bagi pengguna. Aman saat menghapus semuanya sekaligus; menggigit saat menghapus satu dari kumpulan yang masih hidup.
 
+## Migrasi Hanya untuk Struktur dan Master Semua Tenant (ditetapkan 25 Agu 2026)
+
+**Migrasi HANYA membangun STRUKTUR dan MASTER yang berlaku untuk SEMUA tenant.**
+
+Data milik satu tenant — perusahaan, pabrik, shift, mesin, item, BOM, routing, karyawan, pelanggan, setelan perusahaan — **TIDAK BOLEH ada di migrasi**.
+
+**Uji sederhananya**: bila sebuah baris memuat **nama, alamat, atau angka milik PT ITM**, ia salah tempat.
+
+**Setiap fitur yang hanya bisa dijalankan lewat migrasi atau skrip adalah fitur yang BELUM SELESAI** — tenant kedua tidak punya siapa pun yang menulis migrasi untuk mereka.
+
+## Kriteria Selesai Baru: Datanya Harus Bisa Lahir Lewat Layar (ditetapkan 25 Agu 2026)
+
+**Sebuah modul BELUM SELESAI bila data yang dibutuhkannya hanya bisa lahir dari migrasi atau skrip.**
+
+Ini kriteria tambahan, bukan pengganti: modul tetap harus benar, teruji, dan responsive. Yang ditambahkan adalah pertanyaan **"kalau tenant kedua memakainya besok, dari mana datanya datang?"** Bila jawabannya "seseorang menulis migrasi", modul itu belum selesai.
+
+Alasannya bukan kerapian arsitektur. Sistem ini dijual sebagai SaaS; tenant kedua tidak punya akses ke repo, tidak punya siapa pun yang menulis SQL untuk mereka, dan tidak akan pernah tahu bahwa sebagian datanya seharusnya ada. Yang mereka lihat hanya layar yang tidak bisa diisi.
+
+**Ditemukan lewat sensus 25 Agu 2026**: dari 24 langkah mendirikan perusahaan dari nol, beberapa langkah TIDAK punya jalur lewat layar sama sekali — termasuk pabrik, work center, shift, dan seluruh 17 setelan perusahaan (periode gajian, jam kerja standar, tarif BPJS, metode biaya). Ketiadaan itu tidak pernah terasa karena PT ITM sudah punya semuanya dari migrasi dan skrip.
+
 ## Aturan Responsive — WAJIB di Semua Halaman (ditetapkan 23 Agu 2026)
 1. **Seluruh halaman WAJIB responsive terhadap semua ukuran layar** — HP, tablet, laptop, monitor lebar. TIDAK ada layar HP terpisah: satu kode, satu halaman, susunannya menyesuaikan lebar layar.
 2. **Responsive BUKAN tampilan yang sama diperkecil.** Tabel 8 kolom yang diperkecil sampai muat di HP tetap tidak terbaca — yang benar, susunannya BERUBAH BENTUK saat layar menyempit (informasinya sama, penyajiannya berbeda). Pola yang dipakai: tabel banyak kolom → kartu bertumpuk di layar sempit (satu baris = satu kartu, kolom tersusun ke bawah); navigasi samping → menu buka-tutup; modal lebar → layar penuh di HP; field form → satu kolom penuh di layar sempit; kolom tidak penting boleh disembunyikan di layar sempit TAPI harus tetap bisa dibuka, jangan hilang tanpa jalan melihatnya.

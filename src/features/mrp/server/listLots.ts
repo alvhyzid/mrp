@@ -32,11 +32,25 @@ export async function listLots(request: NextRequest): Promise<ApiResult> {
     const productionPlantId = productionPlantIdParam ? Number(productionPlantIdParam) : null;
 
     const adminClient = getAdminClient();
+    // PENGECUALIAN YANG DIPIKIRKAN (B.2 butir 3.5), bukan kelalaian.
+    //
+    // Delapan tempat lain BERHENTI melihat lot kedaluwarsa — itu memang tujuannya. TAPI
+    // daftar lot untuk gudang HARUS tetap menampilkannya, karena BARANGNYA MASIH ADA
+    // SECARA FISIK di rak dan justru perlu dimusnahkan. Menyembunyikannya dari gudang
+    // berarti barang kedaluwarsa lenyap dari layar sambil tetap ada di gudang — persis
+    // keadaan yang paling berbahaya, karena tidak ada yang tahu ia perlu ditangani.
+    //
+    // Yang membedakannya dari "tersedia": lot kedaluwarsa TIDAK BISA dipakai produksi
+    // maupun dikirim (ditolak trigger database), dan tidak ikut hitungan stok tersedia
+    // di delapan tempat lainnya. Ia muncul di sini semata sebagai barang yang menunggu
+    // tindakan.
+    const statusTerlihat = ['available', 'expired'];
+
     let query = adminClient
       .from('lots')
       .select('lot_id, item_id, production_plant_id, lot_number, expiry_date, produced_or_received_date, quantity_on_hand, source_type, status, unit_cost, source_customer_purchase_order_id')
       .eq('company_id', appUser.company_id)
-      .eq('status', 'available')
+      .in('status', statusTerlihat)
       .gt('quantity_on_hand', 0)
       .order('expiry_date', { ascending: true, nullsFirst: false });
 

@@ -8,9 +8,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const MIN_PASSED = 281;   // sekarang 301 -- ruang ~20 utk perubahan wajar
+const MIN_PASSED = 289;   // sekarang 309 -- ruang ~20 utk perubahan wajar
 const MAX_SKIPPED = 10;   // sekarang 7 dilewati sadar (2 pengawas data nyata)
-const EXPECTED_FILES = 49;
+const EXPECTED_FILES = 50;
 
 const arg = process.argv[2] || 'test-results.json';
 const file = path.isAbsolute(arg) ? arg : path.join(process.cwd(), arg);

@@ -8,7 +8,7 @@
 // Saat pilot terbukti dan layar lain menyusul, impor ini naik ke layout yang lebih tinggi —
 // bertahap, bukan sekaligus. Itu juga yang membuat "sebelum vs sesudah" bisa dibandingkan.
 import '@/styles/carbon.scss';
-import './setelan.css';
+import './setelan.scss';
 
 export default function SetelanLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>;

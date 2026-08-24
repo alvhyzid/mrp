@@ -15,7 +15,6 @@ import {
   StructuredListHead,
   StructuredListRow,
   StructuredListWrapper,
-  Tag,
   TextArea,
   TextInput,
   Toggletip,
@@ -146,7 +145,7 @@ export default function SetelanPerhitunganPage() {
 
   if (memuat) {
     return (
-      <div style={{ padding: '1rem', maxWidth: '60rem' }}>
+      <div className="setelan-halaman">
         <SkeletonText heading width="20rem" />
         <SkeletonText paragraph lineCount={8} />
       </div>
@@ -154,11 +153,9 @@ export default function SetelanPerhitunganPage() {
   }
 
   return (
-    <div style={{ padding: '1rem', maxWidth: '60rem' }}>
-      <h1 className="cds--type-productive-heading-04" style={{ marginBottom: '0.25rem' }}>
-        Setelan Perhitungan
-      </h1>
-      <p className="cds--type-body-01" style={{ color: 'var(--cds-text-secondary)', marginBottom: '1.5rem' }}>
+    <div className="setelan-halaman">
+      <h1 className="setelan-judul">Setelan perhitungan</h1>
+      <p className="setelan-pengantar">
         Angka-angka di halaman ini dipakai menghitung biaya tenaga kerja, harga pokok produksi, dan margin.
         Mengubahnya mengubah arti seluruh angka biaya di sistem.
       </p>
@@ -170,7 +167,7 @@ export default function SetelanPerhitunganPage() {
           subtitle={galat}
           onCloseButtonClick={() => setGalat(null)}
           lowContrast
-          style={{ marginBottom: '1rem', maxWidth: '100%' }}
+          className="setelan-pemberitahuan"
         />
       )}
       {berhasil && (
@@ -180,7 +177,7 @@ export default function SetelanPerhitunganPage() {
           subtitle={berhasil}
           onCloseButtonClick={() => setBerhasil(null)}
           lowContrast
-          style={{ marginBottom: '1rem', maxWidth: '100%' }}
+          className="setelan-pemberitahuan"
         />
       )}
       {!bolehMengubah && (
@@ -190,7 +187,7 @@ export default function SetelanPerhitunganPage() {
           subtitle="Hanya Admin Perusahaan atau General Manager yang dapat mengubah setelan ini. Hubungi salah satunya bila ada yang perlu diperbaiki."
           hideCloseButton
           lowContrast
-          style={{ marginBottom: '1rem', maxWidth: '100%' }}
+          className="setelan-pemberitahuan"
         />
       )}
       {belumDiisi > 0 && (
@@ -200,23 +197,27 @@ export default function SetelanPerhitunganPage() {
           subtitle="Perhitungan yang membutuhkannya tidak akan menghasilkan angka sampai diisi."
           hideCloseButton
           lowContrast
-          style={{ marginBottom: '1rem', maxWidth: '100%' }}
+          className="setelan-pemberitahuan"
         />
       )}
 
       {kelompokUrut.map((kelompok) => (
-        <Tile key={kelompok} style={{ marginBottom: '1rem' }}>
-          <h2 className="cds--type-productive-heading-03" style={{ marginBottom: '1rem' }}>
-            {kelompok}
-          </h2>
+        <Tile key={kelompok} className="setelan-tile">
+          <h2 className="setelan-kelompok-judul">{kelompok}</h2>
           <div className="setelan-kisi">
             {setelan
               .filter((s) => s.kelompok === kelompok)
               .map((s) => {
                 const nilai = draf[s.kunci] ?? '';
                 const berubahIni = nilai !== s.nilai;
+                // FF.1 — status field memakai `warn`/`warnText` bawaan Carbon, BUKAN Tag.
+                // Versi pertama halaman ini memakai <Tag> untuk menandai "Belum diisi", dan
+                // Tag Carbon MEMANG berbentuk pil (border-radius 1rem) menurut spesifikasinya.
+                // Jadi sudut membulat yang terlihat pemilik produk bukan Carbon yang ditimpa —
+                // melainkan komponen yang SALAH DIPILIH. Tag untuk menggolongkan dan menyaring;
+                // status sebuah field dijawab `warn`/`warnText` yang sudah dibawa kontrolnya.
                 const label = (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <span className="setelan-label">
                     {s.label}
                     <Toggletip align="top">
                       <ToggletipButton label={`Penjelasan ${s.label}`}>
@@ -225,16 +226,19 @@ export default function SetelanPerhitunganPage() {
                       <ToggletipContent>
                         <p>{s.bantuan}</p>
                         {s.memengaruhi_historis && (
-                          <p style={{ marginTop: '0.5rem' }}>
+                          <p className="setelan-bantuan-lanjutan">
                             Setelan ini memengaruhi perhitungan yang sudah lewat, jadi perubahannya bertanggal berlaku.
                           </p>
                         )}
                       </ToggletipContent>
                     </Toggletip>
-                    {!s.pernah_diisi && <Tag type="red" size="sm">Belum diisi</Tag>}
-                    {berubahIni && <Tag type="blue" size="sm">Diubah</Tag>}
                   </span>
                 );
+                const statusField = !s.pernah_diisi
+                  ? { warn: true, warnText: 'Belum pernah diisi' }
+                  : berubahIni
+                    ? { warn: true, warnText: 'Diubah, belum disimpan' }
+                    : {};
 
                 if (s.jenis === 'pilihan') {
                   return (
@@ -244,6 +248,7 @@ export default function SetelanPerhitunganPage() {
                       labelText={label}
                       value={nilai}
                       disabled={!bolehMengubah}
+                      {...statusField}
                       onChange={(e) => setDraf((p) => ({ ...p, [s.kunci]: e.target.value }))}
                     >
                       <SelectItem value="" text="— pilih —" />
@@ -263,6 +268,7 @@ export default function SetelanPerhitunganPage() {
                     disabled={!bolehMengubah}
                     type={s.jenis === 'teks' ? 'text' : 'number'}
                     step={s.jenis === 'persen' ? '0.01' : undefined}
+                    {...statusField}
                     onChange={(e) => setDraf((p) => ({ ...p, [s.kunci]: e.target.value }))}
                   />
                 );
@@ -272,10 +278,8 @@ export default function SetelanPerhitunganPage() {
       ))}
 
       {bolehMengubah && berubah.length > 0 && (
-        <Tile style={{ marginBottom: '1rem' }}>
-          <h2 className="cds--type-productive-heading-03" style={{ marginBottom: '0.5rem' }}>
-            Simpan {berubah.length} perubahan
-          </h2>
+        <Tile className="setelan-tile">
+          <h2 className="setelan-kelompok-judul">Simpan {berubah.length} perubahan</h2>
 
           {adaPerubahanHistoris && (
             <InlineNotification
@@ -284,17 +288,17 @@ export default function SetelanPerhitunganPage() {
               subtitle="Tanggal berlaku menentukan sejak kapan angka baru dipakai. Isi tanggal mundur hanya bila memang berlaku surut."
               hideCloseButton
               lowContrast
-              style={{ marginBottom: '1rem', maxWidth: '100%' }}
+              className="setelan-pemberitahuan"
             />
           )}
 
-          <ul style={{ marginBottom: '1rem' }}>
+          <ul className="setelan-ringkas">
             {berubah.map((s) => (
-              <li key={s.kunci} className="cds--type-body-01" style={{ marginBottom: '0.25rem' }}>
+              <li key={s.kunci}>
                 <strong>{s.label}</strong>: {s.nilai === '' ? '(belum diisi)' : s.nilai} →{' '}
                 {draf[s.kunci] === '' ? '(kosong)' : draf[s.kunci]}
                 {s.memengaruhi_historis && (
-                  <WarningAlt style={{ verticalAlign: 'middle', marginLeft: '0.25rem' }} />
+                  <WarningAlt className="setelan-ikon-peringatan" />
                 )}
               </li>
             ))}
@@ -331,7 +335,7 @@ export default function SetelanPerhitunganPage() {
             />
           </div>
 
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+          <div className="setelan-aksi">
             <Button onClick={() => void simpan()} disabled={menyimpan}>
               {menyimpan ? 'Menyimpan…' : 'Simpan perubahan'}
             </Button>
@@ -347,16 +351,14 @@ export default function SetelanPerhitunganPage() {
       )}
 
       <Tile>
-        <h2 className="cds--type-productive-heading-03" style={{ marginBottom: '0.5rem' }}>
-          Jejak perubahan
-        </h2>
-        <p className="cds--type-body-01" style={{ color: 'var(--cds-text-secondary)', marginBottom: '1rem' }}>
+        <h2 className="setelan-kelompok-judul">Jejak perubahan</h2>
+        <p className="setelan-teks--redup setelan-pengantar-kecil">
           Setiap perubahan tercatat: siapa, kapan, dari apa ke apa, dan sejak kapan berlaku.
         </p>
         {jejak.length === 0 ? (
-          <p className="cds--type-body-01">Belum ada perubahan yang tercatat.</p>
+          <p className="setelan-teks">Belum ada perubahan yang tercatat.</p>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
+          <div className="setelan-jejak-gulir">
             <StructuredListWrapper isCondensed>
               <StructuredListHead>
                 <StructuredListRow head>

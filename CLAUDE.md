@@ -296,6 +296,34 @@ Polanya selalu sama: perbaikan diterapkan di satu jalur, jalur kedua tidak ikut,
 
 **Ini tidak bisa diselesaikan dengan disiplin — hanya dengan pengawas.** Aturan yang harus diingat setiap kali menulis JSX akan dilanggar, persis seperti sebelumnya. Pengawasnya dicatat sebagai bagian DS-2: gagal keras bila ada `<button>`/`<input>`/`<table>` mentah di berkas halaman, dengan daftar pengecualian eksplisit dan beralasan (mis. tabel cetak surat jalan).
 
+## Carbon Sudah Menjawabnya — Buka Dokumentasinya, Jangan Bertanya atau Menebak (ditetapkan 25 Agu 2026)
+
+**Carbon SUDAH menjawab pertanyaan gaya, ukuran, jarak, dan perilaku komponen. JANGAN menanyakan hal-hal itu ke pemilik produk, dan JANGAN memutuskannya sendiri — BUKA DOKUMENTASINYA.**
+
+Yang boleh ditanyakan ke pemilik produk hanya hal yang **TIDAK dijawab Carbon**: aturan bisnis, istilah Bahasa Indonesia, urutan field menurut alur kerja pabrik, dan kebutuhan lantai produksi.
+
+**Menanyakan hal yang sudah dijawab Carbon berarti membayar biaya adopsi tanpa mendapat manfaatnya.**
+
+**Rujukan wajib dibuka SAAT sesi, bukan dari ingatan — versi komponen dan tokennya berubah.** Ini bukan kehati-hatian teoretis: pada 25 Agu 2026, spesifikasi yang dikutip menyebut token `$heading-03` untuk ukuran 28px, sementara di paket yang benar-benar terpasang nama tokennya `productive-heading-04` dan `heading-03` **tidak ada sama sekali**. Ukurannya benar, namanya berubah.
+
+Daftar halaman rujukan per jenis layar: `docs/governance/rujukan-carbon.md`.
+
+**KELAS CACAT YANG SUDAH TIGA KALI TERJADI di pilot pertama — "berhasil tanpa berlaku":**
+1. Tema dikonfigurasi lewat cara yang terlihat benar; build lulus, token `:root` tetap putih.
+2. Kelas `cds--type-productive-heading-04` dipakai untuk tipografi; **Carbon memancarkan NOL kelas utilitas tipografi**, jadi kelas itu tidak pernah berlaku dan heading jatuh ke bawaan peramban. Yang benar: mixin Sass `type-style`.
+3. `<Tag>` dipakai menandai field "belum diisi"; Tag Carbon **memang berbentuk pil** — komponennya salah pilih, bukan Carbon yang ditimpa. Yang benar: `warn`/`warnText` bawaan kontrolnya.
+
+Ketiganya lolos build, lolos typecheck, dan terlihat bekerja. **Satu-satunya yang menangkapnya adalah MENGUKUR hasil yang benar-benar keluar** — nilai token yang dipancarkan, kelas yang benar-benar ada di CSS, radius yang benar-benar berlaku.
+
+## Huruf Kapital Hanya di Awal Kalimat (ditetapkan 25 Agu 2026)
+
+**Judul dan label ditulis dengan kapital hanya di awal kalimat, bukan tiap kata.** Nama diri tetap kapital (nama hari, nama orang, akronim seperti BPJS).
+
+Benar: "Setelan perhitungan", "Periode & kalender kerja", "Jam kerja Senin–Jumat".
+Salah: "Setelan Perhitungan", "Periode & Kalender Kerja".
+
+Berlaku untuk **seluruh layar**, bukan hanya yang baru. Layar lama dibereskan lewat aturan pramuka: yang disentuh, dirapikan sekalian.
+
 ## Aturan Responsive — WAJIB di Semua Halaman (ditetapkan 23 Agu 2026)
 1. **Seluruh halaman WAJIB responsive terhadap semua ukuran layar** — HP, tablet, laptop, monitor lebar. TIDAK ada layar HP terpisah: satu kode, satu halaman, susunannya menyesuaikan lebar layar.
 2. **Responsive BUKAN tampilan yang sama diperkecil.** Tabel 8 kolom yang diperkecil sampai muat di HP tetap tidak terbaca — yang benar, susunannya BERUBAH BENTUK saat layar menyempit (informasinya sama, penyajiannya berbeda). Pola yang dipakai: tabel banyak kolom → kartu bertumpuk di layar sempit (satu baris = satu kartu, kolom tersusun ke bawah); navigasi samping → menu buka-tutup; modal lebar → layar penuh di HP; field form → satu kolom penuh di layar sempit; kolom tidak penting boleh disembunyikan di layar sempit TAPI harus tetap bisa dibuka, jangan hilang tanpa jalan melihatnya.

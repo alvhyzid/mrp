@@ -1,0 +1,111 @@
+// Gaya halaman Setelan Perhitungan (DS-1 pilot b).
+//
+// SELURUH ukuran dan jarak memakai TOKEN Carbon, tidak satu pun angka px atau rem ditulis
+// langsung. Alasannya bukan kerapian: menulis angka langsung persis mengulang kesalahan 88
+// warna heksadesimal yang ditulis tangan — nilainya kebetulan benar hari ini, lalu menyimpang
+// diam-diam begitu tokennya berubah, dan tidak ada satu tempat pun untuk memperbaikinya.
+//
+// Tipografi memakai MIXIN `type-style`, BUKAN kelas `cds--type-*`. Diperiksa 25 Agu 2026:
+// Carbon memancarkan NOL kelas utilitas tipografi ke CSS. Kelas seperti
+// `cds--type-productive-heading-04` yang sempat dipakai di versi pertama halaman ini TIDAK
+// PERNAH BERLAKU — heading-nya jatuh ke ukuran bawaan peramban. Ia terlihat bekerja karena
+// kebetulan ada judul di layar, bukan karena gayanya diterapkan.
+@use '@carbon/react/scss/type';
+@use '@carbon/react/scss/spacing';
+
+.setelan-judul {
+  @include type.type-style('productive-heading-04');
+  margin-bottom: spacing.$spacing-03;
+}
+
+.setelan-pengantar {
+  @include type.type-style('body-01');
+  color: var(--cds-text-secondary);
+  // $spacing-08 (40px) — jarak bawah area judul, sesuai spesifikasi form Carbon.
+  margin-bottom: spacing.$spacing-08;
+}
+
+.setelan-kelompok-judul {
+  @include type.type-style('productive-heading-03');
+  margin-bottom: spacing.$spacing-05;
+}
+
+.setelan-teks {
+  @include type.type-style('body-01');
+}
+
+.setelan-teks--redup {
+  @include type.type-style('body-01');
+  color: var(--cds-text-secondary);
+}
+
+.setelan-tile {
+  margin-bottom: spacing.$spacing-07;
+}
+
+.setelan-pemberitahuan {
+  margin-bottom: spacing.$spacing-05;
+  max-width: 100%;
+}
+
+// Kisi field.
+//
+// SATU KOLOM DI PONSEL adalah aturan form Carbon, bukan pilihan: minmax(min(100%, 20rem), 1fr)
+// membuat kolom kedua hanya muncul bila benar-benar muat 20rem. Di 360px ia selalu satu kolom.
+// minmax memakai min(100%, ...) — bukan 20rem telanjang — supaya isi yang panjang tidak
+// memaksa kisi melebar dan menimbulkan gulir menyamping.
+//
+// Jarak antar item form $spacing-07 (32px), sesuai spesifikasi form biasa. Halaman ini memakai
+// bentuk FORM BIASA, bukan "fluid form" (jarak 0, gutter 1px) — dipilih karena isinya 17
+// setelan yang dikelompokkan dan perlu bernapas, bukan satu blok isian rapat.
+.setelan-kisi {
+  display: grid;
+  gap: spacing.$spacing-07;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+}
+
+.setelan-ringkas {
+  margin-bottom: spacing.$spacing-05;
+  padding-left: spacing.$spacing-05;
+}
+
+.setelan-ringkas li {
+  @include type.type-style('body-01');
+  margin-bottom: spacing.$spacing-02;
+}
+
+// $spacing-09 (48px) — jarak atas tombol, sesuai spesifikasi form Carbon.
+.setelan-aksi {
+  display: flex;
+  gap: spacing.$spacing-03;
+  margin-top: spacing.$spacing-09;
+  flex-wrap: wrap;
+}
+
+.setelan-halaman {
+  padding: spacing.$spacing-05;
+  max-width: 60rem;
+}
+
+.setelan-jejak-gulir {
+  overflow-x: auto;
+}
+
+.setelan-label {
+  display: inline-flex;
+  align-items: center;
+  gap: spacing.$spacing-02;
+}
+
+.setelan-bantuan-lanjutan {
+  margin-top: spacing.$spacing-03;
+}
+
+.setelan-ikon-peringatan {
+  vertical-align: middle;
+  margin-left: spacing.$spacing-02;
+}
+
+.setelan-pengantar-kecil {
+  margin-bottom: spacing.$spacing-05;
+}

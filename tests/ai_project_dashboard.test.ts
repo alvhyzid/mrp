@@ -204,8 +204,28 @@ describe('Dashboard Proyek AI (K1b) — seed, progres AUTO_QUERY dari data nyata
     const r2 = await takeAiProjectSnapshot(req2);
     expect(r2.status).toBe(200);
 
-    const { data: snapshots, count } = await adminClient.from('ai_project_progress_snapshots').select('overall_percent, per_phase', { count: 'exact' }).eq('company_id', companyId);
-    expect(count).toBe(2);
+    const { data: snapshots, count } = await adminClient
+      .from('ai_project_progress_snapshots')
+      .select('ai_project_progress_snapshot_id, overall_percent, per_phase, taken_at', { count: 'exact' })
+      .eq('company_id', companyId)
+      .order('taken_at');
+
+    // AUD-26 — DIAGNOSTIK, bukan hiasan. Test ini gagal berselang-seling di suite penuh
+    // ("expected 1 to be 2") tapi LULUS 3 dari 3 saat dijalankan sendirian, dan 26 dari 26
+    // bersama tetangganya. Penyisiran 25 Agu 2026 tidak menemukan mekanismenya: tabel ini
+    // hanya ditulis takeAiProjectSnapshot (insert biasa, nol upsert), tidak punya kekangan
+    // unik maupun pemicu, dan tidak ada berkas test lain yang menyentuhnya.
+    //
+    // Karena sebabnya belum ketahuan, yang bisa dilakukan adalah membuat kegagalan
+    // BERIKUTNYA menjelaskan dirinya sendiri: cetak baris yang benar-benar ada beserta
+    // waktunya, supaya terlihat apakah insert kedua tidak pernah mendarat atau justru
+    // hilang sesudahnya. Menebak sudah dicoba dan gagal; mengukur belum.
+    expect(
+      count,
+      `Diharapkan 2 snapshot untuk company ${companyId}, yang ada ${count}. ` +
+        `Status panggilan: r1=${r1.status}, r2=${r2.status}. ` +
+        `Baris yang benar-benar ada: ${JSON.stringify(snapshots)}`
+    ).toBe(2);
     expect(Number(snapshots![0].overall_percent)).toBeGreaterThan(0);
     expect(snapshots![0].per_phase).toHaveProperty('fase0');
   });

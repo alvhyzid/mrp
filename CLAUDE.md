@@ -218,6 +218,35 @@ Ketiganya lebih buruk daripada tidak ada sama sekali: pengguna melihatnya, mengi
 
 **Kasus yang sedang mengintai jadi kejadian KEEMPAT**: §5 arsitektur Sales mengusulkan 6 status pelanggan (ACTIVE, INACTIVE, BLOCKED, SUSPENDED, PROSPECT, ARCHIVED). **BLOCKED dan SUSPENDED TIDAK BOLEH ditambahkan** sampai ada kode yang benar-benar memicunya dan akibat yang benar-benar terjadi saat status itu aktif.
 
+## Pengaman Lama Dicabut HANYA Setelah Penggantinya Terbukti Bekerja (ditetapkan 24 Agu 2026)
+
+**Pengaman lama dicabut HANYA setelah penggantinya terbukti bekerja — bukan sebelum, bukan bersamaan.**
+
+Alasannya bukan kehati-hatian umum, melainkan sifat khusus kegagalan yang dihasilkannya: **pengaman yang dicabut lebih dulu daripada penggantinya siap menghasilkan lubang yang TIDAK BERBUNYI.** Sesuatu berhenti dijaga, tidak ada yang gagal, tidak ada yang merah, dan tidak ada satu pun sinyal bahwa perlindungannya sudah hilang. Ia baru ketahuan saat hal yang dijaganya benar-benar terjadi.
+
+Kasus yang melahirkannya: flag `ALLOW_TESTS_AGAINST_REAL_PROJECT` dipakai menjalankan pemeriksa integritas yang murni membaca data nyata. Penggantinya yang benar adalah kredensial baca-saja (SEC-13). Bila flag itu dicabut sebelum kredensial itu bekerja, **pemeriksa integritasnya mati diam-diam** — bukan gagal berisik.
+
+Berlaku umum, bukan hanya untuk flag ini: aturan lama, pengawas lama, kolom lama, dan jalur lama tetap di tempatnya sampai penggantinya **dibuktikan** — bukan sampai penggantinya selesai ditulis.
+
+## "Tidak Dirujuk" BUKAN Sinonim "Tidak Dibutuhkan" (ditetapkan 24 Agu 2026)
+
+**Pembersihan yang benar bertolak dari BARIS INDUK yang diketahui, bukan dari mencari yang yatim.**
+
+Menyapu berdasarkan ketiadaan rujukan terlihat cerdas dan sebenarnya berbahaya: ia ikut menghapus hal yang **belum sempat** dirujuk — unggahan yang gagal di tengah jalan, berkas yang barisnya sedang dibuat detik itu, data yang menunggu langkah berikutnya. Ketiadaan rujukan hanya membuktikan tidak ada yang menunjuknya **saat itu diperiksa**, bukan bahwa ia tidak dibutuhkan.
+
+Lahir dari INF-23 (pendamping pembersihan berkas Storage): pilihan "hapus baris dulu, lalu sapu berkas yang tidak dirujuk siapa pun" ditolak justru karena alasan ini, dan diganti dengan "kumpulkan daftar berkas dari baris induknya SELAGI masih ada, baru hapus".
+
+## Menjalankan Menemukan Apa yang Membaca Tidak Bisa (ditetapkan 24 Agu 2026)
+
+**Typecheck bersih dan kode yang terbaca benar TIDAK membuktikan sebuah skrip bekerja. Yang membuktikan hanya menjalankannya terhadap keadaan yang sungguhan.**
+
+Sudah terjadi berulang di proyek ini, dan tiap kali cacatnya tak terlihat dari membaca:
+- **MST-16** — asumsi "semua tabel punya kolom `company_id`" lolos typecheck sempurna; yang menangkap adalah membuka layarnya (7 dari 18 tabel ternyata tidak punya).
+- **INF-23** — dua cacat baru muncul saat skripnya dijalankan sungguhan: **nama perusahaan ternyata tidak unik** (dan versi pertama gagal dengan jargon Postgres alih-alih penjelasan), dan **"terhapus 1 dari 2" terbaca seperti kegagalan** padahal berkasnya memang sudah tidak ada.
+- **INF-22** — urutan pembersihan Storage yang salah hanya terlihat setelah test-nya dijalankan; dari membaca kode, urutan itu tampak wajar.
+
+Konsekuensinya untuk cara kerja: skrip atau alur yang akan menyentuh data sungguhan **wajib dijalankan lebih dulu terhadap fixture di tenant uji**, dengan keadaan yang menyerupai kenyataan — termasuk keadaan yang "seharusnya tidak terjadi", seperti nama kembar.
+
 ## Aturan Responsive — WAJIB di Semua Halaman (ditetapkan 23 Agu 2026)
 1. **Seluruh halaman WAJIB responsive terhadap semua ukuran layar** — HP, tablet, laptop, monitor lebar. TIDAK ada layar HP terpisah: satu kode, satu halaman, susunannya menyesuaikan lebar layar.
 2. **Responsive BUKAN tampilan yang sama diperkecil.** Tabel 8 kolom yang diperkecil sampai muat di HP tetap tidak terbaca — yang benar, susunannya BERUBAH BENTUK saat layar menyempit (informasinya sama, penyajiannya berbeda). Pola yang dipakai: tabel banyak kolom → kartu bertumpuk di layar sempit (satu baris = satu kartu, kolom tersusun ke bawah); navigasi samping → menu buka-tutup; modal lebar → layar penuh di HP; field form → satu kolom penuh di layar sempit; kolom tidak penting boleh disembunyikan di layar sempit TAPI harus tetap bisa dibuka, jangan hilang tanpa jalan melihatnya.

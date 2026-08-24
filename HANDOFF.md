@@ -36,6 +36,43 @@ Dikerjakan tanpa interaksi, mengumpulkan pertanyaan di task alih-alih berhenti. 
 
 **Yang TIDAK batal dari pekerjaan INF-05 kemarin (23 Agu, DD.2)**: backup manual (ekspor 92 tabel via Supabase JS client) **tetap satu-satunya backup yang PERNAH DIUJI PULIH sungguhan** (direstorasi ke project staging, dibuktikan identik, lalu dibersihkan). Backup bawaan Supabase (7 titik PHYSICAL) **belum pernah diuji restore-nya** — baru diketahui ADA, belum dibuktikan BISA DIPULIHKAN. Task baru dicatat untuk ini (lihat `INF-15`).
 
+## PELAJARAN TETAP — Aturan di CLAUDE.md TIDAK CUKUP untuk Kelas yang Bisa Disapu Mesin (24 Agu 2026)
+
+Aturan **"periksa contoh sekelas di berkas yang sama"** ditulis di CLAUDE.md pada 24 Agu 2026 — lalu **dilanggar pada hari yang sama oleh yang menulisnya**. RSP-01 memperbaiki `overflow-hidden` di komponen tabel bersama dan meninggalkan **14 tabel yang berdiri sendiri**, 8 di antaranya masih memotong kolom diam-diam.
+
+**KESIMPULAN**: aturan di CLAUDE.md **TIDAK CUKUP** untuk kelas cacat yang bisa disapu mesin. Bila sebuah kelas **bisa dicari otomatis**, ia **HARUS dijaga pengawas** — bukan diserahkan pada ingatan.
+
+**Kenapa aturannya gagal, dan ini bukan soal kedisiplinan**: orang yang sedang fokus memperbaiki satu hal memang **tidak melihat ke samping**. Itu bukan kelalaian yang bisa diperbaiki dengan lebih berhati-hati — itu cara kerja perhatian. Aturan yang bergantung pada seseorang mengingatnya pada saat ia paling sibuk akan gagal, berapa kali pun ditulis ulang.
+
+**PEMBAGIAN YANG BENAR:**
+- **CLAUDE.md** untuk hal yang butuh **PERTIMBANGAN** — kapan sesuatu boleh dikecualikan, apa artinya sebuah angka, keputusan mana yang milik siapa.
+- **PENGAWAS** untuk hal yang bisa **DICARI** — pola tekstual, nilai yang hilang, izin yang terbuka.
+
+Menaruh sesuatu di tempat yang salah membuatnya tampak terjaga padahal tidak.
+
+**CATATAN PEMBATAS, supaya aturan ini tidak dipakai berlebihan**: tidak semua yang bisa dicari layak jadi pengawas yang GAGAL KERAS. Contoh nyata dari hari yang sama — 12 dari 13 berkas bermodal belum memakai anatomi Carbon. Itu **utang bentuk**, bukan cacat: modalnya berfungsi, hanya belum mengikuti cetakan. Pengawas yang gagal keras untuk itu akan memerahkan CI berminggu-minggu tanpa ada yang rusak, dan CI yang merah terus akan diabaikan. Untuk kasus semacam itu: **penghitung yang melaporkan angkanya tiap run**, bukan penghenti.
+
+## PELAJARAN TETAP — PENGUKURAN Adalah Mata Rantai Terlemah (24 Agu 2026, kejadian KEEMPAT)
+
+Empat kali angka yang dilaporkan ternyata salah karena **CARA MENGHITUNGNYA**, bukan karena hal yang diukur:
+
+1. **Menghitung baris log dengan `grep`**, padahal patokan yang sah adalah berkas catatan. Baris milik test uji-diri tidak bisa dibedakan dari yang sungguhan — 7 baris tiruan sempat dilaporkan sebagai patokan.
+2. **`numTotalTestSuites` disangka jumlah berkas**, ternyata jumlah blok `describe` — 104 vs 46.
+3. **Jenis alert tak terpicu** dilaporkan **10, lalu 0, lalu 9, lalu 4**. Hanya yang terakhir membaca blok `insert` secara utuh; tiga sebelumnya salah cakupan (melewatkan trigger SQL), terlalu longgar (berkas yang kebetulan memuat kata itu), lalu terlalu ketat (`insert` dan nilainya di baris berbeda).
+4. **Hal "terdaftar tapi tidak pernah hidup"** dilaporkan **37**, ternyata tidak terukur sama sekali — **25 / 0 / 61** tergantung cara. Angka itu ditarik; yang tersisa 10 hal yang diperiksa satu per satu dengan tangan.
+
+**ATURAN**: sebelum melaporkan angka hasil penyisiran, **JELASKAN cara menghitungnya** dan **SEBUTKAN apa yang mungkin luput** dari cara itu. **Angka tanpa keterangan cara adalah angka yang tidak bisa dinilai** — pembacanya tidak punya sarana menaksir seberapa jauh ia bisa salah.
+
+**ATURAN KEDUA, dan ini yang paling penting**: penyisiran kode **TIDAK BOLEH** dipakai untuk menyimpulkan sesuatu **"tidak pernah terjadi"**. Ia hanya bisa membuktikan sesuatu **ADA**. Untuk membuktikan sesuatu **TIDAK PERNAH** terjadi, **amati datanya** — jalankan sistemnya, lalu lihat nilai apa yang benar-benar muncul.
+
+Perbedaannya bukan soal ketelitian: `grep` menjawab "apakah tulisan ini ada di berkas", bukan "apakah keadaan ini pernah terjadi". Sebanyak apa pun polanya diperbaiki, pertanyaannya tetap berbeda dari yang ingin dijawab.
+
+## FAKTA TERVERIFIKASI — Snapshot Batch BEKERJA (24 Agu 2026)
+
+`production_batches.snapshotted_bom_version` **BENAR-BENAR DIISI**, di `startProductionBatch.ts:160`. `routing_snapshot_taken_at` juga dipakai di 11 tempat.
+
+Dicatat supaya **tidak diperiksa ulang**: kekhawatiran bahwa kekekalan biaya per batch "bocor" karena kolom snapshot tidak terisi **TIDAK TERBUKTI**. Kolom-kolom itu sempat masuk daftar "tidak pernah diisi" — daftar itu salah, hasil pengukuran yang jebol di atas.
+
 ## PELAJARAN TETAP — Test yang Mengukur Hal yang SALAH Akan Selalu Lulus (24 Agu 2026)
 
 Kalimat pemilik produk, dicatat apa adanya:

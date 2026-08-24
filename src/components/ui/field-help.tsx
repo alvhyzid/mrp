@@ -27,12 +27,17 @@ import { Help } from '@carbon/icons-react';
 //    bertab yang berat untuk satu kalimat penjelasan justru membuat penjelasannya
 //    terasa lebih rumit daripada pertanyaannya.
 //
-// Ukuran tombol 44x44 px mengikuti aturan responsive proyek (bisa ditekan jari,
-// termasuk jari bersarung tangan), walau ikonnya sendiri kecil.
+// AREA SENTUH 44x44 px mengikuti aturan responsive proyek (bisa ditekan jari, termasuk
+// jari bersarung tangan) -- TAPI area itu dibuat lewat lapisan absolut, bukan lewat
+// ukuran tombolnya. Lihat komentar panjang di dalam komponen: tombol yang benar-benar
+// setinggi 44px membuat baris label berikon lebih tinggi 8px daripada label biasa, dan
+// itu menggeser seluruh field di sebelahnya.
 export function FieldLabel({ children, help }: { children: ReactNode; help?: string }) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
 
+  // Tanpa help: dirender sebagai satu baris teks biasa. Tingginya kini SAMA dengan
+  // versi berikon (20px), jadi keduanya boleh berdampingan di satu grid tanpa bergeser.
   if (!help) {
     return <span className="text-sm font-medium text-foreground">{children}</span>;
   }
@@ -41,13 +46,27 @@ export function FieldLabel({ children, help }: { children: ReactNode; help?: str
     <span className="flex flex-col gap-1">
       <span className="flex items-start justify-between gap-2">
         <span className="text-sm font-medium text-foreground">{children}</span>
+        {/* TINGGI BARIS LABEL WAJIB SAMA, ada ikon maupun tidak.
+            //
+            // Versi pertama memakai tombol h-11 (44px) supaya target sentuhnya memenuhi
+            // aturan responsive. Akibatnya baris label BERIKON setinggi 28px sementara
+            // baris label biasa 20px -- terukur, bukan dikira-kira. Selisih 8px itu
+            // menggeser field di bawahnya, sehingga kolom berikon tidak pernah rata
+            // dengan kolom di sebelahnya. Pemilik produk melihatnya sebagai formulir
+            // yang "tidak rapi", dan memang begitu.
+            //
+            // Sekarang tombolnya seukuran ikonnya (20px, setinggi satu baris teks),
+            // TAPI area sentuhnya tetap 44x44 lewat lapisan tak terlihat yang
+            // diposisikan absolut (after:-inset-3 => 20 + 12 + 12 = 44). Area sentuh
+            // tidak ikut menentukan tinggi baris, jadi target sentuh TIDAK dikorbankan
+            // demi perataan -- keduanya didapat. */}
         <button
           type="button"
           aria-expanded={open}
           aria-controls={panelId}
           aria-label={open ? 'Tutup penjelasan kolom ini' : 'Apa maksud kolom ini?'}
           onClick={() => setOpen((v) => !v)}
-          className="-my-2 -mr-3 inline-flex h-11 w-11 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus:outline-none focus:outline-2 focus:outline-ring"
+          className="relative inline-flex h-5 w-5 shrink-0 items-center justify-center text-muted-foreground transition-colors after:absolute after:-inset-3 after:content-[''] hover:text-foreground focus:outline-none focus:outline-2 focus:outline-ring"
         >
           <Help size={16} />
         </button>

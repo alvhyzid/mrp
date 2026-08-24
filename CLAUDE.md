@@ -32,6 +32,60 @@ Baca KEDUA file ini secara penuh sebelum menulis kode apa pun. Semua keputusan d
 4. **Bila pemilik produk meminta penyimpangan dari standar: boleh, itu haknya.** Yang WAJIB: alasan dan detailnya dicatat di task terkait, supaya berbulan-bulan kemudian masih bisa dijelaskan kenapa angkanya berbeda dari standar baku.
 5. **Setiap angka keuangan yang ditampilkan ke pengguna harus bisa menjawab "ini metode apa"** lewat panel Asal-Usul (`ProvenanceInfoButton`) atau Kamus istilah — bukan angka yang muncul tanpa jejak metodenya.
 
+## Keputusan Biaya SDM — TIGA Golongan (final 23 Agu 2026, dipindahkan ke sini 24 Agu 2026)
+
+> **KENAPA ADA DI SINI, bukan cuma di task MRG-11**: keputusan yang menentukan **ARTI ANGKA** punya umur simpan pendek bila hanya hidup di task — task bisa ditutup dan tenggelam di antara 234 baris, sementara berkas ini dibaca setiap sesi. Lihat aturan "Keputusan yang Menentukan Arti Angka" di bawah.
+
+**TIGA GOLONGAN, bukan dua:**
+1. **DIRECT COST** — menempel ke batch.
+2. **MANUFACTURING OVERHEAD** — menempel ke produksi, **MASUK HPP**, dibagi ke batch bersama biaya direct.
+3. **GENERAL & ADMINISTRATIVE** — **TIDAK masuk HPP sama sekali**, langsung jadi beban periode.
+
+**Alasan tiga, bukan dua**: bila seluruh non-direct digabung jadi satu "indirect", gaji Direktur & General Manager ikut membebani HPP — keliru menurut standar akuntansi biaya, dan membuat produk terlihat lebih mahal dari kenyataan. Beban administrasi tidak pernah masuk biaya produk.
+
+**Panduan pemisahan**: overhead pabrik mendukung **PRODUKSI**; beban administrasi mendukung **PERUSAHAAN**, bukan produksi.
+
+**RUMUS FINAL per golongan:**
+- Biaya **DIRECT** per batch = total biaya karyawan direct sebulan (gaji + tunjangan + BPJS pemberi kerja) **÷ jumlah batch sebulan**.
+- Biaya **MANUFACTURING OVERHEAD** per batch = total biaya karyawan overhead pabrik sebulan **÷ jumlah batch sebulan**, masuk HPP bersama direct.
+- Biaya **GENERAL & ADMINISTRATIVE** = **tidak dibagi ke batch sama sekali**.
+
+**DASAR PEMBAGIAN: JUMLAH BATCH** (dikonfirmasi pemilik produk), berlaku untuk direct maupun overhead pabrik. Data untuk dasar lain (kuantitas hasil, jam mesin) tetap dikumpulkan lewat PRD-18 supaya bila kelak dasarnya diubah, datanya sudah ada.
+
+**HARIAN vs BULANAN — dua angka terpisah, jangan tertukar:**
+- **Harian** = pemantauan produktivitas, **TIDAK PERNAH** masuk HPP/Margin Watch, wajib berlabel "Produktivitas Harian — bukan biaya batch".
+- **Bulanan** = yang masuk HPP/Margin Watch, ditandai "perkiraan" selama bulan berjalan.
+
+**BERJALAN vs FINAL**: biaya batch berjalan **TIDAK DITIMPA** oleh perhitungan ulang akhir bulan — simpan **ketiganya** (berjalan, final, selisih). Selisih besar = masalah **KAPASITAS**, bukan biaya. Margin diakui saat **TERKIRIM**; pengiriman lintas bulan ikut **BULAN PRODUKSI**.
+
+**WEWENANG: Finance menetapkan LANGSUNG**, tanpa alur usulan HRD. Penggolongan adalah **kebijakan akuntansi** (wilayah Finance), bukan fakta kepegawaian (wilayah HRD). HRD menyediakan fakta, Finance menerjemahkannya. Penggantinya bukan persetujuan melainkan **JEJAK WAJIB**: siapa menetapkan, kapan, dari apa ke apa, alasannya — append-only, bertanggal berlaku. HRD boleh **melihat**, tidak boleh mengubah.
+
+**ATURAN KERAS**: karyawan DIRECT wajib jamnya tercatat di batch. **Bila tidak sanggup dicatat, JANGAN digolongkan direct.** Karyawan direct yang tidak muncul di labor log sebulan → peringatan, bukan blokir.
+
+**WAJIB DIJELASKAN DI LAYAR** (bukan opsional):
+- Biaya SDM per batch adalah **RATA-RATA per golongan**, bukan biaya batch itu sendiri — batch yang dikerjakan lebih lambat **tidak** terlihat lebih mahal. Efisiensi antar batch dilihat lewat **yield dan durasi tahap**, bukan biaya.
+- **11 dari 19 karyawan direct dibayar harian**, jadi biaya direct naik-turun mengikuti jumlah hari produksi. Rumusnya tetap benar; angkanya memang lebih berfluktuasi antar bulan — wajar, bukan kesalahan hitung.
+
+## Penggolongan 30 Karyawan Aktif PT ITM (final 23 Agu 2026)
+
+**DIRECT (19)** — Operator Produksi bulanan: Aziz Maulana, Diana Ayu Agustin, Ezra Ariya Septiano, Maylani Suhesti, Mi'asih, Muhammad Alif Alhamad, Rumanik. Operator Produksi harian/PHL: Bilal, Diah, Lely, Mayang, Mina, Nanda, Nindi, Yunita, Zidan, Rohmat. **Team Leader: Angga Ade Mahendra, Sutipa Handayani** — direct karena **ikut produksi penuh** dan namanya muncul di "siapa mengerjakan". *Pemicu peninjauan: bila kelak bergeser ke mengatur/mengawasi, golongannya ditinjau ulang — bertanggal berlaku, tidak mengubah biaya batch lama.*
+
+**MANUFACTURING OVERHEAD (5)** — Dina Melinda Cahya Purnama (Spv Produksi), Dimas Suryo Anantyo (Manager PPIC), Sandra Wedi Pradika (PPIC Jr. Spv), **Syaifulloh Alamsyah (Helper Gudang)** — menimbang kebutuhan **total beberapa batch sekaligus**, jamnya tidak bisa ditelusuri ke batch mana pun; penimbangan per batch dilakukan tim produksi yang sudah direct. **Darmini (Janitor)** — bekerja di pabrik **dan** kantor satu lokasi; untuk 1 orang tidak sepadan dipisah proporsional, dan arah konservatif dipilih sengaja: HPP sedikit **lebih tinggi** dari sebenarnya, bukan lebih rendah. *Pemicu peninjauan: bila jumlah petugas kebersihan atau lokasi bertambah.*
+
+**GENERAL & ADMINISTRATIVE (6)** — Alvan Handyka Yudha (Direktur), Bayu Oktavian Wibowo (General Manager), Ruud Ayu Dewanti (HR Generalist), Mega Asmarani (Staf Purchasing), **Asni Damayati (FAT Spv)** — FAT = Finance, Accounting, Tax, **Adhiskaprillia Nur Anissa (RnD Staff)** — tidak terlibat langsung di batch MLVT.
+
+**QC**: belum ada petugas QC tersendiri — tahap QC dikerjakan Spv Produksi yang merangkap. Karena Spv sudah Manufacturing Overhead, biayanya sudah tertangkap. Keterbatasan "pemeriksa = pelapor" dicatat di QMS-01 untuk audit BPOM/halal.
+
+## Keputusan yang Menentukan ARTI ANGKA Wajib Masuk CLAUDE.md (ditetapkan 24 Agu 2026)
+
+**Task menyimpan PEKERJAAN; CLAUDE.md menyimpan ATURAN.**
+
+Keputusan yang menentukan **arti sebuah angka** — golongan biaya, rumus, dasar pembagian, kapan sesuatu diakui, apa yang masuk HPP dan apa yang tidak — **WAJIB masuk berkas ini**, bukan hanya ke task.
+
+**Alasannya**: task bisa ditutup dan tenggelam di antara ratusan baris, sementara berkas ini dibaca setiap sesi. Aturan yang hanya hidup di task punya umur simpan pendek, dan begitu ia lupa, angkanya tetap keluar — hanya artinya yang berubah diam-diam.
+
+Ditemukan lewat audit 24 Agu 2026: seluruh keputusan biaya SDM dan penggolongan 30 karyawan hanya tercatat di MRG-10/MRG-11, tidak di sini.
+
 ## Aturan Bukti: "Jumlah Baris Identik" TIDAK LAGI Sah (ditetapkan 23 Agu 2026)
 Sejak situs production tersambung ke data nyata dan pemilik produk mulai MEMAKAI sistem, **jumlah baris memang berubah karena pemakaian yang sah**. Karena itu:
 
@@ -100,6 +154,55 @@ Aturan tampilan Daftar Tugas: **default seluruh modul TERTUTUP**, KECUALI modul 
 **Pengecualian ini DISENGAJA, bukan cacat.** Menyembunyikan hal yang paling genting di balik baris yang harus diklik dulu melawan tujuan penandaan SUPER URGENT itu sendiri: gunanya justru supaya terlihat tanpa dicari.
 
 **JANGAN "memperbaikinya" jadi seragam tertutup.** Keputusan D.2 tidak dicabut, dan sudah ditegaskan ulang oleh pemilik produk pada 24 Agu 2026 setelah melihat hasilnya. Modul yang cocok dengan saringan aktif juga tetap terbuka otomatis (F.2), dengan alasan sejenis: hasil saringan yang tersembunyi sama saja dengan saringan yang tidak bekerja.
+
+## Status Mencatat KEPUTUSAN, Bukan Menyimpulkan dari Angka (ditetapkan 24 Agu 2026)
+
+**Status yang berubah sendiri sebagai efek samping perhitungan akan berbohong begitu angkanya dikoreksi.**
+
+Kasus yang melahirkan aturan ini: lot yang saldonya mencapai nol **tidak** otomatis berstatus `consumed`. Alasannya — lot bersaldo nol **masih bisa menerima penyesuaian**: stok opname bisa menemukan barangnya ternyata masih ada, atau ada koreksi pencatatan. Bila nol otomatis berarti `consumed`, koreksi itu harus **menghidupkan kembali** lot yang sudah ditutup, dan statusnya berbohong dua kali — sekali saat menutup terlalu cepat, sekali lagi saat dibuka kembali.
+
+**Yang dilakukan sebagai gantinya**: saring **TAMPILANNYA**, bukan ubah statusnya. Daftar stok menampilkan lot bersaldo > 0 secara bawaan, dengan pilihan "tampilkan yang sudah habis". Nilai `consumed` tetap ada, disisakan untuk **penutupan yang DISENGAJA**.
+
+## Saat Memperbaiki Satu Contoh dari Sebuah Kelas Cacat, Periksa Tetangganya (ditetapkan 24 Agu 2026)
+
+**ATURAN**: saat memperbaiki satu contoh dari sebuah kelas cacat, **PERIKSA tabel dan berkas yang sama untuk contoh lain dari kelas itu, dan LAPORKAN temuannya** — meski tidak diperbaiki sekaligus.
+
+Kasus yang melahirkannya: **PRD-12** lahir dari kelas "kolom tidak pernah diisi", menutup satu kolom (`work_orders.status`), dan meninggalkan **DUA kolom sekelas DI TABEL YANG SAMA** — `actual_start_at` dan `actual_completed_at` — yang terlihat jelas saat mengerjakannya.
+
+Cara membaca kelasnya: pekerjaan yang benar bukan *"isi kolom status"*, melainkan *"Work Order mencatat perjalanannya"*. Pertanyaan yang membedakan keduanya: **"cacat ini contoh dari apa?"** — bukan "apa yang diminta task ini?"
+
+## Prinsip Penamaan Field (ditetapkan 24 Agu 2026)
+
+**Nama field menjawab APA YANG TERJADI KALAU SAYA ISI INI, bukan istilah bukunya.** Istilah yang dipindahkan dari literatur ERP berbahasa Inggris tanpa diterjemahkan ke bahasa orang pabrik adalah **cacat, bukan ketepatan**.
+
+Contoh yang melahirkan aturan ini: **"Reorder Point"**. Dalam buku manajemen persediaan, "point" berarti **ambang**; dalam bahasa sehari-hari, "point" berarti titik atau lokasi. Konsepnya sederhana — sisa stok yang memicu pembelian — dan namanya yang membingungkan.
+
+Perhatikan juga: **menerjemahkan saja tidak cukup.** "Titik Pemesanan Ulang" adalah terjemahan yang benar dan tetap tidak dimengerti siapa pun. Yang harus hilang bukan bahasa Inggrisnya, melainkan **penyembunyian cara kerjanya**.
+
+**Uji yang sudah berlaku tetap berlaku**: bila label itu tidak akan pernah diucapkan orang di lantai produksi, label itu **belum selesai**.
+
+## Rasa Bingung Pemilik Produk Adalah ALAT DETEKSI (ditetapkan 24 Agu 2026)
+
+**Bila orang yang membangun bisnisnya sendiri tidak paham sebuah field untuk apa, kemungkinan besar memang tidak ada yang tahu — dan field itu perlu diperiksa KEBERADAANNYA, bukan dijelaskan.**
+
+Terbukti tiga kali dalam satu hari, ketiganya lewat pemeriksaan kode, bukan dugaan:
+- **Reorder Point** — hanya diteruskan `listStockSummary` ke tampilan, nol perhitungan.
+- **Reorder Qty** — nol pemakai sama sekali.
+- **Shelf Life** — `lots.expiry_date` selalu diketik manual; **tidak ada satu pun kode yang menghitungnya dari `shelf_life_days`**.
+
+**BATAS YANG TEGAS: menambahkan ikon bantuan TIDAK menyelesaikan field golongan C.** Memberi penjelasan untuk field yang seharusnya tidak ada hanya menyembunyikan masalahnya di balik kalimat yang enak dibaca. Golongan C diselesaikan dengan **menyembunyikan atau menghapus**, bukan dengan menjelaskan.
+
+**NUANSA YANG WAJIB DIPERIKSA sebelum menghapus**: "tidak dipakai perhitungan" TIDAK otomatis berarti "tidak berguna". Nomor Registrasi BPOM dan Kode Halal juga nol perhitungan, tapi keduanya **catatan kepatuhan** yang justru diminta pemilik produk. Golongan C hanya untuk field yang **tidak dipakai perhitungan DAN tidak punya kegunaan sebagai catatan**.
+
+## Satu Istilah di Layar untuk Semua Departemen (ditetapkan 24 Agu 2026)
+
+Label di layar **TIDAK boleh berbeda antar departemen**, sekalipun tiap departemen punya sebutan sendiri.
+
+**Alasannya**: bila gudang melihat "sisa stok" dan finance melihat "saldo persediaan" untuk hal yang sama, begitu mereka rapat bersama **tidak ada yang tahu apakah sedang membicarakan hal yang sama**. Untuk sistem multi-tenant lebih buruk lagi — tiap tenant punya kombinasi sendiri, dan laporan lintas perusahaan jadi mustahil dibandingkan.
+
+**Yang dilakukan**: sinonim per departemen **DICATAT di Kamus dan dipakai untuk PENCARIAN**, bukan untuk mengubah label. Satu tampilan, banyak pintu masuk — orang yang mencari "saldo persediaan" menemukan istilah yang dipakai sistem, beserta keterangan bahwa keduanya sama.
+
+**BATAS**: JANGAN mengubah label apa pun berdasarkan Kamus sebelum jawabannya **DIKONFIRMASI**. Jawaban yang baru berstatus "dijawab" belum boleh mengubah layar.
 
 ## Aturan Status/Alert/Tombol Baru — Hanya Bersama Pemicunya (ditetapkan 24 Agu 2026)
 

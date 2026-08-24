@@ -138,6 +138,37 @@ Rp7.198,47 = **31,3%** dari harga jual Rp23.000/box. Ini fakta biaya, bukan peni
 terhadap target margin apa pun (target GPM 35% sudah dicabut dari sistem, lihat Bagian A
 migrasi 26 Agu 2026).
 
+## Status di database — DIPERBARUI 25 Agu 2026 (SELURUH data MLVT sudah dihapus)
+
+**BAGIAN DI BAWAH INI SUDAH TIDAK MENGGAMBARKAN KEADAAN SEKARANG.** Ia dipertahankan
+sebagai rekaman keadaan 27 Agu 2026, tapi jangan dipakai sebagai acuan kerja.
+
+Pada 25 Agu 2026 seluruh data studi kasus MLVT **dihapus dari database** (Bagian 3), atas
+keputusan pemilik produk, supaya rantainya dimasukkan ulang dari nol lewat layar — bukan
+lewat migrasi. Keadaan PT ITM sekarang: **0 item, 0 BOM, 0 routing, 0 pelanggan,
+0 supplier, 0 SO, 0 PO**.
+
+**Akibatnya untuk siapa pun yang memakai dokumen ini sebagai acuan pengisian:**
+
+- Yang perlu dibuat BUKAN 16 item, melainkan **24 item**. Enam belas bahan baku (daftarnya
+  di bagian bawah dokumen ini) DITAMBAH delapan item yang dulu dibuat migrasi: empat premix
+  (PMBASE / PMSPC / PMHOT / PMSW-MLVT), WIP Sachet MLVT ETAWAFIT, FG MLVT ETAWAFIT (box),
+  Sachet Roll Etawa Fit, dan Box Etawa Fit.
+- **Tidak ada lagi baris BOM yang "sudah terisi sebagian"** — seluruh enam BOM dibangun dari
+  kosong, termasuk yang dulu terisi 4 dari 6 baris.
+- Routing 10 tahap juga **dibangun ulang dari nol**.
+
+**Kemampuan membangun ulang lewat migrasi TETAP ADA dan sudah dibuktikan** (dijalankan dua
+kali di project uji, hasilnya identik: 8 item, 6 BOM, 7 baris BOM, 2 routing, 10 langkah,
+1 pelanggan, 1 SO, 1 PO klien). Itu jaring pengaman, bukan rencana — rencananya tetap
+pengisian manual lewat layar.
+
+**SYARAT yang menopang jaring pengaman itu**: migrasi MLVT MENOLAK JALAN tanpa pabrik
+bernama persis `KL Bizhub (Karanglo)`, dan **tidak ada migrasi mana pun yang membuat pabrik
+itu**. Jangan menghapus atau mengganti namanya.
+
+---
+
 ## Status baris komponen BOM di database (27 Agu 2026)
 
 Sesuai instruksi eksplisit pemilik produk — **item bahan baku TIDAK dibuat** oleh Claude

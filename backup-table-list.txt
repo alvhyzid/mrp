@@ -17,6 +17,7 @@ build_task_urgency_history
 build_tasks
 companies
 company_settings
+company_settings_history
 customer_delivery_addresses
 customer_po_approvals
 customer_purchase_order_lines

@@ -1,0 +1,35 @@
+// FONDASI CARBON DESIGN SYSTEM (DS-01, 25 Agu 2026).
+//
+// ================= URUTAN @use DI BAWAH INI PENTING, JANGAN DIACAK =================
+//
+// Sass hanya mengizinkan sebuah modul dikonfigurasi SEKALI, dan hanya SEBELUM ada
+// yang memuatnya. Dua percobaan pertama gagal justru karena urutan:
+//   1. `@use '@carbon/react/scss/theme' with ($theme: 'g10')`
+//      -> "$map2: \"g10\" is not a map" — $theme menuntut PETA token, bukan nama tema.
+//   2. memuat `themes` lebih dulu lalu `@use '@carbon/react' with (...)`
+//      -> "This module was already loaded, so it can't be configured using with" —
+//         `themes` diam-diam sudah memuat `config`, sehingga config tidak bisa
+//         dikonfigurasi lagi sesudahnya.
+// Jadi `config` WAJIB dikonfigurasi di baris paling pertama.
+//
+// $css--font-face: false — SUDAH DIUJI, bukan pilihan gaya. Tanpa ini build gagal
+// dengan 90 galat "Module not found: ~@ibm/plex/...". Sebabnya Carbon memancarkan
+// url('~@ibm/plex/...'), dan awalan `~` adalah sintaks webpack — Next.js 16 memakai
+// Turbopack yang tidak mengenalnya. IBM Plex dimuat lewat next/font di app/layout.tsx,
+// cara yang justru lebih baik karena fontnya disajikan dari server sendiri.
+@use '@carbon/styles/scss/config' with ($css--font-face: false);
+
+// Tema Gray 10 — keputusan pemilik produk D-2 (25 Agu 2026):
+// "untuk ERP yang dipandangi berjam-jam, kontras yang lebih lembut lebih nyaman."
+// Mode gelap masuk backlog, BUKAN v1.
+@use '@carbon/styles/scss/themes';
+@use '@carbon/styles/scss/theme';
+@use '@carbon/react';
+
+// Tema dipancarkan EKSPLISIT lewat mixin resmi Carbon, bukan lewat `with ($theme:)`.
+// Percobaan ketiga memakai `with` dan hasilnya token :root tetap putih (#ffffff),
+// karena token itu dipancarkan modul lain yang sudah memuat tema bawaannya sendiri.
+// Memancarkannya sendiri di :root membuat hasilnya bisa DIPERIKSA, bukan diharapkan.
+:root {
+  @include theme.theme(themes.$g10);
+}

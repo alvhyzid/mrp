@@ -1,22 +1,3 @@
-> **CATATAN KEPALA — DIBACA LEBIH DULU (ditambahkan 24 Agu 2026 saat dokumen ini masuk repo)**
->
-> Dokumen ini adalah **potret per 20 Agustus 2026**. Isinya TIDAK diperbarui mengikuti
-> keadaan sistem, dan sebagian faktanya **sudah berubah** sejak ditulis:
->
-> - Jumlah test bukan lagi 192, melainkan **275 test di 46 berkas** (per 24 Agu 2026).
-> - "Routing non-linear" (S3) sudah **diturunkan urgensinya jadi Bisa Menunggu**, bukan lagi
->   dianggap penghalang.
-> - Peran alamat & kontak pelanggan (address/contact roles) **SUDAH SELESAI** lewat PMB-07b —
->   di dokumen ini masih tertulis sebagai pekerjaan yang belum ada.
->
-> **KEBENARAN STATUS TERKINI ADA DI DAFTAR TUGAS PEMBANGUNAN (`build_tasks`), BUKAN DI SINI.**
-> Dokumen ini dipakai sebagai **peta cakrawala** — apa saja yang kelak mungkin dibutuhkan modul
-> Sales — bukan sebagai daftar pekerjaan yang sedang berjalan. Sebelum mengerjakan apa pun yang
-> disebut di sini, periksa dulu task terkait di Daftar Tugas.
->
-> Keputusan strategis yang mengikat dokumen ini tercatat di modul **SLS** pada Daftar Tugas
-> (lihat SLS-01 sampai SLS-05 dan SLS-90).
-
 # Tinjauan Arsitektur — FABRIX Sales Domain v0.1 → Arahan v0.2
 
 **Dari:** Claude Fable 5 (peninjau arsitektur, sesuai mandat §40 dokumen sumber)

@@ -184,6 +184,10 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Dashboard Proyek AI', href: '/ai-project', visible: (role) => role === 'company_admin' || role === 'general_manager', icon: ChartLine },
       { label: 'Process Mining', href: '/process-mining', visible: (role) => role === 'company_admin' || role === 'general_manager', icon: Analytics },
       { label: 'Data Perusahaan', href: '/company', visible: (role) => role === 'company_admin', icon: SettingsIcon },
+      // Setelan Perhitungan dipisah dari Data Perusahaan karena isinya beda jenis:
+      // yang satu identitas perusahaan, yang satu angka yang menentukan arti seluruh
+      // biaya. General Manager ikut melihatnya — ia yang bertanggung jawab atas angkanya.
+      { label: 'Setelan Perhitungan', href: '/company/setelan', visible: (role) => role === 'company_admin' || role === 'general_manager', icon: SettingsIcon },
       { label: 'Tim & Undangan', href: '/team', visible: (role) => role === 'company_admin', icon: UserMultiple },
       { label: 'Profil Saya', href: '/profile', visible: () => true, icon: UserAvatar }
     ]

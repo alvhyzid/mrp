@@ -16,9 +16,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const MIN_PASSED = 300;   // sekarang 320 (+2 dari tests/auth_user_lewat_helper_watchdog.test.ts, TT) -- ruang ~20
+const MIN_PASSED = 307;   // sekarang 327 (+7 dari tests/company_settings_mst26.test.ts, DS-1) -- ruang ~20
 const MAX_SKIPPED = 10;   // sekarang 7 dilewati sadar (2 pengawas data nyata)
-const EXPECTED_FILES = 53;  // +storage_ikut_terhapus (JJ.1), +backup_table_list_lengkap (LL), +auth_user_lewat_helper_watchdog (TT)
+const EXPECTED_FILES = 54;  // +storage_ikut_terhapus (JJ.1), +backup_table_list_lengkap (LL), +auth_user_lewat_helper_watchdog (TT), +company_settings_mst26 (DS-1)
 
 const arg = process.argv[2] || 'test-results.json';
 const file = path.isAbsolute(arg) ? arg : path.join(process.cwd(), arg);

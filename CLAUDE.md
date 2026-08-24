@@ -281,6 +281,21 @@ Alasannya bukan kerapian arsitektur. Sistem ini dijual sebagai SaaS; tenant kedu
 
 **Ditemukan lewat sensus 25 Agu 2026**: dari 24 langkah mendirikan perusahaan dari nol, beberapa langkah TIDAK punya jalur lewat layar sama sekali — termasuk pabrik, work center, shift, dan seluruh 17 setelan perusahaan (periode gajian, jam kerja standar, tarif BPJS, metode biaya). Ketiadaan itu tidak pernah terasa karena PT ITM sudah punya semuanya dari migrasi dan skrip.
 
+## Dua Jalur Hidup untuk Hal yang Sama Adalah CACAT (ditetapkan 25 Agu 2026)
+
+**Setelah komponen bersama ada, menulis elemen mentah untuk hal yang sama adalah CACAT, bukan pilihan.**
+
+Diukur 25 Agu 2026 di 54 berkas TSX: **26 `<button>`, 27 `<input>`, 25 `<table>` ditulis mentah** — berdampingan dengan komponen bersama yang melakukan hal yang sama persis.
+
+**Yang mentah TIDAK ikut berubah saat komponen bersama diperbaiki.** Itu mekanismenya, dan mekanisme itu sudah menggigit berkali-kali:
+- RSP-01 memperbaiki komponen tabel bersama, dan **meninggalkan 8 halaman** yang menulis tabelnya sendiri.
+- Aturan bantuan-klik ditulis, komponennya dibuat, dan **18 tempat masih memakai tooltip hover** karena mereka tidak lewat komponen itu.
+- Palet warna disalin dengan benar ke 88 tempat, sementara variabel terpusatnya meleset — **dua sistem warna yang saling tidak cocok**.
+
+Polanya selalu sama: perbaikan diterapkan di satu jalur, jalur kedua tidak ikut, dan hasilnya terlihat seperti perbaikan yang "sudah diterapkan" padahal separuh layar tidak berubah.
+
+**Ini tidak bisa diselesaikan dengan disiplin — hanya dengan pengawas.** Aturan yang harus diingat setiap kali menulis JSX akan dilanggar, persis seperti sebelumnya. Pengawasnya dicatat sebagai bagian DS-2: gagal keras bila ada `<button>`/`<input>`/`<table>` mentah di berkas halaman, dengan daftar pengecualian eksplisit dan beralasan (mis. tabel cetak surat jalan).
+
 ## Aturan Responsive — WAJIB di Semua Halaman (ditetapkan 23 Agu 2026)
 1. **Seluruh halaman WAJIB responsive terhadap semua ukuran layar** — HP, tablet, laptop, monitor lebar. TIDAK ada layar HP terpisah: satu kode, satu halaman, susunannya menyesuaikan lebar layar.
 2. **Responsive BUKAN tampilan yang sama diperkecil.** Tabel 8 kolom yang diperkecil sampai muat di HP tetap tidak terbaca — yang benar, susunannya BERUBAH BENTUK saat layar menyempit (informasinya sama, penyajiannya berbeda). Pola yang dipakai: tabel banyak kolom → kartu bertumpuk di layar sempit (satu baris = satu kartu, kolom tersusun ke bawah); navigasi samping → menu buka-tutup; modal lebar → layar penuh di HP; field form → satu kolom penuh di layar sempit; kolom tidak penting boleh disembunyikan di layar sempit TAPI harus tetap bisa dibuka, jangan hilang tanpa jalan melihatnya.

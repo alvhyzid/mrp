@@ -14,7 +14,7 @@ interaksi menentukan apakah layar **bisa dipakai**, sementara visual menentukan 
 | Golongan | Temuan utama | Ukuran |
 |---|---|---|
 | **E** Aksesibilitas | `role=` hanya 5 kemunculan di 54 berkas | belum terukur penuh |
-| **C** Interaksi | 18 `title=` — bantuan yang hanya muncul saat kursor lewat | 18 titik |
+| **C** Interaksi | 18 `title=` — **dinaikkan ke golongan E**, lihat E.2 | 18 titik |
 | **B** Komponen | Elemen HTML mentah berdampingan dengan komponen bersama | 81 elemen mentah |
 | **A** Visual | **Dua sistem warna berjalan bersamaan dan saling tidak cocok** | 88 + 11 titik |
 
@@ -56,6 +56,11 @@ Yang membuatnya serius: **kesepuluh warna yang ditulis tangan itu nilai token Ca
 
 **Sebabnya bisa dijelaskan**: warna yang ditulis langsung disalin apa adanya, sedangkan
 variabel CSS melewati konversi ke HSL dan pembulatannya menggeser satu-dua satuan.
+
+**INI BUKAN KECEROBOHAN.** Ini akibat menyalin dari ingatan tanpa satu sumber. Orang yang
+menulisnya melakukan hal yang benar — mengambil nilai Carbon — dan tetap menghasilkan dua
+sistem yang tidak cocok, karena tidak ada satu tempat yang bisa dirujuk. **Tidak bisa
+diperbaiki dengan disiplin, hanya dengan struktur.**
 
 **Akibatnya**: elemen yang memakai variabel dan elemen yang memakai heks langsung
 menampilkan biru yang **berbeda tipis** — cukup untuk membuat layar terasa "dibuat orang
@@ -117,6 +122,24 @@ hanya untuk label singkat non-esensial).
 ---
 
 ## E — AKSESIBILITAS
+
+### E.2 Delapan belas bantuan yang tidak bisa dipakai di HP — prioritas TERTINGGI
+
+**Dinaikkan dari golongan C ke E pada 25 Agu 2026 atas keputusan pemilik produk**, dan
+alasannya tepat: tooltip hover bukan soal kenyamanan interaksi, melainkan soal **bisa atau
+tidak bisa dipakai sama sekali**. Di HP dan tablet tidak ada "kursor lewat" — penjelasannya
+tidak pernah muncul. Dan justru perangkat itulah yang dipakai di lantai produksi.
+
+Delapan belas `title=` berarti delapan belas penjelasan yang **tidak terlihat oleh separuh
+penggunanya**. Aturan penggantinya sudah ditulis (bantuan dibuka dengan KLIK), komponennya
+sudah ada (`FieldLabel`), tapi baru dipakai 3 berkas.
+
+**Cara memperbaikinya: aturan pramuka DS-3** — layar yang disentuh, dibereskan sekalian.
+Bukan proyek penyisiran tersendiri, karena penyisiran sekali jalan akan meninggalkan yang
+lahir sesudahnya.
+
+Padanan Carbon: `Toggletip` (klik) untuk penjelasan yang perlu dibaca, `Tooltip` (hover)
+hanya untuk label singkat yang tidak esensial.
 
 ### E.1 Belum terukur penuh — dan itu sendiri temuan
 

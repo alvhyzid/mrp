@@ -385,6 +385,44 @@ Keduanya tidak bertentangan: **navigasi adalah nama modul; isi halaman adalah ya
 
 **Lebar penuh hanya menyentuh LEBAR, bukan yang lain.** Sesi berikutnya: jangan "memperbaikinya" jadi bergrid.
 
+## Data Berkala Wajib Punya Pemicu Berkala (ditetapkan 25 Agu 2026)
+
+**Ini kelas yang lebih berbahaya daripada "menulis saat dibaca", dan perlu dibedakan darinya.**
+
+Riwayat KPI hanya bertambah **bila ada yang kebetulan membuka halamannya**. Akibatnya grafik trennya merekam **KAPAN ORANG MEMBUKA HALAMAN**, bukan **bagaimana angkanya bergerak** — dua hal yang sangat berbeda, dan **tidak ada apa pun di layar yang memberi tahu bedanya**.
+
+**Ini bukan cacat teknis melainkan ANGKA YANG BERBOHONG TANPA TERLIHAT BERBOHONG**: grafiknya rapi, sumbunya benar, datanya nyata, artinya salah. Tidak ada pesan galat, tidak ada test merah, tidak ada yang mengeluh.
+
+**ATURAN**: data berkala — tren, riwayat, snapshot — **WAJIB punya pemicu yang berkala**: jadwal, atau tindakan sadar. **Data berkala yang lahir dari kunjungan halaman merekam kebiasaan menjelajah, bukan kenyataan.**
+
+Penjaganya: `tests/membaca_tidak_menulis.test.ts`.
+
+## "Kebetulan Benar" — Kelas Cacat Keempat (ditetapkan 25 Agu 2026)
+
+**Bila sebuah hal ditulis berulang di banyak tempat dan kebenarannya bergantung pada penulisnya mengingat caranya, ia butuh SATU PINTU BERSAMA — bukan aturan.**
+
+Kasus yang melahirkannya: **36 halaman menulis cara mengambil tanda pengenalnya masing-masing. 35 kebetulan benar, 1 tidak** — dan tidak ada satu tempat pun yang bisa diperiksa untuk mengetahuinya. Halaman yang ke-36 tidak bisa dibuka sama sekali selama berhari-hari.
+
+**"Kebetulan benar" adalah bentuk yang paling sulit ditemukan, karena tidak ada yang mengeluh sampai yang berikutnya lahir.** Ia tidak muncul di test, tidak muncul di typecheck, dan tidak muncul di layar — sampai satu salinan meleset.
+
+Ini **contoh keempat** dari kelas yang sama, setelah:
+1. **88 warna heksadesimal** ditulis tangan di 54 berkas — nilainya benar, sistemnya dua.
+2. **Tombol, input, dan tabel mentah** berdampingan dengan komponen bersama.
+3. **Tooltip hover di 18 tempat** setelah aturan bantuan-klik ditulis dan komponennya dibuat.
+4. **36 pengambil tanda pengenal**, 35 kebetulan benar.
+
+**Yang membedakannya dari ketiga sebelumnya**: tiga yang pertama terlihat di layar begitu diperhatikan. Yang keempat **tidak terlihat sama sekali** — halaman yang salah tampak seperti halaman yang butuh login.
+
+## Penjaga yang Salah Tuduh Diperketat, Bukan Dibiarkan (ditetapkan 25 Agu 2026)
+
+**Penjaga yang salah tuduh melatih orang mengabaikan hasilnya.** Begitu sebuah pengawas dikenal sering keliru, orang berhenti membaca keluarannya — dan sejak saat itu ia tidak menjaga apa pun, sambil tetap terlihat menjaga.
+
+Sudah terjadi dua kali dalam satu hari, keduanya langsung diperketat:
+- Penjaga layar publik **menuduh halaman POD menulis `<input>` mentah**, padahal yang ditemukannya kata itu di dalam kalimat penjelasan. → komentar dibuang sebelum disisir.
+- Penjaga jalur baca **menuduh tiga berkas menulis ke basis data**, padahal ketiganya memanggil `visiting.delete(...)` — Set JavaScript biasa di penelusuran BOM. → polanya mewajibkan rantai `.from('tabel')` mendahuluinya.
+
+**Berlaku untuk seluruh pengawas di proyek ini**: pengawas yang keliru diperbaiki di giliran yang sama, bukan dicatat sebagai "nanti".
+
 ## DS-RULES — Gerbang Rencana Carbon Sebelum Membangun Layar (ditetapkan 25 Agu 2026)
 
 Ditetapkan atas permintaan eksplisit pemilik produk setelah gelombang layar publik selesai. **Berlaku untuk SETIAP layar internal yang dibangun atau dimigrasikan sejak sekarang, tanpa kecuali.**

@@ -61,6 +61,63 @@ const DIKECUALIKAN: Record<string, string> = {
     'mencatat jejak akses dokumen terbatas — justru itu tujuannya'
 };
 
+// ============================================================================
+// CATATAN UNTUK SESI BERIKUTNYA — JANGAN "MEMPERBAIKI" PENGECUALIAN DI ATAS
+// ============================================================================
+// Kalimat pemilik produk, disalin apa adanya supaya tidak luntur:
+//
+//   "Halaman dokumen memang mencatat siapa membuka berkas terbatas. Di situ 'membaca yang
+//    menulis' bukan cacat — itu gunanya.
+//    Bedanya tegas: ia menulis CATATAN TENTANG pembacaan, bukan menulis ulang data yang
+//    sedang dibaca."
+//
+// Jejak akses yang hanya tercatat bila seseorang menekan tombol tambahan adalah jejak yang
+// tidak ada. Mencabut penulisan ini akan terlihat seperti merapikan, dan sebenarnya menghapus
+// satu-satunya bukti siapa membuka dokumen yang aksesnya dibatasi.
+
+
+/// Ke-36 halaman yang SUDAH ADA saat pintu bersama dibuat (25 Agu 2026). Daftar ini hanya
+/// boleh MENYUSUT — tiap halaman yang dimigrasikan ke Carbon sekalian dipindah ke authedFetch,
+/// lalu barisnya dihapus dari sini.
+const DAFTAR_LAMA: string[] = [
+  'features/ai-project/pages/AiProjectDashboardPage.tsx',
+  'features/ai-readiness/pages/AiReadinessPage.tsx',
+  'features/attendance/pages/AttendancePage.tsx',
+  'features/auth/pages/DashboardPage.tsx',
+  'features/auth/pages/DebugPage.tsx',
+  'features/auth/pages/InviteAcceptPage.tsx',
+  'features/auth/pages/ProfilePage.tsx',
+  'features/auth/pages/ResetPasswordPage.tsx',
+  'features/auth/pages/TestTenantPage.tsx',
+  'features/company/pages/CompanySettingsPage.tsx',
+  'features/documents/pages/DocumentsPage.tsx',
+  'features/hr/pages/HrDashboardPage.tsx',
+  'features/kamus/pages/KamusPage.tsx',
+  'features/kpi/pages/KpiPage.tsx',
+  'features/kpi/pages/MyKpiPage.tsx',
+  'features/mrp/components/NotificationBell.tsx',
+  'features/mrp/pages/BomsPage.tsx',
+  'features/mrp/pages/BuildTasksPage.tsx',
+  'features/mrp/pages/CustomerPurchaseOrdersPage.tsx',
+  'features/mrp/pages/CustomersPage.tsx',
+  'features/mrp/pages/ItemsPage.tsx',
+  'features/mrp/pages/OperatingProfitPage.tsx',
+  'features/mrp/pages/PodConfirmationPage.tsx',
+  'features/mrp/pages/PurchasingPage.tsx',
+  'features/mrp/pages/RoutingsPage.tsx',
+  'features/mrp/pages/SalesOrdersPage.tsx',
+  'features/mrp/pages/ShipmentsPage.tsx',
+  'features/mrp/pages/SuratJalanPrintPage.tsx',
+  'features/mrp/pages/WhatsNewPage.tsx',
+  'features/mrp/pages/WorkOrdersPage.tsx',
+  'features/navigasi/AppShellCarbon.tsx',
+  'features/ppic/pages/PpicDashboardPage.tsx',
+  'features/process-mining/pages/ProcessMiningPage.tsx',
+  'features/production/pages/ProductionDashboardPage.tsx',
+  'features/team/pages/TeamManagePage.tsx',
+  'features/warehouse/pages/WarehouseDashboardPage.tsx',
+];
+
 function berkasServer(dir: string, keluar: string[] = []): string[] {
   for (const nama of readdirSync(dir)) {
     if (nama === 'node_modules' || nama.startsWith('.')) continue;
@@ -143,5 +200,73 @@ describe('AUD-36 — jalur baca tidak boleh menulis', () => {
         'Server proyek ini HANYA menerima Authorization: Bearer -- tidak ada jalur cookie.\n' +
         'Pakai authedFetch/authedJson dari src/lib/authedFetch.ts.'
     ).toEqual([]);
+  });
+
+  it('halaman BARU tidak boleh mengambil tanda pengenal sendiri — wajib lewat pintu bersama', () => {
+    // AUD-37 / II.5 — PENGAWAS SUPAYA YANG KE-37 TIDAK LAHIR DENGAN CARA LAMA.
+    //
+    // Pemindahan 36 halaman lama ke authedFetch dilakukan BERTAHAP, bersama migrasi Carbon
+    // masing-masing. Itu keputusan yang benar: menyentuh 36 halaman sekaligus untuk perubahan
+    // yang tidak terlihat di layar adalah perubahan besar tanpa cara memeriksanya.
+    //
+    // Tapi "bertahap" tanpa pengawas berarti DUA JALUR HIDUP BERDAMPINGAN selama berbulan-
+    // bulan, dan itu kelas cacat yang sudah dicatat berkali-kali. Daftar di bawah adalah
+    // daftar yang HANYA BOLEH MENYUSUT. Halaman baru yang mengambil sesinya sendiri akan
+    // membuat test ini merah.
+    //
+    // CARA MEMAKAINYA saat memigrasikan sebuah halaman: pindahkan ia ke authedFetch, lalu
+    // HAPUS barisnya dari daftar ini. Bila daftarnya bertambah, seseorang sedang menambah
+    // jalur kedua.
+    const BELUM_DIPINDAH = new Set<string>(DAFTAR_LAMA);
+
+    const telusuri = (dir: string, keluar: string[] = []): string[] => {
+      for (const nama of readdirSync(dir)) {
+        if (nama === 'node_modules' || nama.startsWith('.')) continue;
+        const q = join(dir, nama);
+        if (statSync(q).isDirectory()) telusuri(q, keluar);
+        else if (nama.endsWith('.tsx')) keluar.push(q);
+      }
+      return keluar;
+    };
+
+    const baru: string[] = [];
+    for (const p of telusuri(join(AKAR, 'src', 'features'))) {
+      const rel = p.slice(join(AKAR, 'src').length + 1);
+      const isi = tanpaKomentar(readFileSync(p, 'utf8'));
+      if (!/auth\.getSession\(\)/.test(isi)) continue;
+      if (!BELUM_DIPINDAH.has(rel)) baru.push(rel);
+    }
+
+    expect(
+      baru,
+      `Halaman berikut mengambil tanda pengenalnya SENDIRI, padahal sudah ada pintu bersama:\n` +
+        `  ${baru.join('\n  ')}\n\n` +
+        'Pakai authedFetch/authedJson dari src/lib/authedFetch.ts.\n' +
+        'Diukur 25 Agu 2026: 36 halaman menulis caranya masing-masing; 35 KEBETULAN benar dan\n' +
+        'yang ke-36 tidak bisa dibuka sama sekali selama berhari-hari tanpa ada yang tahu.'
+    ).toEqual([]);
+  });
+
+  it('daftar halaman yang belum dipindah HANYA BOLEH MENYUSUT', () => {
+    // Menjaga arah. Tanpa ini, seseorang bisa "memperbaiki" test di atas dengan menambahkan
+    // berkasnya ke daftar -- yang justru kebalikan dari tujuannya.
+    const telusuri = (dir: string, keluar: string[] = []): string[] => {
+      for (const nama of readdirSync(dir)) {
+        if (nama === 'node_modules' || nama.startsWith('.')) continue;
+        const q = join(dir, nama);
+        if (statSync(q).isDirectory()) telusuri(q, keluar);
+        else if (nama.endsWith('.tsx')) keluar.push(q);
+      }
+      return keluar;
+    };
+    const masihMengambilSendiri = telusuri(join(AKAR, 'src', 'features')).filter((p) =>
+      /auth\.getSession\(\)/.test(tanpaKomentar(readFileSync(p, 'utf8')))
+    ).length;
+
+    expect(
+      masihMengambilSendiri,
+      `Sekarang ${masihMengambilSendiri} halaman masih mengambil sesinya sendiri; saat daftar ` +
+        `ini dibuat jumlahnya ${DAFTAR_LAMA.length}. Angka ini TIDAK BOLEH NAIK.`
+    ).toBeLessThanOrEqual(DAFTAR_LAMA.length);
   });
 });

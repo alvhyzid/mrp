@@ -3250,3 +3250,104 @@ Environment kerja sesi ini **tidak punya Docker maupun `pg_dump`** (dicoba: `sup
 
 ## Cara pakai dokumen ini
 Tiap sesi baru: tambah bagian baru di ATAS (paling terbaru di atas) dengan format sama — apa yang dikerjakan, apa yang ditemukan, apa yang belum, bukti konkret (bukan ringkasan "sudah beres"). Jangan hapus riwayat sesi sebelumnya.
+
+---
+
+# 25 Agu 2026 — Angka yang Berbohong Tanpa Terlihat Berbohong
+
+## Pelajarannya, disimpan sebagai kelas tersendiri
+
+Halaman KPI menyimpan snapshot **di dalam jalur baca**. Dari sisi teknis itu pelanggaran biasa
+"membuka halaman tidak boleh menulis". Yang membuatnya kelas BARU, dan lebih berbahaya, adalah
+akibatnya pada **arti angkanya**:
+
+> Riwayat KPI hanya bertambah bila ada yang **kebetulan membuka halamannya**. Grafik trennya
+> merekam **KAPAN ORANG MEMBUKA HALAMAN**, bukan bagaimana angkanya bergerak — dua hal yang
+> sangat berbeda, dan tidak ada apa pun di layar yang memberi tahu bedanya.
+>
+> Ini bukan cacat teknis melainkan **angka yang berbohong tanpa terlihat berbohong**:
+> grafiknya rapi, sumbunya benar, datanya nyata, **artinya salah**.
+
+**ATURAN**: data berkala — tren, riwayat, snapshot — **wajib punya pemicu yang berkala**:
+jadwal, atau tindakan sadar. **Data berkala yang lahir dari kunjungan halaman merekam
+kebiasaan menjelajah, bukan kenyataan.**
+
+## Yang membuat kelas ini sulit ditemukan
+
+Tidak ada satu pun sinyal biasa yang menyala. Build lulus. Typecheck lulus. Test lulus.
+Layarnya tampil benar. Angkanya nyata — bukan karangan, bukan salah hitung.
+
+Yang salah **hanya artinya**, dan arti tidak punya pesan galat.
+
+## Riwayat KPI yang sudah terlanjur ada — diperiksa, bukan dikira
+
+Isi `kpi_snapshots` seluruhnya **tiga baris**, dan ketiganya lahir dalam **satu momen yang
+sama**: 24 Agu 2026, pukul 17:40:48 sampai 17:40:52 — **rentang empat detik**. Itu satu
+kunjungan halaman, bukan tiga periode pengukuran.
+
+| Metrik | Periode | Nilai |
+|---|---|---|
+| Margin kontribusi | 26 Jul – 25 Agu 2026 | 0 |
+| Laba operasional bulanan | 26 Jul – 25 Agu 2026 | −73.352.547 |
+| Nilai persediaan | 24 Agu 2026 (satu hari) | 0 |
+
+**Konsekuensinya lebih ringan dari yang dikhawatirkan**: dengan satu titik per metrik,
+**tidak ada tren sama sekali** — grafiknya tidak bisa menyesatkan tentang arah, karena tidak
+ada arah. Perbandingan periode sebelumnya juga kosong.
+
+**Yang perlu diperhatikan untuk besok**: "Nilai persediaan" berperiode **satu hari**. Dengan
+cara lama, kunjungan berikutnya di hari berbeda akan melahirkan titik kedua — dan sejak titik
+kedua itulah grafiknya mulai merekam hari-hari kunjungan sebagai kalau-kalau ia perjalanan
+angka. Cara lama sudah dicabut sebelum itu terjadi.
+
+**Menunggu keputusan pemilik produk** (dicatat sebagai KPI-05): tiga baris ini dipertahankan
+atau dihapus. Keduanya bisa dipertahankan alasannya, dan pilihannya bukan milik Claude Code.
+
+## Tabel potret waktu lain — disisir seluruhnya, hasilnya bersih
+
+Tujuh tabel di skema menyimpan potret waktu. Diperiksa satu per satu **siapa yang menulisnya**:
+
+| Tabel | Ditulis oleh | Jalur |
+|---|---|---|
+| `ai_project_progress_snapshots` | `takeAiProjectSnapshot` | aksi sengaja |
+| `sales_order_line_margin_snapshots` | `lockMarginBaseline`, `updateMarginFloorThreshold` | aksi sengaja |
+| `sales_order_line_feasibility_snapshots` | `lockFeasibilityBaseline` | aksi sengaja |
+| `production_batch_*_snapshots` (3 tabel) | `startProductionBatch` | aksi sengaja |
+| `kpi_snapshots` | **dulu jalur baca** | **sudah diperbaiki** |
+| `ai_capability_status` | **dulu jalur baca** | **sudah diperbaiki** |
+
+**Nol tabel tersisa yang lahir dari kunjungan halaman.** Penamaan fungsinya sendiri yang
+membuat penyisiran ini mungkin — `take*`, `lock*`, `start*` menyatakan niat, sehingga jalurnya
+terbaca tanpa membuka isinya.
+
+## Gerbang yang tidak menjaga apa-apa
+
+Dicatat terpisah karena ia bukan soal angka, melainkan soal **izin**:
+
+> Gerbang yang menentukan boleh-tidaknya sebuah kemampuan AI dipakai membaca tabel yang hanya
+> terisi bila seseorang membuka dashboard. Artinya sebuah kemampuan bisa terkunci atau terbuka
+> **tergantung siapa yang kebetulan membuka halaman apa hari itu**.
+
+Bila tidak ada yang pernah membuka dashboard-nya, gerbang menjawab "terkunci" untuk segalanya.
+Bila dibuka berbulan-bulan lalu, ia menjawab dari keadaan yang sudah basi. Keduanya salah, dan
+keduanya diam.
+
+**Disisir**: `isCapabilityUnlocked` adalah **satu-satunya** gerbang yang membaca tabel. Seluruh
+pemeriksaan izin lain hidup di `src/lib/roles.ts`, yang punya **nol panggilan basis data** —
+ia fungsi murni atas nama peran. Jadi kelas ini ada **tepat satu kali**, dan sekarang tertutup:
+gerbangnya menghitung langsung.
+
+## "Kebetulan benar" — bentuk yang paling sulit ditemukan
+
+36 halaman menulis cara mengambil tanda pengenalnya masing-masing. **35 kebetulan benar, 1
+tidak.** Halaman yang ke-36 tidak bisa dibuka sama sekali selama berhari-hari, dan tidak ada
+yang tahu — karena tidak ada satu tempat pun yang bisa diperiksa.
+
+Yang membedakannya dari tiga contoh sebelumnya di kelas yang sama (88 warna tulis tangan,
+elemen mentah, tooltip hover): ketiganya **terlihat di layar** begitu diperhatikan. Yang
+keempat tidak terlihat sama sekali — halaman yang salah tampak seperti halaman yang butuh
+login.
+
+Pemindahan 35 sisanya dilakukan **bertahap** bersama migrasi Carbon masing-masing (AUD-37),
+dengan pengawas yang gagal keras bila halaman **ke-37** lahir dengan cara lama. Daftarnya
+hanya boleh menyusut.

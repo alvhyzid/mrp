@@ -45,7 +45,7 @@ Dokumen ini hanya menyimpan **alamat**, bukan isi.
 | **Pemberitahuan** | `components/notification/usage` — memilih inline vs toast vs actionable |
 | **Navigasi** | `components/ui-shell-header/usage` · `components/ui-shell-left-panel/usage` |
 | **Bantuan & penjelasan** | `components/toggletip/usage` (klik) · `components/tooltip/usage` (hover) |
-| **Label & status** | `components/tag/usage` — **Tag untuk menggolongkan/menyaring, BUKAN status field.** Status field dijawab `warn`/`warnText` atau `invalid`/`invalidText` pada kontrolnya |
+| **Label & status** | `components/tag/usage` — **Tag untuk menggolongkan/menyaring, BUKAN status field.** Status field dijawab `warn`/`warnText` atau `invalid`/`invalidText` pada kontrolnya. Contoh BENAR & SALAH di bawah |
 | **Keadaan memuat** | `components/skeleton/usage` |
 
 ## WAJIB: setiap layar yang selesai dimigrasikan menyertakan alamat katalognya
@@ -150,6 +150,26 @@ indeksnya lagi, jangan menebak.
 | **Dasbor** | Keadaan memuat + Keadaan kosong | **Tidak ada pola dasbor**; acuan terdekat keadaan kosong & memuat |
 | **Kerangka aplikasi** (header, navigasi samping) | Header global | Menyentuh seluruh layar — rencananya disodorkan lebih dulu (DS-RULES C.4) |
 | **Panel detail yang mekar dari baris** | Penyingkapan bertahap | Dipakai panel Detail Item (MST-16) |
+
+## Tag: kapan BENAR, kapan SALAH — dua contoh dari proyek ini sendiri
+
+Dicatat 25 Agu 2026 karena keduanya terjadi berdekatan, dan **komponennya sama persis**. Yang
+membedakan bukan bentuk, melainkan **apa yang ditandainya**.
+
+**SALAH — pilot pertama, layar Setelan perhitungan.** `<Tag>` dipakai menandai field yang
+"Belum diisi". Itu **status sebuah field**, bukan penggolongan: ia berubah begitu orang
+mengetik, ia melekat pada satu kontrol, dan tidak ada yang akan pernah menyaring daftar
+berdasarkan "belum diisi". Akibatnya 17 pil berbaris di satu layar, dan sudut membulatnya
+terlihat seperti Carbon ditimpa padahal Tag Carbon **memang** berbentuk pil menurut
+spesifikasinya. Yang benar: `warn`/`warnText` bawaan kontrolnya.
+
+**BENAR — Master Item, kolom Tipe.** `<Tag>` dipakai menandai tipe item (Bahan Baku, Kemasan,
+WIP, Barang Jadi) dan status aktif/nonaktif. Itu **penggolongan**: jumlahnya tetap, tidak
+berubah saat orang mengetik, melekat pada barisnya, dan memang dipakai memilah daftar.
+
+**Uji yang membedakan keduanya, satu pertanyaan**: *"apakah masuk akal MENYARING daftar
+berdasarkan ini?"* Kalau ya, Tag. Kalau tidak, ia status — dan status dijawab kontrolnya
+sendiri.
 
 ## Yang TIDAK dijawab Carbon — ini yang ditanyakan ke pemilik produk
 

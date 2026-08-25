@@ -1,0 +1,286 @@
+// Gaya halaman Master Item (DS-05).
+//
+// SELURUH warna, ukuran, dan jarak memakai TOKEN Carbon. Nol warna heksadesimal,
+// nol angka px yang tidak disebut alasannya.
+@use '@carbon/react/scss/spacing';
+@use '@carbon/react/scss/theme';
+@use '@carbon/react/scss/type';
+
+.item-halaman {
+  padding: spacing.$spacing-06 spacing.$spacing-05 spacing.$spacing-09;
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-05;
+}
+
+.item-kelompok {
+  @include type.type-style('label-01');
+  color: theme.$text-secondary;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.item-judul {
+  @include type.type-style('productive-heading-04');
+  margin-block-end: spacing.$spacing-03;
+}
+
+.item-teks--redup {
+  @include type.type-style('body-01');
+  color: theme.$text-secondary;
+}
+
+.item-kode {
+  font-weight: 600;
+}
+
+.item-angka {
+  font-variant-numeric: tabular-nums;
+}
+
+.item-judul-kolom,
+.item-label {
+  display: inline-flex;
+  align-items: center;
+  gap: spacing.$spacing-02;
+}
+
+// ============================================================================
+// PANEL DETAIL (MST-16) — satu pintu masuk, seluruh aksi di dalamnya
+// ============================================================================
+.item-detail {
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-06;
+  padding: spacing.$spacing-05 0;
+}
+
+.item-detail__judul {
+  @include type.type-style('productive-heading-03');
+}
+
+.item-detail__daftar {
+  border-block-start: 1px solid theme.$border-subtle;
+}
+
+.item-detail__baris {
+  display: grid;
+  gap: spacing.$spacing-02;
+  padding: spacing.$spacing-04 0;
+  border-block-end: 1px solid theme.$border-subtle;
+}
+
+.item-detail__baris dt {
+  @include type.type-style('label-01');
+  color: theme.$text-secondary;
+}
+
+.item-detail__baris dd {
+  @include type.type-style('body-01');
+  min-inline-size: 0;
+  overflow-wrap: break-word;
+}
+
+@media (min-width: 42rem) {
+  .item-detail__baris {
+    grid-template-columns: 14rem 1fr;
+    gap: spacing.$spacing-05;
+  }
+}
+
+// AKSI MERUSAK DITEMPATKAN TERPISAH DAN BERJAUHAN (aturan tetap proyek).
+// Di layar sentuh jari jauh lebih besar daripada kursor, dan aksi yang tidak bisa dibatalkan
+// tidak boleh berjarak satu jari dari aksi sehari-hari.
+.item-detail__aksi {
+  display: flex;
+  flex-wrap: wrap;
+  gap: spacing.$spacing-03;
+}
+
+@media (min-width: 42rem) {
+  .item-detail__hapus {
+    margin-inline-start: auto;
+  }
+}
+
+.item-bagian {
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-04;
+}
+
+.item-bagian__judul {
+  @include type.type-style('productive-heading-03');
+}
+
+.item-bagian__subjudul {
+  @include type.type-style('heading-compact-01');
+  color: theme.$text-secondary;
+}
+
+.item-bagian__pengantar {
+  @include type.type-style('body-01');
+  color: theme.$text-secondary;
+}
+
+.item-dokumen {
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-03;
+}
+
+.item-dokumen__baris {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: spacing.$spacing-03;
+  padding: spacing.$spacing-04;
+  background-color: theme.$layer;
+}
+
+.item-dokumen__isi {
+  min-inline-size: 0;
+}
+
+.item-dokumen__judul {
+  @include type.type-style('body-compact-01');
+  font-weight: 600;
+}
+
+.item-dokumen__aksi {
+  display: flex;
+  align-items: center;
+  gap: spacing.$spacing-03;
+}
+
+.item-lampir {
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-05;
+  padding: spacing.$spacing-05;
+  background-color: theme.$layer;
+}
+
+.item-lampir__aksi {
+  display: flex;
+  gap: spacing.$spacing-03;
+}
+
+.item-kisi,
+.item-form {
+  display: grid;
+  gap: spacing.$spacing-07;
+  // Satu kolom di layar sempit dijamin STRUKTURAL: kolom kedua hanya muncul bila benar-benar
+  // muat 18rem. Tidak ada media query yang bisa salah.
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+}
+
+.item-form__lebar {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-05;
+}
+
+.item-pola {
+  display: flex;
+  flex-wrap: wrap;
+  gap: spacing.$spacing-03;
+}
+
+.item-modal__catatan {
+  margin-block-start: spacing.$spacing-05;
+  color: theme.$text-secondary;
+}
+
+// ============================================================================
+// DEVIASI RESMI — TABEL JADI KARTU BERTUMPUK DI LAYAR SEMPIT
+// ============================================================================
+// Carbon TIDAK melakukan ini: DataTable-nya menggulir menyamping di layar sempit.
+//
+// Aturan proyek melarang gulir menyamping di lebar mana pun, dan alasannya bukan estetika —
+// tabel delapan kolom yang diperkecil sampai muat di HP tetap tidak terbaca, sementara kolom
+// yang terpotong diam-diam sudah jadi cacat berulang di proyek ini (RSP-01, RSP-02).
+//
+// Yang dilakukan: di bawah 42rem, tiap BARIS berubah jadi satu KARTU dengan kolomnya tersusun
+// ke bawah. Nama kolomnya dibawa lewat atribut `data-label` pada tiap sel, jadi informasinya
+// SAMA — hanya penyajiannya yang berubah bentuk.
+//
+// SESI BERIKUTNYA: ini deviasi yang sudah didokumentasikan, bukan kelalaian. Jangan
+// "memperbaikinya" jadi tabel yang menggulir.
+@media (max-width: 41.98rem) {
+  .item-tabel thead {
+    // Judul kolom pindah ke tiap sel lewat data-label; menyisakan kepala tabel di layar sempit
+    // hanya menampilkan deretan judul tanpa isinya.
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  // SETIAP bagian tabel dijadikan block, termasuk <tbody>.
+  //
+  // Versi pertama hanya mengubah <tr> dan <td>, dan hasilnya BARIS SALING MENINDIH: selama
+  // <tbody> masih `table-row-group`, peramban tetap menata anak-anaknya sebagai baris tabel
+  // dan tinggi tetap bawaan Carbon ikut berlaku. Ditemukan dari MELIHAT tangkapan layarnya —
+  // pengukuran "nol gulir menyamping" tetap hijau padahal barisnya tumpang tindih.
+  .item-tabel,
+  .item-tabel tbody {
+    display: block;
+    inline-size: 100%;
+  }
+
+  .item-tabel tbody tr {
+    display: block;
+    block-size: auto;
+    min-block-size: 0;
+    margin-block-end: spacing.$spacing-05;
+    padding: spacing.$spacing-03 0;
+    background-color: theme.$layer;
+  }
+
+  .item-tabel tbody td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: spacing.$spacing-05;
+    inline-size: 100%;
+    max-inline-size: none;
+    block-size: auto;
+    min-block-size: 0;
+    padding-block: spacing.$spacing-03;
+  }
+
+  .item-tabel tbody td::before {
+    content: attr(data-label);
+    @include type.type-style('label-01');
+    color: theme.$text-secondary;
+    flex-shrink: 0;
+  }
+
+  // Sel tombol mekar: tetap sebaris, tapi TANPA label — ia bukan kolom data.
+  .item-tabel tbody td.cds--table-expand {
+    justify-content: flex-start;
+    padding-block: 0;
+  }
+
+  .item-tabel tbody td.cds--table-expand::before {
+    content: none;
+  }
+
+  // Baris detail memakai seluruh lebar dan TIDAK dijadikan kartu — ia isi, bukan ringkasan.
+  .item-tabel tbody tr.cds--expandable-row {
+    margin-block-start: calc(-1 * #{spacing.$spacing-05});
+  }
+
+  .item-tabel tbody tr.cds--expandable-row td {
+    display: block;
+    padding-inline: spacing.$spacing-05;
+  }
+
+  .item-tabel tbody tr.cds--expandable-row td::before {
+    content: none;
+  }
+}

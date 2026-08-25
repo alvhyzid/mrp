@@ -100,7 +100,6 @@ const DAFTAR_LAMA: string[] = [
   'features/mrp/pages/BuildTasksPage.tsx',
   'features/mrp/pages/CustomerPurchaseOrdersPage.tsx',
   'features/mrp/pages/CustomersPage.tsx',
-  'features/mrp/pages/ItemsPage.tsx',
   'features/mrp/pages/OperatingProfitPage.tsx',
   'features/mrp/pages/PodConfirmationPage.tsx',
   'features/mrp/pages/PurchasingPage.tsx',

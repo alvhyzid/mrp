@@ -1,15 +1,44 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import type { ColumnDef } from '@tanstack/react-table';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { DataTable } from '@/components/ui/data-table';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { FieldLabel } from '@/components/ui/field-help';
+import { authedFetch as panggilApi, SesiTidakValid } from '@/lib/authedFetch';
+import {
+  Button,
+  Checkbox,
+  ComposedModal,
+  DataTable,
+  DataTableSkeleton,
+  FileUploader,
+  InlineNotification,
+  Modal,
+  ModalBody,
+  ModalFooter,
+  ModalHeader,
+  Pagination,
+  Select as CarbonSelect,
+  SelectItem as CarbonSelectItem,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableExpandedRow,
+  TableExpandHeader,
+  TableExpandRow,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableToolbar,
+  TableToolbarContent,
+  TableToolbarSearch,
+  Tag,
+  TextInput,
+  Toggletip,
+  ToggletipButton,
+  ToggletipContent
+} from '@carbon/react';
+import { Information } from '@carbon/icons-react';
 import {
   SHELF_LIFE_UNITS,
   shelfLifeToDays,
@@ -17,8 +46,6 @@ import {
   formatShelfLife,
   type ShelfLifeUnit
 } from '@/features/mrp/shelfLife';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { canViewFinancialData, isCompanyLeadership } from '@/lib/roles';
 import { itemTypes, typeLabels, typeBadgeVariant } from '../itemTypeLabels';
 import { formatCurrency, formatNumberId } from '@/lib/currency';
@@ -102,6 +129,39 @@ const emptyForm = {
   is_active: true
 };
 
+/// Warna Tag mengikuti TIPE ITEM, bukan selera. Dipetakan dari nama varian lama supaya
+/// tampilannya tidak berubah arti bagi orang yang sudah terbiasa.
+function warnaTagTipe(tipe: string): 'blue' | 'teal' | 'purple' | 'magenta' | 'gray' {
+  const peta: Record<string, 'blue' | 'teal' | 'purple' | 'magenta' | 'gray'> = {
+    raw_material: 'blue',
+    packaging: 'teal',
+    wip: 'purple',
+    finished_good: 'magenta'
+  };
+  return peta[tipe] ?? 'gray';
+}
+
+/// Label field dengan penjelasan yang dibuka lewat KLIK.
+///
+/// Aturan tetap proyek: penjelasan bantuan tidak pernah dibuka hanya dengan sentuhan kursor.
+/// Penjelasan hover TIDAK BISA DIPAKAI SAMA SEKALI di HP dan tablet — dan justru perangkat
+/// itulah yang dipakai di lantai produksi. Toggletip Carbon dibuka dengan klik.
+function LabelBantuan({ teks, children }: { teks: string; children: React.ReactNode }) {
+  return (
+    <span className="item-label">
+      {teks}
+      <Toggletip align="top">
+        <ToggletipButton label={`Penjelasan ${teks}`}>
+          <Information size={16} />
+        </ToggletipButton>
+        <ToggletipContent>
+          <p>{children}</p>
+        </ToggletipContent>
+      </Toggletip>
+    </span>
+  );
+}
+
 export default function ItemsPage() {
   const router = useRouter();
   const [checkingAccess, setCheckingAccess] = useState(true);
@@ -151,21 +211,14 @@ export default function ItemsPage() {
   const [newSupplierPriceForm, setNewSupplierPriceForm] = useState({ supplier_id: '', reference_price: '', price_valid_from: '' });
   const [supplierPriceFormMessage, setSupplierPriceFormMessage] = useState('');
 
-  const getAccessToken = useCallback(async () => {
-    if (!supabase) return null;
-    const { data } = await supabase.auth.getSession();
-    return data?.session?.access_token ?? null;
+  // AUD-35/AUD-37 — memakai pintu bersama src/lib/authedFetch.ts, bukan pengambil token
+  // sendiri. Halaman ini yang PERTAMA dipindah; sisanya menyusul bersama migrasi Carbon
+  // masing-masing. Daftar yang belum dipindah dijaga tests/membaca_tidak_menulis.test.ts,
+  // dan daftar itu hanya boleh MENYUSUT.
+  const authedFetch = useCallback(async (path: string, options: RequestInit = {}) => {
+    const response = await panggilApi(path, options);
+    return { ok: response.ok, body: await response.json() };
   }, []);
-
-  const authedFetch = useCallback(
-    async (path: string, options: RequestInit = {}) => {
-      const accessToken = await getAccessToken();
-      if (!accessToken) throw new Error('Sesi tidak valid.');
-      const response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}`, ...(options.headers || {}) } });
-      return { ok: response.ok, body: await response.json() };
-    },
-    [getAccessToken]
-  );
 
   const loadItemDocs = useCallback(
     async (itemId: number) => {
@@ -202,12 +255,9 @@ export default function ItemsPage() {
     fd.append('entity_id', String(item.item_id));
     fd.append('link_role', docForm.doc_type);
 
-    const accessToken = await getAccessToken();
-    const response = await fetch('/api/documents', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}` },
-      body: fd
-    });
+    // FormData mengatur Content-Type-nya sendiri beserta boundary-nya; panggilApi tahu itu
+    // dan tidak menimpanya.
+    const response = await panggilApi('/api/documents', { method: 'POST', body: fd });
     const body = await response.json();
     setDocStatus('idle');
     if (!response.ok) {
@@ -227,25 +277,22 @@ export default function ItemsPage() {
   };
 
   const loadItems = useCallback(async () => {
-    const accessToken = await getAccessToken();
-    if (!accessToken) return;
-
     setItemsLoading(true);
-    const response = await fetch('/api/items', {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-    const data = await response.json();
-
-    if (!response.ok) {
-      setItemsError(data.error || 'Gagal memuat daftar item.');
-      setItemsLoading(false);
-      return;
+    try {
+      const response = await panggilApi('/api/items');
+      const data = await response.json();
+      if (!response.ok) {
+        setItemsError(data.error || 'Gagal memuat daftar item.');
+        setItemsLoading(false);
+        return;
+      }
+      setItems(data.items || []);
+      setItemsError('');
+    } catch (e) {
+      setItemsError(e instanceof SesiTidakValid ? 'Sesi Anda sudah berakhir. Silakan masuk lagi.' : String(e));
     }
-
-    setItems(data.items || []);
-    setItemsError('');
     setItemsLoading(false);
-  }, [getAccessToken]);
+  }, []);
 
   useEffect(() => {
     const checkAccessAndLoad = async () => {
@@ -255,16 +302,21 @@ export default function ItemsPage() {
         return;
       }
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData?.session) {
-        router.replace('/login?redirectTo=/items');
+      // Pemeriksaan sesi ikut lewat pintu bersama. `SesiTidakValid` dilempar bila memang
+      // tidak ada sesi -- halaman ini yang memutuskan apa yang terjadi berikutnya, bukan
+      // pembungkusnya.
+      let meResponse: Response;
+      try {
+        meResponse = await panggilApi('/api/me');
+      } catch (e) {
+        if (e instanceof SesiTidakValid) {
+          router.replace('/login?redirectTo=/items');
+          return;
+        }
+        setCheckingAccess(false);
+        setAccessDenied(true);
         return;
       }
-
-      const accessToken = sessionData.session.access_token;
-      const meResponse = await fetch('/api/me', {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
       const meData = await meResponse.json();
 
       if (!meResponse.ok) {
@@ -315,15 +367,16 @@ export default function ItemsPage() {
     }
   };
 
+  // Modal berbahaya Carbon menggantikan window.confirm (DS-05).
+  //
+  // Bukan soal rupa: window.confirm memblokir seluruh peramban, tidak bisa memuat penekanan
+  // apa pun selain teks polos, dan tidak bisa menandai bahwa aksinya MERUSAK. Carbon
+  // menyediakan varian `danger` justru untuk ini.
+  const [itemAkanDihapus, setItemAkanDihapus] = useState<Item | null>(null);
+  const [hargaAkanDihapus, setHargaAkanDihapus] = useState<number | null>(null);
+
   const handleDeleteItem = async (item: Item) => {
-    // Konfirmasi menyebut NAMA item-nya. Konfirmasi yang cuma bertanya "yakin hapus?"
-    // tidak membantu orang yang salah menekan baris.
-    const confirmed = window.confirm(
-      `Hapus "${item.name}" (${item.item_code ?? 'tanpa kode'})?\n\n` +
-        'Bila item ini sudah dipakai di BOM, lot, atau dokumen pembelian, item TIDAK akan dihapus ' +
-        'melainkan dinonaktifkan, supaya riwayatnya tetap utuh.'
-    );
-    if (!confirmed) return;
+    setItemAkanDihapus(null);
     setItemActionMessage(null);
     const { ok, body } = await authedFetch(`/api/items/${item.item_id}`, { method: 'DELETE' });
     if (!ok) {
@@ -359,9 +412,8 @@ export default function ItemsPage() {
   };
 
   const handleDeleteItemSupplierPrice = async (priceId: number) => {
+    setHargaAkanDihapus(null);
     if (expandedItemPricesId === null) return;
-    const confirmed = window.confirm('Hapus supplier ini dari daftar pemasok bahan ini?');
-    if (!confirmed) return;
     const { ok } = await authedFetch(`/api/supplier-item-prices/${priceId}`, { method: 'DELETE' });
     if (ok) await loadItemPrices(expandedItemPricesId);
   };
@@ -403,13 +455,6 @@ export default function ItemsPage() {
     setFormStatus('pending');
     setFormMessage('');
 
-    const accessToken = await getAccessToken();
-    if (!accessToken) {
-      setFormStatus('error');
-      setFormMessage('Sesi Anda sudah tidak valid, silakan login ulang.');
-      return;
-    }
-
     const payload = {
       ...(editingItemId ? { item_id: editingItemId } : {}),
       item_code: form.item_code,
@@ -431,14 +476,17 @@ export default function ItemsPage() {
       is_active: form.is_active
     };
 
-    const response = await fetch('/api/items', {
-      method: editingItemId ? 'PATCH' : 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`
-      },
-      body: JSON.stringify(payload)
-    });
+    let response: Response;
+    try {
+      response = await panggilApi('/api/items', {
+        method: editingItemId ? 'PATCH' : 'POST',
+        body: JSON.stringify(payload)
+      });
+    } catch (e) {
+      setFormStatus('error');
+      setFormMessage(e instanceof SesiTidakValid ? 'Sesi Anda sudah tidak valid, silakan login ulang.' : String(e));
+      return;
+    }
     const data = await response.json();
 
     if (!response.ok) {
@@ -453,203 +501,230 @@ export default function ItemsPage() {
     setIsFormModalOpen(false);
     await loadItems();
   };
+  // ==========================================================================
+  // TABEL — DataTable Carbon
+  // ==========================================================================
+  // Bukan <table> polos, dan bukan komponen tabel bersama yang lama. Alasannya bukan
+  // keseragaman semata: pengurutan, baris yang bisa dimekarkan, toolbar, dan pencarian sudah
+  // DIBAWA DataTable Carbon lengkap dengan peran ARIA dan navigasi keyboardnya. Memakai tabel
+  // polos lalu menambal kemampuannya sendiri melahirkan jalur kedua yang tidak ikut berubah
+  // saat yang pertama diperbaiki.
+  //
+  // YANG DIPAKAI  : pengurutan, baris mekar, toolbar + pencarian, pembagian halaman.
+  // YANG TIDAK    : pemilihan banyak baris beserta aksi massalnya — SENGAJA. Satu-satunya aksi
+  //                 massal yang masuk akal di sini adalah menghapus, dan menghapus banyak item
+  //                 sekaligus justru yang paling ingin dihindari (lihat MST-16: hapus bahkan
+  //                 dikeluarkan dari baris tabel karena terlalu mudah tertekan).
+  const [cariItem, setCariItem] = useState('');
+  const [halaman, setHalaman] = useState(1);
+  const [ukuranHalaman, setUkuranHalaman] = useState(15);
 
-  const columns = useMemo<ColumnDef<Item>[]>(() => {
-    const baseColumns: ColumnDef<Item>[] = [
-      {
-        accessorKey: 'item_code',
-        header: 'Kode',
-        cell: ({ row }) => <span className="font-medium text-foreground">{row.original.item_code}</span>
-      },
-      { accessorKey: 'name', header: 'Nama' },
-      {
-        accessorKey: 'type',
-        header: 'Tipe',
-        cell: ({ row }) => (
-          <Badge variant={typeBadgeVariant[row.original.type] ?? 'secondary'}>
-            {typeLabels[row.original.type] ?? row.original.type}
-          </Badge>
-        )
-      },
-      { accessorKey: 'base_uom', header: 'Satuan Dasar' },
-      { accessorKey: 'purchase_uom', header: 'Satuan Beli' },
-      {
-        accessorKey: 'min_stock_level',
-        header: 'Min Stock',
-        cell: ({ row }) => <span className="text-data">{formatNumberId(row.original.min_stock_level, 2)}</span>
-      }
-    ];
+  const itemTersaring = useMemo(() => {
+    const k = cariItem.trim().toLowerCase();
+    if (!k) return items;
+    return items.filter((i) => `${i.item_code} ${i.name}`.toLowerCase().includes(k));
+  }, [items, cariItem]);
 
-    // standard_cost adalah data finansial (lihat "Kontrol Akses Data Finansial") —
-    // kolomnya cuma dirender sama sekali untuk role yang berhak, bukan cuma
-    // ditampilkan kosong. API sendiri sudah mengembalikan null untuk role lain,
-    // ini lapisan tambahan supaya kolomnya tidak nongol sama sekali di tabel.
-    if (canViewCost) {
-      baseColumns.push({
-        accessorKey: 'standard_cost',
-        header: () => (
-          <span className="flex items-center gap-1">
-            Biaya Standar
-            <ProvenanceInfoButton
-              label="Biaya Standar Item"
-              envelope={{
-                formula: 'Nilai input manual di form Item — tidak dihitung dari komponen/BOM apa pun. Dipakai sebagai harga master pada perhitungan biaya BOM, Margin Watch, dan Kelayakan Jadwal di seluruh sistem.',
-                inputs: [{ label: 'Cara isi/ubah', value: 'Form edit Item → field Biaya Standar' }]
-              }}
-            />
-          </span>
-        ),
-        cell: ({ row }) => <span className="text-data">{formatCurrency(row.original.standard_cost)}</span>
-      });
+  const itemHalamanIni = useMemo(
+    () => itemTersaring.slice((halaman - 1) * ukuranHalaman, halaman * ukuranHalaman),
+    [itemTersaring, halaman, ukuranHalaman]
+  );
+
+  const itemById = useMemo(() => new Map(items.map((i) => [String(i.item_id), i])), [items]);
+
+  // Kolom biaya standar HANYA dirender untuk peran yang berhak — bukan ditampilkan kosong.
+  // API sudah mengembalikan null untuk peran lain; ini lapisan kedua supaya kolomnya tidak
+  // muncul sama sekali.
+  const headers = useMemo(
+    () => [
+      { key: 'item_code', header: 'Kode' },
+      { key: 'name', header: 'Nama' },
+      { key: 'type', header: 'Tipe' },
+      { key: 'base_uom', header: 'Satuan dasar' },
+      { key: 'purchase_uom', header: 'Satuan beli' },
+      { key: 'min_stock_level', header: 'Stok minimum' },
+      ...(canViewCost ? [{ key: 'standard_cost', header: 'Biaya standar' }] : []),
+      { key: 'is_active', header: 'Status' }
+    ],
+    [canViewCost]
+  );
+
+  const rows = useMemo(
+    () =>
+      itemHalamanIni.map((i) => ({
+        id: String(i.item_id),
+        item_code: i.item_code,
+        name: i.name,
+        type: i.type,
+        base_uom: i.base_uom,
+        purchase_uom: i.purchase_uom,
+        min_stock_level: i.min_stock_level,
+        ...(canViewCost ? { standard_cost: i.standard_cost } : {}),
+        is_active: i.is_active
+      })),
+    [itemHalamanIni, canViewCost]
+  );
+
+  const isiSel = (item: Item, key: string): React.ReactNode => {
+    if (key === 'item_code') return <span className="item-kode">{item.item_code}</span>;
+    if (key === 'type') {
+      // TAG DI SINI BENAR, dan ini kebalikan dari kesalahan pilot pertama.
+      //
+      // Tag Carbon untuk MENGGOLONGKAN dan MENYARING — tipe item persis itu: sekumpulan
+      // golongan tetap yang dipakai memilah daftar. Yang keliru di pilot pertama adalah
+      // memakai Tag untuk STATUS SEBUAH FIELD ("belum diisi"), yang bukan penggolongan.
+      return <Tag type={warnaTagTipe(item.type)} size="sm">{typeLabels[item.type] ?? item.type}</Tag>;
     }
+    if (key === 'min_stock_level') return <span className="item-angka">{formatNumberId(item.min_stock_level, 2)}</span>;
+    if (key === 'standard_cost') return <span className="item-angka">{formatCurrency(item.standard_cost)}</span>;
+    if (key === 'is_active') {
+      return (
+        <Tag type={item.is_active ? 'green' : 'red'} size="sm">
+          {item.is_active ? 'Aktif' : 'Nonaktif'}
+        </Tag>
+      );
+    }
+    return String((item as unknown as Record<string, unknown>)[key] ?? '');
+  };
 
-    baseColumns.push(
-      {
-        accessorKey: 'is_active',
-        header: 'Status',
-        cell: ({ row }) => (
-          <Badge variant={row.original.is_active ? 'success' : 'critical'}>
-            {row.original.is_active ? 'Aktif' : 'Nonaktif'}
-          </Badge>
-        )
-      },
-      {
-        id: 'actions',
-        header: 'Aksi',
-        // MST-16 — SATU pintu masuk: "Detail". Sebelumnya kolom ini memuat "Edit" dan
-        // "Pemasok" berdampingan, dan "Pemasok" cuma muncul untuk sebagian tipe item
-        // sehingga barisnya tampak berbeda-beda tanpa alasan yang terbaca pengguna.
-        // Semua aksi (Ubah, Tambah Pemasok, Hapus) sekarang hidup DI DALAM Detail.
-        //
-        // HAPUS SENGAJA TIDAK ADA DI TABEL. Tombol hapus yang berjejer rapat di daftar
-        // panjang terlalu mudah tertekan pada baris yang salah — apalagi di layar sentuh.
-        cell: ({ row }) => (
-          <Button size="sm" variant="outline" onClick={() => toggleItemDetail(row.original)}>
-            {expandedItemPricesId === row.original.item_id ? 'Tutup' : 'Detail'}
-          </Button>
-        )
-      }
+  const judulKolom = (key: string, header: string) => {
+    if (key !== 'standard_cost') return header;
+    return (
+      <span className="item-judul-kolom">
+        {header}
+        <ProvenanceInfoButton
+          label="Biaya Standar Item"
+          envelope={{
+            formula:
+              'Nilai input manual di form Item — tidak dihitung dari komponen/BOM apa pun. Dipakai sebagai harga master pada perhitungan biaya BOM, Margin Watch, dan Kelayakan Jadwal di seluruh sistem.',
+            inputs: [{ label: 'Cara isi/ubah', value: 'Form edit Item → field Biaya Standar' }]
+          }}
+        />
+      </span>
     );
-
-    return baseColumns;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canManage, canViewCost, expandedItemPricesId]);
+  };
 
   const detailRows = (item: Item): { label: string; nilai: React.ReactNode }[] => {
     const atau = (v: string | null | undefined) => (v && String(v).trim() ? String(v) : '—');
     const baris: { label: string; nilai: React.ReactNode }[] = [
-      { label: 'Kode Item', nilai: atau(item.item_code) },
+      { label: 'Kode item', nilai: atau(item.item_code) },
       { label: 'Nama', nilai: item.name },
-      { label: 'Tipe', nilai: <Badge variant={typeBadgeVariant[item.type]}>{typeLabels[item.type]}</Badge> },
-      { label: 'Satuan Dasar/Pakai', nilai: atau(item.base_uom) },
-      { label: 'Satuan Beli', nilai: atau(item.purchase_uom) },
+      { label: 'Tipe', nilai: <Tag type={warnaTagTipe(item.type)} size="sm">{typeLabels[item.type]}</Tag> },
+      { label: 'Satuan dasar/pakai', nilai: atau(item.base_uom) },
+      { label: 'Satuan beli', nilai: atau(item.purchase_uom) },
       {
-        label: 'Faktor Konversi',
+        label: 'Faktor konversi',
         nilai: `1 ${item.purchase_uom || 'satuan beli'} = ${formatNumberId(item.uom_conversion_factor ?? 1)} ${item.base_uom || 'satuan dasar'}`
       },
-      { label: 'Shelf Life', nilai: formatShelfLife(item.shelf_life_days) },
+      { label: 'Shelf life', nilai: formatShelfLife(item.shelf_life_days) },
       {
-        label: 'Min Stock Level',
+        label: 'Stok minimum',
         nilai:
           item.min_stock_percent !== null && item.min_stock_percent !== undefined
             ? `${formatNumberId(item.min_stock_percent, 2)}% dari total yang pernah masuk`
             : formatNumberId(item.min_stock_level ?? 0, 2)
       },
+      // MST-21 masih menunggu keputusan pemilik produk: keduanya DIBIARKAN seperti sekarang,
+      // tidak disembunyikan dan tidak diberi penjelasan baru.
       { label: 'Reorder Point', nilai: item.reorder_point !== null ? formatNumberId(item.reorder_point, 2) : '—' },
       { label: 'Reorder Qty', nilai: item.reorder_qty !== null ? formatNumberId(item.reorder_qty, 2) : '—' }
     ];
     if (canViewCost) {
       baris.push({
-        label: 'Biaya Standar',
+        label: 'Biaya standar',
         nilai: item.standard_cost !== null ? formatCurrency(item.standard_cost, { maxDecimals: 0 }) : '—'
       });
     }
     baris.push(
-      { label: 'No. Registrasi BPOM', nilai: atau(item.bpom_registration_number) },
-      { label: 'Kode Halal', nilai: atau(item.halal_certificate_number) },
+      { label: 'No. registrasi BPOM', nilai: atau(item.bpom_registration_number) },
+      { label: 'Kode halal', nilai: atau(item.halal_certificate_number) },
       {
         label: 'Status',
-        nilai: <Badge variant={item.is_active ? 'success' : 'critical'}>{item.is_active ? 'Aktif' : 'Nonaktif'}</Badge>
+        nilai: (
+          <Tag type={item.is_active ? 'green' : 'red'} size="sm">
+            {item.is_active ? 'Aktif' : 'Nonaktif'}
+          </Tag>
+        )
       }
     );
     return baris;
   };
 
-  // MST-16 — panel Detail: SELURUH informasi bahan + aksi Ubah / Tambah Pemasok / Hapus.
+  // MST-16 TETAP UTUH: satu pintu masuk "Detail", dan seluruh aksi (Ubah / Tambah Pemasok /
+  // Hapus) hidup DI DALAMNYA. Hapus sengaja tidak ada di baris tabel — tombol hapus yang
+  // berjejer rapat di daftar panjang terlalu mudah tertekan pada baris yang salah.
   const renderItemDetail = (item: Item) => (
-    <div className="flex flex-col gap-5">
-      <div>
-        <h4 className="pb-2 text-sm font-semibold text-foreground">Detail &quot;{item.name}&quot;</h4>
-        <dl className="divide-y border bg-background">
-          {detailRows(item).map((baris) => (
-            <div key={baris.label} className="grid gap-1 px-4 py-2.5 sm:grid-cols-3 sm:gap-4">
-              <dt className="text-xs uppercase tracking-wide text-muted-foreground">{baris.label}</dt>
-              <dd className="min-w-0 break-words text-data sm:col-span-2">{baris.nilai}</dd>
-            </div>
-          ))}
-        </dl>
-      </div>
+    <div className="item-detail">
+      <h4 className="item-detail__judul">Detail “{item.name}”</h4>
+      <dl className="item-detail__daftar">
+        {detailRows(item).map((baris) => (
+          <div key={baris.label} className="item-detail__baris">
+            <dt>{baris.label}</dt>
+            <dd>{baris.nilai}</dd>
+          </div>
+        ))}
+      </dl>
 
       {canManage ? (
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={() => startEdit(item)}>
-              Ubah
-            </Button>
-            {/* Hapus ditaruh TERPISAH di kanan, bukan berdempetan dengan Ubah --
-                jarak fisik mengurangi salah tekan pada aksi yang paling merusak. */}
-            <Button size="sm" variant="destructive" className="sm:ml-auto" onClick={() => handleDeleteItem(item)}>
-              Hapus
-            </Button>
-          </div>
-          {itemActionMessage ? (
-            <p className={`text-sm ${itemActionMessage.kind === 'error' ? 'text-destructive' : 'text-success'}`}>
-              {itemActionMessage.message}
-            </p>
-          ) : null}
+        <div className="item-detail__aksi">
+          <Button size="md" kind="tertiary" onClick={() => startEdit(item)}>
+            Ubah
+          </Button>
+          {/* Aksi merusak ditempatkan TERPISAH dan BERJAUHAN dari aksi biasa (aturan tetap
+              proyek). Di layar sentuh jari jauh lebih besar daripada kursor, dan aksi yang
+              tidak bisa dibatalkan tidak boleh berjarak satu jari dari aksi sehari-hari. */}
+          <Button size="md" kind="danger--tertiary" className="item-detail__hapus" onClick={() => setItemAkanDihapus(item)}>
+            Hapus
+          </Button>
         </div>
       ) : null}
 
-      {renderItemDocuments(item)}
+      {itemActionMessage ? (
+        <InlineNotification
+          kind={itemActionMessage.kind === 'error' ? 'error' : 'success'}
+          title={itemActionMessage.kind === 'error' ? 'Gagal' : 'Berhasil'}
+          subtitle={itemActionMessage.message}
+          onCloseButtonClick={() => setItemActionMessage(null)}
+          lowContrast
+        />
+      ) : null}
 
+      {renderItemDocuments(item)}
       {item.type === 'raw_material' || item.type === 'packaging' ? renderItemSuppliers(item) : null}
     </div>
   );
 
   const renderItemDocuments = (item: Item) => (
-    <div className="flex flex-col gap-3">
-      <div>
-        <h4 className="text-sm font-semibold text-foreground">Dokumen</h4>
-        {/* Ditulis eksplisit di layar, bukan cuma diketahui di kode: banyak bahan
-            memang tidak punya dokumen sendiri, dan tanpa kalimat ini orang akan
-            mengira ada yang kurang. */}
-        <p className="text-xs text-muted-foreground">
-          COA, Sertifikat Halal, dan Izin Edar BPOM. Ketiganya opsional — item tetap sah tanpa dokumen apa pun.
-        </p>
-      </div>
+    <section className="item-bagian">
+      <h4 className="item-bagian__judul">Dokumen</h4>
+      {/* Ditulis eksplisit di layar, bukan cuma diketahui di kode: banyak bahan memang tidak
+          punya dokumen sendiri, dan tanpa kalimat ini orang akan mengira ada yang kurang. */}
+      <p className="item-bagian__pengantar">
+        COA, Sertifikat Halal, dan Izin Edar BPOM. Ketiganya opsional — item tetap sah tanpa dokumen apa pun.
+      </p>
 
       {itemDocsLoading ? (
-        <p className="text-sm text-muted-foreground">Memuat dokumen...</p>
+        <p className="item-teks--redup">Memuat dokumen…</p>
       ) : itemDocs.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Belum ada dokumen dilampirkan.</p>
+        <p className="item-teks--redup">Belum ada dokumen dilampirkan.</p>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="item-dokumen">
           {itemDocs.map((d) => {
             const jenis = DOC_TYPE_ITEM.find((t) => t.code === d.doc_type);
             const kedaluwarsa = d.expiry_date ? new Date(`${d.expiry_date}T00:00:00`) < new Date() : false;
             return (
-              <li key={d.document_id} className="flex flex-wrap items-center justify-between gap-2 border bg-background p-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-foreground">{d.title}</p>
-                  <p className="text-xs text-muted-foreground">
+              <li key={d.document_id} className="item-dokumen__baris">
+                <div className="item-dokumen__isi">
+                  <p className="item-dokumen__judul">{d.title}</p>
+                  <p className="item-teks--redup">
                     {jenis?.label ?? d.doc_type}
                     {d.doc_number ? ` · ${d.doc_number}` : ''}
                     {d.expiry_date ? ` · berlaku sampai ${d.expiry_date}` : ''}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  {kedaluwarsa ? <Badge variant="critical">Kedaluwarsa</Badge> : null}
-                  <Button size="sm" variant="outline" onClick={() => bukaDokumen(d.document_id)}>
+                <div className="item-dokumen__aksi">
+                  {kedaluwarsa ? <Tag type="red" size="sm">Kedaluwarsa</Tag> : null}
+                  <Button size="md" kind="ghost" onClick={() => bukaDokumen(d.document_id)}>
                     Buka
                   </Button>
                 </div>
@@ -660,442 +735,649 @@ export default function ItemsPage() {
       )}
 
       {canManage ? (
-        <div className="flex flex-col gap-3 border border-dashed p-3">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Lampirkan Dokumen</span>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="flex flex-col gap-1.5">
-              <FieldLabel help="Jenis dokumen menentukan apakah tanggal berlakunya wajib diisi. Sertifikat Halal dan Izin Edar BPOM punya masa berlaku; COA melekat pada satu batch bahan dan tidak kedaluwarsa dengan cara yang sama.">
-                Jenis Dokumen
-              </FieldLabel>
-              <Select value={docForm.doc_type} onValueChange={(v) => setDocForm((p) => ({ ...p, doc_type: v }))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DOC_TYPE_ITEM.map((t) => (
-                    <SelectItem key={t.code} value={t.code}>
-                      {t.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
+        <div className="item-lampir">
+          <p className="item-bagian__subjudul">Lampirkan dokumen</p>
+          <div className="item-kisi">
+            <CarbonSelect
+              size="lg"
+              id={`doc-type-${item.item_id}`}
+              labelText={
+                <LabelBantuan teks="Jenis dokumen">
+                  Jenis dokumen menentukan apakah tanggal berlakunya wajib diisi. Sertifikat Halal dan Izin Edar BPOM
+                  punya masa berlaku; COA melekat pada satu batch bahan dan tidak kedaluwarsa dengan cara yang sama.
+                </LabelBantuan>
+              }
+              value={docForm.doc_type}
+              onChange={(e) => setDocForm((p) => ({ ...p, doc_type: e.target.value }))}
+            >
+              {DOC_TYPE_ITEM.map((t) => (
+                <CarbonSelectItem key={t.code} value={t.code} text={t.label} />
+              ))}
+            </CarbonSelect>
 
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-foreground">Nomor Dokumen (opsional)</span>
-              <Input value={docForm.doc_number} onChange={(e) => setDocForm((p) => ({ ...p, doc_number: e.target.value }))} />
-            </label>
+            <TextInput
+              size="lg"
+              id={`doc-number-${item.item_id}`}
+              labelText="Nomor dokumen"
+              helperText="Boleh dikosongkan."
+              value={docForm.doc_number}
+              onChange={(e) => setDocForm((p) => ({ ...p, doc_number: e.target.value }))}
+            />
 
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-foreground">
-                Berlaku Sampai{DOC_TYPE_ITEM.find((t) => t.code === docForm.doc_type)?.requiresExpiry ? '' : ' (opsional)'}
-              </span>
-              <Input type="date" value={docForm.expiry_date} onChange={(e) => setDocForm((p) => ({ ...p, expiry_date: e.target.value }))} />
-            </label>
+            <TextInput
+              size="lg"
+              id={`doc-expiry-${item.item_id}`}
+              type="date"
+              labelText={`Berlaku sampai${DOC_TYPE_ITEM.find((t) => t.code === docForm.doc_type)?.requiresExpiry ? '' : ' (boleh dikosongkan)'}`}
+              value={docForm.expiry_date}
+              onChange={(e) => setDocForm((p) => ({ ...p, expiry_date: e.target.value }))}
+            />
 
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-foreground">Berkas</span>
-              <input
-                type="file"
-                accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.docx"
-                onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
-                className="min-h-11 border border-border bg-background px-3 py-2 text-sm file:mr-3 file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm"
-              />
-              <span className="text-xs text-muted-foreground">PDF, PNG, JPG, WEBP, XLSX, atau DOCX. Maksimal 20 MB.</span>
-            </label>
+            <TextInput
+              size="lg"
+              id={`doc-title-${item.item_id}`}
+              labelText="Judul"
+              helperText="Bila dikosongkan, judulnya diisi otomatis dari jenis dokumen dan nama item."
+              value={docForm.title}
+              onChange={(e) => setDocForm((p) => ({ ...p, title: e.target.value }))}
+            />
           </div>
 
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-foreground">Judul (opsional)</span>
-            <Input value={docForm.title} onChange={(e) => setDocForm((p) => ({ ...p, title: e.target.value }))} />
-            <span className="text-xs text-muted-foreground">Bila dikosongkan, judulnya diisi otomatis dari jenis dokumen dan nama item.</span>
-          </label>
+          <FileUploader
+            size="lg"
+            labelTitle="Berkas"
+            labelDescription="PDF, PNG, JPG, WEBP, XLSX, atau DOCX. Maksimal 20 MB."
+            buttonLabel="Pilih berkas"
+            accept={['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.xlsx', '.docx']}
+            filenameStatus={docFile ? 'edit' : 'uploading'}
+            iconDescription="Hapus berkas"
+            onChange={(event: React.SyntheticEvent<HTMLElement>) =>
+              setDocFile((event.currentTarget as HTMLInputElement).files?.[0] ?? null)
+            }
+            onDelete={() => setDocFile(null)}
+          />
 
-          <div className="flex flex-wrap items-center gap-3">
-            <Button size="sm" disabled={docStatus === 'uploading'} onClick={() => handleUploadItemDoc(item)}>
-              {docStatus === 'uploading' ? 'Mengunggah...' : 'Unggah Dokumen'}
+          <div className="item-lampir__aksi">
+            <Button size="md" disabled={docStatus === 'uploading'} onClick={() => handleUploadItemDoc(item)}>
+              {docStatus === 'uploading' ? 'Mengunggah…' : 'Unggah dokumen'}
             </Button>
-            {docMessage ? (
-              <span className={`text-sm ${docMessage.kind === 'error' ? 'text-destructive' : 'text-success'}`}>{docMessage.message}</span>
-            ) : null}
           </div>
+
+          {docMessage ? (
+            <InlineNotification
+              kind={docMessage.kind === 'error' ? 'error' : 'success'}
+              title={docMessage.kind === 'error' ? 'Gagal' : 'Tersimpan'}
+              subtitle={docMessage.message}
+              onCloseButtonClick={() => setDocMessage(null)}
+              lowContrast
+            />
+          ) : null}
         </div>
       ) : null}
-    </div>
+    </section>
   );
 
   const renderItemSuppliers = (item: Item) => (
-    <div className="flex flex-col gap-3">
-      <h4 className="text-sm font-semibold text-foreground">Supplier yang Memasok "{item.name}"</h4>
+    <section className="item-bagian">
+      <h4 className="item-bagian__judul">Supplier yang memasok “{item.name}”</h4>
       {itemPricesLoading ? (
-        <p className="text-sm text-muted-foreground">Memuat...</p>
+        <p className="item-teks--redup">Memuat…</p>
       ) : itemPrices.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Belum ada supplier tercatat untuk bahan ini.</p>
+        <p className="item-teks--redup">Belum ada supplier tercatat untuk bahan ini.</p>
       ) : (
-        <div className="flex flex-col gap-2">
+        <ul className="item-dokumen">
           {itemPrices.map((price) => (
-            <div key={price.supplier_item_price_id} className="flex items-center justify-between rounded-md border bg-background p-3 text-sm">
-              <div>
-                <p className="font-medium text-foreground">{price.supplier_name}</p>
-                <p className="text-xs text-muted-foreground">
-                  Harga acuan — belum ada pembelian nyata: {price.reference_price !== null ? formatCurrency(price.reference_price, { maxDecimals: 0 }) : '-'}
+            <li key={price.supplier_item_price_id} className="item-dokumen__baris">
+              <div className="item-dokumen__isi">
+                <p className="item-dokumen__judul">{price.supplier_name}</p>
+                <p className="item-teks--redup">
+                  Harga acuan — belum ada pembelian nyata:{' '}
+                  {price.reference_price !== null ? formatCurrency(price.reference_price, { maxDecimals: 0 }) : '-'}
                   {price.price_valid_from ? ` (berlaku sejak ${price.price_valid_from})` : ''}
                 </p>
               </div>
               {canManage ? (
-                <Button size="sm" variant="destructive" onClick={() => handleDeleteItemSupplierPrice(price.supplier_item_price_id)}>
+                <Button size="md" kind="danger--ghost" onClick={() => setHargaAkanDihapus(price.supplier_item_price_id)}>
                   Hapus
                 </Button>
               ) : null}
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
+
       {canManage ? (
-        <div className="flex flex-col gap-2 rounded-md border border-dashed p-3">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tambah Supplier Pemasok</span>
-          <div className="grid gap-2 sm:grid-cols-3">
-            <Select value={newSupplierPriceForm.supplier_id} onValueChange={(v) => setNewSupplierPriceForm((prev) => ({ ...prev, supplier_id: v }))}>
-              <SelectTrigger>
-                <SelectValue placeholder="Pilih supplier..." />
-              </SelectTrigger>
-              <SelectContent>
-                {suppliersForPicker.map((s) => (
-                  <SelectItem key={s.supplier_id} value={String(s.supplier_id)}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Input
+        <div className="item-lampir">
+          <p className="item-bagian__subjudul">Tambah supplier pemasok</p>
+          <div className="item-kisi">
+            <CarbonSelect
+              size="lg"
+              id={`supplier-${item.item_id}`}
+              labelText="Supplier"
+              value={newSupplierPriceForm.supplier_id}
+              onChange={(e) => setNewSupplierPriceForm((prev) => ({ ...prev, supplier_id: e.target.value }))}
+            >
+              <CarbonSelectItem value="" text="— pilih supplier —" />
+              {suppliersForPicker.map((s) => (
+                <CarbonSelectItem key={s.supplier_id} value={String(s.supplier_id)} text={s.name} />
+              ))}
+            </CarbonSelect>
+            <TextInput
+              size="lg"
+              id={`harga-${item.item_id}`}
               type="number"
               min={0}
-              placeholder="Harga acuan (opsional)"
+              labelText="Harga acuan"
+              helperText="Boleh dikosongkan."
               value={newSupplierPriceForm.reference_price}
               onChange={(e) => setNewSupplierPriceForm((prev) => ({ ...prev, reference_price: e.target.value }))}
             />
-            <Input type="date" value={newSupplierPriceForm.price_valid_from} onChange={(e) => setNewSupplierPriceForm((prev) => ({ ...prev, price_valid_from: e.target.value }))} />
+            <TextInput
+              size="lg"
+              id={`berlaku-${item.item_id}`}
+              type="date"
+              labelText="Berlaku sejak"
+              value={newSupplierPriceForm.price_valid_from}
+              onChange={(e) => setNewSupplierPriceForm((prev) => ({ ...prev, price_valid_from: e.target.value }))}
+            />
           </div>
-          {supplierPriceFormMessage ? <p className="text-xs text-destructive">{supplierPriceFormMessage}</p> : null}
-          <Button size="sm" className="w-fit" onClick={handleAddItemSupplierPrice}>
-            Tambah
-          </Button>
+          {supplierPriceFormMessage ? (
+            <InlineNotification kind="error" title="Gagal" subtitle={supplierPriceFormMessage} lowContrast onCloseButtonClick={() => setSupplierPriceFormMessage('')} />
+          ) : null}
+          <div className="item-lampir__aksi">
+            <Button size="md" onClick={handleAddItemSupplierPrice}>
+              Tambah
+            </Button>
+          </div>
         </div>
       ) : null}
-    </div>
+    </section>
   );
 
   if (checkingAccess) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="px-6 text-center text-sm text-muted-foreground">Memuat...</div>
-      </main>
+      <div className="item-halaman">
+        <DataTableSkeleton columnCount={7} rowCount={8} showHeader showToolbar />
+      </div>
     );
   }
 
   if (accessDenied) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="max-w-3xl px-6">
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em] text-destructive">Akses Ditolak</CardDescription>
-              <CardTitle className="text-2xl">Sesi tidak valid</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <p className="text-sm text-muted-foreground">Silakan login ulang untuk mengakses daftar item.</p>
-              <Button onClick={() => router.push('/login?redirectTo=/items')} className="w-fit">
-                Ke Halaman Login
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+      <div className="item-halaman">
+        <h1 className="item-judul">Daftar item</h1>
+        <InlineNotification
+          kind="error"
+          title="Sesi tidak valid"
+          subtitle="Silakan masuk lagi untuk membuka daftar item."
+          hideCloseButton
+          lowContrast
+        />
+        <Button size="lg" onClick={() => router.push('/login?redirectTo=/items')}>
+          Ke halaman masuk
+        </Button>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-muted/30 py-10">
-      <div className="flex w-full flex-col gap-6 px-6">
-        <Card>
-          <CardHeader>
-            <CardDescription className="uppercase tracking-[0.2em]">Master Data</CardDescription>
-            <CardTitle className="text-2xl">Daftar Item</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {itemsError ? <p className="text-sm text-destructive">{itemsError}</p> : null}
-            {itemsLoading ? (
-              <p className="text-sm text-muted-foreground">Memuat item...</p>
-            ) : (
-              <DataTable
-                columns={columns}
-                data={items}
-                emptyMessage="Belum ada item."
-                searchPlaceholder="Cari kode atau nama item..."
-                getSearchText={(item) => `${item.item_code} ${item.name}`}
-                paginated
-                pageSize={15}
-                getRowId={(item) => String(item.item_id)}
-                expandedRowId={expandedItemPricesId !== null ? String(expandedItemPricesId) : null}
-                renderExpandedRow={renderItemDetail}
-                primaryAction={canManage ? { label: 'Tambah Item', onClick: () => { resetForm(); setIsFormModalOpen(true); } } : undefined}
-              />
-            )}
-          </CardContent>
-        </Card>
+    <div className="item-halaman">
+      <p className="item-kelompok">Master data</p>
+      <h1 className="item-judul">Daftar item</h1>
 
-        {canManage ? (
-          <Dialog
-            open={isFormModalOpen}
-            onOpenChange={(open) => {
-              if (!open) {
+      {itemsError ? (
+        <InlineNotification kind="error" title="Gagal memuat" subtitle={itemsError} lowContrast onCloseButtonClick={() => setItemsError('')} />
+      ) : null}
+
+      {itemsLoading ? (
+        <DataTableSkeleton columnCount={headers.length + 1} rowCount={8} showHeader showToolbar />
+      ) : (
+        <>
+          <DataTable rows={rows} headers={headers} isSortable>
+            {/* Tipe render-prop dibiarkan mengikuti bawaan Carbon lewat parameter tunggal.
+                Menuliskan bentuknya sendiri sempat dicoba dan DITOLAK typecheck: bentuk yang
+                ditulis tangan tidak akan ikut berubah saat Carbon memperbaruinya, dan itu
+                justru jalur kedua yang sedang diberantas. */}
+            {(rp) => (
+              <TableContainer
+                title="Daftar item"
+                description={`${itemTersaring.length} item${cariItem ? ' cocok dengan pencarian' : ''}`}
+                {...rp.getTableContainerProps()}
+              >
+                <TableToolbar>
+                  <TableToolbarContent>
+                    <TableToolbarSearch
+                      placeholder="Cari kode atau nama item…"
+                      persistent
+                      onChange={(e: React.ChangeEvent<HTMLInputElement> | '') => {
+                        setCariItem(typeof e === 'string' ? '' : e.target.value);
+                        setHalaman(1);
+                      }}
+                    />
+                    {canManage ? (
+                      <Button
+                        size="lg"
+                        onClick={() => {
+                          resetForm();
+                          setIsFormModalOpen(true);
+                        }}
+                      >
+                        Tambah item
+                      </Button>
+                    ) : null}
+                  </TableToolbarContent>
+                </TableToolbar>
+
+                <Table {...rp.getTableProps()} className="item-tabel">
+                  <TableHead>
+                    <TableRow>
+                      <TableExpandHeader aria-label="Buka detail" />
+                      {rp.headers.map((h) => {
+                        const { key, ...sisa } = rp.getHeaderProps({ header: h }) as { key?: string };
+                        void key;
+                        return (
+                          // Kolom "Biaya standar" SENGAJA tidak bisa diurut.
+                          //
+                          // Bukan karena mengurutnya tidak berguna, melainkan karena judul
+                          // kolomnya memuat tombol Asal-Usul — dan TableHeader yang bisa
+                          // diurut adalah sebuah <button>. Menaruh tombol di dalam tombol
+                          // menghasilkan HTML tidak sah: peramban boleh merapikannya sesuka
+                          // hati, dan tombol Asal-Usulnya bisa berhenti bisa ditekan tanpa
+                          // ada yang tahu. Ditemukan dari galat hydration di konsol.
+                          <TableHeader key={h.key} {...sisa} isSortable={h.key !== 'standard_cost'}>
+                            {judulKolom(String(h.key), String(h.header))}
+                          </TableHeader>
+                        );
+                      })}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {rp.rows.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={rp.headers.length + 1}>
+                          {cariItem ? 'Tidak ada item yang cocok dengan pencarian.' : 'Belum ada item.'}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      rp.rows.map((baris) => {
+                        const item = itemById.get(baris.id);
+                        if (!item) return null;
+                        const { key, ...sisaBaris } = rp.getRowProps({ row: baris }) as { key?: string };
+                        void key;
+                        return (
+                          <React.Fragment key={baris.id}>
+                            <TableExpandRow
+                              {...sisaBaris}
+                              isExpanded={expandedItemPricesId === item.item_id}
+                              onExpand={() => void toggleItemDetail(item)}
+                              aria-label={`Detail ${item.name}`}
+                            >
+                              {headers.map((h) => (
+                                <TableCell key={h.key} data-label={h.header}>
+                                  {isiSel(item, h.key)}
+                                </TableCell>
+                              ))}
+                            </TableExpandRow>
+                            <TableExpandedRow colSpan={headers.length + 1}>
+                              {expandedItemPricesId === item.item_id ? renderItemDetail(item) : null}
+                            </TableExpandedRow>
+                          </React.Fragment>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </DataTable>
+
+          <Pagination
+            page={halaman}
+            pageSize={ukuranHalaman}
+            pageSizes={[15, 30, 50]}
+            totalItems={itemTersaring.length}
+            onChange={({ page, pageSize }: { page: number; pageSize: number }) => {
+              setHalaman(page);
+              setUkuranHalaman(pageSize);
+            }}
+            backwardText="Halaman sebelumnya"
+            forwardText="Halaman berikutnya"
+            itemsPerPageText="Baris per halaman"
+            // Teks bawaan Carbon berbahasa Inggris. Aturan D-3 hanya membolehkan Inggris untuk
+            // LABEL NAVIGASI (nama modul); ini isi halaman, jadi Bahasa Indonesia.
+            itemRangeText={(mulai: number, akhir: number, total: number) =>
+              `${mulai}–${akhir} dari ${total} item`
+            }
+            pageRangeText={(_current: number, total: number) => `dari ${total} halaman`}
+            pageNumberText="Nomor halaman"
+          />
+        </>
+      )}
+
+      {/* ====================================================================
+          MODAL ISIAN — transaksional, bukan bertahap.
+          ====================================================================
+          Sembilan belas field memang banyak, TAPI keputusannya SATU: simpan item. Modal
+          bertahap dipakai bila langkahnya berurutan dan saling bergantung — di sini tidak;
+          orang bisa mengisi dari mana saja dan menyimpan kapan saja. */}
+      {canManage ? (
+        <ComposedModal
+          open={isFormModalOpen}
+          size="lg"
+          onClose={() => {
+            resetForm();
+            setIsFormModalOpen(false);
+            return true;
+          }}
+        >
+          <ModalHeader
+            label="Master data"
+            title={editingItemId ? `Ubah item: ${form.item_code}` : 'Tambah item baru'}
+            closeModal={() => {
+              resetForm();
+              setIsFormModalOpen(false);
+            }}
+          />
+          <ModalBody hasForm>
+            <form id="form-item" onSubmit={handleSubmit} className="item-form">
+              <TextInput
+                size="lg"
+                id="item_code"
+                labelText="Kode item"
+                value={form.item_code}
+                onChange={(e) => setForm((prev) => ({ ...prev, item_code: e.target.value }))}
+                required
+              />
+              <TextInput
+                size="lg"
+                id="name"
+                labelText="Nama item"
+                value={form.name}
+                onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                required
+              />
+              <CarbonSelect
+                size="lg"
+                id="type"
+                labelText="Tipe"
+                value={form.type}
+                onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value }))}
+              >
+                {itemTypes.map((t) => (
+                  <CarbonSelectItem key={t} value={t} text={typeLabels[t]} />
+                ))}
+              </CarbonSelect>
+
+              <TextInput
+                size="lg"
+                id="base_uom"
+                labelText={
+                  <LabelBantuan teks="Satuan dasar/pakai">
+                    Satuan yang dipakai saat bahan ini DIPAKAI di produksi dan dicatat stoknya. Biasanya satuan
+                    terkecil, mis. gram untuk bahan yang ditimbang.
+                  </LabelBantuan>
+                }
+                helperText="Contoh: g, ml, pcs."
+                value={form.base_uom}
+                onChange={(e) => setForm((prev) => ({ ...prev, base_uom: e.target.value }))}
+                required
+              />
+              <TextInput
+                size="lg"
+                id="purchase_uom"
+                labelText={
+                  <LabelBantuan teks="Satuan beli">
+                    Satuan yang tertulis di dokumen pembelian dari supplier. Boleh berbeda dari satuan pakai —
+                    selisihnya diisi di Faktor konversi.
+                  </LabelBantuan>
+                }
+                helperText="Contoh: kg, liter, dus."
+                value={form.purchase_uom}
+                onChange={(e) => setForm((prev) => ({ ...prev, purchase_uom: e.target.value }))}
+                required
+              />
+
+              <div className="item-form__lebar">
+                <TextInput
+                  size="lg"
+                  id="uom_conversion_factor"
+                  type="number"
+                  min="0"
+                  step="any"
+                  labelText={
+                    <LabelBantuan teks="Faktor konversi (satuan beli → satuan dasar)">
+                      Berapa banyak satuan dasar yang didapat dari SATU satuan beli. Contoh: beli per kg, pakai per
+                      gram → isi 1000, karena 1 kg berisi 1000 g. Kalau satuan beli dan satuan pakai sama, isi 1.
+                    </LabelBantuan>
+                  }
+                  helperText="Pilih pola di bawah untuk mengisi cepat, atau ketik angkanya sendiri."
+                  value={form.uom_conversion_factor}
+                  onChange={(e) => setForm((prev) => ({ ...prev, uom_conversion_factor: e.target.value }))}
+                  required
+                />
+                {/* MST-15 — pola konversi umum. Daftar ini SENGAJA pendek dan berisi satuan
+                    yang benar-benar dipakai hari ini, bukan tabel konversi universal. */}
+                <div className="item-pola">
+                  {POLA_KONVERSI.map((pola) => (
+                    <Button
+                      key={`${pola.dari}-${pola.ke}-${pola.faktor}`}
+                      size="md"
+                      kind="tertiary"
+                      type="button"
+                      onClick={() => setForm((prev) => ({ ...prev, uom_conversion_factor: String(pola.faktor) }))}
+                    >
+                      {pola.dari === 'sama' ? 'Satuannya sama (1)' : `1 ${pola.dari} = ${formatNumberId(pola.faktor)} ${pola.ke}`}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <TextInput
+                size="lg"
+                id="shelf_life_days"
+                type="number"
+                min="0"
+                labelText={
+                  <LabelBantuan teks="Shelf life">
+                    Berapa lama bahan atau produk ini masih layak sejak diproduksi/diterima. Isi angkanya, lalu pilih
+                    satuannya — sistem menyimpannya dalam hari, karena tanggal kedaluwarsa tiap lot dihitung dari
+                    angka itu (dasar aturan FEFO). Kosongkan bila bahan ini tidak punya masa simpan.
+                  </LabelBantuan>
+                }
+                helperText={
+                  form.shelf_life_days.trim() && Number(form.shelf_life_days) > 0
+                    ? `Tersimpan sebagai ${shelfLifeToDays(Number(form.shelf_life_days), shelfLifeUnit)} hari.`
+                    : 'Boleh dikosongkan bila bahan ini tidak punya masa simpan.'
+                }
+                value={form.shelf_life_days}
+                onChange={(e) => setForm((prev) => ({ ...prev, shelf_life_days: e.target.value }))}
+              />
+              <CarbonSelect
+                size="lg"
+                id="shelf_life_unit"
+                labelText="Satuan shelf life"
+                value={shelfLifeUnit}
+                onChange={(e) => setShelfLifeUnit(e.target.value as ShelfLifeUnit)}
+              >
+                {SHELF_LIFE_UNITS.map((u) => (
+                  <CarbonSelectItem key={u} value={u} text={u.charAt(0).toUpperCase() + u.slice(1)} />
+                ))}
+              </CarbonSelect>
+
+              <TextInput
+                size="lg"
+                id="min_stock_percent"
+                type="number"
+                min="0"
+                max="100"
+                step="any"
+                labelText={
+                  <LabelBantuan teks="Stok minimum (persen)">
+                    Ambang stok minimum sebagai PERSEN dari jumlah yang PERNAH MASUK untuk item ini. SENGAJA bukan
+                    persen dari stok saat ini: ambang yang dihitung dari stok saat ini ikut turun setiap kali stok
+                    turun, jadi justru menghilang ketika stok menipis.
+                  </LabelBantuan>
+                }
+                helperText="Contoh: isi 10 berarti diperingatkan saat sisa stok kurang dari 10% dari total yang pernah masuk."
+                value={form.min_stock_percent}
+                onChange={(e) => setForm((prev) => ({ ...prev, min_stock_percent: e.target.value }))}
+              />
+              <TextInput
+                size="lg"
+                id="min_stock_level"
+                type="number"
+                min="0"
+                labelText={
+                  <LabelBantuan teks="Stok minimum (angka mutlak)">
+                    Ambang stok minimum dalam ANGKA MUTLAK. Dipertahankan untuk item lama yang belum dipindah ke
+                    persen. Bila kolom persen di atas terisi, kolom persen yang MENANG dan angka ini diabaikan.
+                  </LabelBantuan>
+                }
+                {...(form.min_stock_percent.trim() && Number(form.min_stock_percent) > 0
+                  ? { warn: true, warnText: 'Diabaikan: kolom persen di atas sedang terisi, dan persen yang menang.' }
+                  : {})}
+                value={form.min_stock_level}
+                onChange={(e) => setForm((prev) => ({ ...prev, min_stock_level: e.target.value }))}
+              />
+
+              {/* MST-21 masih menunggu keputusan pemilik produk — kedua field ini DIBIARKAN
+                  persis seperti sekarang: tidak disembunyikan, tidak diberi penjelasan baru,
+                  tidak diubah namanya. */}
+              <TextInput
+                size="lg"
+                id="reorder_point"
+                type="number"
+                min="0"
+                labelText="Reorder Point"
+                value={form.reorder_point}
+                onChange={(e) => setForm((prev) => ({ ...prev, reorder_point: e.target.value }))}
+              />
+              <TextInput
+                size="lg"
+                id="reorder_qty"
+                type="number"
+                min="0"
+                labelText="Reorder Qty"
+                value={form.reorder_qty}
+                onChange={(e) => setForm((prev) => ({ ...prev, reorder_qty: e.target.value }))}
+              />
+
+              {canViewCost ? (
+                <TextInput
+                  size="lg"
+                  id="standard_cost"
+                  type="number"
+                  min="0"
+                  labelText="Biaya standar"
+                  value={form.standard_cost}
+                  onChange={(e) => setForm((prev) => ({ ...prev, standard_cost: e.target.value }))}
+                />
+              ) : null}
+
+              <TextInput
+                size="lg"
+                id="bpom_registration_number"
+                labelText={
+                  <LabelBantuan teks="No. registrasi BPOM">
+                    Nomor izin edar dari BPOM untuk item ini. Boleh dikosongkan bila item ini belum/tidak punya izin
+                    edar sendiri, misalnya bahan baku.
+                  </LabelBantuan>
+                }
+                helperText="Contoh: BPOM RI MD 023733999101561."
+                value={form.bpom_registration_number}
+                onChange={(e) => setForm((prev) => ({ ...prev, bpom_registration_number: e.target.value }))}
+              />
+              <TextInput
+                size="lg"
+                id="halal_certificate_number"
+                labelText={
+                  <LabelBantuan teks="Kode halal">
+                    Nomor sertifikat halal item ini. Diminta bersama nomor BPOM saat pengurusan izin, jadi disimpan
+                    berdampingan. Boleh dikosongkan — banyak bahan baku tidak punya sertifikat halal sendiri.
+                  </LabelBantuan>
+                }
+                value={form.halal_certificate_number}
+                onChange={(e) => setForm((prev) => ({ ...prev, halal_certificate_number: e.target.value }))}
+              />
+
+              <div className="item-form__lebar">
+                <Checkbox
+                  id="is_active"
+                  labelText="Aktif"
+                  checked={form.is_active}
+                  onChange={(_e: unknown, { checked }: { checked: boolean }) => setForm((prev) => ({ ...prev, is_active: checked }))}
+                />
+              </div>
+
+              {formMessage ? (
+                <div className="item-form__lebar">
+                  <InlineNotification
+                    kind={formStatus === 'success' ? 'success' : 'error'}
+                    title={formStatus === 'success' ? 'Tersimpan' : 'Gagal menyimpan'}
+                    subtitle={formMessage}
+                    onCloseButtonClick={() => setFormMessage('')}
+                    lowContrast
+                  />
+                </div>
+              ) : null}
+            </form>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              kind="secondary"
+              onClick={() => {
                 resetForm();
                 setIsFormModalOpen(false);
-              }
-            }}
-          >
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>{editingItemId ? `Edit: ${form.item_code}` : 'Tambah item baru'}</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="grid gap-3 sm:grid-cols-2">
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">Kode Item</span>
-                  <Input value={form.item_code} onChange={(event) => setForm((prev) => ({ ...prev, item_code: event.target.value }))} required />
-                </label>
+              }}
+            >
+              Batal
+            </Button>
+            <Button kind="primary" type="submit" form="form-item" disabled={formStatus === 'pending'}>
+              {formStatus === 'pending' ? 'Menyimpan…' : editingItemId ? 'Simpan perubahan' : 'Tambah item'}
+            </Button>
+          </ModalFooter>
+        </ComposedModal>
+      ) : null}
 
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">Nama Item</span>
-                  <Input value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} required />
-                </label>
+      {/* MODAL BERBAHAYA — menggantikan window.confirm.
+          Kalimatnya menyebut NAMA item-nya: konfirmasi yang cuma bertanya "yakin hapus?"
+          tidak membantu orang yang salah menekan baris. */}
+      <Modal
+        open={itemAkanDihapus !== null}
+        danger
+        modalHeading={
+          itemAkanDihapus ? `Hapus “${itemAkanDihapus.name}” (${itemAkanDihapus.item_code || 'tanpa kode'})?` : ''
+        }
+        modalLabel="Tindakan merusak"
+        primaryButtonText="Hapus"
+        secondaryButtonText="Batal"
+        onRequestClose={() => setItemAkanDihapus(null)}
+        onSecondarySubmit={() => setItemAkanDihapus(null)}
+        onRequestSubmit={() => itemAkanDihapus && void handleDeleteItem(itemAkanDihapus)}
+      >
+        <p>
+          Bila item ini sudah dipakai di BOM, lot, atau dokumen pembelian, item TIDAK akan dihapus melainkan
+          dinonaktifkan, supaya riwayatnya tetap utuh.
+        </p>
+        <p className="item-modal__catatan">
+          Keputusan hapus-atau-nonaktifkan dihitung server, bukan ditanyakan ke Anda — dari layar tidak ada cara
+          mengetahui apakah item ini pernah masuk BOM tiga bulan lalu.
+        </p>
+      </Modal>
 
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">Tipe</span>
-                  <Select value={form.type} onValueChange={(value) => setForm((prev) => ({ ...prev, type: value }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {itemTypes.map((typeOption) => (
-                        <SelectItem key={typeOption} value={typeOption}>
-                          {typeLabels[typeOption]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
-
-                <label className="flex flex-col gap-1.5">
-                  <FieldLabel help="Satuan yang dipakai saat bahan ini DIPAKAI di produksi dan dicatat stoknya. Biasanya satuan terkecil, mis. gram untuk bahan yang ditimbang.">
-                    Satuan Dasar/Pakai
-                  </FieldLabel>
-                  <Input
-                    value={form.base_uom}
-                    onChange={(event) => setForm((prev) => ({ ...prev, base_uom: event.target.value }))}
-                    required
-                  />
-                  <span className="text-xs text-muted-foreground">Contoh: g, ml, pcs.</span>
-                </label>
-
-                <label className="flex flex-col gap-1.5">
-                  <FieldLabel help="Satuan yang tertulis di dokumen pembelian dari supplier. Boleh berbeda dari satuan pakai — selisihnya diisi di Faktor Konversi.">
-                    Satuan Beli
-                  </FieldLabel>
-                  <Input
-                    value={form.purchase_uom}
-                    onChange={(event) => setForm((prev) => ({ ...prev, purchase_uom: event.target.value }))}
-                    required
-                  />
-                  <span className="text-xs text-muted-foreground">Contoh: kg, liter, dus.</span>
-                </label>
-
-                <div className="flex flex-col gap-1.5 sm:col-span-2">
-                  <FieldLabel help="Berapa banyak satuan dasar yang didapat dari SATU satuan beli. Contoh: beli per kg, pakai per gram → isi 1000, karena 1 kg berisi 1000 g. Kalau satuan beli dan satuan pakai sama (mis. beli pcs, pakai pcs), isi 1.">
-                    Faktor Konversi (satuan beli → satuan dasar)
-                  </FieldLabel>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={form.uom_conversion_factor}
-                    onChange={(event) => setForm((prev) => ({ ...prev, uom_conversion_factor: event.target.value }))}
-                    required
-                  />
-                  <div className="flex flex-wrap gap-2">
-                    {POLA_KONVERSI.map((pola) => (
-                      <button
-                        key={`${pola.dari}-${pola.ke}-${pola.faktor}`}
-                        type="button"
-                        onClick={() => setForm((prev) => ({ ...prev, uom_conversion_factor: String(pola.faktor) }))}
-                        className="min-h-11 border border-border px-3 py-2 text-xs text-foreground transition-colors hover:bg-muted focus:outline-none focus:outline-2 focus:outline-ring"
-                      >
-                        {pola.dari === 'sama' ? 'Satuannya sama (1)' : `1 ${pola.dari} = ${formatNumberId(pola.faktor)} ${pola.ke}`}
-                      </button>
-                    ))}
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    Pilih pola yang cocok untuk mengisi cepat, atau ketik angkanya sendiri di atas.
-                  </span>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel help="Berapa lama bahan atau produk ini masih layak sejak diproduksi/diterima. Isi angkanya, lalu pilih satuannya — sistem menyimpannya dalam hari, karena tanggal kedaluwarsa tiap lot dihitung dari angka itu (dasar aturan FEFO: yang lebih dulu kedaluwarsa, lebih dulu dikeluarkan). Kosongkan bila bahan ini tidak punya masa simpan.">
-                    Shelf Life
-                  </FieldLabel>
-                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                    <Input
-                      type="number"
-                      min="0"
-                      aria-label="Angka shelf life"
-                      value={form.shelf_life_days}
-                      onChange={(event) => setForm((prev) => ({ ...prev, shelf_life_days: event.target.value }))}
-                    />
-                    <Select value={shelfLifeUnit} onValueChange={(v) => setShelfLifeUnit(v as ShelfLifeUnit)}>
-                      <SelectTrigger aria-label="Satuan shelf life">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {SHELF_LIFE_UNITS.map((u) => (
-                          <SelectItem key={u} value={u}>
-                            {u.charAt(0).toUpperCase() + u.slice(1)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {/* Hasil konversinya DITAMPILKAN, bukan disembunyikan: angka inilah yang
-                      dipakai menghitung tanggal kedaluwarsa tiap lot. Menyembunyikannya akan
-                      membuat pengguna tidak punya cara memeriksa apakah sistem memahami
-                      maksudnya. */}
-                  <span className="text-xs text-muted-foreground">
-                    {form.shelf_life_days.trim() && Number(form.shelf_life_days) > 0
-                      ? `Tersimpan sebagai ${shelfLifeToDays(Number(form.shelf_life_days), shelfLifeUnit)} hari.`
-                      : 'Boleh dikosongkan bila bahan ini tidak punya masa simpan.'}
-                  </span>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel help="Ambang stok minimum sebagai PERSEN dari jumlah yang PERNAH MASUK untuk item ini (semua penerimaan dan hasil produksi, dijumlah). SENGAJA bukan persen dari stok saat ini: ambang yang dihitung dari stok saat ini ikut turun setiap kali stok turun, jadi justru menghilang ketika stok menipis. Kosongkan bila item ini memakai angka mutlak di bawah.">
-                    Min Stock Level (persen)
-                  </FieldLabel>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="any"
-                    value={form.min_stock_percent}
-                    onChange={(event) => setForm((prev) => ({ ...prev, min_stock_percent: event.target.value }))}
-                  />
-                  <span className="text-xs text-muted-foreground">
-                    Contoh: isi 10 berarti diperingatkan saat sisa stok kurang dari 10% dari total yang pernah masuk.
-                  </span>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel help="Ambang stok minimum dalam ANGKA MUTLAK. Dipertahankan untuk item lama yang belum dipindah ke persen. Bila kolom persen di atas terisi, kolom persen yang MENANG dan angka ini diabaikan.">
-                    Min Stock Level (angka mutlak)
-                  </FieldLabel>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={form.min_stock_level}
-                    onChange={(event) => setForm((prev) => ({ ...prev, min_stock_level: event.target.value }))}
-                  />
-                  {form.min_stock_percent.trim() && Number(form.min_stock_percent) > 0 ? (
-                    <span className="text-xs text-warning">
-                      Diabaikan: kolom persen di atas sedang terisi, dan persen yang menang.
-                    </span>
-                  ) : null}
-                </div>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">Reorder Point</span>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={form.reorder_point}
-                    onChange={(event) => setForm((prev) => ({ ...prev, reorder_point: event.target.value }))}
-                  />
-                </label>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">Reorder Qty</span>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={form.reorder_qty}
-                    onChange={(event) => setForm((prev) => ({ ...prev, reorder_qty: event.target.value }))}
-                  />
-                </label>
-
-                {canViewCost ? (
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">Biaya Standar</span>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={form.standard_cost}
-                      onChange={(event) => setForm((prev) => ({ ...prev, standard_cost: event.target.value }))}
-                    />
-                  </label>
-                ) : null}
-
-                <label className="flex flex-col gap-1.5">
-                  <FieldLabel help="Nomor izin edar dari BPOM untuk item ini. Boleh dikosongkan bila item ini belum/tidak punya izin edar sendiri, misalnya bahan baku.">
-                    No. Registrasi BPOM
-                  </FieldLabel>
-                  <Input
-                    value={form.bpom_registration_number}
-                    onChange={(event) => setForm((prev) => ({ ...prev, bpom_registration_number: event.target.value }))}
-                  />
-                  <span className="text-xs text-muted-foreground">Contoh: BPOM RI MD 023733999101561.</span>
-                </label>
-
-                <label className="flex flex-col gap-1.5">
-                  <FieldLabel help="Nomor sertifikat halal item ini. Diminta bersama nomor BPOM saat pengurusan izin, jadi disimpan berdampingan. Boleh dikosongkan — banyak bahan baku tidak punya sertifikat halal sendiri.">
-                    Kode Halal
-                  </FieldLabel>
-                  <Input
-                    value={form.halal_certificate_number}
-                    onChange={(event) => setForm((prev) => ({ ...prev, halal_certificate_number: event.target.value }))}
-                  />
-                </label>
-
-                <label className="flex items-center gap-2 sm:col-span-2">
-                  <input
-                    type="checkbox"
-                    checked={form.is_active}
-                    onChange={(event) => setForm((prev) => ({ ...prev, is_active: event.target.checked }))}
-                  />
-                  <span className="text-sm font-medium text-foreground">Aktif</span>
-                </label>
-
-                <div className="flex items-center gap-3 sm:col-span-2">
-                  <Button type="submit" disabled={formStatus === 'pending'}>
-                    {formStatus === 'pending' ? 'Menyimpan...' : editingItemId ? 'Simpan Perubahan' : 'Tambah Item'}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      resetForm();
-                      setIsFormModalOpen(false);
-                    }}
-                  >
-                    Batal
-                  </Button>
-                </div>
-
-                {formMessage ? (
-                  <p className={`sm:col-span-2 text-sm ${formStatus === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>
-                    {formMessage}
-                  </p>
-                ) : null}
-              </form>
-            </DialogContent>
-          </Dialog>
-        ) : null}
-      </div>
-    </main>
+      <Modal
+        open={hargaAkanDihapus !== null}
+        danger
+        modalHeading="Hapus supplier ini dari daftar pemasok bahan ini?"
+        modalLabel="Tindakan merusak"
+        primaryButtonText="Hapus"
+        secondaryButtonText="Batal"
+        onRequestClose={() => setHargaAkanDihapus(null)}
+        onSecondarySubmit={() => setHargaAkanDihapus(null)}
+        onRequestSubmit={() => hargaAkanDihapus !== null && void handleDeleteItemSupplierPrice(hargaAkanDihapus)}
+      >
+        <p>Harga acuannya ikut terhapus. Riwayat pembelian yang sudah terjadi tidak terpengaruh.</p>
+      </Modal>
+    </div>
   );
 }

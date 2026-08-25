@@ -95,7 +95,14 @@ export default function ResetPasswordPage() {
 
   if (!sessionReady) {
     return (
-      <LayarPublik judul="Tautan sudah tidak berlaku">
+      <LayarPublik
+        judul="Tautan sudah tidak berlaku"
+        aksi={
+          <Button size="lg" onClick={() => router.push('/forgot-password')} renderIcon={ArrowRight}>
+            Minta tautan baru
+          </Button>
+        }
+      >
         <InlineNotification
           kind="error"
           title="Tautan tidak berlaku"
@@ -104,17 +111,26 @@ export default function ResetPasswordPage() {
           lowContrast
           className="publik-pemberitahuan"
         />
-        <div className="publik-aksi">
-          <Button size="lg" onClick={() => router.push('/forgot-password')} renderIcon={ArrowRight}>
-            Minta tautan baru
-          </Button>
-        </div>
       </LayarPublik>
     );
   }
 
   return (
-    <LayarPublik judul="Atur ulang kata sandi" pengantar="Masukkan kata sandi baru untuk akun Anda.">
+    <LayarPublik
+      judul="Atur ulang kata sandi"
+      pengantar="Masukkan kata sandi baru untuk akun Anda."
+      aksi={
+        status === 'success' ? (
+          <Button size="lg" type="button" onClick={() => router.push('/dashboard')} renderIcon={ArrowRight}>
+            Lanjut ke dasbor
+          </Button>
+        ) : (
+          <Button size="lg" type="submit" form="form-sandi-baru" disabled={status === 'pending'} renderIcon={ArrowRight}>
+            {status === 'pending' ? 'Menyimpan…' : 'Simpan kata sandi baru'}
+          </Button>
+        )
+      }
+    >
       {message && (
         <InlineNotification
           kind={status === 'success' ? 'success' : 'error'}
@@ -126,7 +142,7 @@ export default function ResetPasswordPage() {
         />
       )}
 
-      <form onSubmit={handleSubmit} className="publik-form">
+      <form id="form-sandi-baru" onSubmit={handleSubmit} className="publik-form">
         <PasswordInput
           size="lg"
           id="kata-sandi-baru"
@@ -150,17 +166,6 @@ export default function ResetPasswordPage() {
           required
         />
 
-        <div className="publik-aksi">
-          {status === 'success' ? (
-            <Button size="lg" type="button" onClick={() => router.push('/dashboard')} renderIcon={ArrowRight}>
-              Lanjut ke dasbor
-            </Button>
-          ) : (
-            <Button size="lg" type="submit" disabled={status === 'pending'} renderIcon={ArrowRight}>
-              {status === 'pending' ? 'Menyimpan…' : 'Simpan kata sandi baru'}
-            </Button>
-          )}
-        </div>
       </form>
     </LayarPublik>
   );

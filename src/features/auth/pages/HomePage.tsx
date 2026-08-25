@@ -20,15 +20,21 @@ export default function HomePage() {
     <LayarPublik
       judul="MRP SaaS"
       pengantar="Fondasi platform MRP multi-tenant untuk manufaktur. Masuk dulu untuk melanjutkan."
+      aksi={
+        <>
+          <Button size="lg" kind="secondary" href="/register" as={Link}>
+            Daftar
+          </Button>
+          <Button size="lg" href="/login" as={Link} renderIcon={ArrowRight}>
+            Masuk
+          </Button>
+        </>
+      }
     >
-      <div className="publik-aksi">
-        <Button size="lg" href="/login" as={Link} renderIcon={ArrowRight}>
-          Masuk
-        </Button>
-        <Button size="lg" kind="tertiary" href="/register" as={Link}>
-          Daftar
-        </Button>
-      </div>
+      <p className="publik-teks--redup">
+        Sebagian besar orang yang membuka halaman ini sudah punya akun. Mendaftar hanya
+        dilakukan sekali, saat perusahaan Anda pertama kali memakai sistem.
+      </p>
     </LayarPublik>
   );
 }

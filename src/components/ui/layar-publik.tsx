@@ -22,15 +22,20 @@ interface LayarPublikProps {
   pengantar?: string;
   /// Kartu yang lebih lebar untuk isi bertabel (konfirmasi penerimaan barang).
   lebar?: boolean;
+  /// Tombol aksi. Ditempatkan di KAKI kartu, melebar penuh dan rapat ke tepinya.
+  ///
+  /// URUTANNYA PENTING DAN BUKAN SELERA: tombol UTAMA ditaruh PALING KANAN saat berdampingan,
+  /// dan PALING BAWAH saat menumpuk di layar sempit. Keduanya aturan Carbon untuk aksi di
+  /// dalam wadah berstruktur, dan alasannya sama — yang terakhir dibaca mata adalah yang
+  /// dituju. Halaman cukup meneruskan tombolnya dengan yang sekunder lebih dulu.
+  aksi?: React.ReactNode;
   children: React.ReactNode;
 }
 
-export function LayarPublik({ judul, pengantar, lebar = false, children }: LayarPublikProps) {
+export function LayarPublik({ judul, pengantar, lebar = false, aksi, children }: LayarPublikProps) {
   return (
     <main className="publik-halaman">
       <Tile className={lebar ? 'publik-kartu publik-kartu--lebar' : 'publik-kartu'}>
-        <h1 className="publik-judul">{judul}</h1>
-        {pengantar && <p className="publik-pengantar">{pengantar}</p>}
         {/*
           LAPIS. Bukan hiasan, dan bukan pilihan — ini yang membuat field TERLIHAT.
 
@@ -48,7 +53,14 @@ export function LayarPublik({ judul, pengantar, lebar = false, children }: Layar
           membuktikan sebuah nilai sesuai niatnya; ia tidak bisa melihat bahwa dua nilai yang
           sama-sama benar kebetulan berwarna sama.
         */}
-        <Layer>{children}</Layer>
+        <Layer>
+          <div className="publik-isi">
+            <h1 className="publik-judul">{judul}</h1>
+            {pengantar && <p className="publik-pengantar">{pengantar}</p>}
+            {children}
+          </div>
+          {aksi && <div className="publik-kaki-aksi">{aksi}</div>}
+        </Layer>
       </Tile>
     </main>
   );

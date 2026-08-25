@@ -67,6 +67,42 @@ pemeriksaan yang terbukti menangkap kelas cacat ini.
 | Layar daftar data (Item, BOM, SO, WO, …) | `components/data-table/usage` + `patterns/list-pattern` |
 | Dasbor | `components/tile/usage` + `elements/2x-grid/overview` |
 
+## Penempatan tombol — Carbon menjawabnya, dan jawabannya BERGANTUNG PADA WADAH
+
+**Dicatat 25 Agu 2026 setelah pemilik produk mempertanyakan tombol utama yang diletakkan di
+kiri.** Pertanyaannya benar, dan jawabannya menunjukkan kesalahan yang halus: aturan yang
+dipakai memang aturan Carbon — hanya saja untuk **jenis formulir yang berbeda**.
+
+Tabel Carbon di `patterns/forms-pattern` (bagian *Buttons in forms*):
+
+| Perataan | Rapat ke tepi | Berlaku untuk |
+|---|---|---|
+| **Rata kiri** | tidak | Formulir di dalam halaman, bukan dialog |
+| **Rata kanan** | tidak | Formulir bertahap / wizard, saat aksi utama berarti "maju" |
+| **Melebar penuh** | **ya** | Formulir di dalam **dialog, panel samping, DAN di dalam tile** |
+
+Kalimatnya persis: *"In side panels, dialogs, and any other forms within tiles, the button
+group should span the width of the container and buttons should bleed to the bottom edge."*
+
+**Yang menentukan bukan selera, melainkan WADAHNYA.** Sebelum memilih perataan, tanyakan
+dulu: formulir ini menempel langsung di halaman, atau berada di dalam sesuatu?
+
+Aturan turunannya, semuanya dari halaman yang sama:
+- **Tombol utama di KANAN** untuk formulir di dalam wadah berstruktur; di **KIRI** untuk
+  formulir yang menempel di halaman.
+- Bila melebar penuh dan labelnya kepanjangan, **tumpuk vertikal dengan tombol utama di
+  BAWAH**.
+- **Jangan menyematkan tombol di ATAS halaman** — Carbon melarangnya secara khusus.
+- Tombol sekunder untuk **membatalkan**, bukan untuk "kembali".
+
+Untuk layar masuk, `patterns/login-pattern` menambahkan:
+- **Posisi formulir di halaman (kiri/kanan/tengah) diserahkan ke tim produk**, asal field-nya
+  tetap di grid. Ini termasuk hal yang BOLEH ditanyakan ke pemilik produk.
+- **Tombol utama diletakkan sedekat mungkin dengan field**.
+- Gaya **fluid** disebut sebagai bentuk ideal untuk layar masuk/daftar; gaya **default** tetap
+  sah. FABRIX memilih **default** (keputusan pemilik produk 25 Agu 2026) supaya sama dengan
+  layar lain di dalam sistem.
+
 ## Yang TIDAK dijawab Carbon — ini yang ditanyakan ke pemilik produk
 
 - Aturan bisnis dan arti angka

@@ -82,7 +82,22 @@ export default function LoginPage() {
   };
 
   return (
-    <LayarPublik judul="Masuk" pengantar="Gunakan email dan kata sandi akun Anda.">
+    <LayarPublik
+      judul="Masuk"
+      pengantar="Gunakan email dan kata sandi akun Anda."
+      aksi={
+        <>
+          {/* Sekunder lebih dulu, utama paling kanan — aturan Carbon untuk aksi di dalam
+              wadah berstruktur. Di layar sempit keduanya menumpuk dan "Masuk" jatuh ke bawah. */}
+          <Button size="lg" kind="secondary" href="/register" as={Link}>
+            Daftar
+          </Button>
+          <Button size="lg" type="submit" form="form-masuk" disabled={loading} renderIcon={ArrowRight}>
+            {loading ? 'Memproses…' : 'Masuk'}
+          </Button>
+        </>
+      }
+    >
       {error && (
         <InlineNotification
           kind="error"
@@ -94,7 +109,7 @@ export default function LoginPage() {
         />
       )}
 
-      <form onSubmit={handleLogin} className="publik-form">
+      <form id="form-masuk" onSubmit={handleLogin} className="publik-form">
         <TextInput
           size="lg"
           id="email"
@@ -116,25 +131,16 @@ export default function LoginPage() {
           required
         />
 
-        <div className="publik-aksi">
-          {/* Tombol Carbon menaruh teks di KIRI dan ikon di KANAN (justify-content:
-              space-between) — itu sebabnya ikon panah dipakai di sini, bukan sebagai hiasan.
-              Lebarnya mengikuti isi, TIDAK dipaksa penuh. */}
-          <Button size="lg" type="submit" disabled={loading} renderIcon={ArrowRight}>
-            {loading ? 'Memproses…' : 'Masuk'}
-          </Button>
+        {/* "Lupa kata sandi?" SENGAJA tinggal di dalam formulir, bukan ikut ke kaki kartu.
+            Anatomi login Carbon menempatkannya sebagai tautan pemulihan yang menempel pada
+            field-nya, bukan sebagai aksi sejajar dengan Masuk. Bentuknya tombol ghost supaya
+            area tekannya tetap 48px — tautan sebaris hanya 18px dan tidak bisa ditekan jari. */}
+        <div className="publik-aksi publik-aksi--rapat">
           <Button size="lg" kind="ghost" href="/forgot-password" as={Link}>
             Lupa kata sandi?
           </Button>
         </div>
       </form>
-
-      <p className="publik-kaki">Belum punya akun?</p>
-      <div className="publik-aksi publik-aksi--rapat">
-        <Button size="lg" kind="ghost" href="/register" as={Link}>
-          Daftar
-        </Button>
-      </div>
     </LayarPublik>
   );
 }

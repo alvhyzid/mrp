@@ -36,12 +36,63 @@
 // menambahkan bingkai 1px sendiri. Yang memisahkan kartu dari latar bukan garis, melainkan
 // PERBEDAAN LAPISAN: latar halaman $background, kartu $layer. Di tema Gray 10 itu berarti
 // abu-abu muda dengan kartu putih di atasnya.
+//
+// PADDING DIPINDAH KE DALAM (.publik-isi), kartunya sendiri tanpa padding. Alasannya bukan
+// kerapian: kelompok tombol di kaki kartu harus RAPAT KE TEPI, dan tepi itu mustahil dicapai
+// bila pembungkusnya sendiri sudah memberi jarak.
 .publik-kartu {
   inline-size: 100%;
   // 28rem = lebar formulir satu kolom yang nyaman dibaca; di layar sempit ia menyusut sendiri
   // karena inline-size 100%, jadi tidak perlu media query.
   max-inline-size: 28rem;
+  padding: 0;
+}
+
+// Jarak ke kelompok tombol datang DARI SINI ($spacing-09 / 48px, jarak baku Carbon antara
+// isian terakhir dan aksi), bukan dari margin kelompok tombolnya. Versi pertama memberi jarak
+// di kedua tempat dan hasilnya 96px — dua aturan yang sama-sama benar, dijumlahkan.
+.publik-isi {
   padding: spacing.$spacing-07;
+  padding-block-end: spacing.$spacing-09;
+}
+
+// KAKI KARTU — kelompok tombol melebar penuh, rapat ke tepi.
+//
+// KENAPA BEGINI, dan kenapa BUKAN tombol selebar isinya di kiri seperti versi sebelumnya:
+// Carbon memberi tiga aturan penempatan tombol, dan yang menentukan mana yang berlaku adalah
+// JENIS FORMULIRNYA, bukan selera —
+//   rata kiri, tanpa rapat tepi  -> formulir di dalam halaman, bukan dialog
+//   rata kanan                   -> formulir bertahap / wizard
+//   MELEBAR PENUH, RAPAT TEPI    -> formulir di dalam dialog, panel samping, DAN DI DALAM TILE
+// Kalimat Carbon persisnya: "In side panels, dialogs, and any other forms within tiles, the
+// button group should span the width of the container and buttons should bleed to the bottom
+// edge."
+//
+// Formulir layar publik kita berada DI DALAM TILE. Versi sebelumnya memakai aturan pertama —
+// benar untuk formulir yang menempel langsung di halaman, dan bukan itu yang kita punya.
+//
+// URUTAN: tombol utama di KANAN. Carbon menempatkan tombol utama di kanan pada "forms in
+// structured containers like dialog windows or side panels"; kartu ini wadah sejenis.
+.publik-kaki-aksi {
+  display: flex;
+}
+
+.publik-kaki-aksi > * {
+  // Melebar rata membagi lebar kartu. max-inline-size Carbon (20rem) dilepas HANYA di sini,
+  // karena di sinilah "span the width of the container" berlaku.
+  flex: 1 1 0;
+  max-inline-size: none;
+}
+
+// LAYAR SEMPIT: tombol MENUMPUK, dan yang utama pindah ke BAWAH.
+//
+// Ini juga aturan Carbon, bukan penyesuaian sendiri: "If the button content is too long for
+// this arrangement, stack buttons vertically (with primary button on the bottom)."
+// Ambangnya 20rem karena di bawah itu dua tombol berdampingan mulai memotong labelnya.
+@media (max-width: 20rem) {
+  .publik-kaki-aksi {
+    flex-direction: column;
+  }
 }
 
 .publik-kartu--lebar {
@@ -77,7 +128,9 @@
   gap: spacing.$spacing-07;
 }
 
-// $spacing-09 (48px) di atas tombol — jarak baku Carbon antara isian terakhir dan aksi.
+// Dipakai untuk aksi yang memang berada DI DALAM isi, bukan di kaki kartu — misalnya tautan
+// "Lupa kata sandi?" yang menurut anatomi login Carbon harus tetap DEKAT dengan field-nya.
+// $spacing-09 (48px) mengikuti jarak baku Carbon antara isian terakhir dan aksi.
 .publik-aksi {
   display: flex;
   flex-wrap: wrap;
@@ -129,6 +182,12 @@
 // kartu inilah orang berpindah antara Masuk dan Daftar.
 .publik-aksi--rapat {
   margin-block-start: spacing.$spacing-03;
+}
+
+// Aksi di dalam isi yang mengikuti field-nya sendiri (mis. "Lupa kata sandi?") tidak perlu
+// jarak 48px — jarak itu milik kelompok tombol di kaki kartu.
+.publik-form > .publik-aksi--rapat {
+  margin-block-start: 0;
 }
 
 // KOTAK CENTANG: area tekan dinaikkan ke 44px.

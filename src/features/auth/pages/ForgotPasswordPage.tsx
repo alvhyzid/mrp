@@ -52,6 +52,16 @@ export default function ForgotPasswordPage() {
     <LayarPublik
       judul="Lupa kata sandi"
       pengantar="Masukkan email Anda, kami kirim tautan untuk mengatur ulang kata sandi."
+      aksi={
+        <>
+          <Button size="lg" kind="secondary" href="/login" as={Link}>
+            Masuk
+          </Button>
+          <Button size="lg" type="submit" form="form-lupa" disabled={status === 'pending'} renderIcon={ArrowRight}>
+            {status === 'pending' ? 'Mengirim…' : 'Kirim tautan'}
+          </Button>
+        </>
+      }
     >
       {message && (
         <InlineNotification
@@ -64,7 +74,7 @@ export default function ForgotPasswordPage() {
         />
       )}
 
-      <form onSubmit={handleSubmit} className="publik-form">
+      <form id="form-lupa" onSubmit={handleSubmit} className="publik-form">
         <TextInput
           size="lg"
           id="email"
@@ -75,19 +85,7 @@ export default function ForgotPasswordPage() {
           required
         />
 
-        <div className="publik-aksi">
-          <Button size="lg" type="submit" disabled={status === 'pending'} renderIcon={ArrowRight}>
-            {status === 'pending' ? 'Mengirim…' : 'Kirim tautan'}
-          </Button>
-        </div>
       </form>
-
-      <p className="publik-kaki">Ingat kata sandinya?</p>
-      <div className="publik-aksi publik-aksi--rapat">
-        <Button size="lg" kind="ghost" href="/login" as={Link}>
-          Masuk
-        </Button>
-      </div>
     </LayarPublik>
   );
 }

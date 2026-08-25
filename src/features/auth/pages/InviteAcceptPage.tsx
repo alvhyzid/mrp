@@ -69,7 +69,16 @@ export default function InviteAcceptPage({ token }: InviteAcceptPageProps) {
   }, [router, token]);
 
   return (
-    <LayarPublik judul="Terima undangan perusahaan">
+    <LayarPublik
+      judul="Terima undangan perusahaan"
+      aksi={
+        status === 'success' ? (
+          <Button size="lg" onClick={() => router.push('/dashboard')} renderIcon={ArrowRight}>
+            Masuk ke dasbor
+          </Button>
+        ) : undefined
+      }
+    >
       {(status === 'idle' || status === 'pending') && (
         <InlineLoading
           description={status === 'idle' ? 'Memeriksa token undangan…' : 'Memproses undangan…'}
@@ -98,13 +107,6 @@ export default function InviteAcceptPage({ token }: InviteAcceptPageProps) {
         />
       )}
 
-      {status === 'success' && (
-        <div className="publik-aksi">
-          <Button size="lg" onClick={() => router.push('/dashboard')} renderIcon={ArrowRight}>
-            Masuk ke dasbor
-          </Button>
-        </div>
-      )}
     </LayarPublik>
   );
 }

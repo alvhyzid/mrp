@@ -45,7 +45,20 @@ export default function RegisterPage() {
   };
 
   return (
-    <LayarPublik judul="Daftar" pengantar="Buat akun untuk perusahaan Anda.">
+    <LayarPublik
+      judul="Daftar"
+      pengantar="Buat akun untuk perusahaan Anda."
+      aksi={
+        <>
+          <Button size="lg" kind="secondary" href="/login" as={Link}>
+            Masuk
+          </Button>
+          <Button size="lg" type="submit" form="form-daftar" disabled={loading} renderIcon={ArrowRight}>
+            {loading ? 'Memproses…' : 'Daftar'}
+          </Button>
+        </>
+      }
+    >
       {error && (
         <InlineNotification
           kind="error"
@@ -57,7 +70,7 @@ export default function RegisterPage() {
         />
       )}
 
-      <form onSubmit={handleRegister} className="publik-form">
+      <form id="form-daftar" onSubmit={handleRegister} className="publik-form">
         <TextInput
           size="lg"
           id="nama"
@@ -100,19 +113,7 @@ export default function RegisterPage() {
           required
         />
 
-        <div className="publik-aksi">
-          <Button size="lg" type="submit" disabled={loading} renderIcon={ArrowRight}>
-            {loading ? 'Memproses…' : 'Daftar'}
-          </Button>
-        </div>
       </form>
-
-      <p className="publik-kaki">Sudah punya akun?</p>
-      <div className="publik-aksi publik-aksi--rapat">
-        <Button size="lg" kind="ghost" href="/login" as={Link}>
-          Masuk
-        </Button>
-      </div>
     </LayarPublik>
   );
 }

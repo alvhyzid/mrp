@@ -142,7 +142,21 @@ export default function PodConfirmationPage({ token }: { token: string }) {
   });
 
   return (
-    <LayarPublik judul="Bukti penerimaan barang" pengantar={`Surat jalan ${shipment!.shipment_number} · ${tanggal}`} lebar>
+    <LayarPublik
+      judul="Bukti penerimaan barang"
+      pengantar={`Surat jalan ${shipment!.shipment_number} · ${tanggal}`}
+      lebar
+      aksi={
+        <Button
+          size="lg"
+          onClick={handleSubmit}
+          disabled={!photoFile || !checked || submitting}
+          renderIcon={CheckmarkFilled}
+        >
+          {submitting ? 'Memproses…' : 'Barang sudah diterima'}
+        </Button>
+      }
+    >
       <dl className="publik-baris-data">
         <dt>Alamat tujuan:</dt>
         <dd>{shipment!.delivery_address}</dd>
@@ -227,16 +241,6 @@ export default function PodConfirmationPage({ token }: { token: string }) {
         />
       )}
 
-      <div className="publik-aksi">
-        <Button
-          size="lg"
-          onClick={handleSubmit}
-          disabled={!photoFile || !checked || submitting}
-          renderIcon={CheckmarkFilled}
-        >
-          {submitting ? 'Memproses…' : 'Barang sudah diterima'}
-        </Button>
-      </div>
     </LayarPublik>
   );
 }

@@ -1,0 +1,154 @@
+// Gaya layar publik (DS-02) — daftar, masuk, lupa sandi, atur ulang sandi, undangan,
+// beranda, dan konfirmasi penerimaan barang.
+//
+// SELURUH ukuran, jarak, dan warna memakai TOKEN Carbon. Nol angka px ditulis langsung, nol
+// warna heksadesimal. Sebelum migrasi ini, keenam layar itu meniru Carbon dengan menuliskan
+// warnanya sendiri — 10 heks per layar di /login dan /register saja. Nilainya kebetulan benar,
+// lalu menyimpang diam-diam begitu tokennya berubah, dan tidak ada satu tempat pun untuk
+// memperbaikinya.
+//
+// UKURAN KONTROL: seluruh field dan tombol memakai anak tangga `lg` Carbon (48px), BUKAN `md`
+// (40px) yang jadi bawaannya. Alasannya aturan proyek: target sentuh minimal 44px, karena
+// tombol seukuran kursor tidak bisa ditekan jari -- apalagi jari bersarung tangan.
+// Yang penting soal cara memilihnya: 48px diambil dari SKALA CARBON SENDIRI, bukan dari
+// menimpa tinggi komponennya. Menimpa tinggi akan merusak jarak dalam komponen (padding,
+// posisi label, ukuran ikon) yang dihitung Carbon relatif terhadap tingginya.
+//
+// Tipografi memakai MIXIN `type-style`. Carbon memancarkan NOL kelas utilitas tipografi —
+// kelas `cds--type-*` tidak pernah berlaku (dibuktikan 25 Agu 2026).
+@use '@carbon/react/scss/type';
+@use '@carbon/react/scss/spacing';
+@use '@carbon/react/scss/theme';
+
+.publik-halaman {
+  display: flex;
+  min-block-size: 100vh;
+  align-items: center;
+  justify-content: center;
+  // $spacing-05 (16px) di layar sempit memastikan kartu tidak menempel ke tepi layar.
+  padding: spacing.$spacing-07 spacing.$spacing-05;
+  background-color: theme.$background;
+}
+
+// Kartu pembungkus.
+//
+// Tile Carbon TIDAK BERBINGKAI — itu spesifikasinya, dan versi lama layar ini keliru
+// menambahkan bingkai 1px sendiri. Yang memisahkan kartu dari latar bukan garis, melainkan
+// PERBEDAAN LAPISAN: latar halaman $background, kartu $layer. Di tema Gray 10 itu berarti
+// abu-abu muda dengan kartu putih di atasnya.
+.publik-kartu {
+  inline-size: 100%;
+  // 28rem = lebar formulir satu kolom yang nyaman dibaca; di layar sempit ia menyusut sendiri
+  // karena inline-size 100%, jadi tidak perlu media query.
+  max-inline-size: 28rem;
+  padding: spacing.$spacing-07;
+}
+
+.publik-kartu--lebar {
+  max-inline-size: 40rem;
+}
+
+.publik-judul {
+  @include type.type-style('productive-heading-04');
+  margin-block-end: spacing.$spacing-03;
+}
+
+.publik-pengantar {
+  @include type.type-style('body-01');
+  color: theme.$text-secondary;
+  margin-block-end: spacing.$spacing-07;
+}
+
+.publik-teks {
+  @include type.type-style('body-01');
+}
+
+.publik-teks--redup {
+  @include type.type-style('body-01');
+  color: theme.$text-secondary;
+}
+
+// Jarak antar field mengikuti spesifikasi form biasa Carbon ($spacing-07 / 32px), bukan fluid
+// form. Dipilih karena formulir ini pendek dan berdiri sendiri di tengah layar — merapatkannya
+// justru membuatnya terlihat sesak.
+.publik-form {
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-07;
+}
+
+// $spacing-09 (48px) di atas tombol — jarak baku Carbon antara isian terakhir dan aksi.
+.publik-aksi {
+  display: flex;
+  flex-wrap: wrap;
+  gap: spacing.$spacing-03;
+  margin-block-start: spacing.$spacing-09;
+}
+
+.publik-pemberitahuan {
+  margin-block-end: spacing.$spacing-05;
+  max-inline-size: 100%;
+}
+
+.publik-kaki {
+  @include type.type-style('body-01');
+  color: theme.$text-secondary;
+  margin-block-start: spacing.$spacing-07;
+}
+
+.publik-daftar-barang {
+  margin-block: spacing.$spacing-05;
+  overflow-x: auto;
+}
+
+.publik-pratinjau {
+  display: block;
+  max-inline-size: 100%;
+  block-size: auto;
+  margin-block-start: spacing.$spacing-05;
+}
+
+.publik-baris-data {
+  @include type.type-style('body-01');
+  display: flex;
+  flex-wrap: wrap;
+  gap: spacing.$spacing-02;
+  margin-block-end: spacing.$spacing-05;
+}
+
+.publik-baris-data dt {
+  color: theme.$text-secondary;
+}
+
+// Varian rapat: dipakai untuk tombol pindah-halaman di kaki kartu (Masuk <-> Daftar), yang
+// mengikuti kalimat pengantarnya sendiri sehingga tidak perlu jarak $spacing-09 lagi.
+//
+// KENAPA TOMBOL, BUKAN TAUTAN SEBARIS: versi sebelumnya menaruh "Daftar" sebagai tautan di
+// dalam kalimat, tingginya 18px. Aturan proyek menetapkan target sentuh minimal 44px, dan
+// tautan setinggi 18px di tengah kalimat tidak bisa ditekan jari -- padahal justru di kaki
+// kartu inilah orang berpindah antara Masuk dan Daftar.
+.publik-aksi--rapat {
+  margin-block-start: spacing.$spacing-03;
+}
+
+// KOTAK CENTANG: area tekan dinaikkan ke 44px.
+//
+// INI PENYIMPANGAN DARI CARBON YANG DISENGAJA DAN DICATAT, bukan tambalan diam-diam.
+//
+// Carbon TIDAK menyediakan ukuran lain untuk Checkbox — tidak ada `size="lg"` seperti pada
+// field dan tombol. Area tekan bawaannya, diukur di peramban, 37px. Aturan proyek menetapkan
+// minimal 44px, dan ketegangan ini sudah tercatat di CLAUDE.md sejak 23 Agu 2026 sebagai
+// sesuatu yang "dinaikkan bila terbukti sulit ditekan di lantai produksi".
+//
+// Di sinilah bukti itu datang: kotak centang ini adalah SATU-SATUNYA pernyataan yang harus
+// ditekan penerima barang sebelum konfirmasi bisa dikirim, dan ia ditekan di HP, di tepi
+// jalan, sering dengan tangan yang sedang memegang barang. Salah tekan berarti ia mengulang;
+// tidak berhasil menekan berarti tombol kirimnya tetap mati tanpa penjelasan.
+//
+// Yang dinaikkan HANYA tinggi area tekannya. Ukuran kotak, warna, jarak, dan perilakunya tetap
+// bawaan Carbon — supaya perbedaannya dengan layar lain tidak terlihat, hanya terasa.
+.publik-form .cds--checkbox-label {
+  min-block-size: 2.75rem;
+  display: flex;
+  align-items: center;
+}

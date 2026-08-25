@@ -2,7 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Button, InlineNotification, PasswordInput, SkeletonText } from '@carbon/react';
+import { ArrowRight } from '@carbon/icons-react';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
+import { LayarPublik } from '@/components/ui/layar-publik';
+
+// Dimigrasikan ke Carbon pada 25 Agu 2026 (DS-02).
+//
+// Keadaan MEMUAT sekarang memakai SkeletonText Carbon, bukan tulisan "Memeriksa tautan
+// reset...". Alasannya bukan gaya: skeleton menempati ruang yang sama dengan isi yang akan
+// muncul, jadi halaman tidak melompat saat pemeriksaannya selesai. Kalimat satu baris selalu
+// melompat, dan lompatan itu paling terasa justru di layar yang dibuka orang dalam keadaan
+// panik karena tidak bisa masuk.
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -76,86 +87,81 @@ export default function ResetPasswordPage() {
 
   if (checkingSession) {
     return (
-      <main className="min-h-screen bg-slate-50 py-16">
-        <div className="mx-auto max-w-md px-6">
-          <div className="rounded-3xl bg-white p-10 shadow-lg ring-1 ring-slate-200 text-center text-slate-600">Memeriksa tautan reset...</div>
-        </div>
-      </main>
+      <LayarPublik judul="Atur ulang kata sandi">
+        <SkeletonText paragraph lineCount={4} />
+      </LayarPublik>
     );
   }
 
   if (!sessionReady) {
     return (
-      <main className="min-h-screen bg-slate-50 py-16">
-        <div className="mx-auto max-w-md rounded-3xl bg-white p-10 shadow-lg ring-1 ring-slate-200">
-          <p className="text-sm uppercase tracking-[0.2em] text-rose-500">Tautan Tidak Valid</p>
-          <h1 className="mt-4 text-2xl font-semibold text-slate-900">Tautan reset kata sandi sudah tidak berlaku</h1>
-          <p className="mt-4 text-slate-600">Silakan minta tautan reset baru.</p>
-          <a
-            href="/forgot-password"
-            className="mt-6 inline-flex items-center justify-center rounded-none bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
-          >
-            Minta Tautan Baru
-          </a>
+      <LayarPublik judul="Tautan sudah tidak berlaku">
+        <InlineNotification
+          kind="error"
+          title="Tautan tidak berlaku"
+          subtitle="Tautan atur ulang kata sandi hanya berlaku sekali dan punya batas waktu. Silakan minta tautan baru."
+          hideCloseButton
+          lowContrast
+          className="publik-pemberitahuan"
+        />
+        <div className="publik-aksi">
+          <Button size="lg" onClick={() => router.push('/forgot-password')} renderIcon={ArrowRight}>
+            Minta tautan baru
+          </Button>
         </div>
-      </main>
+      </LayarPublik>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 py-16">
-      <div className="mx-auto flex max-w-md flex-col gap-6 rounded-3xl bg-white p-10 shadow-lg ring-1 ring-slate-200">
-        <div>
-          <h1 className="text-3xl font-semibold text-slate-900">Atur Ulang Kata Sandi</h1>
-          <p className="mt-2 text-sm text-slate-600">Masukkan kata sandi baru untuk akun Anda.</p>
-        </div>
+    <LayarPublik judul="Atur ulang kata sandi" pengantar="Masukkan kata sandi baru untuk akun Anda.">
+      {message && (
+        <InlineNotification
+          kind={status === 'success' ? 'success' : 'error'}
+          title={status === 'success' ? 'Tersimpan' : 'Gagal menyimpan'}
+          subtitle={message}
+          onCloseButtonClick={() => setMessage('')}
+          lowContrast
+          className="publik-pemberitahuan"
+        />
+      )}
 
-        <form onSubmit={handleSubmit} className="grid gap-4">
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium text-slate-700">Kata sandi baru</span>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(event) => setNewPassword(event.target.value)}
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-              required
-            />
-          </label>
+      <form onSubmit={handleSubmit} className="publik-form">
+        <PasswordInput
+          size="lg"
+          id="kata-sandi-baru"
+          labelText="Kata sandi baru"
+          showPasswordLabel="Tampilkan kata sandi"
+          hidePasswordLabel="Sembunyikan kata sandi"
+          helperText="Minimal 8 karakter."
+          value={newPassword}
+          onChange={(event) => setNewPassword(event.target.value)}
+          required
+        />
 
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium text-slate-700">Konfirmasi kata sandi baru</span>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-              required
-            />
-          </label>
+        <PasswordInput
+          size="lg"
+          id="konfirmasi-kata-sandi"
+          labelText="Ulangi kata sandi baru"
+          showPasswordLabel="Tampilkan kata sandi"
+          hidePasswordLabel="Sembunyikan kata sandi"
+          value={confirmPassword}
+          onChange={(event) => setConfirmPassword(event.target.value)}
+          required
+        />
 
-          {message ? (
-            <p className={`text-sm ${status === 'success' ? 'text-emerald-700' : 'text-rose-700'}`}>{message}</p>
-          ) : null}
-
+        <div className="publik-aksi">
           {status === 'success' ? (
-            <button
-              type="button"
-              onClick={() => router.push('/dashboard')}
-              className="inline-flex justify-center rounded-none bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
-            >
-              Lanjut ke Dashboard
-            </button>
+            <Button size="lg" type="button" onClick={() => router.push('/dashboard')} renderIcon={ArrowRight}>
+              Lanjut ke dasbor
+            </Button>
           ) : (
-            <button
-              type="submit"
-              disabled={status === 'pending'}
-              className="inline-flex justify-center rounded-none bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
-            >
-              {status === 'pending' ? 'Menyimpan...' : 'Simpan Kata Sandi Baru'}
-            </button>
+            <Button size="lg" type="submit" disabled={status === 'pending'} renderIcon={ArrowRight}>
+              {status === 'pending' ? 'Menyimpan…' : 'Simpan kata sandi baru'}
+            </Button>
           )}
-        </form>
-      </div>
-    </main>
+        </div>
+      </form>
+    </LayarPublik>
   );
 }

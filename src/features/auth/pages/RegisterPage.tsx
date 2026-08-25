@@ -1,14 +1,17 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
+import { Button, InlineNotification, PasswordInput, TextInput } from '@carbon/react';
+import { ArrowRight } from '@carbon/icons-react';
+import { LayarPublik } from '@/components/ui/layar-publik';
 
-// Lihat catatan di LoginPage.tsx: className hex eksplisit di sini kebetulan
-// sama dengan token dasar Carbon di src/components/ui/ & app/globals.css
-// sejak Tahap 3. Font IBM Plex Sans dimuat sekali di app/layout.tsx.
+// Dimigrasikan ke Carbon pada 25 Agu 2026 (DS-02). Lihat catatan lengkapnya di LoginPage.tsx.
+//
+// Layar inilah yang diperiksa pemilik produk berdampingan dengan katalog Carbon resmi, dan
+// yang melahirkan seluruh gelombang migrasi ini. Ia juga LANGKAH PERTAMA dari rantai "berdiri
+// dari nol" — layar pertama yang dilihat tenant baru, dan kesan pertama produk yang dijual.
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -26,15 +29,8 @@ export default function RegisterPage() {
 
     const response = await fetch('/api/register', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        name,
-        email,
-        password,
-        companyName
-      })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password, companyName })
     });
 
     const data = await response.json();
@@ -48,69 +44,75 @@ export default function RegisterPage() {
     router.push('/login');
   };
 
-  const carbonInputClass =
-    'h-12 rounded-none border-0 border-b border-[#8d8d8d] bg-[#f4f4f4] px-4 text-sm text-[#161616] shadow-none focus-visible:border-transparent focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#0f62fe] focus-visible:ring-0';
-
   return (
-    <main className="min-h-screen bg-white py-16">
-      <div className="mx-auto max-w-md px-4">
-        <Card className="rounded-none border border-[#e0e0e0] bg-white p-8 shadow-none">
-          <CardContent className="flex flex-col gap-6 p-0">
-            <div>
-              <h1 className="text-[1.75rem] font-semibold leading-[1.286] text-[#161616]">Daftar</h1>
-              <p className="mt-2 text-sm leading-[1.429] text-[#525252]">Buat akun untuk perusahaan Anda.</p>
-            </div>
+    <LayarPublik judul="Daftar" pengantar="Buat akun untuk perusahaan Anda.">
+      {error && (
+        <InlineNotification
+          kind="error"
+          title="Gagal mendaftar"
+          subtitle={error}
+          onCloseButtonClick={() => setError('')}
+          lowContrast
+          className="publik-pemberitahuan"
+        />
+      )}
 
-            <form onSubmit={handleRegister} className="grid gap-5">
-              <label className="block">
-                <span className="mb-2 block text-xs leading-[1.333] text-[#525252]">Nama</span>
-                <Input type="text" value={name} onChange={(event) => setName(event.target.value)} className={carbonInputClass} required />
-              </label>
+      <form onSubmit={handleRegister} className="publik-form">
+        <TextInput
+          size="lg"
+          id="nama"
+          labelText="Nama Anda"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          required
+        />
 
-              <label className="block">
-                <span className="mb-2 block text-xs leading-[1.333] text-[#525252]">Nama Perusahaan</span>
-                <Input
-                  type="text"
-                  value={companyName}
-                  onChange={(event) => setCompanyName(event.target.value)}
-                  className={carbonInputClass}
-                  required
-                />
-              </label>
+        <TextInput
+          size="lg"
+          id="nama-perusahaan"
+          labelText="Nama perusahaan"
+          helperText="Nama ini muncul di dokumen yang diterbitkan sistem, seperti surat jalan."
+          value={companyName}
+          onChange={(event) => setCompanyName(event.target.value)}
+          required
+        />
 
-              <label className="block">
-                <span className="mb-2 block text-xs leading-[1.333] text-[#525252]">Email</span>
-                <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} className={carbonInputClass} required />
-              </label>
+        <TextInput
+          size="lg"
+          id="email"
+          type="email"
+          labelText="Email"
+          helperText="Dipakai untuk masuk, dan untuk memulihkan akun bila kata sandi terlupa."
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          required
+        />
 
-              <label className="block">
-                <span className="mb-2 block text-xs leading-[1.333] text-[#525252]">Kata Sandi</span>
-                <Input
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  className={carbonInputClass}
-                  required
-                />
-              </label>
+        <PasswordInput
+          size="lg"
+          id="kata-sandi"
+          labelText="Kata sandi"
+          showPasswordLabel="Tampilkan kata sandi"
+          hidePasswordLabel="Sembunyikan kata sandi"
+          helperText="Minimal 8 karakter."
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          required
+        />
 
-              {error ? <p className="text-sm leading-[1.429] text-[#da1e28]">{error}</p> : null}
+        <div className="publik-aksi">
+          <Button size="lg" type="submit" disabled={loading} renderIcon={ArrowRight}>
+            {loading ? 'Memproses…' : 'Daftar'}
+          </Button>
+        </div>
+      </form>
 
-              <Button
-                type="submit"
-                disabled={loading}
-                className="h-12 w-full rounded-none bg-[#0f62fe] text-sm font-normal text-white shadow-none hover:bg-[#0043ce] active:bg-[#002d9c] disabled:bg-[#c6c6c6] disabled:text-[#8d8d8d]"
-              >
-                {loading ? 'Memproses...' : 'Daftar'}
-              </Button>
-            </form>
-
-            <p className="text-center text-sm leading-[1.429] text-[#525252]">
-              Sudah punya akun? <a href="/login" className="text-[#0f62fe] hover:underline">Masuk</a>
-            </p>
-          </CardContent>
-        </Card>
+      <p className="publik-kaki">Sudah punya akun?</p>
+      <div className="publik-aksi publik-aksi--rapat">
+        <Button size="lg" kind="ghost" href="/login" as={Link}>
+          Masuk
+        </Button>
       </div>
-    </main>
+    </LayarPublik>
   );
 }

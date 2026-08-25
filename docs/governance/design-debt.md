@@ -18,6 +18,13 @@ interaksi menentukan apakah layar **bisa dipakai**, sementara visual menentukan 
 | **B** Komponen | Elemen HTML mentah berdampingan dengan komponen bersama | 81 elemen mentah |
 | **A** Visual | **Dua sistem warna berjalan bersamaan dan saling tidak cocok** | 88 + 11 titik |
 
+> **Kemajuan 25 Agu 2026 (DS-02).** Tujuh layar publik selesai dimigrasikan ke Carbon:
+> beranda, masuk, daftar, lupa sandi, atur ulang sandi, terima undangan, dan konfirmasi
+> penerimaan barang. Dari angka di atas, **22 warna heksadesimal** dan **belasan elemen HTML
+> mentah** sudah tercabut, dan ketujuh layar itu kini memakai satu rangka bersama. Angka di
+> tabel ini adalah potret audit awal dan **belum dikurangi** — ia sengaja dibiarkan sebagai
+> garis dasar supaya kemajuan bisa diukur terhadap sesuatu yang tetap.
+
 ---
 
 ## A — VISUAL

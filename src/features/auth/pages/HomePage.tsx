@@ -1,24 +1,34 @@
+'use client';
+
 import Link from 'next/link';
+import { Button } from '@carbon/react';
+import { ArrowRight } from '@carbon/icons-react';
+import { LayarPublik } from '@/components/ui/layar-publik';
+
+// Dimigrasikan ke Carbon pada 25 Agu 2026 (DS-02).
+//
+// Dua tombol berdampingan: "Masuk" primer, "Daftar" sekunder. Perbedaannya BUKAN hiasan —
+// Carbon memakai tingkat tombol untuk menyatakan mana jalan yang biasa ditempuh. Sebagian
+// besar orang yang membuka halaman ini sudah punya akun; yang mendaftar hanya sekali seumur
+// pemakaian. Dua tombol yang terlihat sama berat memaksa setiap pengunjung membaca keduanya.
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="mx-auto flex min-h-screen max-w-4xl flex-col items-center justify-center px-6 py-16">
-        <div className="w-full rounded-3xl bg-white p-10 shadow-lg ring-1 ring-slate-200">
-          <h1 className="text-4xl font-semibold text-slate-900">MRP SaaS</h1>
-          <p className="mt-4 text-lg leading-8 text-slate-600">
-            Fondasi platform MRP multi-tenant untuk manufaktur. Login dulu untuk melanjutkan.
-          </p>
-          <div className="mt-8 flex flex-col gap-4 sm:flex-row">
-            <Link href="/login" className="inline-flex items-center justify-center rounded-none bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-slate-700">
-              Masuk
-            </Link>
-            <Link href="/register" className="inline-flex items-center justify-center rounded-none border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-50">
-              Daftar
-            </Link>
-          </div>
-        </div>
+    // Nama produk SENGAJA tidak diubah di migrasi ini. Di dokumen internal sistem ini disebut
+    // FABRIX, di layar ia "MRP SaaS" — perbedaan itu nyata dan perlu diputuskan pemilik
+    // produk, bukan diselipkan diam-diam ke dalam pekerjaan yang niatnya soal tampilan.
+    <LayarPublik
+      judul="MRP SaaS"
+      pengantar="Fondasi platform MRP multi-tenant untuk manufaktur. Masuk dulu untuk melanjutkan."
+    >
+      <div className="publik-aksi">
+        <Button size="lg" href="/login" as={Link} renderIcon={ArrowRight}>
+          Masuk
+        </Button>
+        <Button size="lg" kind="tertiary" href="/register" as={Link}>
+          Daftar
+        </Button>
       </div>
-    </main>
+    </LayarPublik>
   );
 }

@@ -2,19 +2,24 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { Button, InlineNotification, PasswordInput, TextInput } from '@carbon/react';
+import { ArrowRight } from '@carbon/icons-react';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import { getDashboardRouteForRole } from '@/lib/roles';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
+import { LayarPublik } from '@/components/ui/layar-publik';
 
-// Halaman ini awalnya jadi eksperimen terisolasi gaya Carbon Design System
-// (IBM) sebelum diperluas company-wide di Tahap 3 — className hex eksplisit
-// di sini sekarang KEBETULAN sama dengan token dasar src/components/ui/ &
-// app/globals.css (sumbernya sama: @carbon/themes, @carbon/layout,
-// @carbon/type, @carbon/colors via unpkg), sengaja dibiarkan sebagai
-// override eksplisit di sini karena sebelumnya sudah direview & disetujui
-// apa adanya. Font IBM Plex Sans sekarang dimuat sekali di app/layout.tsx.
+// Dimigrasikan ke Carbon pada 25 Agu 2026 (DS-02).
+//
+// Versi sebelumnya MENIRU Carbon dengan tangan: 10 warna heksadesimal ditulis langsung, tinggi
+// field 48px, dan penanda fokus buatan sendiri. Nilainya sebagian besar benar — dan itulah yang
+// membuatnya berbahaya. Yang meleset tidak terlihat sampai dibandingkan berdampingan dengan
+// katalog Carbon: tombol dipaksa melebar penuh dengan teks di tengah (Carbon menaruh teks di
+// KIRI dan lebarnya mengikuti isi), kartunya diberi bingkai (Tile Carbon tidak berbingkai), dan
+// penanda fokusnya 3px hitam (Carbon 2px biru).
+//
+// Sekarang tidak ada satu pun angka atau warna yang ditulis di sini — seluruhnya dibawa
+// komponen Carbon. Itu juga yang membuat layar ini ikut berubah sendiri saat temanya diganti.
 
 export default function LoginPage() {
   const router = useRouter();
@@ -36,9 +41,7 @@ export default function LoginPage() {
 
     const response = await fetch('/api/login', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password })
     });
 
@@ -68,73 +71,70 @@ export default function LoginPage() {
       return;
     }
 
-    // Redirect langsung ke dashboard department (kalau role user punya satu) —
-    // TANPA mampir dulu ke /dashboard generik untuk fetch /api/me. Role sudah
-    // ada di data.user.tenant.role dari respons /api/login barusan, jadi tidak
-    // perlu request tambahan. Ini menghilangkan 1 putaran /api/me penuh
-    // (auth.getUser + query users + query companies, ~550-900ms terukur) yang
-    // sebelumnya terjadi 2x berturut-turut (sekali di /dashboard, sekali lagi
-    // di halaman department) — sekarang cukup sekali, dan cuma kalau memang
-    // dituju ke halaman umum /dashboard.
+    // Redirect langsung ke dashboard department (kalau role user punya satu) — TANPA mampir
+    // dulu ke /dashboard generik untuk fetch /api/me. Role sudah ada di data.user.tenant.role
+    // dari respons /api/login barusan, jadi tidak perlu request tambahan. Ini menghilangkan 1
+    // putaran /api/me penuh (auth.getUser + query users + query companies, ~550-900ms terukur)
+    // yang sebelumnya terjadi 2x berturut-turut.
     const explicitRedirect = new URLSearchParams(window.location.search).get('redirectTo');
     const departmentRoute = getDashboardRouteForRole(data?.user?.tenant?.role);
     router.push(explicitRedirect || departmentRoute || '/dashboard');
   };
 
   return (
-    <main className="min-h-screen bg-white py-16">
-      <div className="mx-auto max-w-md px-4">
-        <Card className="rounded-none border border-[#e0e0e0] bg-white p-8 shadow-none">
-          <CardContent className="flex flex-col gap-6 p-0">
-            <div>
-              <h1 className="text-[1.75rem] font-semibold leading-[1.286] text-[#161616]">Masuk</h1>
-              <p className="mt-2 text-sm leading-[1.429] text-[#525252]">Gunakan email dan kata sandi akun Anda.</p>
-            </div>
+    <LayarPublik judul="Masuk" pengantar="Gunakan email dan kata sandi akun Anda.">
+      {error && (
+        <InlineNotification
+          kind="error"
+          title="Gagal masuk"
+          subtitle={error}
+          onCloseButtonClick={() => setError('')}
+          lowContrast
+          className="publik-pemberitahuan"
+        />
+      )}
 
-            <form onSubmit={handleLogin} className="grid gap-5">
-              <label className="block">
-                <span className="mb-2 block text-xs leading-[1.333] text-[#525252]">Email</span>
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  className="h-12 rounded-none border-0 border-b border-[#8d8d8d] bg-[#f4f4f4] px-4 text-sm text-[#161616] shadow-none focus-visible:border-transparent focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#0f62fe] focus-visible:ring-0"
-                  required
-                />
-              </label>
+      <form onSubmit={handleLogin} className="publik-form">
+        <TextInput
+          size="lg"
+          id="email"
+          type="email"
+          labelText="Email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          required
+        />
 
-              <label className="block">
-                <span className="mb-2 block text-xs leading-[1.333] text-[#525252]">Kata Sandi</span>
-                <Input
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  className="h-12 rounded-none border-0 border-b border-[#8d8d8d] bg-[#f4f4f4] px-4 text-sm text-[#161616] shadow-none focus-visible:border-transparent focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#0f62fe] focus-visible:ring-0"
-                  required
-                />
-              </label>
+        <PasswordInput
+          size="lg"
+          id="kata-sandi"
+          labelText="Kata sandi"
+          showPasswordLabel="Tampilkan kata sandi"
+          hidePasswordLabel="Sembunyikan kata sandi"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          required
+        />
 
-              <a href="/forgot-password" className="text-right text-sm leading-[1.429] text-[#0f62fe] hover:underline">
-                Lupa kata sandi?
-              </a>
+        <div className="publik-aksi">
+          {/* Tombol Carbon menaruh teks di KIRI dan ikon di KANAN (justify-content:
+              space-between) — itu sebabnya ikon panah dipakai di sini, bukan sebagai hiasan.
+              Lebarnya mengikuti isi, TIDAK dipaksa penuh. */}
+          <Button size="lg" type="submit" disabled={loading} renderIcon={ArrowRight}>
+            {loading ? 'Memproses…' : 'Masuk'}
+          </Button>
+          <Button size="lg" kind="ghost" href="/forgot-password" as={Link}>
+            Lupa kata sandi?
+          </Button>
+        </div>
+      </form>
 
-              {error ? <p className="text-sm leading-[1.429] text-[#da1e28]">{error}</p> : null}
-
-              <Button
-                type="submit"
-                disabled={loading}
-                className="h-12 w-full rounded-none bg-[#0f62fe] text-sm font-normal text-white shadow-none hover:bg-[#0043ce] active:bg-[#002d9c] disabled:bg-[#c6c6c6] disabled:text-[#8d8d8d]"
-              >
-                {loading ? 'Memproses...' : 'Masuk'}
-              </Button>
-            </form>
-
-            <p className="text-center text-sm leading-[1.429] text-[#525252]">
-              Belum punya akun? <a href="/register" className="text-[#0f62fe] hover:underline">Daftar</a>
-            </p>
-          </CardContent>
-        </Card>
+      <p className="publik-kaki">Belum punya akun?</p>
+      <div className="publik-aksi publik-aksi--rapat">
+        <Button size="lg" kind="ghost" href="/register" as={Link}>
+          Daftar
+        </Button>
       </div>
-    </main>
+    </LayarPublik>
   );
 }

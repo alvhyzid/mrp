@@ -1,7 +1,19 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
+import { Button, InlineNotification, TextInput } from '@carbon/react';
+import { ArrowRight } from '@carbon/icons-react';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
+import { LayarPublik } from '@/components/ui/layar-publik';
+
+// Dimigrasikan ke Carbon pada 25 Agu 2026 (DS-02).
+//
+// Layar ini termasuk yang paling jauh menyimpang sebelum migrasi: ia sama sekali tidak meniru
+// Carbon, melainkan memakai palet Tailwind (slate/emerald/rose) dan sudut membulat 24px — dua
+// sistem visual yang berbeda dari layar masuk yang bersebelahan dengannya dalam satu alur.
+// Orang yang lupa kata sandinya berpindah dari layar Carbon ke layar bergaya lain, lalu kembali
+// lagi. Perpindahan itulah yang membuat produk terasa dirakit dari potongan.
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -31,46 +43,51 @@ export default function ForgotPasswordPage() {
     }
 
     setStatus('success');
-    setMessage('Kalau email terdaftar, tautan untuk atur ulang kata sandi sudah dikirim. Silakan cek inbox Anda.');
+    setMessage(
+      'Kalau email tersebut terdaftar, tautan untuk mengatur ulang kata sandi sudah dikirim. Silakan periksa kotak masuk Anda.'
+    );
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 py-16">
-      <div className="mx-auto flex max-w-md flex-col gap-6 rounded-3xl bg-white p-10 shadow-lg ring-1 ring-slate-200">
-        <div>
-          <h1 className="text-3xl font-semibold text-slate-900">Lupa Kata Sandi</h1>
-          <p className="mt-2 text-sm text-slate-600">Masukkan email Anda, kami kirim tautan untuk atur ulang kata sandi.</p>
+    <LayarPublik
+      judul="Lupa kata sandi"
+      pengantar="Masukkan email Anda, kami kirim tautan untuk mengatur ulang kata sandi."
+    >
+      {message && (
+        <InlineNotification
+          kind={status === 'success' ? 'success' : 'error'}
+          title={status === 'success' ? 'Tautan dikirim' : 'Gagal mengirim'}
+          subtitle={message}
+          onCloseButtonClick={() => setMessage('')}
+          lowContrast
+          className="publik-pemberitahuan"
+        />
+      )}
+
+      <form onSubmit={handleSubmit} className="publik-form">
+        <TextInput
+          size="lg"
+          id="email"
+          type="email"
+          labelText="Email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          required
+        />
+
+        <div className="publik-aksi">
+          <Button size="lg" type="submit" disabled={status === 'pending'} renderIcon={ArrowRight}>
+            {status === 'pending' ? 'Mengirim…' : 'Kirim tautan'}
+          </Button>
         </div>
+      </form>
 
-        <form onSubmit={handleSubmit} className="grid gap-4">
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium text-slate-700">Email</span>
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-              required
-            />
-          </label>
-
-          {message ? (
-            <p className={`text-sm ${status === 'success' ? 'text-emerald-700' : 'text-rose-700'}`}>{message}</p>
-          ) : null}
-
-          <button
-            type="submit"
-            disabled={status === 'pending'}
-            className="inline-flex justify-center rounded-none bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
-          >
-            {status === 'pending' ? 'Mengirim...' : 'Kirim Tautan Reset'}
-          </button>
-        </form>
-
-        <p className="text-center text-sm text-slate-600">
-          Ingat kata sandi? <a href="/login" className="font-semibold text-slate-900 underline">Masuk</a>
-        </p>
+      <p className="publik-kaki">Ingat kata sandinya?</p>
+      <div className="publik-aksi publik-aksi--rapat">
+        <Button size="lg" kind="ghost" href="/login" as={Link}>
+          Masuk
+        </Button>
       </div>
-    </main>
+    </LayarPublik>
   );
 }

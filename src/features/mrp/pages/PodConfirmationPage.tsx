@@ -1,23 +1,42 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import {
+  Button,
+  Checkbox,
+  FileUploader,
+  InlineNotification,
+  SkeletonText,
+  StructuredListBody,
+  StructuredListCell,
+  StructuredListHead,
+  StructuredListRow,
+  StructuredListWrapper,
+  TextInput
+} from '@carbon/react';
+import { CheckmarkFilled } from '@carbon/icons-react';
 import { formatNumberId } from '@/lib/currency';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { LayarPublik } from '@/components/ui/layar-publik';
 
 type ShipmentLine = { item_code: string | null; item_name: string | null; qty: number; uom: string | null };
 type ShipmentSummary = { shipment_number: string; shipment_date: string; delivery_address: string; lines: ShipmentLine[] };
 
 const CONFIRMATION_TEXT = 'Barang sudah sesuai jenis dan jumlahnya';
 
-// Halaman PUBLIK, TANPA login sama sekali — diakses client (bukan user sistem) lewat
-// scan QR di Surat Jalan fisik. TIDAK ADA pemeriksaan sesi Supabase di sini (beda dari
-// SEMUA halaman lain di aplikasi ini yang selalu cek supabase.auth.getSession() dulu)
-// — itu sengaja, bukan lupa. Field yang ditampilkan HANYA yang dikembalikan API
-// (/api/pod/[token], sudah dibatasi ketat di server — lihat getShipmentByPodToken.ts)
-// — komponen ini TIDAK PERNAH menambah field lain sendiri, apalagi apa pun berbau
-// harga/biaya.
+// Halaman PUBLIK, TANPA login sama sekali — diakses client (bukan user sistem) lewat scan QR di
+// Surat Jalan fisik. TIDAK ADA pemeriksaan sesi Supabase di sini (beda dari SEMUA halaman lain
+// di aplikasi ini yang selalu cek supabase.auth.getSession() dulu) — itu sengaja, bukan lupa.
+// Field yang ditampilkan HANYA yang dikembalikan API (/api/pod/[token], sudah dibatasi ketat di
+// server — lihat getShipmentByPodToken.ts) — komponen ini TIDAK PERNAH menambah field lain
+// sendiri, apalagi apa pun berbau harga/biaya.
+//
+// Dimigrasikan ke Carbon pada 25 Agu 2026 (DS-02). Layar ini yang paling menentukan di antara
+// ketiga layar publik, dan alasannya bukan estetika: ia dibuka di TEPI JALAN, di HP, oleh orang
+// yang tidak pernah dilatih memakai sistem ini dan sedang menunggu untuk pergi. Komponen Carbon
+// membawa ukuran sentuh, kontras, dan peran ARIA bawaan — hal-hal yang pada versi tulis-tangan
+// harus diingat satu per satu, dan sebagian memang terlewat: tabel dan kotak centangnya ditulis
+// sebagai elemen HTML mentah.
+
 export default function PodConfirmationPage({ token }: { token: string }) {
   const [status, setStatus] = useState<'loading' | 'invalid' | 'valid' | 'success'>('loading');
   const [shipment, setShipment] = useState<ShipmentSummary | null>(null);
@@ -77,111 +96,147 @@ export default function PodConfirmationPage({ token }: { token: string }) {
 
   if (status === 'loading') {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
-        <p className="text-sm text-muted-foreground">Memuat...</p>
-      </main>
+      <LayarPublik judul="Bukti penerimaan barang">
+        <SkeletonText paragraph lineCount={5} />
+      </LayarPublik>
     );
   }
 
   if (status === 'invalid') {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle className="text-xl">Link Tidak Valid</CardTitle>
-            <CardDescription>Link ini sudah tidak berlaku, sudah pernah dipakai, atau salah.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">Kalau Anda merasa ini keliru, silakan hubungi pihak yang mengirimkan barang ini.</p>
-          </CardContent>
-        </Card>
-      </main>
+      <LayarPublik judul="Tautan tidak berlaku">
+        <InlineNotification
+          kind="error"
+          title="Tautan tidak berlaku"
+          subtitle="Tautan ini sudah tidak berlaku, sudah pernah dipakai, atau salah."
+          hideCloseButton
+          lowContrast
+          className="publik-pemberitahuan"
+        />
+        <p className="publik-teks">
+          Bila Anda merasa ini keliru, silakan hubungi pihak yang mengirimkan barang ini.
+        </p>
+      </LayarPublik>
     );
   }
 
   if (status === 'success') {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle className="text-xl">Terima Kasih</CardTitle>
-            <CardDescription>Konfirmasi penerimaan barang Anda sudah berhasil dicatat.</CardDescription>
-          </CardHeader>
-        </Card>
-      </main>
+      <LayarPublik judul="Terima kasih">
+        <InlineNotification
+          kind="success"
+          title="Sudah tercatat"
+          subtitle="Konfirmasi penerimaan barang Anda sudah berhasil dicatat. Halaman ini boleh ditutup."
+          hideCloseButton
+          lowContrast
+          className="publik-pemberitahuan"
+        />
+      </LayarPublik>
     );
   }
 
+  const tanggal = new Date(shipment!.shipment_date).toLocaleDateString('id-ID', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric'
+  });
+
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardDescription className="uppercase tracking-[0.2em]">Bukti Penerimaan Barang</CardDescription>
-          <CardTitle className="text-xl">{shipment!.shipment_number}</CardTitle>
-          <CardDescription>{new Date(shipment!.shipment_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="text-sm">
-            <span className="text-muted-foreground">Alamat Tujuan:</span> {shipment!.delivery_address}
-          </div>
+    <LayarPublik judul="Bukti penerimaan barang" pengantar={`Surat jalan ${shipment!.shipment_number} · ${tanggal}`} lebar>
+      <dl className="publik-baris-data">
+        <dt>Alamat tujuan:</dt>
+        <dd>{shipment!.delivery_address}</dd>
+      </dl>
 
-          <div className="overflow-hidden rounded-md border">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/40">
-                  <th className="px-3 py-1.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Item</th>
-                  <th className="px-3 py-1.5 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Qty</th>
-                </tr>
-              </thead>
-              <tbody>
-                {shipment!.lines.map((line, idx) => (
-                  <tr key={idx} className="border-b last:border-0">
-                    <td className="px-3 py-1.5">
-                      {line.item_code} — {line.item_name}
-                    </td>
-                    <td className="px-3 py-1.5 text-right">
-                      {formatNumberId(line.qty, 2)} {line.uom}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      <div className="publik-daftar-barang">
+        <StructuredListWrapper isCondensed aria-label="Rincian barang yang dikirim">
+          <StructuredListHead>
+            <StructuredListRow head>
+              <StructuredListCell head>Barang</StructuredListCell>
+              <StructuredListCell head>Jumlah</StructuredListCell>
+            </StructuredListRow>
+          </StructuredListHead>
+          <StructuredListBody>
+            {shipment!.lines.map((line, idx) => (
+              <StructuredListRow key={idx}>
+                <StructuredListCell>
+                  {line.item_code} — {line.item_name}
+                </StructuredListCell>
+                <StructuredListCell>
+                  {formatNumberId(line.qty, 2)} {line.uom}
+                </StructuredListCell>
+              </StructuredListRow>
+            ))}
+          </StructuredListBody>
+        </StructuredListWrapper>
+      </div>
 
-          <div className="my-1 border-t" />
-
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-foreground">Foto Barang Diterima (wajib)</span>
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)}
-              className="text-sm text-foreground file:mr-3 file:h-8 file:rounded-none file:border-0 file:bg-[#0f62fe] file:px-3 file:text-xs file:font-medium file:text-white hover:file:bg-[#0043ce]"
-            />
-            <span className="text-xs text-muted-foreground">PNG, JPG, atau WEBP, maksimal 5MB.</span>
-          </label>
-          {photoPreviewUrl ? (
+      <div className="publik-form">
+        <div>
+          <FileUploader
+            // `lg` supaya tombolnya 48px seperti kontrol lain di layar ini. Tanpa ini ia
+            // 40px -- dan justru tombol INILAH yang ditekan lebih dulu, di HP, di tepi jalan.
+            size="lg"
+            labelTitle="Foto barang diterima"
+            labelDescription="Wajib. PNG, JPG, atau WEBP, maksimal 5MB."
+            buttonLabel="Pilih atau ambil foto"
+            accept={['image/png', 'image/jpeg', 'image/webp']}
+            filenameStatus={photoFile ? 'edit' : 'uploading'}
+            iconDescription="Hapus foto"
+            // Carbon mengetikkan event-nya sebagai SyntheticEvent<HTMLElement>, bukan
+            // ChangeEvent<HTMLInputElement>, karena FileUploader juga dipicu dari area seret-
+            // dan-lepas — bukan hanya dari <input type="file">. Berkasnya diambil dari
+            // currentTarget yang memang input itu.
+            onChange={(event: React.SyntheticEvent<HTMLElement>) =>
+              setPhotoFile((event.currentTarget as HTMLInputElement).files?.[0] ?? null)
+            }
+            onDelete={() => setPhotoFile(null)}
+          />
+          {photoPreviewUrl && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={photoPreviewUrl} alt="Preview foto barang diterima" className="h-40 w-fit rounded-md border object-contain" />
-          ) : null}
+            <img src={photoPreviewUrl} alt="Pratinjau foto barang yang diterima" className="publik-pratinjau" />
+          )}
+        </div>
 
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-foreground">Nama yang Menerima (opsional)</span>
-            <Input value={receivedByName} onChange={(e) => setReceivedByName(e.target.value)} />
-          </label>
+        <TextInput
+          size="lg"
+          id="nama-penerima"
+          labelText="Nama yang menerima"
+          helperText="Boleh dikosongkan."
+          value={receivedByName}
+          onChange={(e) => setReceivedByName(e.target.value)}
+        />
 
-          <label className="flex items-start gap-2">
-            <input type="checkbox" className="mt-0.5 h-4 w-4" checked={checked} onChange={(event) => setChecked(event.target.checked)} disabled={submitting} />
-            <span className="text-sm">{CONFIRMATION_TEXT}</span>
-          </label>
+        <Checkbox
+          id="pernyataan-sesuai"
+          labelText={CONFIRMATION_TEXT}
+          checked={checked}
+          disabled={submitting}
+          onChange={(_event: unknown, { checked: nilai }: { checked: boolean }) => setChecked(nilai)}
+        />
+      </div>
 
-          {submitError ? <p className="text-sm text-destructive">{submitError}</p> : null}
+      {submitError && (
+        <InlineNotification
+          kind="error"
+          title="Gagal menyimpan"
+          subtitle={submitError}
+          onCloseButtonClick={() => setSubmitError('')}
+          lowContrast
+          className="publik-pemberitahuan"
+        />
+      )}
 
-          <Button onClick={handleSubmit} disabled={!photoFile || !checked || submitting}>
-            {submitting ? 'Memproses...' : 'Barang Sudah Diterima'}
-          </Button>
-        </CardContent>
-      </Card>
-    </main>
+      <div className="publik-aksi">
+        <Button
+          size="lg"
+          onClick={handleSubmit}
+          disabled={!photoFile || !checked || submitting}
+          renderIcon={CheckmarkFilled}
+        >
+          {submitting ? 'Memproses…' : 'Barang sudah diterima'}
+        </Button>
+      </div>
+    </LayarPublik>
   );
 }

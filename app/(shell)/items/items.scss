@@ -310,31 +310,9 @@
   }
 }
 
-// ============================================================================
-// AREA TEKAN TOMBOL BUKA-DETAIL — deviasi kecil yang dicatat
-// ============================================================================
-// Carbon mengukur tombol buka-detail (32px) TERPISAH dari tinggi barisnya. Menyetel tabel ke
-// ukuran `lg` menaikkan barisnya jadi 48px, dan tombolnya TETAP 32px — diukur, bukan dikira.
+// AREA TEKAN tombol buka-detail TIDAK LAGI diatur di sini.
 //
-// Aturan proyek menetapkan target sentuh minimal 44px. Yang dinaikkan HANYA AREA TEKANNYA:
-// ikon, warna, dan jaraknya tetap bawaan Carbon, jadi tampilannya tidak berubah sama sekali —
-// hanya lebih mudah kena jari.
-//
-// Ini tombol yang PALING SERING ditekan di halaman ini: satu-satunya jalan membuka detail,
-// mengubah, dan menghapus sebuah item.
-// DUA PERCOBAAN SEBELUMNYA GAGAL, dan keduanya hanya ketahuan dengan MENGUKUR:
-//   min-block-size 2.75rem  -> tombolnya 44px TAPI barisnya membengkak jadi 61px, karena
-//                              tombol mendorong tinggi selnya.
-//   block-size 100%          -> barisnya kembali 48px TAPI tombolnya cuma 31px, karena
-//                              induknya bukan sel setinggi penuh.
-// Yang bekerja: tinggi tombol dipatok 44px DAN padding vertikal selnya dinolkan, sehingga
-// tombolnya muat di dalam baris 48px tanpa mendorongnya.
-//
-// Ikon, warna, dan jaraknya tetap bawaan Carbon — yang berubah hanya AREA TEKANNYA.
-.item-tabel td.cds--table-expand {
-  padding-block: 0;
-}
-
-.item-tabel .cds--table-expand__button {
-  block-size: 2.75rem;
-}
+// Sejak DS-07 (25 Agu 2026) ia jadi kasus khusus dari SATU aturan yang berlaku seluruh layar:
+// "ukuran visual mengikuti Carbon, area sentuh minimal 44px lewat lapisan tak terlihat".
+// Aturannya hidup di src/styles/carbon.scss. Mengaturnya lagi di sini akan melahirkan jalur
+// kedua yang tidak ikut berubah saat aturannya diperbaiki.

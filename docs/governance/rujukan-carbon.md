@@ -26,6 +26,26 @@ Menyalin isi dokumentasi ke repo berarti membekukan kekeliruan semacam itu dan m
 
 Dokumen ini hanya menyimpan **alamat**, bukan isi.
 
+## DUA SITUS, dan keduanya wajib — untuk pertanyaan yang BERBEDA
+
+| Situs | Menjawab |
+|---|---|
+| `carbondesignsystem.com` | **KAPAN** dan **KENAPA** sebuah komponen dipakai — pola, Usage, Style |
+| `react.carbondesignsystem.com` | **BAGAIMANA** memakainya — properti apa yang ada, nilai bawaannya, perilakunya |
+
+**Kenapa yang kedua ditambahkan (25 Agu 2026)**: kesalahan `persistent` pada pencarian tabel
+lahir persis karena propertinya tidak pernah diperiksa di Storybook. Properti itu **mematikan
+perilaku bawaan** — pencarian yang seharusnya melipat jadi selalu terbuka — dan halaman Usage
+tidak menyebutnya sama sekali.
+
+Halaman Usage menjawab *"pakai pencarian di toolbar"*. Hanya Storybook yang menjawab *"dan
+begini properti-propertinya, dan begini bawaannya bila tidak diisi"*.
+
+**URUTAN PEMERIKSAAN MENGIKAT** (juga di CLAUDE.md):
+1. Pola → kapan & kenapa · 2. Usage → konteks · 3. Storybook → properti & perilaku ·
+4. Paket di `node_modules` → nama token & nilai sebenarnya.
+**Nomor 4 selalu menang bila bertentangan.**
+
 ## Wajib dibuka untuk setiap layar, apa pun jenisnya
 
 | Kebutuhan | Halaman |

@@ -190,24 +190,8 @@
   margin-block-start: 0;
 }
 
-// KOTAK CENTANG: area tekan dinaikkan ke 44px.
+// KOTAK CENTANG tidak lagi diatur di sini.
 //
-// INI PENYIMPANGAN DARI CARBON YANG DISENGAJA DAN DICATAT, bukan tambalan diam-diam.
-//
-// Carbon TIDAK menyediakan ukuran lain untuk Checkbox — tidak ada `size="lg"` seperti pada
-// field dan tombol. Area tekan bawaannya, diukur di peramban, 37px. Aturan proyek menetapkan
-// minimal 44px, dan ketegangan ini sudah tercatat di CLAUDE.md sejak 23 Agu 2026 sebagai
-// sesuatu yang "dinaikkan bila terbukti sulit ditekan di lantai produksi".
-//
-// Di sinilah bukti itu datang: kotak centang ini adalah SATU-SATUNYA pernyataan yang harus
-// ditekan penerima barang sebelum konfirmasi bisa dikirim, dan ia ditekan di HP, di tepi
-// jalan, sering dengan tangan yang sedang memegang barang. Salah tekan berarti ia mengulang;
-// tidak berhasil menekan berarti tombol kirimnya tetap mati tanpa penjelasan.
-//
-// Yang dinaikkan HANYA tinggi area tekannya. Ukuran kotak, warna, jarak, dan perilakunya tetap
-// bawaan Carbon — supaya perbedaannya dengan layar lain tidak terlihat, hanya terasa.
-.publik-form .cds--checkbox-label {
-  min-block-size: 2.75rem;
-  display: flex;
-  align-items: center;
-}
+// Sejak DS-07 (25 Agu 2026) area sentuh 44px berlaku SELURUH layar lewat satu aturan di
+// src/styles/carbon.scss -- termasuk kotak centang. Pengecualian yang dulu ditulis khusus
+// untuk halaman POD sudah dicabut dan disatukan ke sana.

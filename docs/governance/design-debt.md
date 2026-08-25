@@ -18,6 +18,22 @@ interaksi menentukan apakah layar **bisa dipakai**, sementara visual menentukan 
 | **B** Komponen | Elemen HTML mentah berdampingan dengan komponen bersama | 81 elemen mentah |
 | **A** Visual | **Dua sistem warna berjalan bersamaan dan saling tidak cocok** | 88 + 11 titik |
 
+> ### Potret 25 Agu 2026 — angka mana yang berubah sejak DS-0
+>
+> | | Saat DS-0 | Sekarang |
+> |---|---:|---:|
+> | Halaman memakai Carbon | **0** | **8** (7 layar publik + Master Item) |
+> | Halaman belum Carbon | 39 | **31** |
+> | Kerangka aplikasi | buatan sendiri | **UI Shell Carbon** |
+> | Warna heks tulis tangan | 88 | **± 66** (22 tercabut di layar publik) |
+> | `window.confirm` | 8 | **6** (2 tercabut di Master Item) |
+> | Halaman mengambil token sendiri | 36 | **35** |
+> | Penjaga otomatis untuk aturan UI | 0 | **4 berkas, 17 pemeriksaan** |
+>
+> **Yang paling menentukan dan tidak muncul sebagai angka**: kerangkanya sudah Carbon, jadi
+> setiap layar yang dimigrasikan sesudah ini **lahir di dalam kerangka yang sudah benar** —
+> bukan dipindahkan dua kali.
+>
 > **Kemajuan 25 Agu 2026 (DS-02).** Tujuh layar publik selesai dimigrasikan ke Carbon:
 > beranda, masuk, daftar, lupa sandi, atur ulang sandi, terima undangan, dan konfirmasi
 > penerimaan barang. Dari angka di atas, **22 warna heksadesimal** dan **belasan elemen HTML

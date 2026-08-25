@@ -423,6 +423,41 @@ Sudah terjadi dua kali dalam satu hari, keduanya langsung diperketat:
 
 **Berlaku untuk seluruh pengawas di proyek ini**: pengawas yang keliru diperbaiki di giliran yang sama, bukan dicatat sebagai "nanti".
 
+## URUTAN PEMERIKSAAN CARBON — MENGIKAT (ditetapkan 25 Agu 2026)
+
+Empat sumber, dipakai **berurutan**, dan masing-masing menjawab pertanyaan yang berbeda:
+
+1. **`carbondesignsystem.com/patterns`** — **kapan** dan **kenapa**. Pola menentukan komponen, bukan sebaliknya.
+2. **Usage komponen** — **konteks pemakaian**: kapan komponen itu dipakai, dan kapan TIDAK.
+3. **`react.carbondesignsystem.com` (Storybook)** — **bagaimana**: properti apa yang ada, nilai bawaannya, perilakunya.
+4. **Paket di `node_modules`** — **nama token dan nilai sebenarnya**.
+
+**Nomor 4 SELALU MENANG bila bertentangan.** Dokumentasi bisa mendahului atau tertinggal dari versi paket.
+
+**Kenapa nomor 3 ditambahkan, dan ini bukan kelengkapan formalitas**: kesalahan `persistent` pada pencarian tabel lahir persis karena propertinya tidak pernah diperiksa di Storybook. Properti itu **mematikan perilaku bawaan** Carbon — pencarian yang seharusnya melipat jadi selalu terbuka — dan halaman Usage tidak menyebutnya sama sekali. Halaman Usage menjawab *"pakai pencarian di toolbar"*; hanya Storybook yang menjawab *"dan begini properti-propertinya"*.
+
+## Properti KOSONG Tidak Sama dengan Properti TIDAK ADA (ditetapkan 25 Agu 2026)
+
+`titleText=""` pada komponen Carbon **tetap merender elemen labelnya** — hanya isinya yang kosong. Diukur: kotak saringan terdorong **16px lebih rendah** daripada kontrol di sebelahnya, dan terlihat melenceng dari toolbar.
+
+Yang benar: `titleText="Tipe"` **+ `hideLabel`** — labelnya tetap dibacakan pembaca layar, hanya disembunyikan secara visual. Membuang labelnya sama sekali akan membuat kontrol itu **tidak punya nama** bagi yang tidak melihat layar.
+
+**Waspadai di komponen lain**: string kosong sering diperlakukan sebagai "ada, tapi kosong", bukan "tidak ada".
+
+## Periksa Apa yang SUDAH Dibawa Komponen Sebelum Menambahkan yang Serupa (ditetapkan 25 Agu 2026)
+
+Judul ganda di Master Item lahir karena judul halaman ditambahkan **tanpa mencabut judul bawaan `DataTable`**. Anatomi DataTable Carbon memang memuat "Title and description" — jadi "Daftar item" muncul dua kali, berjarak beberapa sentimeter, dan pembacanya mengira ada dua hal berbeda.
+
+**ATURAN**: saat memakai komponen Carbon, periksa dulu **apa yang sudah dibawanya** sebelum menambahkan yang serupa di sekitarnya. Komponen Carbon sering membawa lebih banyak daripada yang terlihat dari namanya.
+
+## Menguji Komponen Carbon WAJIB dengan Klik Nyata (ditetapkan 25 Agu 2026)
+
+**Klik programatik (`element.click()`) tidak memicu Carbon sama sekali.**
+
+Pengujian pertama saringan Master Item memberi **hasil palsu**: seluruh interaksi dilaporkan "tidak berpengaruh" padahal komponennya baik-baik saja — yang tidak bekerja adalah cara mengujinya. Yang benar: kirim peristiwa tetikus sungguhan ke koordinat elemennya.
+
+Ini kelas yang sama dengan **test yang lulus tanpa menguji apa pun**: keduanya menghasilkan laporan yang terlihat meyakinkan dan tidak mengandung informasi.
+
 ## DS-RULES — Gerbang Rencana Carbon Sebelum Membangun Layar (ditetapkan 25 Agu 2026)
 
 Ditetapkan atas permintaan eksplisit pemilik produk setelah gelombang layar publik selesai. **Berlaku untuk SETIAP layar internal yang dibangun atau dimigrasikan sejak sekarang, tanpa kecuali.**

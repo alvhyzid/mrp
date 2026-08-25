@@ -33,3 +33,99 @@
 :root {
   @include theme.theme(themes.$g10);
 }
+
+// ============================================================================
+// DOMAIN PATTERN §42 — UKURAN VISUAL DIPISAH DARI AREA SENTUH (DS-07, 25 Agu 2026)
+// ============================================================================
+//
+// KEPUTUSAN PEMILIK PRODUK, berlaku SELURUH layar:
+//
+//   "FABRIX memisahkan ukuran visual dari area sentuh. Visual mengikuti Carbon; area sentuh
+//    minimal 44px lewat lapisan tak terlihat.
+//    ALASAN: lantai produksi memakai tablet dan HP, sering bersarung tangan. Memperbesar
+//    visualnya menyimpang dari Carbon; memperbesar area sentuhnya tidak."
+//
+// ---------------------------------------------------------------------------
+// KENAPA LAPISAN TAK TERLIHAT, BUKAN MEMBESARKAN TOMBOLNYA
+// ---------------------------------------------------------------------------
+// Sudah dicoba membesarkan tombolnya langsung, dan gagal dua kali dengan cara yang hanya
+// ketahuan setelah DIUKUR:
+//   min-block-size 2.75rem -> tombol 44px TAPI baris tabel membengkak 48px -> 61px
+//   block-size 100%         -> baris kembali 48px TAPI tombol menyusut jadi 31px
+// Elemen semu yang diposisikan absolut TIDAK IKUT menentukan tinggi induknya sama sekali,
+// jadi ia menambah area tekan tanpa menyentuh tata letak. Itu sebabnya pola ini dipakai.
+//
+// ---------------------------------------------------------------------------
+// BERLAKU DI SEMUA PERANGKAT, BUKAN HANYA LAYAR SENTUH
+// ---------------------------------------------------------------------------
+// Sempat dipertimbangkan `@media (pointer: coarse)` supaya hanya berlaku di layar sentuh.
+// DITOLAK: dua jalur perilaku untuk hal yang sama adalah kelas cacat yang sudah dicatat
+// berkali-kali di proyek ini, dan area sentuh yang lebih luas tidak merugikan pemakai tetikus.
+//
+// ---------------------------------------------------------------------------
+// DUA PENGECUALIAN LAMA DICABUT DAN DISATUKAN KE SINI
+// ---------------------------------------------------------------------------
+// Sebelumnya ada dua penyimpangan yang diputuskan kasus per kasus: kotak centang halaman POD
+// (37 -> 44px) dan tombol buka-detail Master Item (32 -> 44px). Keduanya sekarang kasus khusus
+// dari SATU aturan, bukan pengecualian sendiri-sendiri.
+//
+// SESI BERIKUTNYA: jangan menghapus ini karena "Carbon tidak begitu". Carbon memang tidak
+// begitu — dan itu justru yang dicatat di sini sebagai deviasi resmi.
+
+$area-sentuh-minimum: 2.75rem; // 44px
+
+/// Menempelkan lapisan tak terlihat di tengah sebuah kontrol.
+/// Ukuran visual kontrolnya TIDAK disentuh sama sekali.
+@mixin area-sentuh($ukuran: $area-sentuh-minimum) {
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 50%;
+    transform: translate(-50%, -50%);
+    inline-size: max(100%, #{$ukuran});
+    block-size: max(100%, #{$ukuran});
+    // Tidak menggambar apa pun; hanya menangkap sentuhan.
+    pointer-events: auto;
+  }
+}
+
+// Kontrol Carbon yang ukuran visualnya di bawah 44px. Daftar ini bertambah bila ditemukan
+// yang lain -- ukur, jangan tebak.
+.cds--toggletip-button,          // ikon bantuan (16px)
+.cds--popover-container > button, // pemicu popover kecil
+.cds--pagination__button,        // panah pembagi halaman (40px)
+.cds--table-expand__button,      // tombol buka-detail baris tabel (32px)
+.cds--overflow-menu,             // menu titik tiga
+.cds--list-box__selection {      // tombol hapus pilihan di dropdown
+  @include area-sentuh;
+}
+
+// Kotak centang: yang ditekan orang adalah LABELNYA, bukan kotak 16px-nya.
+.cds--checkbox-label {
+  min-block-size: $area-sentuh-minimum;
+  display: flex;
+  align-items: center;
+}
+
+// ============================================================================
+// CACAT CARBON YANG DIPERBAIKI DI SELURUH HALAMAN — BREADCRUMB
+// ============================================================================
+// Carbon menempelkan kelas `cds--link` ke SETIAP butir breadcrumb, termasuk butir yang TIDAK
+// punya alamat. Diukur 25 Agu 2026: butir tanpa alamat berwarna rgb(15, 98, 254) -- biru
+// tautan yang sama persis dengan butir yang benar-benar bisa diklik di sebelahnya.
+//
+// Akibatnya orang mengklik sesuatu yang tidak melakukan apa-apa, lalu mengira sistemnya rusak.
+// Butir yang bukan tautan dikembalikan ke warna teks sekunder DI SELURUH HALAMAN, bukan
+// per halaman.
+.cds--breadcrumb-item > span.cds--link:not([href]) {
+  color: var(--cds-text-secondary);
+  cursor: default;
+}
+
+// Butir halaman sekarang tetap berwarna teks utama -- ia menandai POSISI, bukan tujuan.
+.cds--breadcrumb-item--current > span.cds--link {
+  color: var(--cds-text-primary);
+}

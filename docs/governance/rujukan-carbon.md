@@ -165,5 +165,6 @@ lengkap dengan alasannya. Yang sudah ada:
 
 | Penyimpangan | Alasan |
 |---|---|
+| **LEBAR PENUH** — isi tidak dibatasi lebar grid Carbon | **Deviasi resmi, keputusan pemilik produk 25 Agu 2026.** ERP padat data: tabel banyak kolom butuh seluruh lebar layar, dan membuang ruang kiri-kanan membuat kolom terpotong lebih cepat — cacat yang sudah berulang (RSP-01, RSP-02). **Hanya menyentuh LEBAR.** Tinggi header/side nav, padding bertoken, perilaku menu di layar sempit, SkipToContent, dan fokus keyboard TETAP mengikuti Carbon. Sesi berikutnya: jangan "memperbaikinya" jadi bergrid |
 | Mode lantai produksi memakai ukuran `lg` (48px), bukan `md` (40px) | Target sentuh 44px untuk jari bersarung tangan. **Bukan deviasi** — 48px ukuran sah di dalam Carbon |
 | Tabel berubah jadi kartu bertumpuk di layar sempit | `DataTable` Carbon tidak melakukannya sendiri. **Belum diverifikasi** apakah masih perlu setelah pindah ke Carbon |

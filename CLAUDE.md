@@ -340,6 +340,51 @@ Lahir dari cara halaman `/register` diperiksa: pemilik produk meletakkan tangkap
 
 Berlaku lebih luas dari Carbon: bila sebuah pemeriksaan hanya bisa dilakukan mata manusia, **rancang laporannya supaya pemeriksaan itu mudah dijalankan** — jangan melaporkan hanya kesimpulan yang bisa dicapai sendiri.
 
+## FAKTA PROYEK — Sistem Diselesaikan Dulu, Baru Dipakai Pihak Luar (ditetapkan 25 Agu 2026)
+
+**Pengguna satu-satunya untuk sementara adalah pemilik produk dan tim internal PT ITM.** Sistem dibangun sampai selesai lebih dahulu, baru diberikan ke pihak luar.
+
+**Diperkuat angka dari audit navigasi 25 Agu 2026**: dari 16 peran yang dikenal sistem, hanya 7 yang punya akun, dan **ketujuhnya berakhiran `@debug.mrp`** — **nol akun manusia sungguhan**.
+
+**KONSEKUENSI LANGSUNG:**
+- **Navigasi cukup SATU MODE** — seluruh item ditampilkan, masing-masing dengan penanda status kejujurannya. **Mode publik TIDAK dibangun sekarang**; kelak ia hanya penyaringan dari navigasi yang sama, bukan sistem kedua.
+- **PEMICU membangun mode publik**: sebelum tenant di luar PT ITM diberi akses.
+
+**Aturan Fable "item parkir tidak muncul di navigasi publik" DIBATALKAN pemilik produk** dengan alasan yang sah: menyembunyikan sesuatu dari pengguna yang belum ada tidak menghasilkan apa-apa, sementara menampilkan seluruhnya memberi peta apa yang akan dikerjakan.
+
+**SATU HAL TETAP**: item yang keputusannya **DITOLAK** (Sales Forecast) ditandai **"ditolak — keputusan tercatat"**, BUKAN "direncanakan". Menampilkan hal yang sudah ditolak sebagai rencana akan membuat seseorang mengira ia akan dibangun.
+
+## Label Navigasi Bahasa Inggris, Isi Halaman Tetap Bahasa Indonesia (ditetapkan 25 Agu 2026)
+
+**Ini mengubah aturan yang sudah ada, jadi batasnya ditulis tegas.**
+
+**Label NAVIGASI memakai Bahasa Inggris** untuk sekarang, mengikuti penamaan workspace di dokumen Information Architecture.
+
+**Label ISI HALAMAN — field, tombol, pesan, status, judul tabel — TETAP Bahasa Indonesia** dari Kamus.
+
+Keduanya tidak bertentangan: **navigasi adalah nama modul; isi halaman adalah yang dibaca orang pabrik.**
+
+**PEMICU PENINJAUAN**: sebelum ada pengguna di luar tim internal, atau bila ada anggota tim yang kesulitan membacanya.
+
+> Catatan batas: aturan "SELURUH komunikasi ke pemilik produk WAJIB Bahasa Indonesia" **tidak tersentuh** oleh keputusan ini. Yang berubah hanya label navigasi di layar.
+
+## Deviasi Resmi dari Carbon — LEBAR PENUH (ditetapkan 25 Agu 2026)
+
+**Carbon menempatkan isi di dalam grid dengan batas lebar. FABRIX memakai LEBAR PENUH.**
+
+**ALASAN**: ERP padat data. Tabel dengan banyak kolom membutuhkan seluruh lebar layar; membuang ruang di kiri dan kanan membuat kolom terpotong lebih cepat — dan **memotong kolom diam-diam sudah jadi cacat berulang di proyek ini** (RSP-01, RSP-02).
+
+**Keputusan pemilik produk, 25 Agustus 2026.**
+
+**YANG TETAP DARI CARBON meski lebarnya penuh — jangan ikut dilepas:**
+1. Tinggi header dan navigasi samping sesuai spesifikasi Carbon.
+2. Jarak dalam (padding) isi memakai **token**, bukan angka.
+3. Perilaku navigasi samping di layar sempit: menjadi menu buka-tutup, dan **menutup sendiri setelah berpindah halaman** (aturan RSP-01).
+4. **SkipToContent** — melompat ke isi utama, wajib untuk aksesibilitas.
+5. Fokus keyboard terlihat, urutan Tab masuk akal.
+
+**Lebar penuh hanya menyentuh LEBAR, bukan yang lain.** Sesi berikutnya: jangan "memperbaikinya" jadi bergrid.
+
 ## DS-RULES — Gerbang Rencana Carbon Sebelum Membangun Layar (ditetapkan 25 Agu 2026)
 
 Ditetapkan atas permintaan eksplisit pemilik produk setelah gelombang layar publik selesai. **Berlaku untuk SETIAP layar internal yang dibangun atau dimigrasikan sejak sekarang, tanpa kecuali.**

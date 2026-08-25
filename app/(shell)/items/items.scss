@@ -316,3 +316,37 @@
 // "ukuran visual mengikuti Carbon, area sentuh minimal 44px lewat lapisan tak terlihat".
 // Aturannya hidup di src/styles/carbon.scss. Mengaturnya lagi di sini akan melahirkan jalur
 // kedua yang tidak ikut berubah saat aturannya diperbaiki.
+
+// ============================================================================
+// ISIAN BERPASANGAN — satu makna, dua kontrol
+// ============================================================================
+// ATURAN CETAKAN (B.3, 25 Agu 2026): isian yang secara MAKNA berpasangan — angka + satuan,
+// nilai + persen, ambang yang saling meniadakan — WAJIB berada dalam satu kelompok, di bawah
+// SATU legend, dan tidak boleh terpisah kolom.
+//
+// Lahir dari dua kasus yang DIUKUR, bukan dikira:
+//   Shelf life  : angka dan satuannya sudah berdampingan (kiri 219 & 564, baris sama), TAPI
+//                 masing-masing punya label sendiri -- jadi terbaca sebagai dua field yang
+//                 tidak berhubungan. Pemilik produk tidak mengenalinya sebagai isian yang
+//                 dimintanya, padahal itu persis isian yang dimintanya.
+//   Stok minimum: persen di kolom KETIGA, angka mutlak di kolom PERTAMA baris berikutnya --
+//                 padahal yang satu MEMBATALKAN yang lain. Orang bisa mengisi salah satunya
+//                 tanpa pernah melihat yang lain.
+//
+// Carbon tidak punya komponen angka-berpasangan-satuan; FormGroup dipakai untuk menyatukannya.
+.item-berpasangan {
+  margin: 0;
+}
+
+.item-berpasangan__isi {
+  display: grid;
+  gap: spacing.$spacing-05;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  margin-block-start: spacing.$spacing-03;
+}
+
+.item-berpasangan__hasil {
+  @include type.type-style('label-01');
+  color: theme.$text-secondary;
+  margin-block-start: spacing.$spacing-03;
+}

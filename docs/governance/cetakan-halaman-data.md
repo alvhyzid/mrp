@@ -71,6 +71,27 @@ sekaligus; satu-pilihan (`Dropdown`) bila pilihannya saling meniadakan.
   tambahan lain — hidup **di dalam** detail, bukan berjejer di baris tabel.
 - **Aksi merusak ditempatkan berjauhan** dari aksi biasa di dalam detail.
 
+### 3a. Isian yang BERPASANGAN wajib menyatu
+
+**Isian yang secara MAKNA berpasangan — angka + satuan, nilai + persen, dua ambang yang saling
+meniadakan — WAJIB berada dalam satu kelompok di bawah SATU legend.** Tidak boleh terpisah
+kolom, dan tidak boleh punya label sendiri-sendiri.
+
+Lahir dari dua kasus yang **diukur**, dan keduanya mengajarkan hal berbeda:
+
+| Pasangan | Yang terjadi | Pelajarannya |
+|---|---|---|
+| Shelf life (angka + satuan) | **Sudah berdampingan** di baris yang sama, tapi masing-masing punya label sendiri | **Berdampingan saja tidak cukup.** Dua label membuatnya terbaca sebagai dua field yang tidak berhubungan — pemilik produk tidak mengenalinya sebagai isian yang ia minta, padahal itu persis isian yang ia minta |
+| Stok minimum (persen + mutlak) | Persen di kolom **ketiga**, mutlak di kolom **pertama baris berikutnya** | Yang satu **membatalkan** yang lain, dan orang bisa mengisi salah satunya tanpa pernah melihat yang lain |
+
+**Carbon tidak punya komponen angka-berpasangan-satuan** — diperiksa di paket terpasang: ada
+`NumberInput` dan `Select`, tidak ada yang menyatukannya. Dipakai `FormGroup`: satu `legendText`,
+kontrolnya di dalam.
+
+**Hasil turunannya ditampilkan**, bukan disembunyikan: `"6 bulan (180 hari)"`. Angka harinya
+itulah yang dipakai menghitung tanggal kedaluwarsa; menyembunyikannya membuat pengguna tidak
+punya cara memeriksa apakah sistem memahami maksudnya.
+
 ---
 
 ## 4. Keadaan

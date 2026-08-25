@@ -464,7 +464,7 @@ Ini kelas yang sama dengan **test yang lulus tanpa menguji apa pun**: keduanya m
 
 Kasus yang melahirkannya: kode unggah foto profil punya komentar yang menyadari bahwa mengganti PNG dengan JPG meninggalkan berkas yatim. Benar. Yang **tidak** disebutnya: mengganti PNG dengan PNG **menghapus yang lama tanpa jejak** — dan begitulah foto pemilik produk hilang permanen.
 
-**Setengah sadar lebih berbahaya daripada tidak sadar**: komentarnya membuat pembaca berikutnya mengira masalahnya sudah dipikirkan, lalu melanjutkan. Kode tanpa komentar sama sekali justru lebih mungkin diperiksa ulang.
+**Setengah sadar lebih berbahaya daripada tidak sadar**: komentarnya membuat pembaca berikutnya mengira masalahnya sudah dipikirkan, lalu melanjutkan. **Kode tanpa komentar justru lebih mungkin diperiksa ulang.**
 
 **Bentuk kalimat yang dituju**: *"ini menangani A; ini TIDAK menangani B."*
 

@@ -3378,3 +3378,37 @@ dicakupnya**. Menyebut satu risiko tanpa batasnya memberi rasa aman yang tidak b
 rasa aman yang keliru menghentikan pemeriksaan yang seharusnya terjadi.
 
 Bentuk kalimat yang dituju: *"ini menangani A; ini TIDAK menangani B."*
+
+---
+
+# 25 Agu 2026 — Pengaman yang Mencegah tapi Tidak Berbunyi
+
+Kode task bentrok untuk **keempat kalinya**. Tiga kali pertama, `on conflict do nothing`
+menelan insert-nya diam-diam. Kali keempat berbeda, dan justru lebih halus:
+
+Penjaganya berbentuk `if not exists (...) then insert ... end if`. Ia **berhasil** mencegah
+penimpaan task yang sudah ada — itu memang tujuannya. Tapi ketika kodenya bentrok, ia hanya
+**melewati** insert-nya, migrasinya melaporkan sukses, dan task yang seharusnya lahir **tidak
+pernah ada**.
+
+Yang menemukannya bukan penjaga itu, melainkan pemeriksaan sesudahnya: *"baris ini benar-benar
+ada?"*
+
+> **Pengaman yang mencegah kerusakan tapi tidak berbunyi hanya memindahkan kegagalan ke tempat
+> yang lebih sulit dilihat. Mencegah saja tidak cukup — ia harus memberi tahu.**
+
+Ini bentuk lain dari "berhasil tanpa berlaku": tidak ada yang rusak, tidak ada yang merah, dan
+hasil yang diharapkan tetap tidak ada.
+
+**Yang dilakukan sebagai gantinya**, dan keduanya sekaligus:
+
+1. **`pastikan_kode_task_kosong(kode)`** — fungsi database yang **melempar galat** bila kodenya
+   sudah dipakai, menyebutkan **task mana** yang memakainya, **kode kosong berikutnya**, dan
+   **perintah** untuk mencarinya sendiri. Dibuktikan merah untuk kode terpakai, diam untuk kode
+   bebas.
+2. **`scripts/kode-task-berikutnya.js`** — supaya jalan yang benar **lebih mudah daripada
+   menebak**. Menebak sudah gagal empat dari empat kali; menyuruh orang berhati-hati tidak akan
+   mengubah itu, menyediakan jawabannya dalam satu perintah mungkin bisa.
+
+Skripnya sekalian menemukan hal lain: modul HR punya lubang — `HR-13` kosong padahal `HR-38`
+sudah ada. Menebak "nomor tertinggi + 1" pun akan meleset di sana.

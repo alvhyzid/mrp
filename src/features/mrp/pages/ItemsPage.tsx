@@ -10,6 +10,7 @@ import {
   Button,
   Checkbox,
   Dropdown,
+  FormGroup,
   ComposedModal,
   DataTable,
   DataTableSkeleton,
@@ -642,11 +643,11 @@ export default function ItemsPage() {
           item.min_stock_percent !== null && item.min_stock_percent !== undefined
             ? `${formatNumberId(item.min_stock_percent, 2)}% dari total yang pernah masuk`
             : formatNumberId(item.min_stock_level ?? 0, 2)
-      },
-      // MST-21 masih menunggu keputusan pemilik produk: keduanya DIBIARKAN seperti sekarang,
-      // tidak disembunyikan dan tidak diberi penjelasan baru.
-      { label: 'Reorder Point', nilai: item.reorder_point !== null ? formatNumberId(item.reorder_point, 2) : '—' },
-      { label: 'Reorder Qty', nilai: item.reorder_qty !== null ? formatNumberId(item.reorder_qty, 2) : '—' }
+      }
+      // Reorder Point & Qty DICABUT dari tampilan (MST-21, keputusan pemilik produk
+      // 25 Agu 2026). Kolomnya tetap ada di basis data supaya angka lama tidak hilang, tapi
+      // tidak muncul di layar mana pun -- Point karena ambangnya dihitung dari kebutuhan
+      // produksi, Qty karena ia milik purchasing dan akan hidup di layar mereka.
     ];
     if (canViewCost) {
       baris.push({
@@ -1275,95 +1276,121 @@ export default function ItemsPage() {
                 </div>
               </div>
 
-              <TextInput
-                size="lg"
-                id="shelf_life_days"
-                type="number"
-                min="0"
-                labelText={
+              {/* SATU ISIAN BERPASANGAN, bukan dua field yang kebetulan bersebelahan.
+                  =============================================================
+                  Diukur 25 Agu 2026: angka dan satuannya SUDAH berdampingan di baris yang
+                  sama (kiri 219 dan 564, atas 573 keduanya). Jadi dugaan "terpisah kolom"
+                  KELIRU untuk pasangan ini.
+                  Yang membuat pemilik produk tidak mengenalinya adalah hal lain: keduanya
+                  punya LABEL SENDIRI-SENDIRI ("Shelf life" dan "Satuan shelf life"), sehingga
+                  terbaca sebagai DUA field yang tidak berhubungan.
+
+                  Carbon TIDAK punya komponen angka-berpasangan-satuan -- diperiksa di paket
+                  terpasang: ada NumberInput dan Select, tidak ada yang menyatukan keduanya.
+                  Jadi disatukan lewat FormGroup: SATU legend, dua kontrol di dalamnya. */}
+              <FormGroup
+                legendText={
                   <LabelBantuan teks="Shelf life">
                     Berapa lama bahan atau produk ini masih layak sejak diproduksi/diterima. Isi angkanya, lalu pilih
                     satuannya — sistem menyimpannya dalam hari, karena tanggal kedaluwarsa tiap lot dihitung dari
                     angka itu (dasar aturan FEFO). Kosongkan bila bahan ini tidak punya masa simpan.
                   </LabelBantuan>
                 }
-                helperText={
-                  form.shelf_life_days.trim() && Number(form.shelf_life_days) > 0
-                    ? `Tersimpan sebagai ${shelfLifeToDays(Number(form.shelf_life_days), shelfLifeUnit)} hari.`
-                    : 'Boleh dikosongkan bila bahan ini tidak punya masa simpan.'
-                }
-                value={form.shelf_life_days}
-                onChange={(e) => setForm((prev) => ({ ...prev, shelf_life_days: e.target.value }))}
-              />
-              <CarbonSelect
-                size="lg"
-                id="shelf_life_unit"
-                labelText="Satuan shelf life"
-                value={shelfLifeUnit}
-                onChange={(e) => setShelfLifeUnit(e.target.value as ShelfLifeUnit)}
+                className="item-form__lebar item-berpasangan"
               >
-                {SHELF_LIFE_UNITS.map((u) => (
-                  <CarbonSelectItem key={u} value={u} text={u.charAt(0).toUpperCase() + u.slice(1)} />
-                ))}
-              </CarbonSelect>
+                <div className="item-berpasangan__isi">
+                  <TextInput
+                    size="lg"
+                    id="shelf_life_days"
+                    type="number"
+                    min="0"
+                    labelText="Angka"
+                    hideLabel
+                    placeholder="mis. 6"
+                    value={form.shelf_life_days}
+                    onChange={(e) => setForm((prev) => ({ ...prev, shelf_life_days: e.target.value }))}
+                  />
+                  <CarbonSelect
+                    size="lg"
+                    id="shelf_life_unit"
+                    labelText="Satuan"
+                    hideLabel
+                    value={shelfLifeUnit}
+                    onChange={(e) => setShelfLifeUnit(e.target.value as ShelfLifeUnit)}
+                  >
+                    {SHELF_LIFE_UNITS.map((u) => (
+                      <CarbonSelectItem key={u} value={u} text={u.charAt(0).toUpperCase() + u.slice(1)} />
+                    ))}
+                  </CarbonSelect>
+                </div>
+                {/* Hasil konversinya DITAMPILKAN dalam bentuk yang diminta pemilik produk:
+                    "6 bulan (180 hari)". Angka harinya itulah yang dipakai menghitung tanggal
+                    kedaluwarsa tiap lot; menyembunyikannya membuat pengguna tidak punya cara
+                    memeriksa apakah sistem memahami maksudnya. */}
+                <p className="item-berpasangan__hasil">
+                  {form.shelf_life_days.trim() && Number(form.shelf_life_days) > 0
+                    ? `${form.shelf_life_days} ${shelfLifeUnit} (${shelfLifeToDays(Number(form.shelf_life_days), shelfLifeUnit)} hari)`
+                    : 'Boleh dikosongkan bila bahan ini tidak punya masa simpan.'}
+                </p>
+              </FormGroup>
 
-              <TextInput
-                size="lg"
-                id="min_stock_percent"
-                type="number"
-                min="0"
-                max="100"
-                step="any"
-                labelText={
-                  <LabelBantuan teks="Stok minimum (persen)">
-                    Ambang stok minimum sebagai PERSEN dari jumlah yang PERNAH MASUK untuk item ini. SENGAJA bukan
-                    persen dari stok saat ini: ambang yang dihitung dari stok saat ini ikut turun setiap kali stok
-                    turun, jadi justru menghilang ketika stok menipis.
-                  </LabelBantuan>
-                }
-                helperText="Contoh: isi 10 berarti diperingatkan saat sisa stok kurang dari 10% dari total yang pernah masuk."
-                value={form.min_stock_percent}
-                onChange={(e) => setForm((prev) => ({ ...prev, min_stock_percent: e.target.value }))}
-              />
-              <TextInput
-                size="lg"
-                id="min_stock_level"
-                type="number"
-                min="0"
-                labelText={
-                  <LabelBantuan teks="Stok minimum (angka mutlak)">
-                    Ambang stok minimum dalam ANGKA MUTLAK. Dipertahankan untuk item lama yang belum dipindah ke
-                    persen. Bila kolom persen di atas terisi, kolom persen yang MENANG dan angka ini diabaikan.
-                  </LabelBantuan>
-                }
-                {...(form.min_stock_percent.trim() && Number(form.min_stock_percent) > 0
-                  ? { warn: true, warnText: 'Diabaikan: kolom persen di atas sedang terisi, dan persen yang menang.' }
-                  : {})}
-                value={form.min_stock_level}
-                onChange={(e) => setForm((prev) => ({ ...prev, min_stock_level: e.target.value }))}
-              />
+              {/* DUA AMBANG YANG SALING MENIADAKAN, jadi WAJIB berdampingan.
+                  =============================================================
+                  Diukur 25 Agu 2026: sebelumnya persen ada di kolom KETIGA (kiri 908) dan
+                  angka mutlak di kolom PERTAMA baris berikutnya (kiri 219, atas 713).
+                  Terpisah kolom DAN terpisah baris -- padahal yang satu MEMBATALKAN yang lain.
+                  Orang bisa mengisi salah satunya tanpa pernah melihat yang lain. */}
+              <FormGroup legendText="Stok minimum" className="item-form__lebar item-berpasangan">
+                <div className="item-berpasangan__isi">
+                  <TextInput
+                    size="lg"
+                    id="min_stock_percent"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="any"
+                    labelText={
+                      <LabelBantuan teks="Persen dari yang pernah masuk">
+                        Ambang sebagai PERSEN dari jumlah yang PERNAH MASUK untuk item ini. SENGAJA bukan persen dari
+                        stok saat ini: ambang yang dihitung dari stok saat ini ikut turun setiap kali stok turun, jadi
+                        justru menghilang ketika stok menipis.
+                      </LabelBantuan>
+                    }
+                    helperText="Contoh: 10 berarti diperingatkan saat sisa kurang dari 10% dari total yang pernah masuk."
+                    value={form.min_stock_percent}
+                    onChange={(e) => setForm((prev) => ({ ...prev, min_stock_percent: e.target.value }))}
+                  />
+                  <TextInput
+                    size="lg"
+                    id="min_stock_level"
+                    type="number"
+                    min="0"
+                    labelText={
+                      <LabelBantuan teks="Angka mutlak">
+                        Ambang dalam ANGKA MUTLAK. Dipertahankan untuk item lama yang belum dipindah ke persen.
+                      </LabelBantuan>
+                    }
+                    {...(form.min_stock_percent.trim() && Number(form.min_stock_percent) > 0
+                      ? { warn: true, warnText: 'Diabaikan — kolom persen di sebelah sedang terisi, dan persen yang menang.' }
+                      : { helperText: 'Dipakai bila kolom persen dikosongkan.' })}
+                    value={form.min_stock_level}
+                    onChange={(e) => setForm((prev) => ({ ...prev, min_stock_level: e.target.value }))}
+                  />
+                </div>
+              </FormGroup>
 
-              {/* MST-21 masih menunggu keputusan pemilik produk — kedua field ini DIBIARKAN
-                  persis seperti sekarang: tidak disembunyikan, tidak diberi penjelasan baru,
-                  tidak diubah namanya. */}
-              <TextInput
-                size="lg"
-                id="reorder_point"
-                type="number"
-                min="0"
-                labelText="Reorder Point"
-                value={form.reorder_point}
-                onChange={(e) => setForm((prev) => ({ ...prev, reorder_point: e.target.value }))}
-              />
-              <TextInput
-                size="lg"
-                id="reorder_qty"
-                type="number"
-                min="0"
-                labelText="Reorder Qty"
-                value={form.reorder_qty}
-                onChange={(e) => setForm((prev) => ({ ...prev, reorder_qty: e.target.value }))}
-              />
+              {/* REORDER POINT & REORDER QTY DICABUT dari form ini (MST-21, keputusan
+                  pemilik produk 25 Agu 2026).
+                  =============================================================
+                  BUKAN disembunyikan, melainkan dipindahkan kepemilikannya:
+                    Reorder POINT dihapus dari tampilan mana pun. Ambangnya sudah bisa
+                      dihitung sendiri dari kebutuhan produksi; angka yang diketik tangan
+                      hanya menambah satu hal yang harus dijaga benar oleh manusia, untuk
+                      hasil yang sudah bisa dihitung. Kolomnya tetap ada di basis data.
+                    Reorder QTY dipertahankan, tapi pindah ke layar yang diakses purchasing --
+                      ia KEPUTUSAN KOMERSIAL (ukuran kemasan supplier, diskon jumlah, ongkos
+                      kirim) yang tidak bisa diturunkan dari kebutuhan produksi.
+                  Form ini diisi GUDANG, jadi keduanya tidak muncul di sini. */}
 
               {canViewCost ? (
                 <TextInput

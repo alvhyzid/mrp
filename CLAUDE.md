@@ -458,6 +458,16 @@ Pengujian pertama saringan Master Item memberi **hasil palsu**: seluruh interaks
 
 Ini kelas yang sama dengan **test yang lulus tanpa menguji apa pun**: keduanya menghasilkan laporan yang terlihat meyakinkan dan tidak mengandung informasi.
 
+## Komentar yang Menyebut Risiko WAJIB Menyebut Batasnya (ditetapkan 25 Agu 2026)
+
+**Menyebut satu risiko tanpa menyebut apa yang TIDAK dicakupnya memberi rasa aman yang tidak berdasar — dan rasa aman yang keliru menghentikan pemeriksaan yang seharusnya terjadi.**
+
+Kasus yang melahirkannya: kode unggah foto profil punya komentar yang menyadari bahwa mengganti PNG dengan JPG meninggalkan berkas yatim. Benar. Yang **tidak** disebutnya: mengganti PNG dengan PNG **menghapus yang lama tanpa jejak** — dan begitulah foto pemilik produk hilang permanen.
+
+**Setengah sadar lebih berbahaya daripada tidak sadar**: komentarnya membuat pembaca berikutnya mengira masalahnya sudah dipikirkan, lalu melanjutkan. Kode tanpa komentar sama sekali justru lebih mungkin diperiksa ulang.
+
+**Bentuk kalimat yang dituju**: *"ini menangani A; ini TIDAK menangani B."*
+
 ## DS-RULES — Gerbang Rencana Carbon Sebelum Membangun Layar (ditetapkan 25 Agu 2026)
 
 Ditetapkan atas permintaan eksplisit pemilik produk setelah gelombang layar publik selesai. **Berlaku untuk SETIAP layar internal yang dibangun atau dimigrasikan sejak sekarang, tanpa kecuali.**

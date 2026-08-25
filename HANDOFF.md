@@ -3351,3 +3351,30 @@ login.
 Pemindahan 35 sisanya dilakukan **bertahap** bersama migrasi Carbon masing-masing (AUD-37),
 dengan pengawas yang gagal keras bila halaman **ke-37** lahir dengan cara lama. Daftarnya
 hanya boleh menyusut.
+
+---
+
+# 25 Agu 2026 — Setengah Sadar Lebih Berbahaya daripada Tidak Sadar
+
+Kode unggah foto profil menyimpan berkas bernama `<user-id>/avatar.png` dengan `upsert: true`.
+Di atasnya ada komentar yang menyadari **setengah** masalahnya:
+
+> "Nama berkas ikut EKSTENSI (avatar.png / avatar.jpg), dan upsert hanya menimpa nama yang
+> sama persis. Jadi mengganti foto PNG dengan JPG meninggalkan avatar.png yatim selamanya."
+
+Komentar itu benar, dan **tidak menyebut** hal yang jauh lebih merugikan: mengganti foto PNG
+dengan PNG lain **menghapus yang lama tanpa jejak**. Tidak ada berkas yatim, tidak ada sisa,
+tidak ada yang bisa dipulihkan.
+
+Foto profil pemilik produk hilang permanen dengan cara itu.
+
+**Kenapa ini kelas tersendiri, bukan sekadar cacat**: komentarnya membuat orang mengira
+masalahnya **sudah dipikirkan**. Pembaca berikutnya melihat catatan tentang berkas yatim,
+menyimpulkan bahwa penulisnya sudah menimbang soal penimpaan, lalu melanjutkan. Kode tanpa
+komentar sama sekali justru lebih mungkin diperiksa ulang.
+
+**ATURAN**: komentar yang menyebut sebuah risiko **WAJIB menyebut juga apa yang TIDAK
+dicakupnya**. Menyebut satu risiko tanpa batasnya memberi rasa aman yang tidak berdasar — dan
+rasa aman yang keliru menghentikan pemeriksaan yang seharusnya terjadi.
+
+Bentuk kalimat yang dituju: *"ini menangani A; ini TIDAK menangani B."*

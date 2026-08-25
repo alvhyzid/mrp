@@ -304,7 +304,9 @@ Yang boleh ditanyakan ke pemilik produk hanya hal yang **TIDAK dijawab Carbon**:
 
 **Menanyakan hal yang sudah dijawab Carbon berarti membayar biaya adopsi tanpa mendapat manfaatnya.**
 
-**Rujukan wajib dibuka SAAT sesi, bukan dari ingatan — versi komponen dan tokennya berubah.** Ini bukan kehati-hatian teoretis: pada 25 Agu 2026, spesifikasi yang dikutip menyebut token `$heading-03` untuk ukuran 28px, sementara di paket yang benar-benar terpasang nama tokennya `productive-heading-04` dan `heading-03` **tidak ada sama sekali**. Ukurannya benar, namanya berubah.
+**Rujukan wajib dibuka SAAT sesi, bukan dari ingatan — versi komponen dan tokennya berubah.** Ini bukan kehati-hatian teoretis: pada 25 Agu 2026, spesifikasi yang dikutip menyebut token `$heading-03` untuk ukuran 28px. Diukur dengan **menjalankan Sass** terhadap paket yang benar-benar terpasang: `$heading-03` **ada**, tetapi nilainya **1,25rem (20px)** — ia alias dari `productive-heading-03`. Yang menghasilkan 28px adalah `productive-heading-04`.
+
+> **KOREKSI 25 Agu 2026, dicatat karena catatannya sendiri sempat salah.** Versi pertama catatan ini menyatakan `heading-03` "tidak ada sama sekali". Itu **keliru** — ia ada. Kekeliruannya lahir dari mencari nama di daftar keluaran JavaScript (yang memakai gaya penulisan `heading03`) lalu menyimpulkan ketiadaannya di Sass. Yang membuktikan bukan mencari nama, melainkan **menjalankan `type-style` dan membaca ukuran yang keluar**. Jadi cacat aslinya bukan "nama berubah" melainkan **ukurannya berbeda dari yang dikira**, dan koreksi ini justru memperkuat aturannya: verifikasi lewat menjalankan, bukan lewat mencari.
 
 Daftar halaman rujukan per jenis layar: `docs/governance/rujukan-carbon.md`.
 
@@ -337,6 +339,62 @@ Lahir dari cara halaman `/register` diperiksa: pemilik produk meletakkan tangkap
 **ATURAN**: setiap layar yang dinyatakan selesai dimigrasikan **WAJIB dilaporkan beserta alamat halaman katalog Carbon yang sepadan**, supaya pemilik produk bisa membandingkan berdampingan. Daftarnya di `docs/governance/rujukan-carbon.md`. Menyerahkan layar tanpa alamat itu berarti menahan satu-satunya pemeriksaan yang terbukti menangkap kelas cacat ini.
 
 Berlaku lebih luas dari Carbon: bila sebuah pemeriksaan hanya bisa dilakukan mata manusia, **rancang laporannya supaya pemeriksaan itu mudah dijalankan** — jangan melaporkan hanya kesimpulan yang bisa dicapai sendiri.
+
+## DS-RULES — Gerbang Rencana Carbon Sebelum Membangun Layar (ditetapkan 25 Agu 2026)
+
+Ditetapkan atas permintaan eksplisit pemilik produk setelah gelombang layar publik selesai. **Berlaku untuk SETIAP layar internal yang dibangun atau dimigrasikan sejak sekarang, tanpa kecuali.**
+
+### A. GERBANG: rencana dulu, kode kemudian
+
+**A.1 — Sebelum menulis SATU BARIS KODE untuk sebuah layar, serahkan RENCANA CARBON layar itu dan BERHENTI.** Kode baru boleh ditulis setelah rencananya dilaporkan.
+
+**Alasannya, dan ini yang membuatnya gerbang dan bukan anjuran**: aturan yang bergantung pada ingatan sudah terbukti gagal berkali-kali di proyek ini — aturan bantuan-klik dilanggar di 18 tempat, komponen tabel bersama meninggalkan 8 halaman, palet warna melahirkan dua sistem yang tidak cocok. Yang bekerja bukan disiplin, melainkan **gerbang yang menghasilkan keluaran**: rencana yang tidak ada berarti pekerjaan yang belum boleh mulai, dan ketiadaannya terlihat.
+
+**A.2 — Rencana Carbon WAJIB memuat tujuh hal:**
+1. **POLA (Pattern)** mana yang berlaku, beserta alamat halaman rujukannya.
+2. **DAFTAR KOMPONEN** satu per satu, beserta **ALASAN** pemilihannya — kenapa komponen ITU, bukan yang mirip.
+3. **VARIAN** tiap komponen (ukuran, jenis, mode) beserta alasannya.
+4. **TATA LETAK**: kolom grid, breakpoint, dan perilaku di layar sempit.
+5. **SPESIFIKASI**: token jarak dan tipografi — **nama tokennya, bukan angka px**.
+6. **KEADAAN** yang ditangani: kosong, memuat, galat, berhasil, tanpa izin.
+7. **ALAMAT KATALOG CARBON** yang sepadan, untuk perbandingan berdampingan setelah jadi.
+
+**A.3 — Rencana dicetak DI CHAT**, bukan hanya disimpan di berkas.
+
+### B. POLA (Patterns) — rujukan wajib, bukan pilihan
+
+**B.1 — POLA MENENTUKAN KOMPONEN, BUKAN SEBALIKNYA.** Carbon menyediakan pola: solusi praktik terbaik untuk **bagaimana pengguna mencapai tujuannya** — gabungan komponen beserta urutan dan alurnya, bukan sekadar daftar komponen. **Buka halaman polanya SEBELUM memilih komponen.** Daftar pola beserta alamatnya di `docs/governance/rujukan-carbon.md`.
+
+**B.2 — Bila sebuah layar tidak punya pola yang cocok, KATAKAN BEGITU di rencana**, dan sebutkan pola terdekat yang dipakai sebagai acuan. **Jangan diam-diam merancang sendiri.**
+
+### C. Komponen — periksa KONTEKS PEMAKAIAN, bukan sekadar bentuknya
+
+**C.1 — Buka tab *Usage* LEBIH DULU**, sebelum *Style* dan *Code*. Di situ dijelaskan kapan komponen dipakai dan kapan **tidak**. Kesalahan `Tag` di pilot pertama lahir persis dari sini: komponennya benar-benar Carbon, bentuknya benar, **konteks pemakaiannya yang salah** — Tag untuk menggolongkan dan menyaring, bukan untuk status field.
+
+**C.2 — MODAL: pilih variannya sesuai SIFAT PEKERJAAN**, jangan satu bentuk untuk semua. Pasif (hanya memberi tahu) · Transaksional (satu keputusan, satu aksi) · Bertahap (pekerjaan berlangkah dengan konfirmasi di ujung) · Berbahaya (tindakan merusak). **Sebutkan di rencana varian mana dan kenapa.**
+
+**C.3 — TABEL: periksa kemampuan bawaan DataTable sebelum memakai** — ukuran baris, pengurutan, penyaringan, baris yang bisa dimekarkan, pemilihan banyak baris beserta aksi massalnya, pembagian halaman, kolom yang bisa disembunyikan, keadaan kosong, keadaan memuat. **JANGAN memakai tabel polos lalu menambal kemampuannya sendiri** — itu melahirkan dua jalur hidup untuk hal yang sama. **Sebutkan di rencana kemampuan mana yang dipakai dan mana yang tidak, beserta alasannya.**
+
+**C.4 — HEADER DAN NAVIGASI: pakai UI Shell Carbon, jangan merakit sendiri.** Karena ini menyentuh SELURUH layar sekaligus, rencananya **disodorkan ke pemilik produk sebelum dikerjakan** — bukan diputuskan sendiri.
+
+**C.5 — TATA LETAK: buka panduan grid Carbon sebelum menyusun kolom.** Breakpoint Carbon sudah ditetapkan: **320 / 672 / 1056 / 1312 / 1584 px**. Jangan menyusun kolom dari selera.
+
+### D. Spesifikasi — token, bukan angka
+
+**D.1 — Seluruh ukuran, jarak, warna, dan tipografi memakai TOKEN Carbon. Nol angka px ditulis langsung, nol nilai warna ditulis langsung.** Alasannya bukan kerapian: 88 warna yang ditulis langsung di 54 berkas adalah sebab langsung dari rasa "dibuat orang berbeda" yang dikeluhkan pemilik produk.
+
+**D.2 — Nama token diverifikasi dari PAKET YANG TERPASANG di `node_modules`, bukan dari dokumentasi saja.** Dokumentasi bisa mendahului atau tertinggal dari versi paket. **Dokumentasi untuk memahami MAKSUDNYA; paket untuk memastikan NAMANYA dan NILAINYA.**
+> Dan verifikasinya dengan **MENJALANKAN**, bukan mencari nama. Terbukti dua kali pada token yang sama: spesifikasi menyebut `$heading-03` = 28px (salah — nilainya 20px), lalu catatan koreksinya sendiri menyatakan token itu tidak ada (juga salah — ia ada). Mencari nama gagal dua arah; menjalankan `type-style` dan membaca ukurannya tidak.
+
+**D.3 — Setelah selesai, UKUR DARI CSS HASIL BUILD, bukan dari kode sumber.** Empat kejadian "berhasil tanpa berlaku" seluruhnya lolos build dan lolos typecheck; yang menangkapnya hanya mengukur hasil yang benar-benar keluar.
+
+### E. Yang boleh dan tidak boleh ditanyakan ke pemilik produk
+
+**E.1 — JANGAN menanyakan hal yang SUDAH DIJAWAB Carbon**: ukuran, jarak, warna, bentuk komponen, perilaku bawaan, tipografi. Buka dokumentasinya. Menanyakan hal yang sudah dijawab berarti **membayar biaya adopsi tanpa mendapat manfaatnya**.
+
+**E.2 — YANG BOLEH ditanyakan hanya yang TIDAK dijawab Carbon**: aturan bisnis, istilah Bahasa Indonesia, urutan field menurut alur kerja pabrik, kebutuhan lantai produksi, dan hak akses.
+
+**E.3 — JANGAN memutuskan sendiri hal yang dijawab Carbon dengan alasan "sepertinya lebih baik".** Bila Carbon dinilai keliru untuk kasus ini, itu **DEVIASI** — didokumentasikan sebagai domain pattern dengan alasan tertulis, **bukan improvisasi diam-diam**.
 
 ## Huruf Kapital Hanya di Awal Kalimat (ditetapkan 25 Agu 2026)
 

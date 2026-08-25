@@ -7,11 +7,22 @@ mana yang perlu dibuka.
 
 **Halaman di bawah WAJIB DIBUKA saat sesi berlangsung — isinya JANGAN disalin ke sini.**
 
-Alasannya sudah terbukti sekali: spesifikasi yang dikutip pada 25 Agu 2026 menyebut token
-`$heading-03` untuk ukuran 28px. Di paket `@carbon/react` 1.114.0 yang benar-benar terpasang,
-nama tokennya **`productive-heading-04`**, dan `heading-03` **tidak ada sama sekali**.
-Ukurannya benar, namanya berubah. Menyalin isi dokumentasi ke repo berarti membekukan
-kekeliruan semacam itu dan mewariskannya.
+Alasannya sudah terbukti — dan contohnya keliru DUA KALI, yang justru membuatnya lebih
+meyakinkan. Spesifikasi yang dikutip pada 25 Agu 2026 menyebut `$heading-03` untuk ukuran
+28px. Catatan koreksi pertama menyatakan token itu "tidak ada sama sekali". **Keduanya salah.**
+
+Diukur dengan **menjalankan Sass** terhadap paket yang benar-benar terpasang:
+
+| Token | Ada di paket? | Nilai sebenarnya |
+|---|---|---|
+| `heading-03` | **ya**, alias dari `productive-heading-03` | **1,25rem (20px)** |
+| `productive-heading-04` | ya | **1,75rem (28px)** |
+
+Jadi yang keliru pada spesifikasi bukan namanya melainkan **ukurannya**; dan yang keliru pada
+catatan koreksi adalah menyimpulkan ketiadaan dari gagal menemukan nama. Mencari nama gagal ke
+dua arah. Menjalankan `type-style` lalu membaca ukuran yang keluar tidak.
+
+Menyalin isi dokumentasi ke repo berarti membekukan kekeliruan semacam itu dan mewariskannya.
 
 Dokumen ini hanya menyimpan **alamat**, bukan isi.
 
@@ -102,6 +113,43 @@ Untuk layar masuk, `patterns/login-pattern` menambahkan:
 - Gaya **fluid** disebut sebagai bentuk ideal untuk layar masuk/daftar; gaya **default** tetap
   sah. FABRIX memilih **default** (keputusan pemilik produk 25 Agu 2026) supaya sama dengan
   layar lain di dalam sistem.
+
+## POLA (Patterns) — dibuka SEBELUM memilih komponen
+
+**Pola menentukan komponen, bukan sebaliknya** (DS-RULES B.1). Pola adalah solusi praktik
+terbaik untuk *bagaimana pengguna mencapai tujuannya* — gabungan komponen beserta urutan dan
+alurnya.
+
+Daftar di bawah **diambil dari halaman indeks pola Carbon pada 25 Agu 2026**, bukan dari
+ingatan. Bila sebuah alamat tidak lagi hidup, itu sinyal bahwa polanya berubah — periksa
+indeksnya lagi, jangan menebak.
+
+| Pola | Alamat |
+|---|---|
+| Aksi umum (buat, ubah, hapus, simpan) | `carbondesignsystem.com/patterns/common-actions` |
+| Dialog | `carbondesignsystem.com/patterns/dialog-pattern` |
+| Keadaan nonaktif | `carbondesignsystem.com/patterns/disabled-states` |
+| Penyingkapan bertahap | `carbondesignsystem.com/patterns/disclosures-pattern` |
+| Keadaan kosong | `carbondesignsystem.com/patterns/empty-states-pattern` |
+| Penyaringan | `carbondesignsystem.com/patterns/filtering` |
+| Formulir | `carbondesignsystem.com/patterns/forms-pattern` |
+| Header global | `carbondesignsystem.com/patterns/global-header` |
+| Keadaan memuat | `carbondesignsystem.com/patterns/loading-pattern` |
+| Masuk (login) | `carbondesignsystem.com/patterns/login-pattern` |
+| Pemberitahuan | `carbondesignsystem.com/patterns/notification-pattern` |
+| Pencarian | `carbondesignsystem.com/patterns/search-pattern` |
+| Toolbar teks | `carbondesignsystem.com/patterns/text-toolbar-pattern` |
+
+### Pola mana untuk jenis layar mana
+
+| Jenis layar kita | Pola yang berlaku | Catatan |
+|---|---|---|
+| **Layar daftar data** (Item, BOM, Sales Order, Work Order, Pelanggan, Supplier) | Penyaringan + Keadaan kosong + Keadaan memuat + Aksi umum | **TIDAK ADA pola "list" tersendiri** di Carbon. Ketiadaan itu wajib disebut di rencana, bukan ditutupi |
+| **Formulir & modal pembuatan data** | Formulir + Dialog + Aksi umum | Varian modal ditentukan sifat pekerjaannya (DS-RULES C.2) |
+| **Layar masuk & publik** | Masuk (login) + Formulir | Sudah dikerjakan, DS-02 |
+| **Dasbor** | Keadaan memuat + Keadaan kosong | **Tidak ada pola dasbor**; acuan terdekat keadaan kosong & memuat |
+| **Kerangka aplikasi** (header, navigasi samping) | Header global | Menyentuh seluruh layar — rencananya disodorkan lebih dulu (DS-RULES C.4) |
+| **Panel detail yang mekar dari baris** | Penyingkapan bertahap | Dipakai panel Detail Item (MST-16) |
 
 ## Yang TIDAK dijawab Carbon — ini yang ditanyakan ke pemilik produk
 

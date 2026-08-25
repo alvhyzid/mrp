@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { HeaderGlobalAction } from '@carbon/react';
 import { Notification, NotificationOff } from '@carbon/icons-react';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import { isCompanyLeadership, getDepartmentForRole } from '@/lib/roles';
@@ -167,23 +168,31 @@ export default function NotificationBell({ role, companyId }: { role: string | n
   const openCount = alerts.length;
 
   return (
-    <div className="relative" ref={containerRef}>
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        className="relative flex h-8 w-8 items-center justify-center rounded-none text-[#525252] transition-colors hover:bg-[rgba(141,141,141,0.12)]"
+    // Pemicunya memakai HeaderGlobalAction Carbon, BUKAN <button> berukuran sendiri.
+    //
+    // KENAPA DIGANTI (temuan pemilik produk, 25 Agu 2026): tombol lama berukuran 32x32 dan
+    // diletakkan berdampingan dengan aksi header Carbon yang berukuran 48x48. Ia terlihat
+    // TIDAK SEJAJAR dengan ikon "+" di sebelahnya -- dan itu bukan soal menggeser beberapa
+    // piksel: selama ukurannya ditentukan sendiri, ia akan meleset lagi setiap kali Carbon
+    // mengubah tinggi headernya.
+    //
+    // Ikut komponen Carbon berarti ukuran, hover, fokus, dan WARNA ikut tema shell (g100)
+    // dengan sendirinya. Panel isinya sendiri belum Carbon -- itu pekerjaan gelombang
+    // berikutnya, dan dicatat sebagai batas yang disadari.
+    <div className="lonceng" ref={containerRef}>
+      <HeaderGlobalAction
         aria-label="Notifikasi"
+        isActive={open}
+        onClick={() => setOpen((prev) => !prev)}
       >
         <Notification size={20} />
         {openCount > 0 ? (
-          <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold leading-none text-destructive-foreground">
-            {openCount > 99 ? '99+' : openCount}
-          </span>
+          <span className="lonceng__jumlah">{openCount > 99 ? '99+' : openCount}</span>
         ) : null}
-      </button>
+      </HeaderGlobalAction>
 
       {open ? (
-        <div className="absolute right-0 top-10 z-50 flex max-h-[28rem] w-96 flex-col overflow-hidden border border-[#c6c6c6] bg-white shadow-lg">
+        <div className="lonceng__panel flex max-h-[28rem] w-96 flex-col overflow-hidden border border-[#c6c6c6] bg-white shadow-lg">
           <div className="flex items-center justify-between border-b border-[#e0e0e0] px-3 py-2">
             <span className="text-sm font-semibold text-[#161616]">Notifikasi</span>
             <button

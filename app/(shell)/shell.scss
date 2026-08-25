@@ -243,3 +243,45 @@
 .cds--header-panel .shell-mati {
   padding-inline: spacing.$spacing-05;
 }
+
+// ============================================================================
+// LONCENG NOTIFIKASI
+// ============================================================================
+// Pembungkusnya HARUS setinggi header dan tidak boleh menyusut, supaya tombolnya sejajar
+// dengan aksi header lain. Versi sebelumnya memakai pembungkus setinggi isinya, dan itu yang
+// membuat loncengnya terlihat melayang lebih tinggi daripada ikon "+" di sebelahnya.
+.lonceng {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  block-size: 3rem;
+  flex-shrink: 0;
+}
+
+// Panel isinya digantung dari TEPI BAWAH pembungkus (top: 100%), bukan dari jarak yang
+// dihitung tangan. Dengan begitu ia ikut turun sendiri bila tinggi header berubah.
+.lonceng__panel {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-start: 100%;
+  z-index: 8000;
+}
+
+// Titik hitung. Bulat, dan ini satu dari dua tempat di seluruh sistem yang memang boleh bulat
+// (lihat tests/sudut_tajam_carbon.test.ts).
+.lonceng__jumlah {
+  @include type.type-style('label-01');
+  position: absolute;
+  inset-block-start: spacing.$spacing-02;
+  inset-inline-end: spacing.$spacing-02;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 1rem;
+  block-size: 1rem;
+  padding-inline: spacing.$spacing-02;
+  border-radius: 50%;
+  background-color: theme.$support-error;
+  color: theme.$text-on-color;
+  line-height: 1;
+}

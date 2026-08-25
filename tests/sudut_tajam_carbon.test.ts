@@ -71,7 +71,7 @@ function berkasTsx(dir: string, keluar: string[] = []): string[] {
     if (nama === 'node_modules' || nama === '.next' || nama.startsWith('.')) continue;
     const p = join(dir, nama);
     if (statSync(p).isDirectory()) berkasTsx(p, keluar);
-    else if (/\.(tsx|ts|css)$/.test(nama)) keluar.push(p);
+    else if (/\.(tsx|ts|css|scss)$/.test(nama)) keluar.push(p);
   }
   return keluar;
 }
@@ -108,14 +108,31 @@ describe('DS-01 — sudut tajam Carbon dijaga dari CSS yang benar-benar dipancar
     // Foto profil dan titik hitung notifikasi memang bulat menurut konvensi mana pun.
     // Tombol berbentuk pil TIDAK termasuk -- itu bukan Carbon, dan sembilan di antaranya
     // sudah diubah jadi bersudut tajam pada 25 Agu 2026.
+    // JANGKAUAN DIPERLUAS 25 Agu 2026, dan alasannya ditemukan oleh test ini sendiri:
+    // lonceng notifikasi berhenti memakai kelas `rounded-full` bukan karena bentuknya berubah,
+    // melainkan karena bulatannya PINDAH ke stylesheet sebagai `border-radius: 50%`.
+    // Versi pertama penjaga ini hanya menyisir TSX, jadi bentuk bulat yang pindah ke SCSS
+    // akan lolos tanpa terdeteksi — lubang yang persis sama bentuknya dengan cacat yang
+    // melahirkan penjaga ini: memeriksa satu tempat lalu menyimpulkan seluruhnya.
+    for (const f of [...berkasTsx(join(AKAR, 'app')), ...berkasTsx(join(AKAR, 'src'))]) {
+      if (!/\.scss$/.test(f)) continue;
+      if (/border-radius:\s*(50%|9999px)/.test(readFileSync(f, 'utf8'))) {
+        pemakai.push(f.replace(AKAR + '/', '') + ' (border-radius di SCSS)');
+      }
+    }
+
     expect(
       pemakai.sort(),
-      'Ada berkas baru memakai rounded-full. Bila itu tombol atau kontrol, ia tidak boleh ' +
-        'berbentuk pil di sistem yang memakai Carbon. Bila memang bulat (foto, titik status), ' +
-        'tambahkan berkasnya ke daftar ini beserta alasannya.'
+      'Ada berkas baru memakai bentuk bulat. Bila itu tombol atau kontrol, ia tidak boleh ' +
+        'berbentuk pil di sistem yang memakai Carbon. Bila memang bulat (foto profil, titik ' +
+        'hitung notifikasi), tambahkan berkasnya ke daftar ini beserta alasannya.'
+    // Daftarnya URUT ABJAD karena `pemakai` disortir -- bukan urut kepentingan.
     ).toEqual([
-      'src/features/auth/pages/ProfilePage.tsx',
-      'src/features/mrp/components/NotificationBell.tsx'
+      // Avatar berinisial di header + titik hitung notifikasi. Keduanya memang bulat, dan
+      // keduanya hidup di stylesheet kerangka aplikasi.
+      'app/(shell)/shell.scss (border-radius di SCSS)',
+      // Foto profil — bulat menurut konvensi avatar di mana pun.
+      'src/features/auth/pages/ProfilePage.tsx'
     ]);
   });
 });

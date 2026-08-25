@@ -41,15 +41,25 @@ function meetsThreshold(actual: number, threshold: number, comparator: 'GTE' | '
   return comparator === 'GTE' ? actual >= threshold : actual <= threshold;
 }
 
-// Menghitung ulang kesiapan SEMUA kemampuan utk satu tenant dari data nyata,
-// lalu menyimpannya ke ai_capability_status (upsert -- idempoten, lihat
-// tests/ai_readiness.test.ts butir "job dijalankan 2x"). Query murah (hitung
-// baris/rentang tanggal atas skala data 1 tenant), jadi dihitung LIVE setiap
-// dashboard dibuka lalu di-cache ke tabel -- BUKAN dijadwalkan cron (belum ada
-// infrastruktur cron di proyek ini, dan membangunnya sekarang utk 1 tenant
-// nyata adalah abstraksi spekulatif). Pola sama dgn computeAiProjectProgress.ts
-// (Bagian C) yang juga menghitung AUTO_QUERY live per panggilan.
-export async function recomputeAiReadiness(adminClient: SupabaseClient, companyId: number): Promise<CapabilityReadiness[]> {
+// MENGHITUNG kesiapan SEMUA kemampuan untuk satu tenant dari data nyata.
+//
+// ============================================================================
+// FUNGSI INI TIDAK MENULIS APA PUN — DAN ITU PERBAIKAN, BUKAN KELALAIAN (AUD-36)
+// ============================================================================
+// Versi sebelumnya menghitung LALU menyimpannya ke ai_capability_status, dan ia dipanggil
+// dari jalur GET dashboard. Akibatnya: MEMBUKA HALAMAN MENULIS DATA. Nol tombol ditekan.
+//
+// Itu melanggar aturan tetap proyek yang lahir dari Sesi 0/0B/0C — "aksi yang terlihat
+// read-only tapi menulis di baliknya" — dan ini kejadian KETIGA dari kelas yang sama
+// (dua sebelumnya: getMarginWatch dan getPlanningFeasibility).
+//
+// Cara ia ketahuan layak dicatat: perusahaan fixture untuk audit navigasi TIDAK BISA DIHAPUS
+// karena tertahan kunci asing dari tabel ini. Yang menemukannya bukan pemeriksaan kode,
+// melainkan PEMBERSIHAN YANG GAGAL.
+//
+// Penyimpanannya sekarang dipisah ke `simpanKesiapanAi`, yang hanya dipanggil dari aksi
+// yang DISENGAJA. Pola ini sudah lebih dulu benar di takeAiProjectSnapshot.
+export async function hitungKesiapanAi(adminClient: SupabaseClient, companyId: number): Promise<CapabilityReadiness[]> {
   const { data: capabilities, error: capError } = await adminClient
     .from('ai_capabilities')
     .select('ai_capability_id, code, name, description, tier, sort_order')
@@ -131,6 +141,17 @@ export async function recomputeAiReadiness(adminClient: SupabaseClient, companyI
     });
   }
 
+  return results;
+}
+
+/// Menghitung LALU MENYIMPAN. Dipisahkan dari `hitungKesiapanAi` dengan sengaja: yang satu
+/// aman dipanggil dari jalur baca, yang satu TIDAK.
+///
+/// Hanya boleh dipanggil dari aksi yang disengaja pengguna atau dari pekerjaan terjadwal —
+/// JANGAN dari GET mana pun. Bila kelak ada tombol "Perbarui kesiapan", inilah yang
+/// dipanggilnya.
+export async function simpanKesiapanAi(adminClient: SupabaseClient, companyId: number): Promise<CapabilityReadiness[]> {
+  const results = await hitungKesiapanAi(adminClient, companyId);
   const upsertRows = results.map((r) => ({
     company_id: companyId,
     capability_id: r.capability_id,
@@ -143,13 +164,21 @@ export async function recomputeAiReadiness(adminClient: SupabaseClient, companyI
     .from('ai_capability_status')
     .upsert(upsertRows, { onConflict: 'company_id,capability_id' });
   if (upsertError) throw new Error(upsertError.message);
-
   return results;
 }
 
-// Gerbang tunggal (§3.3): satu fungsi dipanggil sebelum endpoint/UI kemampuan
-// AI manapun dijalankan. Membaca status TER-CACHE (bukan menghitung ulang) --
-// caller yang butuh angka terbaru harus memanggil recomputeAiReadiness() dulu.
+// Gerbang tunggal (§3.3): satu fungsi dipanggil sebelum endpoint/UI kemampuan AI mana pun
+// dijalankan.
+//
+// MENGHITUNG LIVE, bukan membaca cache (diubah 25 Agu 2026, AUD-36). Versi sebelumnya membaca
+// ai_capability_status — tabel yang hanya terisi BILA ADA YANG MEMBUKA DASHBOARD. Artinya
+// gerbang keamanan sebuah fitur bergantung pada apakah seseorang kebetulan membuka sebuah
+// halaman. Bila tidak ada yang pernah membukanya, gerbangnya menjawab "terkunci" untuk
+// segalanya; bila dibuka berbulan-bulan lalu, ia menjawab dari keadaan yang sudah basi.
+//
+// Menghitung live menghapus ketergantungan itu sepenuhnya. Query-nya murah (hitung baris dan
+// rentang tanggal untuk SATU tenant), dan gerbang yang benar lebih penting daripada
+// menghemat beberapa kueri.
 export async function isCapabilityUnlocked(adminClient: SupabaseClient, companyId: number, capabilityCode: string): Promise<boolean> {
   const { data: capability, error: capError } = await adminClient
     .from('ai_capabilities')
@@ -169,12 +198,6 @@ export async function isCapabilityUnlocked(adminClient: SupabaseClient, companyI
     .maybeSingle();
   if (override) return true;
 
-  const { data: status, error: statusError } = await adminClient
-    .from('ai_capability_status')
-    .select('is_unlocked')
-    .eq('company_id', companyId)
-    .eq('capability_id', capability.ai_capability_id)
-    .maybeSingle();
-  if (statusError) throw new Error(statusError.message);
-  return status?.is_unlocked ?? false;
+  const semua = await hitungKesiapanAi(adminClient, companyId);
+  return semua.find((c) => c.capability_id === capability.ai_capability_id)?.is_unlocked ?? false;
 }

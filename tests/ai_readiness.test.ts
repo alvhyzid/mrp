@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { NextRequest } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { recomputeAiReadiness, isCapabilityUnlocked } from '../src/features/ai-readiness/server/recomputeAiReadiness';
+import { hitungKesiapanAi, simpanKesiapanAi, isCapabilityUnlocked } from '../src/features/ai-readiness/server/recomputeAiReadiness';
 import { createAiCapabilityOverride } from '../src/features/ai-readiness/server/createAiCapabilityOverride';
 import { getAiReadinessDashboard } from '../src/features/ai-readiness/server/getAiReadinessDashboard';
 import { cleanupCompanyCascade } from './testCompanyCleanup';
@@ -73,7 +73,7 @@ describe('Kesiapan AI (Tenant-Facing) — gerbang per kemampuan dari data nyata'
     await adminClient.from('users').upsert([{ auth_uid: authUid, company_id: companyAId, name: 'Admin AiReadinessTest', email: 'admin.aireadinesstest@debug.mrp', role: 'company_admin', status: 'active' }], { onConflict: 'auth_uid' });
 
     // Beri company B satu snapshot kesiapan supaya ada sesuatu utk dibuktikan TIDAK terlihat dari company A.
-    await recomputeAiReadiness(adminClient, companyBId);
+    await simpanKesiapanAi(adminClient, companyBId);
 
     const loginResult = await loginToken('admin.aireadinesstest@debug.mrp');
     adminAToken = loginResult.token;
@@ -100,7 +100,7 @@ describe('Kesiapan AI (Tenant-Facing) — gerbang per kemampuan dari data nyata'
   });
 
   it('TANPA data sama sekali -> Panel Asal-Usul terbuka 100%, semua kemampuan lain TERKUNCI dgn alasan jelas', async () => {
-    const results = await recomputeAiReadiness(adminClient, companyAId);
+    const results = await simpanKesiapanAi(adminClient, companyAId);
     const panel = results.find((r) => r.code === 'panel_asal_usul');
     expect(panel!.is_unlocked).toBe(true);
     expect(panel!.readiness_percent).toBe(100);
@@ -123,7 +123,7 @@ describe('Kesiapan AI (Tenant-Facing) — gerbang per kemampuan dari data nyata'
       { company_id: companyAId, production_plant_id: plant!.production_plant_id, disruption_type: 'other', started_at: '2026-08-04T00:00:00Z' }
     ]);
     expect(insertError).toBeNull();
-    const results = await recomputeAiReadiness(adminClient, companyAId);
+    const results = await simpanKesiapanAi(adminClient, companyAId);
     const anomaly = results.find((r) => r.code === 'anomaly_detection')!;
     const downtimeReq = anomaly.requirements.find((r) => r.metric_key === 'quality.downtime_classified')!;
     expect(downtimeReq).toBeDefined();
@@ -132,8 +132,8 @@ describe('Kesiapan AI (Tenant-Facing) — gerbang per kemampuan dari data nyata'
   });
 
   it('(BUKTI idempoten) recomputeAiReadiness dijalankan 2x dgn data sama -> ai_capability_status IDENTIK', async () => {
-    const firstRun = await recomputeAiReadiness(adminClient, companyAId);
-    const secondRun = await recomputeAiReadiness(adminClient, companyAId);
+    const firstRun = await simpanKesiapanAi(adminClient, companyAId);
+    const secondRun = await simpanKesiapanAi(adminClient, companyAId);
     for (const cap of firstRun) {
       const match = secondRun.find((c) => c.code === cap.code);
       expect(match!.readiness_percent).toBe(cap.readiness_percent);
@@ -156,7 +156,7 @@ describe('Kesiapan AI (Tenant-Facing) — gerbang per kemampuan dari data nyata'
     }));
     await adminClient.from('kamus_terms').insert(rows);
 
-    const before = await recomputeAiReadiness(adminClient, companyAId);
+    const before = await simpanKesiapanAi(adminClient, companyAId);
     const copilotBefore = before.find((r) => r.code === 'copilot_data_pabrik')!;
     expect(copilotBefore.readiness_percent).toBe(0);
     expect(copilotBefore.is_unlocked).toBe(false);
@@ -167,7 +167,7 @@ describe('Kesiapan AI (Tenant-Facing) — gerbang per kemampuan dari data nyata'
     const ids = allTerms!.map((t) => t.kamus_term_id);
     await adminClient.from('kamus_terms').update({ status: 'DIKONFIRMASI' }).in('kamus_term_id', ids.slice(0, 3));
 
-    const partial = await recomputeAiReadiness(adminClient, companyAId);
+    const partial = await simpanKesiapanAi(adminClient, companyAId);
     const copilotPartial = partial.find((r) => r.code === 'copilot_data_pabrik')!;
     expect(copilotPartial.readiness_percent).toBeCloseTo((30 / 70) * 100, 1); // 30% aktual / 70% ambang, dibatasi maks 100
     expect(copilotPartial.is_unlocked).toBe(false);
@@ -175,7 +175,7 @@ describe('Kesiapan AI (Tenant-Facing) — gerbang per kemampuan dari data nyata'
 
     // Konfirmasi 5 baris lagi (total 8/10 = 80%) -- MELEWATI ambang 70%, kemampuan terbuka.
     await adminClient.from('kamus_terms').update({ status: 'DIKONFIRMASI' }).in('kamus_term_id', ids.slice(3, 8));
-    const after = await recomputeAiReadiness(adminClient, companyAId);
+    const after = await simpanKesiapanAi(adminClient, companyAId);
     const copilotAfter = after.find((r) => r.code === 'copilot_data_pabrik')!;
     expect(copilotAfter.requirements[0].actual).toBeCloseTo(80, 1);
     expect(copilotAfter.is_unlocked).toBe(true); // 80% >= ambang 70%
@@ -183,7 +183,7 @@ describe('Kesiapan AI (Tenant-Facing) — gerbang per kemampuan dari data nyata'
   });
 
   it('(NEGATIF 1) gerbang tunggal isCapabilityUnlocked() menolak kemampuan yang prasyaratnya belum terpenuhi', async () => {
-    await recomputeAiReadiness(adminClient, companyAId);
+    await simpanKesiapanAi(adminClient, companyAId);
     const unlocked = await isCapabilityUnlocked(adminClient, companyAId, 'process_mining');
     expect(unlocked).toBe(false);
   });

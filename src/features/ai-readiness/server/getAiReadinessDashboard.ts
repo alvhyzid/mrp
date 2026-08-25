@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
-import { recomputeAiReadiness } from './recomputeAiReadiness';
+import { hitungKesiapanAi } from './recomputeAiReadiness';
 
 interface ApiResult {
   status: number;
@@ -18,7 +18,7 @@ export async function getAiReadinessDashboard(request: NextRequest): Promise<Api
     }
 
     const adminClient = getAdminClient();
-    const capabilities = await recomputeAiReadiness(adminClient, appUser.company_id);
+    const capabilities = await hitungKesiapanAi(adminClient, appUser.company_id);
     const unlockedCount = capabilities.filter((c) => c.is_unlocked).length;
     const overallReadinessPercent =
       capabilities.length > 0

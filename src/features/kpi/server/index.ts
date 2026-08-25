@@ -5,3 +5,4 @@ export * from './listKpiCards';
 export * from './updateKpiTarget';
 export * from './updateKpiVisibility';
 export * from './getMyKpi';
+export * from './takeKpiSnapshot';

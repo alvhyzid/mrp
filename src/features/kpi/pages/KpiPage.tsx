@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { KpiCard } from '@/components/ui/kpi-card';
 import { formatCurrency, formatNumberId } from '@/lib/currency';
 import { isCompanyLeadership } from '@/lib/roles';
+import { authedJson } from '@/lib/authedFetch';
 
 type KpiCardData = {
   kpi_registry_id: number;
@@ -101,6 +102,30 @@ export default function KpiPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
+  // AUD-36 — merekam snapshot KPI kini AKSI YANG DISENGAJA, bukan efek samping membuka
+  // halaman. Sebelumnya setiap pemuatan halaman ini menulis baris ke kpi_snapshots, sehingga
+  // grafik trennya sebenarnya merekam "kapan orang membuka halaman", bukan "bagaimana
+  // angkanya bergerak".
+  const [merekam, setMerekam] = useState(false);
+  const [pesanRekam, setPesanRekam] = useState<string | null>(null);
+
+  const handleRekamSnapshot = async () => {
+    setMerekam(true);
+    setPesanRekam(null);
+    try {
+      const { ok, body } = await authedJson('/api/kpi/snapshot', { method: 'POST' });
+      setPesanRekam(
+        ok
+          ? `${(body as { tersimpan?: number }).tersimpan ?? 0} KPI direkam untuk periode ini.`
+          : ((body as { error?: string }).error ?? 'Gagal merekam snapshot.')
+      );
+    } catch (e) {
+      setPesanRekam(e instanceof Error ? e.message : String(e));
+    }
+    setMerekam(false);
+    await loadCards();
+  };
+
   const handleSeed = async () => {
     setSeeding(true);
     setSeedMessage('');
@@ -139,10 +164,21 @@ export default function KpiPage() {
               6 KPI awal (Margin, Margin %, Biaya/unit, Laba Operasional, Yield, Nilai Persediaan) -- baseline dulu, target kemudian. Klik ikon ⓘ di tiap kartu untuk detail lengkap.
             </p>
           </div>
-          <Link href="/kpi/saya" className="text-sm font-medium text-primary underline underline-offset-2">
-            KPI Saya →
-          </Link>
+          <div className="flex items-center gap-4">
+            {/* AUD-36 — PEMICU perekaman snapshot. Tombol ini ada karena penyimpanannya
+                dicabut dari pemuatan halaman: tanpa pemicu yang terlihat, riwayat KPI tidak
+                akan pernah bertambah lagi. Aturan proyek: tombol hanya ditambahkan BERSAMA
+                pemicu dan akibatnya -- di sini ketiganya lahir bersamaan. */}
+            <Button size="sm" variant="outline" disabled={merekam} onClick={handleRekamSnapshot}>
+              {merekam ? 'Merekam…' : 'Rekam angka periode ini'}
+            </Button>
+            <Link href="/kpi/saya" className="text-sm font-medium text-primary underline underline-offset-2">
+              KPI Saya →
+            </Link>
+          </div>
         </div>
+
+        {pesanRekam ? <p className="text-sm text-muted-foreground">{pesanRekam}</p> : null}
 
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
 

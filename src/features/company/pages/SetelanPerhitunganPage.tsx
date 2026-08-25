@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { authedJson, SesiTidakValid } from '@/lib/authedFetch';
 import {
   Button,
   DatePicker,
@@ -80,21 +81,36 @@ export default function SetelanPerhitunganPage() {
   const muat = useCallback(async () => {
     setMemuat(true);
     setGalat(null);
-    const res = await fetch('/api/company/settings');
+    // AUD-35 — memakai authedFetch bersama. Versi pertama halaman ini memanggil fetch()
+    // telanjang tanpa header Authorization; server menjawab 401 dan halaman ini mengalihkan
+    // penggunanya sendiri ke layar masuk, SELAMANYA. Lihat catatan lengkap di
+    // src/lib/authedFetch.ts.
+    let res: { ok: boolean; status: number; body: Record<string, unknown> };
+    try {
+      res = await authedJson('/api/company/settings');
+    } catch (e) {
+      if (e instanceof SesiTidakValid) {
+        router.replace('/login?redirectTo=/company/setelan');
+        return;
+      }
+      setGalat(e instanceof Error ? e.message : String(e));
+      setMemuat(false);
+      return;
+    }
     if (res.status === 401) {
       router.replace('/login?redirectTo=/company/setelan');
       return;
     }
-    const data = await res.json();
+    const data = res.body as Record<string, unknown>;
     if (!res.ok) {
-      setGalat(data.error ?? 'Gagal memuat setelan.');
+      setGalat((data.error as string) ?? 'Gagal memuat setelan.');
       setMemuat(false);
       return;
     }
-    setSetelan(data.setelan ?? []);
-    setJejak(data.jejak ?? []);
+    setSetelan((data.setelan as Setelan[]) ?? []);
+    setJejak((data.jejak as Jejak[]) ?? []);
     setBolehMengubah(Boolean(data.boleh_mengubah));
-    setDraf(Object.fromEntries((data.setelan ?? []).map((s: Setelan) => [s.kunci, s.nilai])));
+    setDraf(Object.fromEntries(((data.setelan as Setelan[]) ?? []).map((s) => [s.kunci, s.nilai])));
     setMemuat(false);
   }, [router]);
 
@@ -119,19 +135,25 @@ export default function SetelanPerhitunganPage() {
     setMenyimpan(true);
     setGalat(null);
     setBerhasil(null);
-    const res = await fetch('/api/company/settings', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        perubahan: berubah.map((s) => ({ kunci: s.kunci, nilai: draf[s.kunci] ?? '' })),
-        berlaku_sejak: berlakuSejak,
-        alasan: alasan.trim() || null
-      })
-    });
-    const data = await res.json();
+    let res: { ok: boolean; status: number; body: Record<string, unknown> };
+    try {
+      res = await authedJson('/api/company/settings', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          perubahan: berubah.map((s) => ({ kunci: s.kunci, nilai: draf[s.kunci] ?? '' })),
+          berlaku_sejak: berlakuSejak,
+          alasan: alasan.trim() || null
+        })
+      });
+    } catch (e) {
+      setMenyimpan(false);
+      setGalat(e instanceof Error ? e.message : String(e));
+      return;
+    }
+    const data = res.body as Record<string, unknown>;
     setMenyimpan(false);
     if (!res.ok) {
-      setGalat(data.error ?? 'Gagal menyimpan.');
+      setGalat((data.error as string) ?? 'Gagal menyimpan.');
       return;
     }
     setBerhasil(

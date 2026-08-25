@@ -113,15 +113,20 @@ export async function listKpiCards(request: NextRequest): Promise<ApiResult> {
     for (const kpi of visibleRows) {
       const result = await computeByMetricKey(kpi.metric_key, request, adminClient, appUser.company_id, rpcCache);
 
-      if (result.value !== null) {
-        const inputsHash = Buffer.from(JSON.stringify(result.inputs)).toString('base64').slice(0, 64);
-        await adminClient
-          .from('kpi_snapshots')
-          .upsert(
-            { company_id: appUser.company_id, metric_key: kpi.metric_key, period_start: result.periodStart, period_end: result.periodEnd, value: result.value, inputs_hash: inputsHash },
-            { onConflict: 'company_id,metric_key,period_start,period_end' }
-          );
-      }
+      // TIDAK ADA PENULISAN DI SINI — DAN ITU PERBAIKAN, BUKAN YANG TERLEWAT (AUD-36).
+      //
+      // Versi sebelumnya meng-upsert kpi_snapshots di dalam jalur GET ini. Artinya MEMBUKA
+      // HALAMAN KPI menulis data, tanpa satu tombol pun ditekan — kelas cacat yang sama
+      // dengan ai_capability_status, dan pelanggaran aturan tetap sejak Sesi 0C.
+      //
+      // Akibat sampingannya lebih halus dan lebih buruk daripada sekadar "menulis diam-diam":
+      // riwayat KPI hanya bertambah BILA ADA YANG KEBETULAN MEMBUKA HALAMANNYA. Grafik
+      // tren yang terlihat rapi sebenarnya merekam "kapan orang membuka halaman", bukan
+      // "bagaimana angkanya bergerak". Dua hal yang sangat berbeda, dan tidak ada di layar
+      // yang memberi tahu bedanya.
+      //
+      // Penyimpanan sekarang lewat aksi yang DISENGAJA (POST /api/kpi/snapshot), mengikuti
+      // pola yang sudah lebih dulu benar di takeAiProjectSnapshot.
 
       const { data: history } = await adminClient
         .from('kpi_snapshots')

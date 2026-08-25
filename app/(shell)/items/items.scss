@@ -13,16 +13,41 @@
   gap: spacing.$spacing-05;
 }
 
-.item-kelompok {
-  @include type.type-style('label-01');
+// Breadcrumb menggantikan baris "MASTER DATA" yang dulu hanya hiasan: ia memberi tahu POSISI
+// dan menyediakan jalan kembali.
+.item-remah {
+  margin-block-end: spacing.$spacing-03;
+}
+
+// Tingkat yang BUKAN halaman tidak boleh tampak seperti tautan.
+//
+// Carbon menempelkan kelas `cds--link` ke SETIAP butir remah roti, termasuk yang tidak punya
+// alamat. Akibatnya "Product & Engineering" tampil biru dan terlihat bisa diklik, padahal ia
+// nama kelompok di menu kiri dan tidak punya halaman. Diukur sebelum diperbaiki: warnanya
+// rgb(15, 98, 254) — biru tautan yang sama persis dengan "Dashboard" di sebelahnya.
+//
+// Tautan yang diklik lalu tidak melakukan apa-apa membuat orang mengira sistemnya rusak;
+// warnanya dikembalikan ke teks sekunder supaya jujur bahwa ia sekadar penunjuk posisi.
+.item-remah__bukan-tautan {
   color: theme.$text-secondary;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
+  cursor: default;
+}
+
+.item-pengantar {
+  @include type.type-style('body-01');
+  color: theme.$text-secondary;
+  margin-block-end: spacing.$spacing-05;
+}
+
+// Saringan di toolbar. Lebarnya dibatasi supaya tidak mendorong tombol utama keluar layar,
+// dan menyusut sendiri di layar sempit tanpa media query.
+.item-saring {
+  inline-size: min(100%, 14rem);
 }
 
 .item-judul {
   @include type.type-style('productive-heading-04');
-  margin-block-end: spacing.$spacing-03;
+  margin-block-end: spacing.$spacing-02;
 }
 
 .item-teks--redup {
@@ -283,4 +308,33 @@
   .item-tabel tbody tr.cds--expandable-row td::before {
     content: none;
   }
+}
+
+// ============================================================================
+// AREA TEKAN TOMBOL BUKA-DETAIL — deviasi kecil yang dicatat
+// ============================================================================
+// Carbon mengukur tombol buka-detail (32px) TERPISAH dari tinggi barisnya. Menyetel tabel ke
+// ukuran `lg` menaikkan barisnya jadi 48px, dan tombolnya TETAP 32px — diukur, bukan dikira.
+//
+// Aturan proyek menetapkan target sentuh minimal 44px. Yang dinaikkan HANYA AREA TEKANNYA:
+// ikon, warna, dan jaraknya tetap bawaan Carbon, jadi tampilannya tidak berubah sama sekali —
+// hanya lebih mudah kena jari.
+//
+// Ini tombol yang PALING SERING ditekan di halaman ini: satu-satunya jalan membuka detail,
+// mengubah, dan menghapus sebuah item.
+// DUA PERCOBAAN SEBELUMNYA GAGAL, dan keduanya hanya ketahuan dengan MENGUKUR:
+//   min-block-size 2.75rem  -> tombolnya 44px TAPI barisnya membengkak jadi 61px, karena
+//                              tombol mendorong tinggi selnya.
+//   block-size 100%          -> barisnya kembali 48px TAPI tombolnya cuma 31px, karena
+//                              induknya bukan sel setinggi penuh.
+// Yang bekerja: tinggi tombol dipatok 44px DAN padding vertikal selnya dinolkan, sehingga
+// tombolnya muat di dalam baris 48px tanpa mendorongnya.
+//
+// Ikon, warna, dan jaraknya tetap bawaan Carbon — yang berubah hanya AREA TEKANNYA.
+.item-tabel td.cds--table-expand {
+  padding-block: 0;
+}
+
+.item-tabel .cds--table-expand__button {
+  block-size: 2.75rem;
 }

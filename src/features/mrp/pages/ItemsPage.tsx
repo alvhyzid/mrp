@@ -5,8 +5,11 @@ import { useRouter } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import { authedFetch as panggilApi, SesiTidakValid } from '@/lib/authedFetch';
 import {
+  Breadcrumb,
+  BreadcrumbItem,
   Button,
   Checkbox,
+  Dropdown,
   ComposedModal,
   DataTable,
   DataTableSkeleton,
@@ -32,13 +35,14 @@ import {
   TableToolbar,
   TableToolbarContent,
   TableToolbarSearch,
+  MultiSelect,
   Tag,
   TextInput,
   Toggletip,
   ToggletipButton,
   ToggletipContent
 } from '@carbon/react';
-import { Information } from '@carbon/icons-react';
+import { Add, Information } from '@carbon/icons-react';
 import {
   SHELF_LIFE_UNITS,
   shelfLifeToDays,
@@ -519,11 +523,26 @@ export default function ItemsPage() {
   const [halaman, setHalaman] = useState(1);
   const [ukuranHalaman, setUkuranHalaman] = useState(15);
 
+  // SARINGAN — mengikuti pola penyaringan Carbon: beberapa saringan dengan pembaruan
+  // LANGSUNG (bukan tombol "terapkan"). Dipilih karena daftarnya pendek dan hasilnya terlihat
+  // seketika; saringan bertombol berguna saat menghitung ulang mahal, dan di sini tidak.
+  //   Tipe   -> banyak-pilihan (MultiSelect), karena orang wajar memilih Bahan Baku DAN Kemasan
+  //   Status -> satu-pilihan (Dropdown), karena aktif dan nonaktif saling meniadakan
+  const [saringTipe, setSaringTipe] = useState<string[]>([]);
+  const [saringStatus, setSaringStatus] = useState<'semua' | 'aktif' | 'nonaktif'>('semua');
+
   const itemTersaring = useMemo(() => {
     const k = cariItem.trim().toLowerCase();
-    if (!k) return items;
-    return items.filter((i) => `${i.item_code} ${i.name}`.toLowerCase().includes(k));
-  }, [items, cariItem]);
+    return items.filter((i) => {
+      if (k && !`${i.item_code} ${i.name}`.toLowerCase().includes(k)) return false;
+      if (saringTipe.length > 0 && !saringTipe.includes(i.type)) return false;
+      if (saringStatus === 'aktif' && !i.is_active) return false;
+      if (saringStatus === 'nonaktif' && i.is_active) return false;
+      return true;
+    });
+  }, [items, cariItem, saringTipe, saringStatus]);
+
+  const adaSaringan = saringTipe.length > 0 || saringStatus !== 'semua' || cariItem.trim() !== '';
 
   const itemHalamanIni = useMemo(
     () => itemTersaring.slice((halaman - 1) * ukuranHalaman, halaman * ukuranHalaman),
@@ -922,8 +941,38 @@ export default function ItemsPage() {
 
   return (
     <div className="item-halaman">
-      <p className="item-kelompok">Master data</p>
+      {/*
+        SATU judul saja, dan letaknya di ATAS tabel — bukan dua.
+
+        Versi sebelumnya punya judul halaman "Daftar item" DAN judul tabel "Daftar item" yang
+        sama persis, berjarak beberapa sentimeter. Itu bukan gaya Carbon melainkan kelalaian
+        saya: anatomi DataTable Carbon memang memuat "Title and description", dan saya
+        menambahkan judul halaman sendiri di atasnya tanpa mencabut yang bawaan.
+        Judul tabelnya sekarang dicabut; yang tersisa judul halaman, dengan jumlah item
+        sebagai keterangannya.
+
+        BREADCRUMB atas permintaan pemilik produk, menggantikan baris "MASTER DATA" yang dulu
+        hanya hiasan. Catatan jujur yang perlu diketahui: Carbon menyarankan breadcrumb untuk
+        hierarki LEBIH DARI DUA TINGKAT, sedangkan milik kita dua (workspace -> halaman).
+        Dipakai tetap, karena ia memberi tahu POSISI dan menyediakan jalan kembali — dua hal
+        yang tidak diberikan baris hiasan sebelumnya.
+
+        "Product & Engineering" SENGAJA tidak bisa diklik: ia kelompok di menu kiri, bukan
+        halaman. Breadcrumb yang menunjuk halaman tidak ada lebih buruk daripada breadcrumb
+        yang jujur bahwa tingkat itu memang bukan halaman.
+      */}
+      <Breadcrumb noTrailingSlash className="item-remah">
+        <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
+        <BreadcrumbItem>
+          <span className="item-remah__bukan-tautan">Product &amp; Engineering</span>
+        </BreadcrumbItem>
+        <BreadcrumbItem isCurrentPage>Items</BreadcrumbItem>
+      </Breadcrumb>
+
       <h1 className="item-judul">Daftar item</h1>
+      <p className="item-pengantar">
+        {itemTersaring.length} item{adaSaringan ? ` dari ${items.length} yang tercatat` : ' tercatat'}
+      </p>
 
       {itemsError ? (
         <InlineNotification kind="error" title="Gagal memuat" subtitle={itemsError} lowContrast onCloseButtonClick={() => setItemsError('')} />
@@ -933,30 +982,84 @@ export default function ItemsPage() {
         <DataTableSkeleton columnCount={headers.length + 1} rowCount={8} showHeader showToolbar />
       ) : (
         <>
-          <DataTable rows={rows} headers={headers} isSortable>
+          {/* size="lg" — baris 48px, bukan 40px bawaan.
+              Diambil dari SKALA CARBON SENDIRI, bukan dari menimpa tinggi baris. Alasannya
+              aturan proyek: target sentuh minimal 44px, dan tombol buka-detail di kiri tiap
+              baris mengikuti tinggi barisnya. Diukur pada ukuran bawaan: 32px — terlalu kecil
+              untuk jari, apalagi jari bersarung tangan di lantai produksi.
+              Carbon juga mensyaratkan baris kepala mengikuti ukuran baris isi; prop `size`
+              mengurus keduanya sekaligus. */}
+          <DataTable rows={rows} headers={headers} isSortable size="lg">
             {/* Tipe render-prop dibiarkan mengikuti bawaan Carbon lewat parameter tunggal.
                 Menuliskan bentuknya sendiri sempat dicoba dan DITOLAK typecheck: bentuk yang
                 ditulis tangan tidak akan ikut berubah saat Carbon memperbaruinya, dan itu
                 justru jalur kedua yang sedang diberantas. */}
             {(rp) => (
-              <TableContainer
-                title="Daftar item"
-                description={`${itemTersaring.length} item${cariItem ? ' cocok dengan pencarian' : ''}`}
-                {...rp.getTableContainerProps()}
-              >
+              // TableContainer SENGAJA tanpa title/description: judulnya sudah ada di kepala
+              // halaman. Dua judul yang sama persis berjarak beberapa sentimeter membuat orang
+              // mengira ada dua hal berbeda.
+              <TableContainer {...rp.getTableContainerProps()}>
                 <TableToolbar>
                   <TableToolbarContent>
+                    {/* MELIPAT, bukan selalu terbuka. `persistent` sengaja DICABUT: bawaan
+                        Carbon adalah ikon kaca pembesar yang melebar jadi kolom isian saat
+                        diklik. Memaksanya selalu terbuka memakan lebar toolbar yang justru
+                        dibutuhkan saringan, dan menghilangkan isyarat bahwa ia bisa ditutup. */}
                     <TableToolbarSearch
                       placeholder="Cari kode atau nama item…"
-                      persistent
+                      labelText="Cari item"
                       onChange={(e: React.ChangeEvent<HTMLInputElement> | '') => {
                         setCariItem(typeof e === 'string' ? '' : e.target.value);
                         setHalaman(1);
                       }}
                     />
+
+                    <MultiSelect
+                      id="saring-tipe"
+                      size="lg"
+                      className="item-saring"
+                      label="Tipe"
+                      // titleText + hideLabel, BUKAN titleText kosong.
+                      //
+                      // Diukur: `titleText=""` tetap merender elemen label, dan kotaknya
+                      // terdorong 16px lebih rendah daripada pencarian dan tombol di
+                      // sebelahnya. Terlihat sebagai saringan yang "melenceng" dari toolbar.
+                      // hideLabel menyembunyikannya secara visual TAPI tetap membacakannya ke
+                      // pembaca layar — label yang dibuang sama sekali akan membuat saringan
+                      // ini tidak punya nama bagi yang tidak melihat layar.
+                      titleText="Tipe"
+                      hideLabel
+                      items={itemTypes}
+                      itemToString={(t: string) => typeLabels[t] ?? t}
+                      selectedItems={saringTipe}
+                      onChange={({ selectedItems }: { selectedItems: string[] }) => {
+                        setSaringTipe(selectedItems ?? []);
+                        setHalaman(1);
+                      }}
+                    />
+
+                    <Dropdown
+                      id="saring-status"
+                      size="lg"
+                      className="item-saring"
+                      label="Status"
+                      titleText="Status"
+                      hideLabel
+                      items={['semua', 'aktif', 'nonaktif']}
+                      itemToString={(v: string) =>
+                        v === 'semua' ? 'Semua status' : v === 'aktif' ? 'Aktif' : 'Nonaktif'
+                      }
+                      selectedItem={saringStatus}
+                      onChange={({ selectedItem }: { selectedItem: 'semua' | 'aktif' | 'nonaktif' }) => {
+                        setSaringStatus(selectedItem ?? 'semua');
+                        setHalaman(1);
+                      }}
+                    />
+
                     {canManage ? (
                       <Button
                         size="lg"
+                        renderIcon={Add}
                         onClick={() => {
                           resetForm();
                           setIsFormModalOpen(true);
@@ -995,7 +1098,7 @@ export default function ItemsPage() {
                     {rp.rows.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={rp.headers.length + 1}>
-                          {cariItem ? 'Tidak ada item yang cocok dengan pencarian.' : 'Belum ada item.'}
+                          {adaSaringan ? 'Tidak ada item yang cocok dengan pencarian atau saringan.' : 'Belum ada item.'}
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -1161,7 +1264,7 @@ export default function ItemsPage() {
                   {POLA_KONVERSI.map((pola) => (
                     <Button
                       key={`${pola.dari}-${pola.ke}-${pola.faktor}`}
-                      size="md"
+                      size="lg"
                       kind="tertiary"
                       type="button"
                       onClick={() => setForm((prev) => ({ ...prev, uom_conversion_factor: String(pola.faktor) }))}

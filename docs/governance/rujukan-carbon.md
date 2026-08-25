@@ -37,6 +37,36 @@ Dokumen ini hanya menyimpan **alamat**, bukan isi.
 | **Label & status** | `components/tag/usage` — **Tag untuk menggolongkan/menyaring, BUKAN status field.** Status field dijawab `warn`/`warnText` atau `invalid`/`invalidText` pada kontrolnya |
 | **Keadaan memuat** | `components/skeleton/usage` |
 
+## WAJIB: setiap layar yang selesai dimigrasikan menyertakan alamat katalognya
+
+**Aturan ditetapkan 25 Agu 2026, lahir dari cara pemilik produk menemukan penyimpangan di
+halaman `/register`.**
+
+Ia meletakkan tangkapan layar katalog Carbon resmi **berdampingan** dengan layar kita, lalu
+melihat keduanya sekaligus. Yang ditemukan begitu: sudut membulat pada field aktif, kartu
+berbingkai bersudut membulat, tombol melebar penuh dengan teks di tengah (Carbon menaruh teks
+di kiri), dan ketebalan garis yang berbeda.
+
+**Tidak satu pun dari itu tertangkap** oleh membaca kode, membaca dokumentasi, atau bahkan
+mengukur CSS keluaran — tiga cara yang sudah dipakai dan dianggap cukup.
+
+**Claude Code tidak bisa melihat layar.** Perbandingan visual berdampingan adalah kemampuan
+yang **hanya dimiliki pemilik produk**, dan itu menjadikannya bagian dari alat verifikasi,
+bukan sekadar penerima hasil.
+
+**Karena itu**: setiap kali sebuah layar dinyatakan selesai dimigrasikan, laporannya WAJIB
+menyertakan **alamat halaman katalog Carbon yang sepadan**, supaya pemilik produk bisa
+membandingkannya berdampingan. Menyerahkan layar tanpa alamat itu berarti menahan satu-satunya
+pemeriksaan yang terbukti menangkap kelas cacat ini.
+
+| Layar kita | Katalog Carbon yang sepadan |
+|---|---|
+| Daftar, Masuk, Lupa sandi, Undangan | `components/form/usage` + `components/button/usage` |
+| Setelan perhitungan | `components/form/usage` + `components/toggletip/usage` |
+| Konfirmasi POD | `components/form/usage` + `components/file-uploader/usage` |
+| Layar daftar data (Item, BOM, SO, WO, …) | `components/data-table/usage` + `patterns/list-pattern` |
+| Dasbor | `components/tile/usage` + `elements/2x-grid/overview` |
+
 ## Yang TIDAK dijawab Carbon — ini yang ditanyakan ke pemilik produk
 
 - Aturan bisnis dan arti angka

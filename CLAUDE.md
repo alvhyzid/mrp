@@ -326,6 +326,18 @@ Membaca config dan mendapati setiap nilai di sana bernilai `0px` adalah pengamat
 
 **Dan perbaikannya menimpa SELURUH anak tangga, bukan hanya yang dipakai hari ini** — anak tangga yang belum dipakai sekarang adalah lubang untuk besok, dan tidak akan ada yang mengingatkan.
 
+## Pemilik Produk Adalah ALAT VERIFIKASI, Bukan Sekadar Penerima Hasil (ditetapkan 25 Agu 2026)
+
+**Perbandingan visual BERDAMPINGAN adalah kemampuan yang hanya dimiliki pemilik produk — Claude Code tidak bisa melihat layar.**
+
+Lahir dari cara halaman `/register` diperiksa: pemilik produk meletakkan tangkapan layar katalog Carbon resmi **di samping** layar kita, lalu melihat keduanya sekaligus. Yang ditemukan begitu: tombol melebar penuh dengan teks di tengah (Carbon menaruh teks di kiri), kartu berbingkai yang Carbon tidak berbingkai, dan penanda fokus yang berbeda tebal dan warnanya.
+
+**Tidak satu pun tertangkap** oleh membaca kode, membaca dokumentasi, atau mengukur CSS keluaran — ketiga cara yang sudah dipakai dan dikira cukup. Mengukur CSS membuktikan sebuah nilai **sesuai niatnya**; ia tidak bisa membuktikan **niatnya sendiri salah**.
+
+**ATURAN**: setiap layar yang dinyatakan selesai dimigrasikan **WAJIB dilaporkan beserta alamat halaman katalog Carbon yang sepadan**, supaya pemilik produk bisa membandingkan berdampingan. Daftarnya di `docs/governance/rujukan-carbon.md`. Menyerahkan layar tanpa alamat itu berarti menahan satu-satunya pemeriksaan yang terbukti menangkap kelas cacat ini.
+
+Berlaku lebih luas dari Carbon: bila sebuah pemeriksaan hanya bisa dilakukan mata manusia, **rancang laporannya supaya pemeriksaan itu mudah dijalankan** — jangan melaporkan hanya kesimpulan yang bisa dicapai sendiri.
+
 ## Huruf Kapital Hanya di Awal Kalimat (ditetapkan 25 Agu 2026)
 
 **Judul dan label ditulis dengan kapital hanya di awal kalimat, bukan tiap kata.** Nama diri tetap kapital (nama hari, nama orang, akronim seperti BPJS).

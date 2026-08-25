@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { WORKSPACES, ARTI_STATUS, type ItemNav } from '../src/features/navigasi/navConfig';
+import { WORKSPACES, MENU_AKUN, ARTI_STATUS, type ItemNav } from '../src/features/navigasi/navConfig';
 
 // NAV-01 / DS-04 (25 Agu 2026) — PENJAGA KEJUJURAN STATUS NAVIGASI.
 //
@@ -44,7 +44,11 @@ function ruteYangBenarBenarAda(): Set<string> {
   return hasil;
 }
 
-const semuaItem: ItemNav[] = WORKSPACES.flatMap((w) => w.items);
+// MENU_AKUN ikut dijaga. Ia dipisahkan dari navigasi kiri hanya karena TEMPATNYA berbeda,
+// bukan karena kejujurannya boleh lebih longgar — dan justru menu yang jarang dibuka lebih
+// mudah menyimpan status basi tanpa ada yang menyadarinya.
+const SEMUA_GRUP = [...WORKSPACES, ...MENU_AKUN];
+const semuaItem: ItemNav[] = SEMUA_GRUP.flatMap((w) => w.items);
 
 describe('NAV-01 — penanda status navigasi tidak boleh berbohong', () => {
   it('setiap href menunjuk halaman yang BENAR-BENAR ada di App Router', () => {
@@ -93,7 +97,7 @@ describe('NAV-01 — penanda status navigasi tidak boleh berbohong', () => {
 
   it('tidak ada label ganda di dalam satu workspace', () => {
     const ganda: string[] = [];
-    for (const w of WORKSPACES) {
+    for (const w of SEMUA_GRUP) {
       const lihat = new Set<string>();
       for (const i of w.items) {
         if (lihat.has(i.label)) ganda.push(`${w.label} -> ${i.label}`);
@@ -110,7 +114,7 @@ describe('NAV-01 — penanda status navigasi tidak boleh berbohong', () => {
     // dibangun. Yang dijaga cuma satu: jangan sampai nol item aktif (berarti konfignya rusak).
     expect(hitung.aktif ?? 0).toBeGreaterThan(0);
     console.log(
-      `  [NAV-01] ${semuaItem.length} item di ${WORKSPACES.length} workspace: ` +
+      `  [NAV-01] ${semuaItem.length} item di ${WORKSPACES.length} workspace + ${MENU_AKUN.length} grup menu akun: ` +
         Object.entries(hitung)
           .map(([k, v]) => `${k}=${v}`)
           .join(' ')

@@ -72,11 +72,20 @@ export interface WorkspaceNav {
   items: ItemNav[];
 }
 
-/// URUTAN MENGIKUTI FREKUENSI PAKAI HARIAN DI PABRIK (keputusan D-5), bukan abjad dan bukan
-/// urutan dokumen arsitektur. Manufacturing dan Supply Chain di atas.
+/// URUTAN MENGIKUTI ALUR PEKERJAAN, dari pesanan masuk sampai barang terkirim:
+///   Sales & CRM -> Product & Engineering -> Planning -> Manufacturing -> Supply Chain
+///   -> Quality -> Traceability, lalu fungsi pendukung (People, Finance, Analytics).
 ///
-/// Workspace yang isinya hampir seluruhnya kosong sengaja ditaruh di bawah — menaruhnya di
-/// atas berarti orang melewati menu kosong setiap hari sebelum sampai ke pekerjaannya.
+/// KENAPA BERUBAH DARI VERSI PERTAMA, dan ini perlu dicatat supaya tidak dibolak-balik lagi:
+/// versi pertama memakai FREKUENSI PAKAI HARIAN (keputusan D-5) dan menaruh Manufacturing di
+/// atas. Pemilik produk mempertanyakannya — "Sales bukannya harus di awal?" — dan ia benar
+/// untuk alasan yang lebih kuat daripada frekuensi: menu yang mengikuti alur kerja BISA
+/// DIBACA sebagai urutan proses, sehingga orang baru belajar sistemnya dari menunya sendiri.
+/// Urutan berdasarkan frekuensi hanya menghemat gulir bagi orang yang SUDAH tahu.
+///
+/// Frekuensi tetap terhormat lewat dua hal: Dashboard berdiri sendiri paling atas, dan
+/// workspace yang isinya hampir seluruhnya kosong (Quality, Maintenance, Control Tower)
+/// tetap ditaruh di bawah.
 export const WORKSPACES: WorkspaceNav[] = [
   {
     label: 'Overview',
@@ -88,6 +97,49 @@ export const WORKSPACES: WorkspaceNav[] = [
       { label: 'Recent Activity', status: 'belum-ada' }
     ]
   },
+
+  {
+    label: 'Sales & CRM',
+    items: [
+      { label: 'Customers', href: '/customers', status: 'aktif' },
+      { label: 'Customer PO', href: '/customer-purchase-orders', status: 'aktif' },
+      { label: 'Sales Orders', href: '/sales-orders', status: 'aktif' },
+      { label: 'Quotations', status: 'belum-ada' },
+      { label: 'Pricing', status: 'sebagian', keterangan: 'Harga per pelanggan ada di dalam Items' },
+      { label: 'Returns / RMA', status: 'belum-ada' },
+      { label: 'Complaints', status: 'belum-ada' },
+      { label: 'Leads & Opportunities', status: 'belum-ada' },
+      { label: 'Sample Requests', status: 'belum-ada' }
+    ]
+  },
+
+  {
+    label: 'Product & Engineering',
+    items: [
+      { label: 'Items', href: '/items', status: 'aktif' },
+      { label: 'BOM', href: '/boms', status: 'aktif' },
+      { label: 'Routing', href: '/routing', status: 'aktif' },
+      { label: 'Specifications', status: 'belum-ada' },
+      { label: 'Revisions & Effectivity', status: 'belum-ada' },
+      { label: 'Engineering Changes', status: 'belum-ada' },
+      { label: 'Product Variants', status: 'belum-ada' }
+    ]
+  },
+
+  {
+    label: 'Planning & APS',
+    items: [
+      { label: 'PPIC', href: '/ppic', status: 'aktif' },
+      { label: 'Material Requirements', status: 'sebagian', keterangan: 'Ada di dalam PPIC dan Work Order' },
+      { label: 'Sales Forecast', status: 'ditolak', keterangan: 'Ditolak — keputusan tercatat (SLS-90). Bukan ditunda' },
+      { label: 'Scenario Planning', status: 'diparkir' },
+      { label: 'Pegging', status: 'diparkir' },
+      { label: 'MPS', status: 'belum-ada' },
+      { label: 'Capacity / RCCP', status: 'belum-ada' },
+      { label: 'Planned Orders', status: 'belum-ada' }
+    ]
+  },
+
   {
     label: 'Manufacturing',
     items: [
@@ -100,6 +152,7 @@ export const WORKSPACES: WorkspaceNav[] = [
       { label: 'Production Reports', status: 'belum-ada' }
     ]
   },
+
   {
     label: 'Supply Chain',
     items: [
@@ -115,102 +168,7 @@ export const WORKSPACES: WorkspaceNav[] = [
       { label: 'Requisitions & RFQ', status: 'belum-ada' }
     ]
   },
-  {
-    label: 'Planning & APS',
-    items: [
-      { label: 'PPIC', href: '/ppic', status: 'aktif' },
-      { label: 'Material Requirements', status: 'sebagian', keterangan: 'Ada di dalam PPIC dan Work Order' },
-      { label: 'Sales Forecast', status: 'ditolak', keterangan: 'Ditolak — keputusan tercatat (SLS-90). Bukan ditunda' },
-      { label: 'Scenario Planning', status: 'diparkir' },
-      { label: 'Pegging', status: 'diparkir' },
-      { label: 'MPS', status: 'belum-ada' },
-      { label: 'Capacity / RCCP', status: 'belum-ada' },
-      { label: 'Planned Orders', status: 'belum-ada' }
-    ]
-  },
-  {
-    label: 'Product & Engineering',
-    items: [
-      { label: 'Items', href: '/items', status: 'aktif' },
-      { label: 'BOM', href: '/boms', status: 'aktif' },
-      { label: 'Routing', href: '/routing', status: 'aktif' },
-      { label: 'Specifications', status: 'belum-ada' },
-      { label: 'Revisions & Effectivity', status: 'belum-ada' },
-      { label: 'Engineering Changes', status: 'belum-ada' },
-      { label: 'Product Variants', status: 'belum-ada' }
-    ]
-  },
-  {
-    label: 'Sales & CRM',
-    items: [
-      { label: 'Customers', href: '/customers', status: 'aktif' },
-      { label: 'Customer PO', href: '/customer-purchase-orders', status: 'aktif' },
-      { label: 'Sales Orders', href: '/sales-orders', status: 'aktif' },
-      { label: 'Quotations', status: 'belum-ada' },
-      { label: 'Pricing', status: 'sebagian', keterangan: 'Harga per pelanggan ada di dalam Items' },
-      { label: 'Returns / RMA', status: 'belum-ada' },
-      { label: 'Complaints', status: 'belum-ada' },
-      { label: 'Leads & Opportunities', status: 'belum-ada' },
-      { label: 'Sample Requests', status: 'belum-ada' }
-    ]
-  },
-  {
-    // WORKSPACE INI TIDAK ADA DI DOKUMEN IA, dan itu kekeliruan dokumen — bukan tambahan
-    // karangan. Absensi dan kepegawaian SUDAH BERJALAN dan menopang seluruh perhitungan
-    // biaya SDM. Menyalin sitemap apa adanya akan menghilangkan modul yang sudah dipakai.
-    label: 'People',
-    items: [
-      { label: 'HR Dashboard', href: '/hr', status: 'aktif' },
-      { label: 'Attendance', href: '/attendance', status: 'aktif' },
-      { label: 'Payroll', status: 'sebagian', keterangan: 'Perhitungan ada di dalam HR Dashboard' },
-      { label: 'Employees', status: 'sebagian', keterangan: 'Ada di dalam HR Dashboard' }
-    ]
-  },
-  {
-    label: 'Finance & Costing',
-    items: [
-      { label: 'Operating Profit', href: '/operating-profit', status: 'aktif' },
-      { label: 'Standard Cost', status: 'sebagian', keterangan: 'Ada di dalam Items' },
-      { label: 'Cost Variance', status: 'sebagian', keterangan: 'Ada di dalam Operating Profit' },
-      { label: 'Actual Cost', status: 'belum-ada' },
-      { label: 'WIP', status: 'belum-ada' },
-      { label: 'Inventory Valuation', status: 'belum-ada' },
-      { label: 'Invoices & Payments', status: 'belum-ada' },
-      { label: 'General Ledger', status: 'belum-ada' }
-    ]
-  },
-  {
-    label: 'Data & Analytics',
-    items: [
-      { label: 'Company KPI', href: '/kpi', status: 'aktif' },
-      { label: 'My KPI', href: '/kpi/saya', status: 'aktif' },
-      { label: 'Process Mining', href: '/process-mining', status: 'aktif' },
-      { label: 'Report Builder', status: 'diparkir', keterangan: 'Diparkir — belum ada pembuat laporan' },
-      { label: 'Dashboard Builder', status: 'belum-ada' },
-      { label: 'Import / Export', status: 'belum-ada' }
-    ]
-  },
-  {
-    label: 'AI',
-    items: [
-      { label: 'AI Project', href: '/ai-project', status: 'aktif' },
-      { label: 'AI Readiness', href: '/ai-readiness', status: 'aktif' },
-      { label: 'AI Assistant', status: 'belum-ada' },
-      { label: 'AI Detection', status: 'belum-ada' },
-      { label: 'AI Automation', status: 'belum-ada' }
-    ]
-  },
-  {
-    label: 'Traceability',
-    items: [
-      // Kandidat terkuat untuk dibangun berikutnya: datanya SUDAH terisi dan ini syarat
-      // kepatuhan BPOM/halal, tapi tidak ada satu layar pun.
-      { label: 'Lot Genealogy', status: 'sebagian', keterangan: 'Datanya sudah terisi, layarnya belum ada' },
-      { label: 'Forward Trace', status: 'belum-ada' },
-      { label: 'Backward Trace', status: 'belum-ada' },
-      { label: 'Recall Analysis', status: 'belum-ada' }
-    ]
-  },
+
   {
     label: 'Quality',
     items: [
@@ -224,6 +182,69 @@ export const WORKSPACES: WorkspaceNav[] = [
       { label: 'NCR & CAPA', status: 'belum-ada' }
     ]
   },
+
+  {
+    label: 'Traceability',
+    items: [
+      // Kandidat terkuat untuk dibangun berikutnya: datanya SUDAH terisi dan ini syarat
+      // kepatuhan BPOM/halal, tapi tidak ada satu layar pun.
+      { label: 'Lot Genealogy', status: 'sebagian', keterangan: 'Datanya sudah terisi, layarnya belum ada' },
+      { label: 'Forward Trace', status: 'belum-ada' },
+      { label: 'Backward Trace', status: 'belum-ada' },
+      { label: 'Recall Analysis', status: 'belum-ada' }
+    ]
+  },
+
+  {
+    // WORKSPACE INI TIDAK ADA DI DOKUMEN IA, dan itu kekeliruan dokumen — bukan tambahan
+    // karangan. Absensi dan kepegawaian SUDAH BERJALAN dan menopang seluruh perhitungan
+    // biaya SDM. Menyalin sitemap apa adanya akan menghilangkan modul yang sudah dipakai.
+    label: 'People',
+    items: [
+      { label: 'HR Dashboard', href: '/hr', status: 'aktif' },
+      { label: 'Attendance', href: '/attendance', status: 'aktif' },
+      { label: 'Payroll', status: 'sebagian', keterangan: 'Perhitungan ada di dalam HR Dashboard' },
+      { label: 'Employees', status: 'sebagian', keterangan: 'Ada di dalam HR Dashboard' }
+    ]
+  },
+
+  {
+    label: 'Finance & Costing',
+    items: [
+      { label: 'Operating Profit', href: '/operating-profit', status: 'aktif' },
+      { label: 'Standard Cost', status: 'sebagian', keterangan: 'Ada di dalam Items' },
+      { label: 'Cost Variance', status: 'sebagian', keterangan: 'Ada di dalam Operating Profit' },
+      { label: 'Actual Cost', status: 'belum-ada' },
+      { label: 'WIP', status: 'belum-ada' },
+      { label: 'Inventory Valuation', status: 'belum-ada' },
+      { label: 'Invoices & Payments', status: 'belum-ada' },
+      { label: 'General Ledger', status: 'belum-ada' }
+    ]
+  },
+
+  {
+    label: 'Data & Analytics',
+    items: [
+      { label: 'Company KPI', href: '/kpi', status: 'aktif' },
+      { label: 'My KPI', href: '/kpi/saya', status: 'aktif' },
+      { label: 'Process Mining', href: '/process-mining', status: 'aktif' },
+      { label: 'Report Builder', status: 'diparkir', keterangan: 'Diparkir — belum ada pembuat laporan' },
+      { label: 'Dashboard Builder', status: 'belum-ada' },
+      { label: 'Import / Export', status: 'belum-ada' }
+    ]
+  },
+
+  {
+    label: 'AI',
+    items: [
+      { label: 'AI Project', href: '/ai-project', status: 'aktif' },
+      { label: 'AI Readiness', href: '/ai-readiness', status: 'aktif' },
+      { label: 'AI Assistant', status: 'belum-ada' },
+      { label: 'AI Detection', status: 'belum-ada' },
+      { label: 'AI Automation', status: 'belum-ada' }
+    ]
+  },
+
   {
     label: 'Maintenance',
     items: [
@@ -233,15 +254,7 @@ export const WORKSPACES: WorkspaceNav[] = [
       { label: 'Spare Parts', status: 'diparkir' }
     ]
   },
-  {
-    label: 'Integrations',
-    items: [
-      { label: 'API', status: 'belum-ada' },
-      { label: 'Webhooks', status: 'belum-ada' },
-      { label: 'Accounting', status: 'belum-ada' },
-      { label: 'Shipping', status: 'belum-ada' }
-    ]
-  },
+
   {
     label: 'Control Tower',
     items: [
@@ -252,19 +265,7 @@ export const WORKSPACES: WorkspaceNav[] = [
       { label: 'Exceptions', status: 'belum-ada' }
     ]
   },
-  {
-    label: 'Administration',
-    items: [
-      { label: 'Company Data', href: '/company', status: 'aktif' },
-      { label: 'Calculation Settings', href: '/company/setelan', status: 'sebagian', keterangan: 'Sedang diperbaiki — belum bisa dibuka (AUD-35)' },
-      { label: 'Team & Invitations', href: '/team', status: 'aktif' },
-      { label: 'Documents', href: '/documents', status: 'aktif' },
-      { label: 'Glossary Queue', href: '/kamus', status: 'aktif' },
-      { label: 'Numbering / Sequences', status: 'belum-ada', keterangan: 'Nomor dihitung ulang dari jumlah baris; tidak ada penghitung tersimpan' },
-      { label: 'Audit Log', status: 'belum-ada' },
-      { label: 'Workflow & Approval', status: 'belum-ada' }
-    ]
-  },
+
   {
     // Hanya untuk pemilik produk dan tim internal. Bukan "mode kedua" -- sekadar satu
     // workspace tambahan di navigasi yang sama.
@@ -276,6 +277,7 @@ export const WORKSPACES: WorkspaceNav[] = [
       { label: 'Test Tenant', href: '/test-tenant', status: 'internal' }
     ]
   }
+
 ];
 
 /// Keterangan yang dibaca manusia untuk tiap status. Dipakai penanda di menu DAN oleh
@@ -309,3 +311,46 @@ export function bisaDibuka(item: ItemNav): boolean {
   // kemampuannya menumpang di layar lain, bukan halamannya tidak ada.
   return Boolean(item.href);
 }
+
+
+/// MENU AKUN — isi panel yang dibuka dari avatar di header, bukan dari navigasi kiri.
+///
+/// KENAPA DIPISAH DARI NAVIGASI KIRI (permintaan pemilik produk, 25 Agu 2026):
+/// navigasi kiri menjawab "apa yang saya KERJAKAN"; menu akun menjawab "bagaimana sistem dan
+/// akun saya DIATUR". Keduanya dibuka dengan frekuensi yang sangat berbeda — pengaturan
+/// disentuh beberapa kali setahun, pekerjaan setiap hari. Mencampurnya membuat orang
+/// menggulir melewati hal yang tidak pernah ia sentuh.
+export const MENU_AKUN: WorkspaceNav[] = [
+  {
+    label: 'Administration',
+    items: [
+      { label: 'Company Data', href: '/company', status: 'aktif' },
+      { label: 'Team & Invitations', href: '/team', status: 'aktif' },
+      { label: 'Documents', href: '/documents', status: 'aktif' },
+      { label: 'Glossary Queue', href: '/kamus', status: 'aktif' },
+      { label: 'Audit Log', status: 'belum-ada' },
+      { label: 'Workflow & Approval', status: 'belum-ada' },
+      {
+        label: 'Numbering / Sequences',
+        status: 'belum-ada',
+        keterangan: 'Nomor dihitung ulang dari jumlah baris; tidak ada penghitung tersimpan'
+      }
+    ]
+  },
+  {
+    label: 'Settings',
+    items: [
+      { label: 'My Profile', href: '/profile', status: 'aktif' },
+      {
+        label: 'Calculation Settings',
+        href: '/company/setelan',
+        status: 'sebagian',
+        keterangan: 'Sedang diperbaiki — belum bisa dibuka (AUD-35)'
+      },
+      { label: 'Integrations — API', status: 'belum-ada' },
+      { label: 'Integrations — Webhooks', status: 'belum-ada' },
+      { label: 'Integrations — Accounting', status: 'belum-ada' },
+      { label: 'Integrations — Shipping', status: 'belum-ada' }
+    ]
+  }
+];

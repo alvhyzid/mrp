@@ -5,46 +5,55 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Header,
-  HeaderContainer,
   HeaderGlobalAction,
   HeaderGlobalBar,
   HeaderMenuButton,
   HeaderName,
+  HeaderPanel,
   SideNav,
+  SideNavDivider,
   SideNavItems,
   SideNavLink,
   SideNavMenu,
   SideNavMenuItem,
   SkipToContent,
+  Switcher,
+  SwitcherDivider,
+  SwitcherItem,
   Tag,
-  Toggletip,
-  ToggletipButton,
-  ToggletipContent,
   Theme
 } from '@carbon/react';
-import { Add, Information, Logout } from '@carbon/icons-react';
+import { Add, ChevronDown, Logout, UserAvatar } from '@carbon/icons-react';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import { canQuickCreateCustomerPo } from '@/lib/roles';
 import NotificationBell from '@/features/mrp/components/NotificationBell';
-import { WORKSPACES, ARTI_STATUS, bisaDibuka, type ItemNav } from './navConfig';
+import { WORKSPACES, MENU_AKUN, ARTI_STATUS, bisaDibuka, type ItemNav } from './navConfig';
 
-// KERANGKA APLIKASI CARBON (DS-04, 25 Agu 2026) — menggantikan AppShell yang dirakit tangan.
+// KERANGKA APLIKASI CARBON (DS-04, 25 Agu 2026).
 //
-// KENAPA DIKERJAKAN SEKARANG, bukan setelah isi halamannya Carbon (keputusan pemilik produk):
-// setiap layar yang dimigrasikan sesudah ini lahir DI DALAM kerangka yang sudah benar. Bila
-// ditunda, dua belas layar pertama dimigrasikan di kerangka lama lalu kerangkanya berganti —
-// dan sebagian perlu disesuaikan lagi. Tampilan campur selama peralihan memang nyata, tapi ia
-// HILANG SENDIRI seiring migrasi berjalan. Pekerjaan ganda tidak.
+// ============================================================================
+// WARNA — KENAPA HEADER DAN PANEL KIRI GELAP
+// ============================================================================
+// Carbon menetapkan warna header lewat TEMA yang diterapkan ke "shell zone", bukan lewat
+// warna yang ditulis sendiri. Kalimatnya: "The UI Shell can be customized to use any of the
+// four IBM themes by applying an inline theme to the shell zone", dan latar header memakai
+// token $background dari tema itu.
 //
-// AKIBAT YANG DISENGAJA, supaya tidak dikira pekerjaan setengah jadi: selama masa peralihan,
-// kerangka Carbon ini membungkus isi halaman yang sebagian besar BELUM Carbon. Itu akan
-// terlihat campur. Isi halaman TIDAK disentuh di pekerjaan ini.
+// Zona shell memakai g100 (gelap), area isi tetap g10 (terang). Ini bentuk IBM yang khas, dan
+// sekaligus menyelesaikan keluhan bahwa panel kiri "terlalu menyatu dengan area isi": yang
+// memisahkan keduanya sekarang perbedaan TEMA, bukan garis tipis yang mudah hilang.
 //
-// DEVIASI RESMI — LEBAR PENUH: isi tidak dibatasi lebar grid Carbon. Alasannya ERP padat data;
-// membuang ruang kiri-kanan membuat kolom terpotong lebih cepat, dan memotong kolom diam-diam
-// sudah jadi cacat berulang (RSP-01, RSP-02). Deviasi ini HANYA menyentuh lebar — tinggi
-// header, padding bertoken, perilaku menu di layar sempit, SkipToContent, dan fokus keyboard
-// tetap mengikuti Carbon.
+// ============================================================================
+// KENAPA PENJELASAN STATUS TIDAK LAGI MEMAKAI POPOVER
+// ============================================================================
+// Versi pertama memakai Toggletip per item. Panel penjelasannya TERPOTONG oleh panel kiri yang
+// menggulir — dan itu bukan cacat yang bisa ditambal dengan mengatur posisi: elemen melayang
+// di dalam wadah ber-`overflow` akan selalu terpotong oleh wadahnya.
+//
+// Gantinya dua hal yang lebih sederhana dan tidak bisa terpotong:
+//   1. KETERANGAN PER ITEM ditulis langsung di bawah labelnya sebagai teks kecil.
+//   2. ARTI SETIAP PENANDA dijelaskan SEKALI di kaki panel, bukan 75 kali di tiap item.
+// Penjelasan yang sama diulang 75 kali bukan cuma boros — ia membuat orang berhenti membaca.
 
 const LABEL_PERAN: Record<string, string> = {
   company_admin: 'Admin Perusahaan',
@@ -66,10 +75,10 @@ const LABEL_PERAN: Record<string, string> = {
 };
 
 /// Warna penanda mengikuti ARTI-nya, bukan selera:
-///   merah  = jangan menunggunya, keputusannya sudah ditolak
-///   biru   = ada tapi menumpang di layar lain
-///   abu    = belum dibangun (mayoritas — sengaja warna paling tenang supaya tidak berisik)
-///   ungu   = sengaja ditunda, ada pemicunya
+///   merah = jangan menunggunya, keputusannya sudah ditolak
+///   biru  = ada, tapi menumpang di layar lain
+///   abu   = belum dibangun (mayoritas — sengaja paling tenang supaya tidak berisik)
+///   ungu  = sengaja ditunda, ada pemicunya
 const WARNA_TAG: Record<string, 'red' | 'blue' | 'gray' | 'purple' | 'teal'> = {
   ditolak: 'red',
   sebagian: 'blue',
@@ -78,33 +87,28 @@ const WARNA_TAG: Record<string, 'red' | 'blue' | 'gray' | 'purple' | 'teal'> = {
   internal: 'teal'
 };
 
-function PenandaStatus({ item }: { item: ItemNav }) {
-  if (item.status === 'aktif') return null;
-  const arti = ARTI_STATUS[item.status];
+function Penanda({ status }: { status: ItemNav['status'] }) {
+  if (status === 'aktif') return null;
   return (
-    <span className="shell-penanda">
-      <Tag size="sm" type={WARNA_TAG[item.status]}>
-        {arti.singkat}
-      </Tag>
-      {/*
-        Penjelasan dibuka dengan KLIK, tidak pernah hanya dengan sentuhan kursor — aturan tetap
-        proyek. Penjelasan hover tidak bisa dipakai sama sekali di HP dan tablet, dan justru
-        perangkat itulah yang dipakai di lantai produksi.
+    <Tag size="sm" type={WARNA_TAG[status]} className="shell-tag">
+      {ARTI_STATUS[status].singkat}
+    </Tag>
+  );
+}
 
-        Isinya menjawab "kenapa ini tidak bisa dibuka", bukan sekadar menyatakan bahwa ia tidak
-        bisa. Penanda tanpa alasan hanya memindahkan pertanyaannya, tidak menjawabnya.
-      */}
-      <Toggletip align="right">
-        <ToggletipButton label={`Kenapa "${item.label}" belum bisa dibuka`}>
-          <Information size={12} />
-        </ToggletipButton>
-        <ToggletipContent>
-          <p className="shell-penjelasan-judul">{arti.singkat}</p>
-          <p>{arti.panjang}</p>
-          {item.keterangan && <p className="shell-penjelasan-tambahan">{item.keterangan}</p>}
-        </ToggletipContent>
-      </Toggletip>
-    </span>
+/// Baris menu untuk item yang BELUM punya halaman.
+///
+/// Dirender sebagai teks, BUKAN tautan. Tautan yang diklik lalu tidak melakukan apa-apa lebih
+/// buruk daripada yang tidak bisa diklik: yang pertama membuat orang mengira sistemnya rusak.
+function ItemMati({ item }: { item: ItemNav }) {
+  return (
+    <li className="shell-mati">
+      <span className="shell-mati__baris">
+        <span className="shell-mati__label">{item.label}</span>
+        <Penanda status={item.status} />
+      </span>
+      {item.keterangan && <span className="shell-mati__keterangan">{item.keterangan}</span>}
+    </li>
   );
 }
 
@@ -116,6 +120,27 @@ export default function AppShellCarbon({ children }: { children: React.ReactNode
   const [companyId, setCompanyId] = useState<number | null>(null);
   const [companyName, setCompanyName] = useState<string | null>(null);
   const [meLoaded, setMeLoaded] = useState(false);
+
+  // Keadaan buka-tutup panel kiri DIURUS SENDIRI, bukan lewat HeaderContainer.
+  //
+  // Alasannya bukan selera: HeaderContainer menyediakan satu saklar yang di layar lebar tidak
+  // berpengaruh sama sekali karena panelnya `isPersistent`. Akibatnya tombol lipat di kiri
+  // atas TIDAK MELAKUKAN APA-APA di laptop — dilaporkan pemilik produk, dan memang benar.
+  // Dengan keadaan sendiri, tombol itu melipat panelnya di lebar berapa pun.
+  const [menuTerbuka, setMenuTerbuka] = useState(true);
+  const [panelAkun, setPanelAkun] = useState(false);
+
+  // Di layar sempit panel mulai TERTUTUP; di layar lebar mulai TERBUKA.
+  useEffect(() => {
+    if (typeof window !== 'undefined') setMenuTerbuka(window.innerWidth >= 1056);
+  }, []);
+
+  // Menutup sendiri setelah pindah halaman HANYA di layar sempit (RSP-01). Di layar lebar
+  // menutupnya akan menghukum pengguna yang memang ingin panelnya tetap terbuka.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1056) setMenuTerbuka(false);
+    setPanelAkun(false);
+  }, [pathname]);
 
   useEffect(() => {
     let cancelled = false;
@@ -154,139 +179,174 @@ export default function AppShellCarbon({ children }: { children: React.ReactNode
     router.push('/login');
   };
 
+  const tutupBilaSempit = () => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1056) setMenuTerbuka(false);
+  };
+
+  const tautan = (item: ItemNav) => {
+    if (!bisaDibuka(item)) return <ItemMati key={item.label} item={item} />;
+    const aktif = pathname === item.href;
+    return (
+      <SideNavMenuItem
+        key={item.label}
+        as={Link}
+        href={item.href}
+        isActive={aktif}
+        aria-current={aktif ? 'page' : undefined}
+        onClick={tutupBilaSempit}
+      >
+        <span className="shell-hidup">
+          <span>{item.label}</span>
+          <Penanda status={item.status} />
+        </span>
+      </SideNavMenuItem>
+    );
+  };
+
+  const inisial = (userName ?? '?')
+    .split(' ')
+    .slice(0, 2)
+    .map((k) => k.charAt(0).toUpperCase())
+    .join('');
+
   return (
-    <HeaderContainer
-      render={({ isSideNavExpanded, onClickSideNavExpand }: { isSideNavExpanded: boolean; onClickSideNavExpand: () => void }) => {
-        // RSP-01 — menu menutup sendiri setelah berpindah halaman. Tanpa ini, di HP menu
-        // tetap menutupi halaman tujuan setelah pengguna memilih, dan terasa seperti tidak
-        // terjadi apa-apa. Ditaruh di sini karena keadaan buka-tutupnya milik HeaderContainer.
-        const tutupSetelahPindah = () => {
-          if (isSideNavExpanded) onClickSideNavExpand();
-        };
+    <>
+      {/* ZONA SHELL — tema g100. Lihat catatan warna di kepala berkas. */}
+      <Theme theme="g100">
+        <Header aria-label="FABRIX">
+          {/* Teksnya Bahasa Indonesia, bukan bawaan Carbon yang berbahasa Inggris. Aturan D-3
+              menetapkan label NAVIGASI boleh Inggris karena ia nama modul; ini bukan nama
+              modul melainkan KALIMAT PERINTAH yang dibaca orang. */}
+          <SkipToContent href="#main-content">Lompat ke isi utama</SkipToContent>
 
-        const tautan = (item: ItemNav) => {
-          const aktif = pathname === item.href;
-          if (!bisaDibuka(item)) {
-            // Item tanpa halaman TIDAK dirender sebagai tautan sama sekali. Tautan yang
-            // diklik lalu tidak melakukan apa-apa lebih buruk daripada tidak bisa diklik:
-            // yang pertama membuat orang mengira sistemnya rusak.
-            return (
-              <li key={item.label} className="shell-item-mati">
-                <span className="shell-item-mati__label">{item.label}</span>
-                <PenandaStatus item={item} />
-              </li>
-            );
-          }
-          return (
-            <SideNavMenuItem
-              key={item.label}
-              as={Link}
-              href={item.href}
-              isActive={aktif}
-              aria-current={aktif ? 'page' : undefined}
-              onClick={tutupSetelahPindah}
+          <HeaderMenuButton
+            aria-label={menuTerbuka ? 'Tutup menu' : 'Buka menu'}
+            aria-expanded={menuTerbuka}
+            onClick={() => setMenuTerbuka((v) => !v)}
+            isActive={menuTerbuka}
+            isCollapsible
+          />
+
+          <HeaderName as={Link} href="/dashboard" prefix="FABRIX">
+            {companyName ?? ''}
+          </HeaderName>
+
+          <HeaderGlobalBar>
+            {meLoaded && <NotificationBell role={role} companyId={companyId} />}
+
+            {canQuickCreateCustomerPo(role) && (
+              <HeaderGlobalAction aria-label="Buat PO klien" onClick={() => router.push('/customer-purchase-orders')}>
+                <Add size={20} />
+              </HeaderGlobalAction>
+            )}
+
+            {/* AVATAR + NAMA + PANAH — SATU tombol, bukan tiga elemen berdampingan.
+                Seluruhnya bisa ditekan, jadi target sentuhnya selebar nama. Versi sebelumnya
+                menaruh nama sebagai teks mati di sebelah ikon; ia terlihat bisa diklik dan
+                tidak bisa. */}
+            <button
+              type="button"
+              className={`shell-akun ${panelAkun ? 'shell-akun--terbuka' : ''}`}
+              aria-label="Menu akun dan pengaturan"
+              aria-expanded={panelAkun}
+              onClick={() => setPanelAkun((v) => !v)}
             >
-              <span className="shell-item-hidup">
-                <span>{item.label}</span>
-                <PenandaStatus item={item} />
+              <span className="shell-akun__avatar" aria-hidden="true">
+                {meLoaded && userName ? inisial : <UserAvatar size={20} />}
               </span>
-            </SideNavMenuItem>
-          );
-        };
+              <span className="shell-akun__teks">
+                <span className="shell-akun__nama">{userName ?? '…'}</span>
+                {role && <span className="shell-akun__peran">{LABEL_PERAN[role] ?? role}</span>}
+              </span>
+              <ChevronDown size={16} className="shell-akun__panah" />
+            </button>
 
-        return (
-          <>
-            <Theme theme="g10">
-              <Header aria-label="FABRIX">
-                {/* SkipToContent: wajib aksesibilitas. Tab pertama dari awal halaman
-                    memunculkannya, dan menekannya melompat langsung ke isi utama —
-                    tanpa itu pengguna keyboard harus menelusuri 102 item menu dulu. */}
-                {/* Teksnya Bahasa Indonesia, bukan bawaan Carbon yang berbahasa Inggris.
-                    Aturan D-3 menetapkan label NAVIGASI boleh Inggris karena ia nama modul;
-                    ini bukan nama modul melainkan KALIMAT PERINTAH yang dibaca orang. */}
-                <SkipToContent href="#main-content">Lompat ke isi utama</SkipToContent>
-                <HeaderMenuButton
-                  aria-label={isSideNavExpanded ? 'Tutup menu' : 'Buka menu'}
-                  onClick={onClickSideNavExpand}
-                  isActive={isSideNavExpanded}
-                  isCollapsible
-                />
-                <HeaderName as={Link} href="/dashboard" prefix="FABRIX">
-                  {companyName ?? ''}
-                </HeaderName>
+            <HeaderGlobalAction aria-label="Keluar" onClick={keluar}>
+              <Logout size={20} />
+            </HeaderGlobalAction>
+          </HeaderGlobalBar>
 
-                <HeaderGlobalBar>
-                  {meLoaded && (
-                    <span className="shell-identitas">
-                      {userName ?? '…'}
-                      {role && <span className="shell-peran">{LABEL_PERAN[role] ?? role}</span>}
-                    </span>
-                  )}
-                  {meLoaded && <NotificationBell role={role} companyId={companyId} />}
-                  {canQuickCreateCustomerPo(role) && (
-                    <HeaderGlobalAction aria-label="Buat PO klien" onClick={() => router.push('/customer-purchase-orders')}>
-                      <Add size={20} />
-                    </HeaderGlobalAction>
-                  )}
-                  <HeaderGlobalAction aria-label="Keluar" onClick={keluar}>
-                    <Logout size={20} />
-                  </HeaderGlobalAction>
-                </HeaderGlobalBar>
+          {/* PANEL AKUN — komponen Carbon untuk "additional system level actions or content
+              associated with a system icon in the header". Bukan menu buatan sendiri. */}
+          <HeaderPanel aria-label="Menu akun dan pengaturan" expanded={panelAkun}>
+            {/*
+              Anak-anak Switcher dirender DATAR, bukan dibungkus per kelompok.
+              Alasannya bukan gaya: Switcher Carbon adalah <ul>, dan SwitcherDivider sendiri
+              sudah berupa <li>. Versi pertama membungkus tiap kelompok dalam <li> lagi,
+              sehingga menghasilkan <li> di dalam <li> — HTML tidak sah, dan React
+              melaporkannya sebagai galat hydration di konsol. Tidak terlihat di layar, tapi
+              nyata: peramban boleh "memperbaiki" struktur semacam itu sesuka hatinya, dan
+              hasilnya berbeda-beda antar peramban.
+            */}
+            <Switcher aria-label="Menu akun dan pengaturan">
+              {MENU_AKUN.flatMap((grup, iGrup) => [
+                ...(iGrup > 0 ? [<SwitcherDivider key={`pisah-${grup.label}`} />] : []),
+                <li key={`judul-${grup.label}`} className="shell-akun-judul">
+                  {grup.label}
+                </li>,
+                ...grup.items.map((item) =>
+                  bisaDibuka(item) ? (
+                    <SwitcherItem
+                      key={item.label}
+                      aria-label={item.label}
+                      href={item.href}
+                      onClick={() => setPanelAkun(false)}
+                    >
+                      <span className="shell-hidup">
+                        <span>{item.label}</span>
+                        <Penanda status={item.status} />
+                      </span>
+                    </SwitcherItem>
+                  ) : (
+                    <ItemMati key={item.label} item={item} />
+                  )
+                )
+              ])}
+            </Switcher>
+          </HeaderPanel>
 
-                <SideNav
-                  aria-label="Navigasi utama"
-                  expanded={isSideNavExpanded}
-                  onSideNavBlur={onClickSideNavExpand}
-                  isPersistent
-                  className="shell-sidenav"
-                >
-                  <SideNavItems>
-                    {WORKSPACES.map((ws) => {
-                      const adaYangAktif = ws.items.some((i) => i.href && pathname === i.href);
-                      // Satu-satunya item aktif di workspace Overview adalah Dashboard, dan
-                      // ia dipakai setiap hari. Ditaruh sebagai tautan datar, bukan di balik
-                      // kelompok yang harus dibuka dulu.
-                      if (ws.label === 'Overview') {
-                        return (
-                          <div key={ws.label}>
-                            <SideNavLink
-                              as={Link}
-                              href="/dashboard"
-                              isActive={pathname === '/dashboard'}
-                              onClick={tutupSetelahPindah}
-                            >
-                              Dashboard
-                            </SideNavLink>
-                            <SideNavMenu title="Overview" defaultExpanded={false}>
-                              {ws.items.filter((i) => i.href !== '/dashboard').map(tautan)}
-                            </SideNavMenu>
-                          </div>
-                        );
-                      }
-                      return (
-                        <SideNavMenu key={ws.label} title={ws.label} defaultExpanded={adaYangAktif}>
-                          {ws.items.map(tautan)}
-                        </SideNavMenu>
-                      );
-                    })}
-                  </SideNavItems>
-                </SideNav>
-              </Header>
-            </Theme>
+          <SideNav aria-label="Navigasi utama" expanded={menuTerbuka} isPersistent={false} className="shell-sidenav">
+            <SideNavItems>
+              <SideNavLink as={Link} href="/dashboard" isActive={pathname === '/dashboard'} onClick={tutupBilaSempit}>
+                Dashboard
+              </SideNavLink>
 
-            {/* LEBAR PENUH — deviasi resmi. Isi TIDAK dibungkus Grid Carbon.
-                Wadahnya tetap memakai token Carbon untuk jarak dan tinggi header. */}
-            {/* tabIndex={-1} BUKAN hiasan: tanpa itu, menekan "Lompat ke isi utama" memang
-                memindahkan halaman ke jangkarnya, tapi FOKUS keyboard tetap tertinggal di
-                <body>. Akibatnya Tab berikutnya mengulang dari awal dokumen — pengguna
-                keyboard kembali ke 102 item menu yang barusan ia lompati.
-                Diukur di peramban sebelum diperbaiki: fokus mendarat di BODY. */}
-            <main id="main-content" tabIndex={-1} className="shell-isi">
-              {children}
-            </main>
-          </>
-        );
-      }}
-    />
+              {WORKSPACES.map((ws) => {
+                const adaYangAktif = ws.items.some((i) => i.href && pathname === i.href);
+                const isi = ws.label === 'Overview' ? ws.items.filter((i) => i.href !== '/dashboard') : ws.items;
+                return (
+                  <SideNavMenu key={ws.label} title={ws.label} defaultExpanded={adaYangAktif}>
+                    {isi.map(tautan)}
+                  </SideNavMenu>
+                );
+              })}
+
+              <SideNavDivider />
+
+              {/* KETERANGAN PENANDA — dijelaskan SEKALI di sini, bukan 75 kali di tiap item.
+                  Ditaruh di kaki panel karena ia dibaca sekali lalu tidak dibutuhkan lagi. */}
+              <li className="shell-legenda">
+                <p className="shell-legenda__judul">Arti penanda</p>
+                {(['sebagian', 'belum-ada', 'diparkir', 'ditolak'] as const).map((st) => (
+                  <span key={st} className="shell-legenda__baris">
+                    <Tag size="sm" type={WARNA_TAG[st]} className="shell-tag">
+                      {ARTI_STATUS[st].singkat}
+                    </Tag>
+                    <span>{ARTI_STATUS[st].panjang}</span>
+                  </span>
+                ))}
+              </li>
+            </SideNavItems>
+          </SideNav>
+        </Header>
+      </Theme>
+
+      {/* LEBAR PENUH — deviasi resmi. Isi TIDAK dibungkus Grid Carbon.
+          Kelas `shell-isi--bergeser` hanya dipasang saat panel kiri terbuka, supaya tombol
+          lipat benar-benar MELEBARKAN area kerja dan bukan sekadar menyembunyikan menu. */}
+      <main id="main-content" tabIndex={-1} className={`shell-isi ${menuTerbuka ? 'shell-isi--bergeser' : ''}`}>
+        {children}
+      </main>
+    </>
   );
 }

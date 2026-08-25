@@ -113,9 +113,16 @@ describe('DS-02 — layar publik tetap Carbon', () => {
     telusuri(join(AKAR, 'app'));
     telusuri(join(AKAR, 'src'));
 
+    // DUA titik, dan tepat dua:
+    //   (public) -> tujuh layar publik
+    //   (shell)  -> seluruh layar di dalam aplikasi, sejak DS-04
+    // Impor ketiga berarti seseorang menambahkannya per halaman lagi, dan halaman kedelapan
+    // akan lupa. Impor di app/(shell)/company/setelan/layout.tsx sudah DICABUT di DS-04 —
+    // ia jadi ganda begitu kerangka aplikasi memuat Carbon, dan impor ganda tidak
+    // menghasilkan galat sehingga bisa bertahan lama tanpa ada yang menyadarinya.
     expect(pengimpor.sort()).toEqual([
       'app/(public)/layout.tsx',
-      'app/(shell)/company/setelan/layout.tsx'
+      'app/(shell)/layout.tsx'
     ]);
   });
 

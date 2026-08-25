@@ -1,0 +1,111 @@
+// Gaya kerangka aplikasi (DS-04).
+//
+// SELURUH ukuran dan jarak memakai TOKEN Carbon. Nol angka px ditulis langsung, kecuali
+// dua tempat yang disebut alasannya di bawah.
+@use '@carbon/react/scss/spacing';
+@use '@carbon/react/scss/theme';
+@use '@carbon/react/scss/type';
+
+// LEBAR PENUH — deviasi resmi (keputusan pemilik produk, 25 Agu 2026).
+//
+// Isi TIDAK dibungkus grid Carbon dan TIDAK dibatasi lebar maksimum. Alasannya ERP padat
+// data: tabel banyak kolom butuh seluruh lebar layar, dan membuang ruang kiri-kanan membuat
+// kolom terpotong lebih cepat — cacat yang sudah berulang di proyek ini (RSP-01, RSP-02).
+//
+// SESI BERIKUTNYA: JANGAN "memperbaikinya" jadi bergrid. Ini keputusan, bukan kelalaian.
+//
+// Dua angka di bawah ini BUKAN karangan, melainkan ukuran UI Shell Carbon sendiri:
+// tinggi header 3rem (48px) dan lebar side nav 16rem (256px). Keduanya ditulis di sini karena
+// Carbon tidak memancarkannya sebagai token Sass yang bisa dirujuk.
+.shell-isi {
+  padding-block-start: 3rem;
+  min-block-size: 100vh;
+  background-color: theme.$background;
+}
+
+@media (min-width: 66rem) {
+  .shell-isi {
+    padding-inline-start: 16rem;
+  }
+}
+
+.shell-sidenav {
+  // Menu memuat 17 kelompok; tanpa gulir sendiri, kelompok terbawah tidak bisa dicapai
+  // di layar pendek.
+  overflow-y: auto;
+}
+
+// ITEM YANG BELUM PUNYA HALAMAN.
+//
+// Dirender sebagai teks, BUKAN tautan. Tautan yang diklik lalu tidak melakukan apa-apa lebih
+// buruk daripada yang tidak bisa diklik: yang pertama membuat orang mengira sistemnya rusak.
+//
+// Tingginya disamakan dengan item yang hidup supaya barisnya tidak terlihat "loncat", dan
+// warnanya memakai $text-disabled — token Carbon untuk hal yang memang tidak bisa disentuh.
+// min-block-size 2rem menyamakan tingginya dengan item yang hidup, TAPI ia hanya lantai —
+// bukan langit-langit. Versi pertama memakai tinggi tetap, dan label sepanjang "Revisions &
+// Effectivity" membungkus ke baris kedua lalu MENINDIH baris di bawahnya. Ditemukan dengan
+// melihat tangkapan layarnya, bukan dari kode: dua nilai yang sama-sama benar (tinggi baris
+// dan pembungkusan teks) bertabrakan.
+.shell-item-mati {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: spacing.$spacing-03;
+  min-block-size: 2rem;
+  padding-block: spacing.$spacing-02;
+  padding-inline: spacing.$spacing-07 spacing.$spacing-05;
+  color: theme.$text-disabled;
+}
+
+.shell-item-mati__label {
+  @include type.type-style('body-compact-01');
+  // Label boleh membungkus; yang tidak boleh adalah penandanya ikut menyempit.
+  min-inline-size: 0;
+}
+
+.shell-item-hidup {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: spacing.$spacing-03;
+  inline-size: 100%;
+}
+
+.shell-penanda {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.shell-penjelasan-judul {
+  @include type.type-style('heading-compact-01');
+  margin-block-end: spacing.$spacing-02;
+}
+
+.shell-penjelasan-tambahan {
+  margin-block-start: spacing.$spacing-03;
+  color: theme.$text-secondary;
+}
+
+// Nama & peran di header. Disembunyikan di layar sempit: di 360px teks ini mendesak nama
+// aplikasi sampai terpotong, sementara informasinya tetap tersedia di halaman Profil.
+.shell-identitas {
+  display: none;
+  align-items: center;
+  gap: spacing.$spacing-03;
+  padding-inline: spacing.$spacing-05;
+  color: theme.$text-secondary;
+  @include type.type-style('label-01');
+}
+
+.shell-peran {
+  padding-inline-start: spacing.$spacing-03;
+  border-inline-start: 1px solid theme.$border-subtle;
+}
+
+@media (min-width: 42rem) {
+  .shell-identitas {
+    display: inline-flex;
+  }
+}

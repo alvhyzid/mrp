@@ -1,13 +1,9 @@
-// CSS Carbon dimuat DI SINI, bukan di app/layout.tsx — SENGAJA.
+// CSS Carbon TIDAK LAGI diimpor di sini — sejak DS-04 (25 Agu 2026) ia dimuat sekali di
+// app/(shell)/layout.tsx untuk seluruh layar di dalam aplikasi.
 //
-// Memuatnya di layout akar akan menerapkan reset dan tipografi Carbon ke SELURUH 38 halaman
-// sekaligus, dalam satu perubahan yang tidak bisa diperiksa satu per satu. Next.js membatasi
-// stylesheet global ke cabang rute tempat ia diimpor, jadi menaruhnya di sini membuat Carbon
-// berlaku HANYA untuk layar pilot ini.
-//
-// Saat pilot terbukti dan layar lain menyusul, impor ini naik ke layout yang lebih tinggi —
-// bertahap, bukan sekaligus. Itu juga yang membuat "sebelum vs sesudah" bisa dibandingkan.
-import '@/styles/carbon.scss';
+// Impor ganda tidak menghasilkan galat, jadi ia bisa bertahan lama tanpa ada yang menyadari —
+// itu sebabnya dicabut sekarang, bukan "nanti kalau sempat". Yang tersisa di sini hanya gaya
+// khusus halaman ini.
 import './setelan.scss';
 
 export default function SetelanLayout({ children }: { children: React.ReactNode }) {

@@ -16,7 +16,6 @@ import {
   InlineNotification,
   Modal,
   ModalBody,
-  ModalFooter,
   ModalHeader,
   Pagination,
   Select as CarbonSelect,
@@ -42,6 +41,8 @@ import {
   ToggletipContent
 } from '@carbon/react';
 import { KepalaHalaman } from '@/components/ui/kepala-halaman';
+import { FooterBertahap, PenandaLangkah, type LangkahModal } from '@/components/ui/modal-bertahap';
+import { AreaNotifikasi, type Notifikasi } from '@/components/ui/notifikasi';
 import { Add, Information } from '@carbon/icons-react';
 import {
   SHELF_LIFE_UNITS,
@@ -166,6 +167,22 @@ function LabelBantuan({ teks, children }: { teks: string; children: React.ReactN
   );
 }
 
+// LANGKAH FORMULIR ITEM (DS-18, 26 Agu 2026) — mengikuti cetakan PO klien.
+//
+// Nomor BPOM, kode halal, dan centang Aktif DINAIKKAN ke langkah pertama. Ketiganya
+// keterangan JATI DIRI item — namanya, jenisnya, pendaftaran resminya, masih dipakai atau
+// tidak — bukan aturan persediaan. Tanpa pemindahan itu langkah ketiga harus berjudul dua
+// hal sekaligus, dan itu tepat yang dilarang uji pemecahan.
+//
+// DOKUMEN TIDAK MASUK MODAL PEMBUATAN, dan itu keputusan sadar (pemilik produk, 26 Agu
+// 2026): melampirkan berkas menuntut itemnya sudah ada untuk ditempeli. Ia tetap di panel
+// Detail, tempat item yang sudah tersimpan dibuka.
+const LANGKAH_ITEM: LangkahModal[] = [
+  { judul: 'Identitas', ringkas: 'Nama, jenis, pendaftaran' },
+  { judul: 'Satuan', ringkas: 'Satuan pakai, beli, konversi' },
+  { judul: 'Persediaan', ringkas: 'Masa simpan & stok minimum' }
+];
+
 export default function ItemsPage() {
   const router = useRouter();
   const [checkingAccess, setCheckingAccess] = useState(true);
@@ -187,6 +204,14 @@ export default function ItemsPage() {
   // inline ke modal, dipicu tombol toolbar ("Tambah Item") ATAU tombol "Edit" per baris.
   // Field, validasi, handleSubmit TIDAK diubah, cuma wadahnya.
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [langkah, setLangkah] = useState(0);
+  // Hasil yang BERHASIL lewat notifikasi, bukan pesan di dalam modal yang keburu tertutup.
+  const [notifikasi, setNotifikasi] = useState<Notifikasi[]>([]);
+  const beriTahu = useCallback((jenis: Notifikasi['jenis'], judul: string, rincian?: string) => {
+    setNotifikasi((lama) => [...lama, { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, jenis, judul, rincian }]);
+  }, []);
+  const tutupNotifikasi = useCallback((id: string) => setNotifikasi((lama) => lama.filter((n) => n.id !== id)), []);
+
 
   // Alur 1 (3.4) — "supplier yang memasok ini", PINTU MASUK KEDUA ke tabel yang
   // sama dengan layar Supplier (supplier_item_prices). Item TETAP dipilih dari
@@ -428,6 +453,7 @@ export default function ItemsPage() {
   };
 
   const resetForm = () => {
+    setLangkah(0);
     setEditingItemId(null);
     setForm(emptyForm);
     setFormStatus('idle');
@@ -504,10 +530,12 @@ export default function ItemsPage() {
       return;
     }
 
-    setFormStatus('success');
-    setFormMessage(editingItemId ? 'Item berhasil diperbarui.' : 'Item baru berhasil ditambahkan.');
+    const memperbarui = editingItemId !== null;
+    setFormStatus('idle');
+    setFormMessage('');
     resetForm();
     setIsFormModalOpen(false);
+    beriTahu('success', memperbarui ? 'Item diperbarui' : 'Item baru ditambahkan');
     await loadItems();
   };
   // ==========================================================================
@@ -1191,269 +1219,293 @@ export default function ItemsPage() {
           />
           <ModalBody hasForm>
             <form id="form-item" onSubmit={handleSubmit} className="item-form">
-              <TextInput
-                size="lg"
-                id="item_code"
-                labelText="Kode item"
-                value={form.item_code}
-                onChange={(e) => setForm((prev) => ({ ...prev, item_code: e.target.value }))}
-                required
-              />
-              <TextInput
-                size="lg"
-                id="name"
-                labelText="Nama item"
-                value={form.name}
-                onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                required
-              />
-              <CarbonSelect
-                size="lg"
-                id="type"
-                labelText="Tipe"
-                value={form.type}
-                onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value }))}
-              >
-                {itemTypes.map((t) => (
-                  <CarbonSelectItem key={t} value={t} text={typeLabels[t]} />
-                ))}
-              </CarbonSelect>
-
-              <TextInput
-                size="lg"
-                id="base_uom"
-                labelText={
-                  <LabelBantuan teks="Satuan dasar/pakai">
-                    Satuan yang dipakai saat bahan ini DIPAKAI di produksi dan dicatat stoknya. Biasanya satuan
-                    terkecil, mis. gram untuk bahan yang ditimbang.
-                  </LabelBantuan>
-                }
-                helperText="Contoh: g, ml, pcs."
-                value={form.base_uom}
-                onChange={(e) => setForm((prev) => ({ ...prev, base_uom: e.target.value }))}
-                required
-              />
-              <TextInput
-                size="lg"
-                id="purchase_uom"
-                labelText={
-                  <LabelBantuan teks="Satuan beli">
-                    Satuan yang tertulis di dokumen pembelian dari supplier. Boleh berbeda dari satuan pakai —
-                    selisihnya diisi di Faktor konversi.
-                  </LabelBantuan>
-                }
-                helperText="Contoh: kg, liter, dus."
-                value={form.purchase_uom}
-                onChange={(e) => setForm((prev) => ({ ...prev, purchase_uom: e.target.value }))}
-                required
+              <PenandaLangkah
+                langkah={LANGKAH_ITEM}
+                aktif={langkah}
+                onPindah={setLangkah}
+                className="item-form__langkah"
               />
 
-              <div className="item-form__lebar">
+              {/* LANGKAH 1 — Identitas: nama, jenis, pendaftaran resmi, masih dipakai atau tidak. */}
+              {langkah === 0 ? (
+                <div className="item-form__bagian">
                 <TextInput
                   size="lg"
-                  id="uom_conversion_factor"
-                  type="number"
-                  min="0"
-                  step="any"
-                  labelText={
-                    <LabelBantuan teks="Faktor konversi (satuan beli → satuan dasar)">
-                      Berapa banyak satuan dasar yang didapat dari SATU satuan beli. Contoh: beli per kg, pakai per
-                      gram → isi 1000, karena 1 kg berisi 1000 g. Kalau satuan beli dan satuan pakai sama, isi 1.
-                    </LabelBantuan>
-                  }
-                  helperText="Pilih pola di bawah untuk mengisi cepat, atau ketik angkanya sendiri."
-                  value={form.uom_conversion_factor}
-                  onChange={(e) => setForm((prev) => ({ ...prev, uom_conversion_factor: e.target.value }))}
+                  id="item_code"
+                  labelText="Kode item"
+                  value={form.item_code}
+                  onChange={(e) => setForm((prev) => ({ ...prev, item_code: e.target.value }))}
                   required
                 />
-                {/* MST-15 — pola konversi umum. Daftar ini SENGAJA pendek dan berisi satuan
-                    yang benar-benar dipakai hari ini, bukan tabel konversi universal. */}
-                <div className="item-pola">
-                  {POLA_KONVERSI.map((pola) => (
-                    <Button
-                      key={`${pola.dari}-${pola.ke}-${pola.faktor}`}
-                      size="lg"
-                      kind="tertiary"
-                      type="button"
-                      onClick={() => setForm((prev) => ({ ...prev, uom_conversion_factor: String(pola.faktor) }))}
-                    >
-                      {pola.dari === 'sama' ? 'Satuannya sama (1)' : `1 ${pola.dari} = ${formatNumberId(pola.faktor)} ${pola.ke}`}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              {/* SATU ISIAN BERPASANGAN, bukan dua field yang kebetulan bersebelahan.
-                  =============================================================
-                  Diukur 25 Agu 2026: angka dan satuannya SUDAH berdampingan di baris yang
-                  sama (kiri 219 dan 564, atas 573 keduanya). Jadi dugaan "terpisah kolom"
-                  KELIRU untuk pasangan ini.
-                  Yang membuat pemilik produk tidak mengenalinya adalah hal lain: keduanya
-                  punya LABEL SENDIRI-SENDIRI ("Shelf life" dan "Satuan shelf life"), sehingga
-                  terbaca sebagai DUA field yang tidak berhubungan.
-
-                  Carbon TIDAK punya komponen angka-berpasangan-satuan -- diperiksa di paket
-                  terpasang: ada NumberInput dan Select, tidak ada yang menyatukan keduanya.
-                  Jadi disatukan lewat FormGroup: SATU legend, dua kontrol di dalamnya. */}
-              <FormGroup
-                legendText={
-                  <LabelBantuan teks="Shelf life">
-                    Berapa lama bahan atau produk ini masih layak sejak diproduksi/diterima. Isi angkanya, lalu pilih
-                    satuannya — sistem menyimpannya dalam hari, karena tanggal kedaluwarsa tiap lot dihitung dari
-                    angka itu (dasar aturan FEFO). Kosongkan bila bahan ini tidak punya masa simpan.
-                  </LabelBantuan>
-                }
-                className="item-form__lebar item-berpasangan"
-              >
-                <div className="item-berpasangan__isi">
-                  <TextInput
-                    size="lg"
-                    id="shelf_life_days"
-                    type="number"
-                    min="0"
-                    labelText="Angka"
-                    hideLabel
-                    placeholder="mis. 6"
-                    value={form.shelf_life_days}
-                    onChange={(e) => setForm((prev) => ({ ...prev, shelf_life_days: e.target.value }))}
-                  />
-                  <CarbonSelect
-                    size="lg"
-                    id="shelf_life_unit"
-                    labelText="Satuan"
-                    hideLabel
-                    value={shelfLifeUnit}
-                    onChange={(e) => setShelfLifeUnit(e.target.value as ShelfLifeUnit)}
-                  >
-                    {SHELF_LIFE_UNITS.map((u) => (
-                      <CarbonSelectItem key={u} value={u} text={u.charAt(0).toUpperCase() + u.slice(1)} />
-                    ))}
-                  </CarbonSelect>
-                </div>
-                {/* Hasil konversinya DITAMPILKAN dalam bentuk yang diminta pemilik produk:
-                    "6 bulan (180 hari)". Angka harinya itulah yang dipakai menghitung tanggal
-                    kedaluwarsa tiap lot; menyembunyikannya membuat pengguna tidak punya cara
-                    memeriksa apakah sistem memahami maksudnya. */}
-                <p className="item-berpasangan__hasil">
-                  {form.shelf_life_days.trim() && Number(form.shelf_life_days) > 0
-                    ? `${form.shelf_life_days} ${shelfLifeUnit} (${shelfLifeToDays(Number(form.shelf_life_days), shelfLifeUnit)} hari)`
-                    : 'Boleh dikosongkan bila bahan ini tidak punya masa simpan.'}
-                </p>
-              </FormGroup>
-
-              {/* DUA AMBANG YANG SALING MENIADAKAN, jadi WAJIB berdampingan.
-                  =============================================================
-                  Diukur 25 Agu 2026: sebelumnya persen ada di kolom KETIGA (kiri 908) dan
-                  angka mutlak di kolom PERTAMA baris berikutnya (kiri 219, atas 713).
-                  Terpisah kolom DAN terpisah baris -- padahal yang satu MEMBATALKAN yang lain.
-                  Orang bisa mengisi salah satunya tanpa pernah melihat yang lain. */}
-              <FormGroup legendText="Stok minimum" className="item-form__lebar item-berpasangan">
-                <div className="item-berpasangan__isi">
-                  <TextInput
-                    size="lg"
-                    id="min_stock_percent"
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="any"
-                    labelText={
-                      <LabelBantuan teks="Persen dari yang pernah masuk">
-                        Ambang sebagai PERSEN dari jumlah yang PERNAH MASUK untuk item ini. SENGAJA bukan persen dari
-                        stok saat ini: ambang yang dihitung dari stok saat ini ikut turun setiap kali stok turun, jadi
-                        justru menghilang ketika stok menipis.
-                      </LabelBantuan>
-                    }
-                    helperText={
-                      persenBawaanPerusahaan !== null && persenBawaanPerusahaan > 0
-                        ? `Dikosongkan berarti memakai persen bawaan perusahaan, yaitu ${formatNumberId(persenBawaanPerusahaan, 2)}%.`
-                        : 'Contoh: 10 berarti diperingatkan saat sisa kurang dari 10% dari total yang pernah masuk.'
-                    }
-                    value={form.min_stock_percent}
-                    onChange={(e) => setForm((prev) => ({ ...prev, min_stock_percent: e.target.value }))}
-                  />
-                  <TextInput
-                    size="lg"
-                    id="min_stock_level"
-                    type="number"
-                    min="0"
-                    labelText={
-                      <LabelBantuan teks="Angka mutlak">
-                        Ambang dalam ANGKA MUTLAK. Dipertahankan untuk item lama yang belum dipindah ke persen.
-                      </LabelBantuan>
-                    }
-                    {...(form.min_stock_percent.trim() && Number(form.min_stock_percent) > 0
-                      ? { warn: true, warnText: 'Diabaikan — kolom persen di sebelah sedang terisi, dan persen yang menang.' }
-                      : persenBawaanPerusahaan !== null && persenBawaanPerusahaan > 0
-                        ? {
-                            warn: true,
-                            warnText: `Diabaikan — persen bawaan perusahaan ${formatNumberId(persenBawaanPerusahaan, 2)}% yang dipakai.`
-                          }
-                        : { helperText: 'Dipakai bila kolom persen dikosongkan.' })}
-                    value={form.min_stock_level}
-                    onChange={(e) => setForm((prev) => ({ ...prev, min_stock_level: e.target.value }))}
-                  />
-                </div>
-              </FormGroup>
-
-              {/* REORDER POINT & REORDER QTY DICABUT dari form ini (MST-21, keputusan
-                  pemilik produk 25 Agu 2026).
-                  =============================================================
-                  BUKAN disembunyikan, melainkan dipindahkan kepemilikannya:
-                    Reorder POINT dihapus dari tampilan mana pun. Ambangnya sudah bisa
-                      dihitung sendiri dari kebutuhan produksi; angka yang diketik tangan
-                      hanya menambah satu hal yang harus dijaga benar oleh manusia, untuk
-                      hasil yang sudah bisa dihitung. Kolomnya tetap ada di basis data.
-                    Reorder QTY dipertahankan, tapi pindah ke layar yang diakses purchasing --
-                      ia KEPUTUSAN KOMERSIAL (ukuran kemasan supplier, diskon jumlah, ongkos
-                      kirim) yang tidak bisa diturunkan dari kebutuhan produksi.
-                  Form ini diisi GUDANG, jadi keduanya tidak muncul di sini. */}
-
-              {canViewCost ? (
                 <TextInput
                   size="lg"
-                  id="standard_cost"
-                  type="number"
-                  min="0"
-                  labelText="Biaya standar"
-                  value={form.standard_cost}
-                  onChange={(e) => setForm((prev) => ({ ...prev, standard_cost: e.target.value }))}
+                  id="name"
+                  labelText="Nama item"
+                  value={form.name}
+                  onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                  required
                 />
+                <CarbonSelect
+                  size="lg"
+                  id="type"
+                  labelText="Tipe"
+                  value={form.type}
+                  onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value }))}
+                >
+                  {itemTypes.map((t) => (
+                    <CarbonSelectItem key={t} value={t} text={typeLabels[t]} />
+                  ))}
+                </CarbonSelect>
+
+                <TextInput
+                  size="lg"
+                  id="bpom_registration_number"
+                  labelText={
+                    <LabelBantuan teks="No. registrasi BPOM">
+                      Nomor izin edar dari BPOM untuk item ini. Boleh dikosongkan bila item ini belum/tidak punya izin
+                      edar sendiri, misalnya bahan baku.
+                    </LabelBantuan>
+                  }
+                  helperText="Contoh: BPOM RI MD 023733999101561."
+                  value={form.bpom_registration_number}
+                  onChange={(e) => setForm((prev) => ({ ...prev, bpom_registration_number: e.target.value }))}
+                />
+                <TextInput
+                  size="lg"
+                  id="halal_certificate_number"
+                  labelText={
+                    <LabelBantuan teks="Kode halal">
+                      Nomor sertifikat halal item ini. Diminta bersama nomor BPOM saat pengurusan izin, jadi disimpan
+                      berdampingan. Boleh dikosongkan — banyak bahan baku tidak punya sertifikat halal sendiri.
+                    </LabelBantuan>
+                  }
+                  value={form.halal_certificate_number}
+                  onChange={(e) => setForm((prev) => ({ ...prev, halal_certificate_number: e.target.value }))}
+                />
+
+                <div className="item-form__lebar">
+                  <Checkbox
+                    id="is_active"
+                    labelText="Aktif"
+                    checked={form.is_active}
+                    onChange={(_e: unknown, { checked }: { checked: boolean }) => setForm((prev) => ({ ...prev, is_active: checked }))}
+                  />
+                </div>
+                </div>
               ) : null}
 
-              <TextInput
-                size="lg"
-                id="bpom_registration_number"
-                labelText={
-                  <LabelBantuan teks="No. registrasi BPOM">
-                    Nomor izin edar dari BPOM untuk item ini. Boleh dikosongkan bila item ini belum/tidak punya izin
-                    edar sendiri, misalnya bahan baku.
-                  </LabelBantuan>
-                }
-                helperText="Contoh: BPOM RI MD 023733999101561."
-                value={form.bpom_registration_number}
-                onChange={(e) => setForm((prev) => ({ ...prev, bpom_registration_number: e.target.value }))}
-              />
-              <TextInput
-                size="lg"
-                id="halal_certificate_number"
-                labelText={
-                  <LabelBantuan teks="Kode halal">
-                    Nomor sertifikat halal item ini. Diminta bersama nomor BPOM saat pengurusan izin, jadi disimpan
-                    berdampingan. Boleh dikosongkan — banyak bahan baku tidak punya sertifikat halal sendiri.
-                  </LabelBantuan>
-                }
-                value={form.halal_certificate_number}
-                onChange={(e) => setForm((prev) => ({ ...prev, halal_certificate_number: e.target.value }))}
-              />
-
-              <div className="item-form__lebar">
-                <Checkbox
-                  id="is_active"
-                  labelText="Aktif"
-                  checked={form.is_active}
-                  onChange={(_e: unknown, { checked }: { checked: boolean }) => setForm((prev) => ({ ...prev, is_active: checked }))}
+              {/* LANGKAH 2 — Satuan: satuan pakai, satuan beli, dan konversinya. */}
+              {langkah === 1 ? (
+                <div className="item-form__bagian">
+                <TextInput
+                  size="lg"
+                  id="base_uom"
+                  labelText={
+                    <LabelBantuan teks="Satuan dasar/pakai">
+                      Satuan yang dipakai saat bahan ini DIPAKAI di produksi dan dicatat stoknya. Biasanya satuan
+                      terkecil, mis. gram untuk bahan yang ditimbang.
+                    </LabelBantuan>
+                  }
+                  helperText="Contoh: g, ml, pcs."
+                  value={form.base_uom}
+                  onChange={(e) => setForm((prev) => ({ ...prev, base_uom: e.target.value }))}
+                  required
                 />
-              </div>
+                <TextInput
+                  size="lg"
+                  id="purchase_uom"
+                  labelText={
+                    <LabelBantuan teks="Satuan beli">
+                      Satuan yang tertulis di dokumen pembelian dari supplier. Boleh berbeda dari satuan pakai —
+                      selisihnya diisi di Faktor konversi.
+                    </LabelBantuan>
+                  }
+                  helperText="Contoh: kg, liter, dus."
+                  value={form.purchase_uom}
+                  onChange={(e) => setForm((prev) => ({ ...prev, purchase_uom: e.target.value }))}
+                  required
+                />
+
+                <div className="item-form__lebar">
+                  <TextInput
+                    size="lg"
+                    id="uom_conversion_factor"
+                    type="number"
+                    min="0"
+                    step="any"
+                    labelText={
+                      <LabelBantuan teks="Faktor konversi (satuan beli → satuan dasar)">
+                        Berapa banyak satuan dasar yang didapat dari SATU satuan beli. Contoh: beli per kg, pakai per
+                        gram → isi 1000, karena 1 kg berisi 1000 g. Kalau satuan beli dan satuan pakai sama, isi 1.
+                      </LabelBantuan>
+                    }
+                    helperText="Pilih pola di bawah untuk mengisi cepat, atau ketik angkanya sendiri."
+                    value={form.uom_conversion_factor}
+                    onChange={(e) => setForm((prev) => ({ ...prev, uom_conversion_factor: e.target.value }))}
+                    required
+                  />
+                  {/* MST-15 — pola konversi umum. Daftar ini SENGAJA pendek dan berisi satuan
+                      yang benar-benar dipakai hari ini, bukan tabel konversi universal. */}
+                  <div className="item-pola">
+                    {POLA_KONVERSI.map((pola) => (
+                      <Button
+                        key={`${pola.dari}-${pola.ke}-${pola.faktor}`}
+                        size="lg"
+                        kind="tertiary"
+                        type="button"
+                        onClick={() => setForm((prev) => ({ ...prev, uom_conversion_factor: String(pola.faktor) }))}
+                      >
+                        {pola.dari === 'sama' ? 'Satuannya sama (1)' : `1 ${pola.dari} = ${formatNumberId(pola.faktor)} ${pola.ke}`}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* SATU ISIAN BERPASANGAN, bukan dua field yang kebetulan bersebelahan.
+                    =============================================================
+                    Diukur 25 Agu 2026: angka dan satuannya SUDAH berdampingan di baris yang
+                    sama (kiri 219 dan 564, atas 573 keduanya). Jadi dugaan "terpisah kolom"
+                    KELIRU untuk pasangan ini.
+                    Yang membuat pemilik produk tidak mengenalinya adalah hal lain: keduanya
+                    punya LABEL SENDIRI-SENDIRI ("Shelf life" dan "Satuan shelf life"), sehingga
+                    terbaca sebagai DUA field yang tidak berhubungan.
+
+                    Carbon TIDAK punya komponen angka-berpasangan-satuan -- diperiksa di paket
+                    terpasang: ada NumberInput dan Select, tidak ada yang menyatukan keduanya.
+                    Jadi disatukan lewat FormGroup: SATU legend, dua kontrol di dalamnya. */}
+                </div>
+              ) : null}
+
+              {/* LANGKAH 3 — Aturan persediaan: masa simpan, stok minimum, biaya standar. */}
+              {langkah === 2 ? (
+                <div className="item-form__bagian">
+                <FormGroup
+                  legendText={
+                    <LabelBantuan teks="Shelf life">
+                      Berapa lama bahan atau produk ini masih layak sejak diproduksi/diterima. Isi angkanya, lalu pilih
+                      satuannya — sistem menyimpannya dalam hari, karena tanggal kedaluwarsa tiap lot dihitung dari
+                      angka itu (dasar aturan FEFO). Kosongkan bila bahan ini tidak punya masa simpan.
+                    </LabelBantuan>
+                  }
+                  className="item-form__lebar item-berpasangan"
+                >
+                  <div className="item-berpasangan__isi">
+                    <TextInput
+                      size="lg"
+                      id="shelf_life_days"
+                      type="number"
+                      min="0"
+                      labelText="Angka"
+                      hideLabel
+                      placeholder="mis. 6"
+                      value={form.shelf_life_days}
+                      onChange={(e) => setForm((prev) => ({ ...prev, shelf_life_days: e.target.value }))}
+                    />
+                    <CarbonSelect
+                      size="lg"
+                      id="shelf_life_unit"
+                      labelText="Satuan"
+                      hideLabel
+                      value={shelfLifeUnit}
+                      onChange={(e) => setShelfLifeUnit(e.target.value as ShelfLifeUnit)}
+                    >
+                      {SHELF_LIFE_UNITS.map((u) => (
+                        <CarbonSelectItem key={u} value={u} text={u.charAt(0).toUpperCase() + u.slice(1)} />
+                      ))}
+                    </CarbonSelect>
+                  </div>
+                  {/* Hasil konversinya DITAMPILKAN dalam bentuk yang diminta pemilik produk:
+                      "6 bulan (180 hari)". Angka harinya itulah yang dipakai menghitung tanggal
+                      kedaluwarsa tiap lot; menyembunyikannya membuat pengguna tidak punya cara
+                      memeriksa apakah sistem memahami maksudnya. */}
+                  <p className="item-berpasangan__hasil">
+                    {form.shelf_life_days.trim() && Number(form.shelf_life_days) > 0
+                      ? `${form.shelf_life_days} ${shelfLifeUnit} (${shelfLifeToDays(Number(form.shelf_life_days), shelfLifeUnit)} hari)`
+                      : 'Boleh dikosongkan bila bahan ini tidak punya masa simpan.'}
+                  </p>
+                </FormGroup>
+
+                {/* DUA AMBANG YANG SALING MENIADAKAN, jadi WAJIB berdampingan.
+                    =============================================================
+                    Diukur 25 Agu 2026: sebelumnya persen ada di kolom KETIGA (kiri 908) dan
+                    angka mutlak di kolom PERTAMA baris berikutnya (kiri 219, atas 713).
+                    Terpisah kolom DAN terpisah baris -- padahal yang satu MEMBATALKAN yang lain.
+                    Orang bisa mengisi salah satunya tanpa pernah melihat yang lain. */}
+                <FormGroup legendText="Stok minimum" className="item-form__lebar item-berpasangan">
+                  <div className="item-berpasangan__isi">
+                    <TextInput
+                      size="lg"
+                      id="min_stock_percent"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="any"
+                      labelText={
+                        <LabelBantuan teks="Persen dari yang pernah masuk">
+                          Ambang sebagai PERSEN dari jumlah yang PERNAH MASUK untuk item ini. SENGAJA bukan persen dari
+                          stok saat ini: ambang yang dihitung dari stok saat ini ikut turun setiap kali stok turun, jadi
+                          justru menghilang ketika stok menipis.
+                        </LabelBantuan>
+                      }
+                      helperText={
+                        persenBawaanPerusahaan !== null && persenBawaanPerusahaan > 0
+                          ? `Dikosongkan berarti memakai persen bawaan perusahaan, yaitu ${formatNumberId(persenBawaanPerusahaan, 2)}%.`
+                          : 'Contoh: 10 berarti diperingatkan saat sisa kurang dari 10% dari total yang pernah masuk.'
+                      }
+                      value={form.min_stock_percent}
+                      onChange={(e) => setForm((prev) => ({ ...prev, min_stock_percent: e.target.value }))}
+                    />
+                    <TextInput
+                      size="lg"
+                      id="min_stock_level"
+                      type="number"
+                      min="0"
+                      labelText={
+                        <LabelBantuan teks="Angka mutlak">
+                          Ambang dalam ANGKA MUTLAK. Dipertahankan untuk item lama yang belum dipindah ke persen.
+                        </LabelBantuan>
+                      }
+                      {...(form.min_stock_percent.trim() && Number(form.min_stock_percent) > 0
+                        ? { warn: true, warnText: 'Diabaikan — kolom persen di sebelah sedang terisi, dan persen yang menang.' }
+                        : persenBawaanPerusahaan !== null && persenBawaanPerusahaan > 0
+                          ? {
+                              warn: true,
+                              warnText: `Diabaikan — persen bawaan perusahaan ${formatNumberId(persenBawaanPerusahaan, 2)}% yang dipakai.`
+                            }
+                          : { helperText: 'Dipakai bila kolom persen dikosongkan.' })}
+                      value={form.min_stock_level}
+                      onChange={(e) => setForm((prev) => ({ ...prev, min_stock_level: e.target.value }))}
+                    />
+                  </div>
+                </FormGroup>
+
+                {/* REORDER POINT & REORDER QTY DICABUT dari form ini (MST-21, keputusan
+                    pemilik produk 25 Agu 2026).
+                    =============================================================
+                    BUKAN disembunyikan, melainkan dipindahkan kepemilikannya:
+                      Reorder POINT dihapus dari tampilan mana pun. Ambangnya sudah bisa
+                        dihitung sendiri dari kebutuhan produksi; angka yang diketik tangan
+                        hanya menambah satu hal yang harus dijaga benar oleh manusia, untuk
+                        hasil yang sudah bisa dihitung. Kolomnya tetap ada di basis data.
+                      Reorder QTY dipertahankan, tapi pindah ke layar yang diakses purchasing --
+                        ia KEPUTUSAN KOMERSIAL (ukuran kemasan supplier, diskon jumlah, ongkos
+                        kirim) yang tidak bisa diturunkan dari kebutuhan produksi.
+                    Form ini diisi GUDANG, jadi keduanya tidak muncul di sini. */}
+
+                {canViewCost ? (
+                  <TextInput
+                    size="lg"
+                    id="standard_cost"
+                    type="number"
+                    min="0"
+                    labelText="Biaya standar"
+                    value={form.standard_cost}
+                    onChange={(e) => setForm((prev) => ({ ...prev, standard_cost: e.target.value }))}
+                  />
+                ) : null}
+
+                </div>
+              ) : null}
 
               {formMessage ? (
                 <div className="item-form__lebar">
@@ -1468,20 +1520,22 @@ export default function ItemsPage() {
               ) : null}
             </form>
           </ModalBody>
-          <ModalFooter>
-            <Button
-              kind="secondary"
-              onClick={() => {
-                resetForm();
-                setIsFormModalOpen(false);
-              }}
-            >
-              Batal
-            </Button>
-            <Button kind="primary" type="submit" form="form-item" disabled={formStatus === 'pending'}>
-              {formStatus === 'pending' ? 'Menyimpan…' : editingItemId ? 'Simpan perubahan' : 'Tambah item'}
-            </Button>
-          </ModalFooter>
+          <FooterBertahap
+            langkah={LANGKAH_ITEM}
+            aktif={langkah}
+            onPindah={setLangkah}
+            onBatal={() => {
+              resetForm();
+              setIsFormModalOpen(false);
+            }}
+            labelAksiAkhir={editingItemId ? 'Simpan perubahan' : 'Tambah item'}
+            // Formulir ini punya <form> sungguhan dengan atribut `required` di beberapa field,
+            // dan handleSubmit-nya menerima FormEvent. Dipanggil lewat requestSubmit() supaya
+            // pemeriksaan wajib-isi bawaan peramban TETAP berjalan — memanggil handler-nya
+            // langsung akan melewati pemeriksaan itu tanpa ada yang menyadarinya.
+            onSimpan={() => (document.getElementById('form-item') as HTMLFormElement | null)?.requestSubmit()}
+            sedangMenyimpan={formStatus === 'pending'}
+          />
         </ComposedModal>
       ) : null}
 
@@ -1530,6 +1584,10 @@ export default function ItemsPage() {
       >
         <p>Harga acuannya ikut terhapus. Riwayat pembelian yang sudah terjadi tidak terpengaruh.</p>
       </Modal>
+
+      {/* Ditempatkan SEKALI di kaki halaman; posisinya (kanan atas, di bawah header)
+          diatur komponennya sendiri. */}
+      <AreaNotifikasi daftar={notifikasi} onTutup={tutupNotifikasi} />
     </div>
   );
 }

@@ -106,3 +106,14 @@
     justify-self: end;
   }
 }
+
+// Bagian per langkah pada modal BOM bertahap (DS-18).
+.bom-form__bagian {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+}
+
+.bom-form__langkah {
+  margin-block-end: $spacing-06;
+}

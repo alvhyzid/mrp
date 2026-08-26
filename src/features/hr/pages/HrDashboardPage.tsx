@@ -12,7 +12,6 @@ import {
   Dropdown,
   InlineNotification,
   ModalBody,
-  ModalFooter,
   ModalHeader,
   NumberInput,
   Pagination,
@@ -32,6 +31,8 @@ import {
 } from '@carbon/react';
 import { Add } from '@carbon/icons-react';
 import { KepalaHalaman } from '@/components/ui/kepala-halaman';
+import { FooterBertahap, PenandaLangkah, type LangkahModal } from '@/components/ui/modal-bertahap';
+import { AreaNotifikasi, type Notifikasi } from '@/components/ui/notifikasi';
 import { canAccessHrDashboard, canManageHr } from '@/lib/roles';
 
 // DASHBOARD HRD — dimigrasikan ke Carbon 26 Agu 2026 (DS-09).
@@ -137,6 +138,20 @@ type AttendanceRow = {
   status: string;
 };
 
+// LANGKAH FORMULIR KARYAWAN (DS-18, 26 Agu 2026) — mengikuti cetakan PO klien.
+//
+// TIGA langkah, bukan empat. Rencana awal memuat langkah keempat "Penggolongan biaya", dan
+// itu DIHAPUS setelah diperiksa: tabel `employees` tidak punya kolom penggolongan sama
+// sekali, dan formulirnya tidak punya isiannya. Membuat field baru bukan pekerjaan UI.
+//
+// Ketiganya lulus uji pemecahan — judulnya menyebut SATU hal, dan tiap field menjawabnya:
+// siapa dan di mana bekerja · upah dan tunjangan · potongan dan kepesertaan.
+const LANGKAH_KARYAWAN: LangkahModal[] = [
+  { judul: 'Identitas', ringkas: 'Siapa dan di mana bekerja' },
+  { judul: 'Gaji', ringkas: 'Upah dan tunjangan harian' },
+  { judul: 'Pajak & BPJS', ringkas: 'Potongan dan kepesertaan' }
+];
+
 export default function HrDashboardPage() {
   const router = useRouter();
   const [checkingAccess, setCheckingAccess] = useState(true);
@@ -154,6 +169,14 @@ export default function HrDashboardPage() {
   const [employeeFormStatus, setEmployeeFormStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [employeeFormMessage, setEmployeeFormMessage] = useState('');
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
+  const [langkah, setLangkah] = useState(0);
+  // Hasil yang BERHASIL lewat notifikasi, bukan pesan di dalam modal yang keburu tertutup.
+  const [notifikasi, setNotifikasi] = useState<Notifikasi[]>([]);
+  const beriTahu = useCallback((jenis: Notifikasi['jenis'], judul: string, rincian?: string) => {
+    setNotifikasi((lama) => [...lama, { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, jenis, judul, rincian }]);
+  }, []);
+  const tutupNotifikasi = useCallback((id: string) => setNotifikasi((lama) => lama.filter((n) => n.id !== id)), []);
+
 
   // Pencarian, saringan, dan pembagian halaman dulu diurus komponen DataTable lama.
   // Carbon DataTable tidak membawa ketiganya, jadi keadaannya hidup di sini.
@@ -200,6 +223,7 @@ export default function HrDashboardPage() {
   }, [getAccessToken]);
 
   const resetEmployeeForm = () => {
+    setLangkah(0);
     setEditingEmployeeId(null);
     setEmployeeForm(emptyEmployeeForm);
     setEmployeeFormStatus('idle');
@@ -274,10 +298,16 @@ export default function HrDashboardPage() {
       return;
     }
 
-    setEmployeeFormStatus('success');
-    setEmployeeFormMessage(editingEmployeeId ? 'Data karyawan berhasil diperbarui.' : 'Karyawan baru berhasil ditambahkan.');
+    const memperbarui = editingEmployeeId !== null;
+    setEmployeeFormStatus('idle');
+    setEmployeeFormMessage('');
     resetEmployeeForm();
     setIsEmployeeModalOpen(false);
+    beriTahu(
+      'success',
+      memperbarui ? 'Data karyawan diperbarui' : 'Karyawan baru ditambahkan',
+      memperbarui ? undefined : 'Sudah masuk daftar karyawan aktif.'
+    );
     await loadEmployees();
   };
 
@@ -670,145 +700,170 @@ export default function HrDashboardPage() {
           />
           <ModalBody hasForm>
             <div className="hr-form">
-              <TextInput
-                id="hr-nama"
-                size="lg"
-                labelText="Nama"
-                className="hr-form__lebar-penuh"
-                value={employeeForm.name}
-                onChange={(event) => setEmployeeForm((prev) => ({ ...prev, name: event.target.value }))}
-                invalid={employeeForm.name.trim() === ''}
-                invalidText="Nama tidak boleh kosong."
+              <PenandaLangkah
+                langkah={LANGKAH_KARYAWAN}
+                aktif={langkah}
+                onPindah={setLangkah}
+                className="hr-form__langkah"
               />
-              <TextInput
-                id="hr-kode"
-                size="lg"
-                labelText="Kode karyawan pabrik"
-                placeholder="mis. 2508001"
-                helperText="Kosongkan untuk pekerja lepas."
-                value={employeeForm.factory_employee_code}
-                onChange={(event) => setEmployeeForm((prev) => ({ ...prev, factory_employee_code: event.target.value }))}
-              />
-              <Dropdown
-                id="hr-status-kepegawaian"
-                size="lg"
-                titleText="Status kepegawaian"
-                label="Pilih status"
-                items={Object.keys(employmentStatusLabels)}
-                itemToString={(v: string) => employmentStatusLabels[v] ?? v}
-                selectedItem={employeeForm.employment_status || null}
-                onChange={({ selectedItem }: { selectedItem: string | null }) => setEmployeeForm((prev) => ({ ...prev, employment_status: selectedItem ?? '' }))}
-              />
-              <TextInput
-                id="hr-posisi"
-                size="lg"
-                labelText="Posisi"
-                placeholder="mis. Operator produksi"
-                value={employeeForm.position}
-                onChange={(event) => setEmployeeForm((prev) => ({ ...prev, position: event.target.value }))}
-              />
-              <Dropdown
-                id="hr-department"
-                size="lg"
-                titleText="Department"
-                label="Pilih department"
-                items={Object.keys(departmentLabels)}
-                itemToString={(v: string) => departmentLabels[v] ?? v}
-                selectedItem={employeeForm.department || null}
-                onChange={({ selectedItem }: { selectedItem: string | null }) => setEmployeeForm((prev) => ({ ...prev, department: selectedItem ?? '' }))}
-              />
-              <Dropdown
-                id="hr-plant"
-                size="lg"
-                titleText="Lokasi kerja"
-                label="Pilih lokasi"
-                items={plants}
-                itemToString={(p: Plant | null) => p?.name ?? ''}
-                selectedItem={plants.find((p) => String(p.production_plant_id) === employeeForm.production_plant_id) ?? null}
-                onChange={({ selectedItem }: { selectedItem: Plant | null }) =>
-                  setEmployeeForm((prev) => ({ ...prev, production_plant_id: selectedItem ? String(selectedItem.production_plant_id) : '' }))
-                }
-              />
-              <Dropdown
-                id="hr-skema-gaji"
-                size="lg"
-                titleText="Skema gaji"
-                label="Pilih skema"
-                items={Object.keys(wageTypeLabels)}
-                itemToString={(v: string) => wageTypeLabels[v] ?? v}
-                selectedItem={employeeForm.wage_type}
-                onChange={({ selectedItem }: { selectedItem: string | null }) => setEmployeeForm((prev) => ({ ...prev, wage_type: selectedItem ?? 'monthly' }))}
-              />
-              <NumberInput
-                id="hr-gaji"
-                label="Nilai gaji (Rp)"
-                min={0}
-                allowEmpty
-                hideSteppers
-                value={employeeForm.wage_rate === '' ? '' : Number(employeeForm.wage_rate)}
-                onChange={(_e: unknown, { value }: { value: number | string }) => setEmployeeForm((prev) => ({ ...prev, wage_rate: String(value ?? '') }))}
-              />
-              <TextInput
-                id="hr-ptkp"
-                size="lg"
-                labelText="Status PTKP"
-                placeholder="mis. K/2, TK/0"
-                helperText="Kosongkan kalau belum tahu."
-                value={employeeForm.ptkp_status}
-                onChange={(event) => setEmployeeForm((prev) => ({ ...prev, ptkp_status: event.target.value }))}
-              />
-              <TextInput
-                id="hr-ter"
-                size="lg"
-                labelText="Golongan TER"
-                placeholder="mis. TER A"
-                value={employeeForm.ter_category}
-                onChange={(event) => setEmployeeForm((prev) => ({ ...prev, ter_category: event.target.value }))}
-              />
-              <NumberInput
-                id="hr-ter-persen"
-                label="Tarif TER (%)"
-                min={0}
-                allowEmpty
-                hideSteppers
-                value={employeeForm.ter_rate_percent === '' ? '' : Number(employeeForm.ter_rate_percent)}
-                onChange={(_e: unknown, { value }: { value: number | string }) => setEmployeeForm((prev) => ({ ...prev, ter_rate_percent: String(value ?? '') }))}
-              />
-              <NumberInput
-                id="hr-makan"
-                label="Tunjangan makan / hari hadir (Rp)"
-                min={0}
-                allowEmpty
-                hideSteppers
-                value={employeeForm.daily_meal_allowance === '' ? '' : Number(employeeForm.daily_meal_allowance)}
-                onChange={(_e: unknown, { value }: { value: number | string }) => setEmployeeForm((prev) => ({ ...prev, daily_meal_allowance: String(value ?? '') }))}
-              />
-              <NumberInput
-                id="hr-transport"
-                label="Tunjangan transport / hari hadir (Rp)"
-                min={0}
-                allowEmpty
-                hideSteppers
-                value={employeeForm.daily_transport_allowance === '' ? '' : Number(employeeForm.daily_transport_allowance)}
-                onChange={(_e: unknown, { value }: { value: number | string }) => setEmployeeForm((prev) => ({ ...prev, daily_transport_allowance: String(value ?? '') }))}
-              />
-              <Dropdown
-                id="hr-bpjs"
-                size="lg"
-                titleText="Kepesertaan BPJS Kesehatan"
-                label="Belum dikonfirmasi"
-                items={['true', 'false']}
-                itemToString={(v: string) => (v === 'true' ? 'Ikut BPJS Kesehatan' : 'Tidak ikut BPJS Kesehatan')}
-                selectedItem={employeeForm.bpjs_kesehatan_enrolled || null}
-                onChange={({ selectedItem }: { selectedItem: string | null }) => setEmployeeForm((prev) => ({ ...prev, bpjs_kesehatan_enrolled: selectedItem ?? '' }))}
-              />
-              <Checkbox
-                id="hr-aktif"
-                className="hr-form__lebar-penuh"
-                labelText="Aktif — nonaktifkan di sini, bukan hapus, supaya riwayat absensi dan labor log tetap utuh"
-                checked={employeeForm.is_active}
-                onChange={(_e: unknown, { checked }: { checked: boolean }) => setEmployeeForm((prev) => ({ ...prev, is_active: checked }))}
-              />
+
+              {/* LANGKAH 1 — Identitas: Siapa dan di mana bekerja. */}
+              {langkah === 0 ? (
+                <div className="hr-form__bagian">
+                <TextInput
+                  id="hr-nama"
+                  size="lg"
+                  labelText="Nama"
+                  className="hr-form__lebar-penuh"
+                  value={employeeForm.name}
+                  onChange={(event) => setEmployeeForm((prev) => ({ ...prev, name: event.target.value }))}
+                  invalid={employeeForm.name.trim() === ''}
+                  invalidText="Nama tidak boleh kosong."
+                />
+                <TextInput
+                  id="hr-kode"
+                  size="lg"
+                  labelText="Kode karyawan pabrik"
+                  placeholder="mis. 2508001"
+                  helperText="Kosongkan untuk pekerja lepas."
+                  value={employeeForm.factory_employee_code}
+                  onChange={(event) => setEmployeeForm((prev) => ({ ...prev, factory_employee_code: event.target.value }))}
+                />
+                <Dropdown
+                  id="hr-status-kepegawaian"
+                  size="lg"
+                  titleText="Status kepegawaian"
+                  label="Pilih status"
+                  items={Object.keys(employmentStatusLabels)}
+                  itemToString={(v: string) => employmentStatusLabels[v] ?? v}
+                  selectedItem={employeeForm.employment_status || null}
+                  onChange={({ selectedItem }: { selectedItem: string | null }) => setEmployeeForm((prev) => ({ ...prev, employment_status: selectedItem ?? '' }))}
+                />
+                <TextInput
+                  id="hr-posisi"
+                  size="lg"
+                  labelText="Posisi"
+                  placeholder="mis. Operator produksi"
+                  value={employeeForm.position}
+                  onChange={(event) => setEmployeeForm((prev) => ({ ...prev, position: event.target.value }))}
+                />
+                <Dropdown
+                  id="hr-department"
+                  size="lg"
+                  titleText="Department"
+                  label="Pilih department"
+                  items={Object.keys(departmentLabels)}
+                  itemToString={(v: string) => departmentLabels[v] ?? v}
+                  selectedItem={employeeForm.department || null}
+                  onChange={({ selectedItem }: { selectedItem: string | null }) => setEmployeeForm((prev) => ({ ...prev, department: selectedItem ?? '' }))}
+                />
+                <Dropdown
+                  id="hr-plant"
+                  size="lg"
+                  titleText="Lokasi kerja"
+                  label="Pilih lokasi"
+                  items={plants}
+                  itemToString={(p: Plant | null) => p?.name ?? ''}
+                  selectedItem={plants.find((p) => String(p.production_plant_id) === employeeForm.production_plant_id) ?? null}
+                  onChange={({ selectedItem }: { selectedItem: Plant | null }) =>
+                    setEmployeeForm((prev) => ({ ...prev, production_plant_id: selectedItem ? String(selectedItem.production_plant_id) : '' }))
+                  }
+                />
+                <Checkbox
+                  id="hr-aktif"
+                  className="hr-form__lebar-penuh"
+                  labelText="Aktif — nonaktifkan di sini, bukan hapus, supaya riwayat absensi dan labor log tetap utuh"
+                  checked={employeeForm.is_active}
+                  onChange={(_e: unknown, { checked }: { checked: boolean }) => setEmployeeForm((prev) => ({ ...prev, is_active: checked }))}
+                />
+                </div>
+              ) : null}
+
+              {/* LANGKAH 2 — Gaji: Upah dan tunjangan harian. */}
+              {langkah === 1 ? (
+                <div className="hr-form__bagian">
+                <Dropdown
+                  id="hr-skema-gaji"
+                  size="lg"
+                  titleText="Skema gaji"
+                  label="Pilih skema"
+                  items={Object.keys(wageTypeLabels)}
+                  itemToString={(v: string) => wageTypeLabels[v] ?? v}
+                  selectedItem={employeeForm.wage_type}
+                  onChange={({ selectedItem }: { selectedItem: string | null }) => setEmployeeForm((prev) => ({ ...prev, wage_type: selectedItem ?? 'monthly' }))}
+                />
+                <NumberInput
+                  id="hr-gaji"
+                  label="Nilai gaji (Rp)"
+                  min={0}
+                  allowEmpty
+                  hideSteppers
+                  value={employeeForm.wage_rate === '' ? '' : Number(employeeForm.wage_rate)}
+                  onChange={(_e: unknown, { value }: { value: number | string }) => setEmployeeForm((prev) => ({ ...prev, wage_rate: String(value ?? '') }))}
+                />
+                <NumberInput
+                  id="hr-makan"
+                  label="Tunjangan makan / hari hadir (Rp)"
+                  min={0}
+                  allowEmpty
+                  hideSteppers
+                  value={employeeForm.daily_meal_allowance === '' ? '' : Number(employeeForm.daily_meal_allowance)}
+                  onChange={(_e: unknown, { value }: { value: number | string }) => setEmployeeForm((prev) => ({ ...prev, daily_meal_allowance: String(value ?? '') }))}
+                />
+                <NumberInput
+                  id="hr-transport"
+                  label="Tunjangan transport / hari hadir (Rp)"
+                  min={0}
+                  allowEmpty
+                  hideSteppers
+                  value={employeeForm.daily_transport_allowance === '' ? '' : Number(employeeForm.daily_transport_allowance)}
+                  onChange={(_e: unknown, { value }: { value: number | string }) => setEmployeeForm((prev) => ({ ...prev, daily_transport_allowance: String(value ?? '') }))}
+                />
+                </div>
+              ) : null}
+
+              {/* LANGKAH 3 — Pajak & BPJS: Potongan dan kepesertaan. */}
+              {langkah === 2 ? (
+                <div className="hr-form__bagian">
+                <TextInput
+                  id="hr-ptkp"
+                  size="lg"
+                  labelText="Status PTKP"
+                  placeholder="mis. K/2, TK/0"
+                  helperText="Kosongkan kalau belum tahu."
+                  value={employeeForm.ptkp_status}
+                  onChange={(event) => setEmployeeForm((prev) => ({ ...prev, ptkp_status: event.target.value }))}
+                />
+                <TextInput
+                  id="hr-ter"
+                  size="lg"
+                  labelText="Golongan TER"
+                  placeholder="mis. TER A"
+                  value={employeeForm.ter_category}
+                  onChange={(event) => setEmployeeForm((prev) => ({ ...prev, ter_category: event.target.value }))}
+                />
+                <NumberInput
+                  id="hr-ter-persen"
+                  label="Tarif TER (%)"
+                  min={0}
+                  allowEmpty
+                  hideSteppers
+                  value={employeeForm.ter_rate_percent === '' ? '' : Number(employeeForm.ter_rate_percent)}
+                  onChange={(_e: unknown, { value }: { value: number | string }) => setEmployeeForm((prev) => ({ ...prev, ter_rate_percent: String(value ?? '') }))}
+                />
+                <Dropdown
+                  id="hr-bpjs"
+                  size="lg"
+                  titleText="Kepesertaan BPJS Kesehatan"
+                  label="Belum dikonfirmasi"
+                  items={['true', 'false']}
+                  itemToString={(v: string) => (v === 'true' ? 'Ikut BPJS Kesehatan' : 'Tidak ikut BPJS Kesehatan')}
+                  selectedItem={employeeForm.bpjs_kesehatan_enrolled || null}
+                  onChange={({ selectedItem }: { selectedItem: string | null }) => setEmployeeForm((prev) => ({ ...prev, bpjs_kesehatan_enrolled: selectedItem ?? '' }))}
+                />
+                </div>
+              ) : null}
+
               {employeeFormMessage ? (
                 <div className="hr-form__lebar-penuh">
                   <InlineNotification
@@ -822,23 +877,24 @@ export default function HrDashboardPage() {
               ) : null}
             </div>
           </ModalBody>
-          {/* `children` WAJIB pada ModalFooter di @carbon/react 1.114 meski prop teks tombolnya ada. */}
-          <ModalFooter>
-            <Button
-              kind="secondary"
-              onClick={() => {
-                resetEmployeeForm();
-                setIsEmployeeModalOpen(false);
-              }}
-            >
-              Batal
-            </Button>
-            <Button kind="primary" disabled={employeeFormStatus === 'pending'} onClick={handleEmployeeSubmit}>
-              {employeeFormStatus === 'pending' ? 'Menyimpan...' : editingEmployeeId ? 'Simpan perubahan' : 'Tambah karyawan'}
-            </Button>
-          </ModalFooter>
+          <FooterBertahap
+            langkah={LANGKAH_KARYAWAN}
+            aktif={langkah}
+            onPindah={setLangkah}
+            onBatal={() => {
+              resetEmployeeForm();
+              setIsEmployeeModalOpen(false);
+            }}
+            labelAksiAkhir={editingEmployeeId ? 'Simpan perubahan' : 'Tambah karyawan'}
+            onSimpan={() => void handleEmployeeSubmit()}
+            sedangMenyimpan={employeeFormStatus === 'pending'}
+          />
         </ComposedModal>
       ) : null}
+
+      {/* Ditempatkan SEKALI di kaki halaman; posisinya (kanan atas, di bawah header)
+          diatur komponennya sendiri. */}
+      <AreaNotifikasi daftar={notifikasi} onTutup={tutupNotifikasi} />
     </div>
   );
 }

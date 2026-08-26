@@ -11,7 +11,6 @@ import {
   Dropdown,
   InlineNotification,
   ModalBody,
-  ModalFooter,
   ModalHeader,
   NumberInput,
   Pagination,
@@ -33,6 +32,8 @@ import {
 } from '@carbon/react';
 import { Add, TrashCan } from '@carbon/icons-react';
 import { KepalaHalaman } from '@/components/ui/kepala-halaman';
+import { FooterBertahap, PenandaLangkah, type LangkahModal } from '@/components/ui/modal-bertahap';
+import { AreaNotifikasi, type Notifikasi } from '@/components/ui/notifikasi';
 import { canManageBom, canViewFinancialData } from '@/lib/roles';
 import { typeLabels } from '../itemTypeLabels';
 
@@ -120,6 +121,17 @@ const emptyForm = {
   lines: [{ ...emptyFormLine }] as FormLine[]
 };
 
+// LANGKAH FORMULIR BOM (DS-18, 26 Agu 2026) — mengikuti cetakan PO klien.
+//
+// DUA langkah, bukan tiga. "Buffer & status" sempat direncanakan jadi langkah tersendiri dan
+// dibatalkan: isinya hanya dua field dan keduanya TIDAK punya konteks sendiri — buffer
+// menerangkan hasil standar, status menerangkan resepnya. Memisahkannya akan melahirkan
+// langkah yang judulnya terpaksa menyebut dua hal, dan itu yang dilarang uji pemecahan.
+const LANGKAH_BOM: LangkahModal[] = [
+  { judul: 'Resep', ringkas: 'Item induk & hasil standar' },
+  { judul: 'Komponen', ringkas: 'Bahan dan jumlahnya' }
+];
+
 export default function BomsPage() {
   const router = useRouter();
   const [checkingAccess, setCheckingAccess] = useState(true);
@@ -145,6 +157,14 @@ export default function BomsPage() {
   // dipanggil di handleSubmit supaya formMessage tidak ikut ke-reset); modal ditutup
   // manual oleh user (Batal/X/klik luar), yang barulah memanggil resetForm().
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [langkah, setLangkah] = useState(0);
+  // Hasil yang BERHASIL lewat notifikasi, bukan pesan di dalam modal yang keburu tertutup.
+  const [notifikasi, setNotifikasi] = useState<Notifikasi[]>([]);
+  const beriTahu = useCallback((jenis: Notifikasi['jenis'], judul: string, rincian?: string) => {
+    setNotifikasi((lama) => [...lama, { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, jenis, judul, rincian }]);
+  }, []);
+  const tutupNotifikasi = useCallback((id: string) => setNotifikasi((lama) => lama.filter((n) => n.id !== id)), []);
+
 
   // Pencarian, saringan, dan pembagian halaman: Carbon DataTable tidak membawanya.
   const [cari, setCari] = useState('');
@@ -253,6 +273,7 @@ export default function BomsPage() {
   const selectedParentRouting = routingByItemId.get(Number(form.parent_item_id));
 
   const resetForm = () => {
+    setLangkah(0);
     setEditingBomId(null);
     setForm(emptyForm);
     setFormStatus('idle');
@@ -386,10 +407,14 @@ export default function BomsPage() {
     // atas, pesan konfirmasi akan langsung ketimpa 'idle'/kosong sebelum sempat
     // dirender (React 18 membatch semua setState di handler yang sama). Reset
     // field form saja di sini, biarkan pesan sukses tetap tampil.
-    setFormStatus('success');
-    setFormMessage(editingBomId ? 'BOM berhasil diperbarui.' : 'BOM baru berhasil dibuat.');
+    const memperbarui = editingBomId !== null;
+    setFormStatus('idle');
+    setFormMessage('');
     setEditingBomId(null);
     setForm(emptyForm);
+    setLangkah(0);
+    setIsFormModalOpen(false);
+    beriTahu('success', memperbarui ? 'BOM diperbarui' : 'BOM baru dibuat');
     await loadBoms();
   };
 
@@ -725,156 +750,174 @@ export default function BomsPage() {
           />
           <ModalBody hasForm>
             <div className="bom-form">
-              <div className="bom-form__kisi">
-                <Dropdown
-                  id="bom-item-induk"
-                  size="lg"
-                  titleText="Item hasil (induk)"
-                  label="Pilih item..."
-                  disabled={editingBomId !== null}
-                  items={items}
-                  itemToString={(i: ItemOption | null) => (i ? `${i.item_code} — ${i.name}` : '')}
-                  selectedItem={items.find((i) => String(i.item_id) === form.parent_item_id) ?? null}
-                  onChange={({ selectedItem }: { selectedItem: ItemOption | null }) => handleParentItemChange(selectedItem ? String(selectedItem.item_id) : '')}
-                  helperText={editingBomId ? 'Item induk tidak bisa diubah — buat BOM baru kalau perlu item lain.' : undefined}
-                />
-                {/* HASIL STANDAR: angka dan satuan adalah SATU isian, jadi satu label. */}
-                <div className="bom-form__hasil">
-                  <span className="cds--label">Hasil standar per batch</span>
-                  <div className="bom-form__hasil-isi">
-                    <NumberInput
-                      id="bom-hasil-qty"
-                      label="Jumlah"
-                      hideLabel
-                      min={0}
-                      allowEmpty
-                      hideSteppers
-                      value={form.standard_yield_qty === '' ? '' : Number(form.standard_yield_qty)}
-                      onChange={(_e: unknown, { value }: { value: number | string }) => setForm((prev) => ({ ...prev, standard_yield_qty: String(value ?? '') }))}
-                    />
-                    <TextInput
-                      id="bom-hasil-satuan"
-                      size="lg"
-                      labelText="Satuan"
-                      hideLabel
-                      placeholder="satuan"
-                      value={form.standard_yield_uom}
-                      onChange={(event) => setForm((prev) => ({ ...prev, standard_yield_uom: event.target.value }))}
-                    />
-                  </div>
-                </div>
-                <Dropdown
-                  id="bom-sumber-hasil"
-                  size="lg"
-                  titleText="Sumber angka hasil standar"
-                  label="Belum ditentukan"
-                  items={Object.keys(yieldSourceLabels)}
-                  itemToString={(v: string) => yieldSourceLabels[v] ?? v}
-                  selectedItem={form.standard_yield_source || null}
-                  onChange={({ selectedItem }: { selectedItem: string | null }) => setForm((prev) => ({ ...prev, standard_yield_source: selectedItem ?? '' }))}
-                />
-                <Dropdown
-                  id="bom-status"
-                  size="lg"
-                  titleText="Status"
-                  label="Pilih status"
-                  items={bomStatuses}
-                  itemToString={(v: string) => statusLabels[v] ?? v}
-                  selectedItem={form.status}
-                  onChange={({ selectedItem }: { selectedItem: string | null }) => setForm((prev) => ({ ...prev, status: selectedItem ?? 'draft' }))}
-                />
-                <NumberInput
-                  id="bom-buffer"
-                  label="Buffer (%)"
-                  min={0}
-                  max={100}
-                  allowEmpty
-                  hideSteppers
-                  helperText="Kompensasi kehilangan produksi — dipakai saat menghitung kebutuhan bahan per batch."
-                  value={form.buffer_percentage === '' ? '' : Number(form.buffer_percentage)}
-                  onChange={(_e: unknown, { value }: { value: number | string }) => setForm((prev) => ({ ...prev, buffer_percentage: String(value ?? '') }))}
-                />
-                <TextInput
-                  id="bom-keterangan-hasil"
-                  size="lg"
-                  className="bom-form__lebar-penuh"
-                  labelText="Keterangan asal angka hasil standar"
-                  placeholder='mis. "10.000 g adonan × yield 85% ÷ 2,5 g/gummy ÷ 60 gummy/botol"'
-                  helperText="Ini yang muncul di panel Asal-Usul — tulisan di sini yang menjelaskan angkanya kelak."
-                  value={form.standard_yield_basis_note}
-                  onChange={(event) => setForm((prev) => ({ ...prev, standard_yield_basis_note: event.target.value }))}
-                />
-              </div>
+              <PenandaLangkah
+                langkah={LANGKAH_BOM}
+                aktif={langkah}
+                onPindah={setLangkah}
+                className="bom-form__langkah"
+              />
 
-              <div className="bom-komponen">
-                <div className="bom-komponen__kepala">
-                  <h3 className="halaman__subjudul halaman__subjudul--rapat">
-                    Komponen per {form.standard_yield_qty || '?'} {form.standard_yield_uom || 'satuan hasil'}
-                  </h3>
-                  <Button kind="tertiary" size="sm" renderIcon={Add} onClick={addLine}>
-                    Tambah komponen
-                  </Button>
-                </div>
-
-                {form.lines.map((line, index) => (
-                  <div key={index} className="bom-komponen__baris">
-                    <Dropdown
-                      id={`bom-komponen-${index}`}
-                      size="lg"
-                      titleText="Item komponen"
-                      label="Pilih item..."
-                      items={items.filter((item) => String(item.item_id) !== form.parent_item_id)}
-                      itemToString={(i: ItemOption | null) => (i ? `${i.item_code} — ${i.name} (${typeLabels[i.type] ?? i.type})` : '')}
-                      selectedItem={items.find((i) => String(i.item_id) === line.component_item_id) ?? null}
-                      onChange={({ selectedItem }: { selectedItem: ItemOption | null }) => handleComponentChange(index, selectedItem ? String(selectedItem.item_id) : '')}
-                    />
-                    <NumberInput
-                      id={`bom-qty-${index}`}
-                      label="Jumlah per batch"
-                      min={0}
-                      allowEmpty
-                      hideSteppers
-                      value={line.qty_per_batch === '' ? '' : Number(line.qty_per_batch)}
-                      onChange={(_e: unknown, { value }: { value: number | string }) => updateLine(index, { qty_per_batch: String(value ?? '') })}
-                    />
-                    <TextInput
-                      id={`bom-satuan-${index}`}
-                      size="lg"
-                      labelText="Satuan"
-                      value={line.uom}
-                      onChange={(event) => updateLine(index, { uom: event.target.value })}
-                    />
-                    {selectedParentRouting ? (
-                      <Dropdown
-                        id={`bom-tahap-${index}`}
-                        size="lg"
-                        titleText="Tahap SOP"
-                        label="Sejak tahap 1 (bawaan)"
-                        items={['', ...[...selectedParentRouting.steps].sort((a, b) => a.sequence_no - b.sequence_no).map((s) => String(s.routing_step_id))]}
-                        itemToString={(v: string) => {
-                          if (!v) return 'Sejak tahap 1 (bawaan)';
-                          const step = selectedParentRouting.steps.find((s) => String(s.routing_step_id) === v);
-                          return step ? `${step.sequence_no}. ${step.step_name}` : v;
-                        }}
-                        selectedItem={line.routing_step_id || ''}
-                        onChange={({ selectedItem }: { selectedItem: string | null }) => updateLine(index, { routing_step_id: selectedItem ?? '' })}
+              {/* LANGKAH 1 — Item induk & hasil standar: resep ini untuk apa, dan sekali buat jadi berapa. */}
+              {langkah === 0 ? (
+                <div className="bom-form__bagian">
+                <div className="bom-form__kisi">
+                  <Dropdown
+                    id="bom-item-induk"
+                    size="lg"
+                    titleText="Item hasil (induk)"
+                    label="Pilih item..."
+                    disabled={editingBomId !== null}
+                    items={items}
+                    itemToString={(i: ItemOption | null) => (i ? `${i.item_code} — ${i.name}` : '')}
+                    selectedItem={items.find((i) => String(i.item_id) === form.parent_item_id) ?? null}
+                    onChange={({ selectedItem }: { selectedItem: ItemOption | null }) => handleParentItemChange(selectedItem ? String(selectedItem.item_id) : '')}
+                    helperText={editingBomId ? 'Item induk tidak bisa diubah — buat BOM baru kalau perlu item lain.' : undefined}
+                  />
+                  {/* HASIL STANDAR: angka dan satuan adalah SATU isian, jadi satu label. */}
+                  <div className="bom-form__hasil">
+                    <span className="cds--label">Hasil standar per batch</span>
+                    <div className="bom-form__hasil-isi">
+                      <NumberInput
+                        id="bom-hasil-qty"
+                        label="Jumlah"
+                        hideLabel
+                        min={0}
+                        allowEmpty
+                        hideSteppers
+                        value={form.standard_yield_qty === '' ? '' : Number(form.standard_yield_qty)}
+                        onChange={(_e: unknown, { value }: { value: number | string }) => setForm((prev) => ({ ...prev, standard_yield_qty: String(value ?? '') }))}
                       />
-                    ) : (
                       <TextInput
-                        id={`bom-tahap-kosong-${index}`}
+                        id="bom-hasil-satuan"
                         size="lg"
-                        labelText="Tahap SOP"
-                        readOnly
-                        value="Item induk belum punya Routing"
-                        helperText="Buat Routing untuk item induknya dulu supaya komponen bisa ditempelkan ke tahap tertentu."
+                        labelText="Satuan"
+                        hideLabel
+                        placeholder="satuan"
+                        value={form.standard_yield_uom}
+                        onChange={(event) => setForm((prev) => ({ ...prev, standard_yield_uom: event.target.value }))}
                       />
-                    )}
-                    <Button kind="danger--tertiary" size="sm" renderIcon={TrashCan} disabled={form.lines.length <= 1} onClick={() => removeLine(index)}>
-                      Hapus komponen
+                    </div>
+                  </div>
+                  <Dropdown
+                    id="bom-sumber-hasil"
+                    size="lg"
+                    titleText="Sumber angka hasil standar"
+                    label="Belum ditentukan"
+                    items={Object.keys(yieldSourceLabels)}
+                    itemToString={(v: string) => yieldSourceLabels[v] ?? v}
+                    selectedItem={form.standard_yield_source || null}
+                    onChange={({ selectedItem }: { selectedItem: string | null }) => setForm((prev) => ({ ...prev, standard_yield_source: selectedItem ?? '' }))}
+                  />
+                  <Dropdown
+                    id="bom-status"
+                    size="lg"
+                    titleText="Status"
+                    label="Pilih status"
+                    items={bomStatuses}
+                    itemToString={(v: string) => statusLabels[v] ?? v}
+                    selectedItem={form.status}
+                    onChange={({ selectedItem }: { selectedItem: string | null }) => setForm((prev) => ({ ...prev, status: selectedItem ?? 'draft' }))}
+                  />
+                  <NumberInput
+                    id="bom-buffer"
+                    label="Buffer (%)"
+                    min={0}
+                    max={100}
+                    allowEmpty
+                    hideSteppers
+                    helperText="Kompensasi kehilangan produksi — dipakai saat menghitung kebutuhan bahan per batch."
+                    value={form.buffer_percentage === '' ? '' : Number(form.buffer_percentage)}
+                    onChange={(_e: unknown, { value }: { value: number | string }) => setForm((prev) => ({ ...prev, buffer_percentage: String(value ?? '') }))}
+                  />
+                  <TextInput
+                    id="bom-keterangan-hasil"
+                    size="lg"
+                    className="bom-form__lebar-penuh"
+                    labelText="Keterangan asal angka hasil standar"
+                    placeholder='mis. "10.000 g adonan × yield 85% ÷ 2,5 g/gummy ÷ 60 gummy/botol"'
+                    helperText="Ini yang muncul di panel Asal-Usul — tulisan di sini yang menjelaskan angkanya kelak."
+                    value={form.standard_yield_basis_note}
+                    onChange={(event) => setForm((prev) => ({ ...prev, standard_yield_basis_note: event.target.value }))}
+                  />
+                </div>
+                </div>
+              ) : null}
+
+              {/* LANGKAH 2 — Komponen: bahan apa saja dan berapa banyak. */}
+              {langkah === 1 ? (
+                <div className="bom-form__bagian">
+                <div className="bom-komponen">
+                  <div className="bom-komponen__kepala">
+                    <h3 className="halaman__subjudul halaman__subjudul--rapat">
+                      Komponen per {form.standard_yield_qty || '?'} {form.standard_yield_uom || 'satuan hasil'}
+                    </h3>
+                    <Button kind="tertiary" size="sm" renderIcon={Add} onClick={addLine}>
+                      Tambah komponen
                     </Button>
                   </div>
-                ))}
-              </div>
+
+                  {form.lines.map((line, index) => (
+                    <div key={index} className="bom-komponen__baris">
+                      <Dropdown
+                        id={`bom-komponen-${index}`}
+                        size="lg"
+                        titleText="Item komponen"
+                        label="Pilih item..."
+                        items={items.filter((item) => String(item.item_id) !== form.parent_item_id)}
+                        itemToString={(i: ItemOption | null) => (i ? `${i.item_code} — ${i.name} (${typeLabels[i.type] ?? i.type})` : '')}
+                        selectedItem={items.find((i) => String(i.item_id) === line.component_item_id) ?? null}
+                        onChange={({ selectedItem }: { selectedItem: ItemOption | null }) => handleComponentChange(index, selectedItem ? String(selectedItem.item_id) : '')}
+                      />
+                      <NumberInput
+                        id={`bom-qty-${index}`}
+                        label="Jumlah per batch"
+                        min={0}
+                        allowEmpty
+                        hideSteppers
+                        value={line.qty_per_batch === '' ? '' : Number(line.qty_per_batch)}
+                        onChange={(_e: unknown, { value }: { value: number | string }) => updateLine(index, { qty_per_batch: String(value ?? '') })}
+                      />
+                      <TextInput
+                        id={`bom-satuan-${index}`}
+                        size="lg"
+                        labelText="Satuan"
+                        value={line.uom}
+                        onChange={(event) => updateLine(index, { uom: event.target.value })}
+                      />
+                      {selectedParentRouting ? (
+                        <Dropdown
+                          id={`bom-tahap-${index}`}
+                          size="lg"
+                          titleText="Tahap SOP"
+                          label="Sejak tahap 1 (bawaan)"
+                          items={['', ...[...selectedParentRouting.steps].sort((a, b) => a.sequence_no - b.sequence_no).map((s) => String(s.routing_step_id))]}
+                          itemToString={(v: string) => {
+                            if (!v) return 'Sejak tahap 1 (bawaan)';
+                            const step = selectedParentRouting.steps.find((s) => String(s.routing_step_id) === v);
+                            return step ? `${step.sequence_no}. ${step.step_name}` : v;
+                          }}
+                          selectedItem={line.routing_step_id || ''}
+                          onChange={({ selectedItem }: { selectedItem: string | null }) => updateLine(index, { routing_step_id: selectedItem ?? '' })}
+                        />
+                      ) : (
+                        <TextInput
+                          id={`bom-tahap-kosong-${index}`}
+                          size="lg"
+                          labelText="Tahap SOP"
+                          readOnly
+                          value="Item induk belum punya Routing"
+                          helperText="Buat Routing untuk item induknya dulu supaya komponen bisa ditempelkan ke tahap tertentu."
+                        />
+                      )}
+                      <Button kind="danger--tertiary" size="sm" renderIcon={TrashCan} disabled={form.lines.length <= 1} onClick={() => removeLine(index)}>
+                        Hapus komponen
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+
+                </div>
+              ) : null}
 
               {formMessage ? (
                 <InlineNotification
@@ -887,23 +930,24 @@ export default function BomsPage() {
               ) : null}
             </div>
           </ModalBody>
-          {/* `children` WAJIB pada ModalFooter di @carbon/react 1.114. */}
-          <ModalFooter>
-            <Button
-              kind="secondary"
-              onClick={() => {
-                resetForm();
-                setIsFormModalOpen(false);
-              }}
-            >
-              {formStatus === 'success' ? 'Tutup' : 'Batal'}
-            </Button>
-            <Button kind="primary" disabled={formStatus === 'pending'} onClick={handleSubmit}>
-              {formStatus === 'pending' ? 'Menyimpan...' : editingBomId ? 'Simpan perubahan' : 'Buat BOM'}
-            </Button>
-          </ModalFooter>
+          <FooterBertahap
+            langkah={LANGKAH_BOM}
+            aktif={langkah}
+            onPindah={setLangkah}
+            onBatal={() => {
+              resetForm();
+              setIsFormModalOpen(false);
+            }}
+            labelAksiAkhir={editingBomId ? 'Simpan perubahan' : 'Buat BOM'}
+            onSimpan={() => void handleSubmit()}
+            sedangMenyimpan={formStatus === 'pending'}
+          />
         </ComposedModal>
       ) : null}
+
+      {/* Ditempatkan SEKALI di kaki halaman; posisinya (kanan atas, di bawah header)
+          diatur komponennya sendiri. */}
+      <AreaNotifikasi daftar={notifikasi} onTutup={tutupNotifikasi} />
     </div>
   );
 }

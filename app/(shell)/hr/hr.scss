@@ -8,16 +8,27 @@
 }
 
 // Formulir karyawan: satu kolom di layar sempit, dua kolom mulai 672px (breakpoint Carbon).
+// SATU KOLOM (DS-18). Carbon: "form inputs and other components expand the entire width of
+// a modal". Dua kolom sebelumnya dipakai untuk memuatkan 15 field; jawabannya bukan dua
+// kolom melainkan memecah formulirnya jadi langkah — lihat LANGKAH_KARYAWAN.
 .hr-form {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
   gap: $spacing-05;
-
-  @include breakpoint('md') {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
+.hr-form__bagian {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+}
+
+.hr-form__langkah {
+  margin-block-end: $spacing-06;
+}
+
+// Sisa dari susunan kisi; tidak lagi berarti apa-apa di susunan satu kolom, tapi masih
+// dipakai beberapa elemen. Dibiarkan netral supaya tidak perlu menyentuh JSX-nya.
 .hr-form__lebar-penuh {
-  grid-column: 1 / -1;
+  inline-size: 100%;
 }

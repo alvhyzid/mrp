@@ -11,9 +11,6 @@ import {
   Dropdown,
   InlineNotification,
   ModalBody,
-  ModalFooter,
-  ProgressIndicator,
-  ProgressStep,
   ModalHeader,
   NumberInput,
   Pagination,
@@ -40,6 +37,7 @@ import {
 import { Add, TrashCan } from '@carbon/icons-react';
 import { KepalaHalaman } from '@/components/ui/kepala-halaman';
 import { AreaNotifikasi, type Notifikasi } from '@/components/ui/notifikasi';
+import { FooterBertahap, PenandaLangkah, type LangkahModal } from '@/components/ui/modal-bertahap';
 
 // PO KLIEN — dimigrasikan ke Carbon 26 Agu 2026 (DS-09), cetakan Master Item.
 import { canManageCustomerPo, canApproveDepartment, isCompanyLeadership } from '@/lib/roles';
@@ -161,7 +159,7 @@ const emptyForm = {
 // keempatnya TERPOTONG jadi "Orang yang dihub..." di modal 691px — penanda langkah yang
 // terpotong tidak memberi tahu apa pun. Yang dipendekkan judulnya; ARTINYA tetap utuh karena
 // pindah ke baris kedua yang memang disediakan Carbon (secondaryLabel).
-const LANGKAH_PO = [
+const LANGKAH_PO: LangkahModal[] = [
   { judul: 'Klien', ringkas: 'Siapa yang memesan' },
   { judul: 'PIC', ringkas: 'Orang yang dihubungi' },
   { judul: 'Tanggal & bayar', ringkas: 'Kapan dan bagaimana' },
@@ -831,16 +829,12 @@ export default function CustomerPurchaseOrdersPage() {
             <div className="po-form">
               {/* PENANDA LANGKAH — komponen Carbon, bukan rakitan sendiri. Ia juga jadi
                   navigasi: langkah yang sudah dilewati bisa diklik untuk kembali. */}
-              <ProgressIndicator
-                currentIndex={langkah}
-                spaceEqually
-                onChange={(indeks: number) => setLangkah(indeks)}
+              <PenandaLangkah
+                langkah={LANGKAH_PO}
+                aktif={langkah}
+                onPindah={setLangkah}
                 className="po-form__langkah"
-              >
-                {LANGKAH_PO.map((l) => (
-                  <ProgressStep key={l.judul} label={l.judul} secondaryLabel={l.ringkas} />
-                ))}
-              </ProgressIndicator>
+              />
 
               {/* LANGKAH 1 — Klien & nomor PO: siapa yang memesan. */}
               {langkah === 0 ? (
@@ -1102,56 +1096,18 @@ export default function CustomerPurchaseOrdersPage() {
               ) : null}
             </div>
           </ModalBody>
-          {/* FOOTER BERTAHAP — bentuknya dari Carbon, bukan dirancang sendiri:
-              Batal di kiri, lalu Sebelumnya + Berikutnya berpasangan di kanan, masing-masing
-              25% lebar modal dan menempel penuh ke tepi. Di langkah TERAKHIR label
-              "Berikutnya" berganti jadi aksi finalnya.
-
-              DIPAKAI PROP `secondaryButtons`, BUKAN children: hanya lewat prop itu Carbon
-              memasang kelas `--modal-footer--three-button` yang memberi lebar 25%. Menulis
-              tiga tombol sebagai children menghasilkan tiga tombol selebar 50% yang meluber.
-
-              DEVIASI YANG DISEBUT TERBUKA: halaman Usage Carbon menggambar tombol Batal
-              sebagai GHOST, sedangkan komponen React-nya merender kedua tombol sekunder
-              dengan kind="secondary" dan tidak menyediakan pilihan. Yang diikuti di sini
-              adalah KOMPONENNYA, bukan gambarnya — merakit footer sendiri demi satu warna
-              tombol akan melahirkan jalur hidup kedua untuk hal yang sudah ada. */}
-          <ModalFooter
-            secondaryButtons={[
-              {
-                buttonText: 'Batal',
-                onClick: () => {
-                  resetForm();
-                  setIsFormModalOpen(false);
-                }
-              },
-              {
-                buttonText: 'Sebelumnya',
-                onClick: () => setLangkah((n) => Math.max(0, n - 1))
-              }
-            ]}
-            primaryButtonText={
-              langkah < LANGKAH_PO.length - 1
-                ? 'Berikutnya'
-                : formStatus === 'pending'
-                  ? 'Menyimpan...'
-                  : 'Buat PO klien'
-            }
-            primaryButtonDisabled={formStatus === 'pending'}
-            onRequestSubmit={() => {
-              if (langkah < LANGKAH_PO.length - 1) {
-                setLangkah((n) => n + 1);
-                return;
-              }
-              void handleSubmit();
+          <FooterBertahap
+            langkah={LANGKAH_PO}
+            aktif={langkah}
+            onPindah={setLangkah}
+            onBatal={() => {
+              resetForm();
+              setIsFormModalOpen(false);
             }}
-          >
-            {/* `children` DIWAJIBKAN oleh tipe ModalFooter di @carbon/react 1.114, tetapi
-                komponennya TIDAK merendernya sama sekali ketika secondaryButtons dan
-                primaryButtonText dipakai — ia merakit tombolnya sendiri. Jadi ini `null`
-                untuk memenuhi tipe, bukan tempat menaruh isi. */}
-            {null}
-          </ModalFooter>
+            labelAksiAkhir="Buat PO klien"
+            onSimpan={() => void handleSubmit()}
+            sedangMenyimpan={formStatus === 'pending'}
+          />
         </ComposedModal>
       ) : null}
 

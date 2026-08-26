@@ -12,6 +12,8 @@ import {
   InlineNotification,
   ModalBody,
   ModalFooter,
+  ProgressIndicator,
+  ProgressStep,
   ModalHeader,
   NumberInput,
   Pagination,
@@ -129,6 +131,32 @@ const emptyForm = {
   lines: [{ ...emptyFormLine }] as FormLine[]
 };
 
+// LANGKAH FORMULIR PO KLIEN (DS-18, 26 Agu 2026).
+//
+// Formulir ini 15 field — terlalu panjang untuk satu modal. Carbon menyediakan Progress modal
+// untuk itu, DENGAN SYARAT yang disebut di kalimat berikutnya di halaman Usage-nya:
+//   "A progress modal is not a solution for excess modal content. It should only be used to
+//    present information in more consumable and focused chunks."
+//
+// Jadi pemecahan ini BUKAN memuatkan isi yang kebanyakan. Uji yang dipakai, dan yang wajib
+// dipakai lagi untuk tiga modal panjang berikutnya: SETIAP BAGIAN BISA DIBERI JUDUL YANG
+// MENYEBUT SATU HAL, dan setiap field di dalamnya menjawab hal itu. Bila judulnya terpaksa
+// berbunyi "Lanjutan" atau "Bagian 2", pemecahannya salah.
+//
+// Keempat judul di bawah lulus uji itu: siapa yang memesan · siapa yang dihubungi · kapan dan
+// bagaimana dibayar · apa yang dipesan.
+//
+// JUDUL SENGAJA PENDEK, keterangannya di baris kedua. Diukur lebih dulu: dengan judul panjang
+// keempatnya TERPOTONG jadi "Orang yang dihub..." di modal 691px — penanda langkah yang
+// terpotong tidak memberi tahu apa pun. Yang dipendekkan judulnya; ARTINYA tetap utuh karena
+// pindah ke baris kedua yang memang disediakan Carbon (secondaryLabel).
+const LANGKAH_PO = [
+  { judul: 'Klien', ringkas: 'Siapa yang memesan' },
+  { judul: 'PIC', ringkas: 'Orang yang dihubungi' },
+  { judul: 'Tanggal & bayar', ringkas: 'Kapan dan bagaimana' },
+  { judul: 'Barang', ringkas: 'Item dan jumlahnya' }
+] as const;
+
 export default function CustomerPurchaseOrdersPage() {
   const router = useRouter();
   const [checkingAccess, setCheckingAccess] = useState(true);
@@ -150,6 +178,7 @@ export default function CustomerPurchaseOrdersPage() {
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
   const [form, setForm] = useState(emptyForm);
+  const [langkah, setLangkah] = useState(0);
   const [formStatus, setFormStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [formMessage, setFormMessage] = useState('');
   // Stabil untuk 1 percobaan submit (dipakai server buat cegah dokumen duplikat kalau
@@ -254,6 +283,7 @@ export default function CustomerPurchaseOrdersPage() {
     setForm(emptyForm);
     setFormStatus('idle');
     setFormMessage('');
+    setLangkah(0);
   };
 
   const updateLine = (index: number, patch: Partial<FormLine>) => {
@@ -691,7 +721,10 @@ export default function CustomerPurchaseOrdersPage() {
         // MODAL BERTAHAP: baris item ditambah dan dihapus sebelum disimpan.
         <ComposedModal
           open={isFormModalOpen}
-          size="lg"
+          // UKURAN md, BUKAN lg (DS-18). Carbon memilih ukuran dari ISI: lg disediakan untuk
+          // komponen kompleks seperti tabel, bukan untuk formulir yang kebetulan panjang.
+          // Setelah dipecah jadi empat langkah, tiap langkah isinya sedikit — md sudah lega.
+          size="md"
           onClose={() => {
             resetForm();
             setIsFormModalOpen(false);
@@ -708,201 +741,263 @@ export default function CustomerPurchaseOrdersPage() {
           />
           <ModalBody hasForm>
             <div className="po-form">
-              <div className="po-form__kisi">
-                <div className="po-form__klien">
-                  <Dropdown
-                    id="po-klien"
-                    size="lg"
-                    titleText="Klien"
-                    label="Pilih klien..."
-                    items={customers}
-                    itemToString={(c: Customer | null) => (c ? `${c.name} (${c.customer_type === 'individual' ? 'Perorangan' : 'Perusahaan'})` : '')}
-                    selectedItem={customers.find((c) => String(c.customer_id) === form.customer_id) ?? null}
-                    onChange={({ selectedItem }: { selectedItem: Customer | null }) =>
-                      setForm((prev) => ({ ...prev, customer_id: selectedItem ? String(selectedItem.customer_id) : '' }))
-                    }
-                  />
-                  <Button kind="tertiary" size="lg" onClick={() => setShowNewCustomer((v) => !v)}>
-                    Klien baru
-                  </Button>
-                </div>
+              {/* PENANDA LANGKAH — komponen Carbon, bukan rakitan sendiri. Ia juga jadi
+                  navigasi: langkah yang sudah dilewati bisa diklik untuk kembali. */}
+              <ProgressIndicator
+                currentIndex={langkah}
+                spaceEqually
+                onChange={(indeks: number) => setLangkah(indeks)}
+                className="po-form__langkah"
+              >
+                {LANGKAH_PO.map((l) => (
+                  <ProgressStep key={l.judul} label={l.judul} secondaryLabel={l.ringkas} />
+                ))}
+              </ProgressIndicator>
 
-                <TextInput
-                  id="po-nomor"
-                  size="lg"
-                  labelText="Nomor PO klien"
-                  helperText="Nomor milik pelanggan — diketik apa adanya, bukan dibuat sistem."
-                  value={form.po_number}
-                  onChange={(event) => setForm((prev) => ({ ...prev, po_number: event.target.value }))}
-                />
-              </div>
+              {/* LANGKAH 1 — Klien & nomor PO: siapa yang memesan. */}
+              {langkah === 0 ? (
+                <div className="po-form__bagian">
+                  <div className="po-form__klien">
+                    <Dropdown
+                      id="po-klien"
+                      size="lg"
+                      titleText="Klien"
+                      label="Pilih klien..."
+                      items={customers}
+                      itemToString={(c: Customer | null) => (c ? `${c.name} (${c.customer_type === 'individual' ? 'Perorangan' : 'Perusahaan'})` : '')}
+                      selectedItem={customers.find((c) => String(c.customer_id) === form.customer_id) ?? null}
+                      onChange={({ selectedItem }: { selectedItem: Customer | null }) =>
+                        setForm((prev) => ({ ...prev, customer_id: selectedItem ? String(selectedItem.customer_id) : '' }))
+                      }
+                    />
+                    <Button kind="tertiary" size="lg" onClick={() => setShowNewCustomer((v) => !v)}>
+                      Klien baru
+                    </Button>
+                  </div>
 
-              {showNewCustomer ? (
-                <div className="po-klien-baru">
                   <TextInput
-                    id="po-klien-nama"
+                    id="po-nomor"
                     size="lg"
-                    labelText="Nama klien"
-                    value={newCustomer.name}
-                    onChange={(event) => setNewCustomer((prev) => ({ ...prev, name: event.target.value }))}
+                    labelText="Nomor PO klien"
+                    helperText="Nomor milik pelanggan — diketik apa adanya, bukan dibuat sistem."
+                    value={form.po_number}
+                    onChange={(event) => setForm((prev) => ({ ...prev, po_number: event.target.value }))}
                   />
-                  <Dropdown
-                    id="po-klien-jenis"
-                    size="lg"
-                    titleText="Jenis klien"
-                    label="Pilih jenis"
-                    items={customerTypes}
-                    itemToString={(t: string) => (t === 'individual' ? 'Perorangan' : 'Perusahaan')}
-                    selectedItem={newCustomer.customer_type}
-                    onChange={({ selectedItem }: { selectedItem: string | null }) => setNewCustomer((prev) => ({ ...prev, customer_type: selectedItem ?? 'company' }))}
-                  />
-                  <TextInput
-                    id="po-klien-kontak"
-                    size="lg"
-                    labelText="Kontak"
-                    value={newCustomer.contact_info}
-                    onChange={(event) => setNewCustomer((prev) => ({ ...prev, contact_info: event.target.value }))}
-                  />
-                  <Button kind="tertiary" size="lg" disabled={newCustomerStatus === 'pending'} onClick={handleCreateCustomer}>
-                    Simpan klien
-                  </Button>
-                  {newCustomerMessage ? (
-                    <div className="po-form__lebar-penuh">
-                      <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal menyimpan klien" subtitle={newCustomerMessage} />
+
+                  {showNewCustomer ? (
+                    <div className="po-klien-baru">
+                      <TextInput
+                        id="po-klien-nama"
+                        size="lg"
+                        labelText="Nama klien"
+                        value={newCustomer.name}
+                        onChange={(event) => setNewCustomer((prev) => ({ ...prev, name: event.target.value }))}
+                      />
+                      <Dropdown
+                        id="po-klien-jenis"
+                        size="lg"
+                        titleText="Jenis klien"
+                        label="Pilih jenis"
+                        items={customerTypes}
+                        itemToString={(t: string) => (t === 'individual' ? 'Perorangan' : 'Perusahaan')}
+                        selectedItem={newCustomer.customer_type}
+                        onChange={({ selectedItem }: { selectedItem: string | null }) => setNewCustomer((prev) => ({ ...prev, customer_type: selectedItem ?? 'company' }))}
+                      />
+                      <TextInput
+                        id="po-klien-kontak"
+                        size="lg"
+                        labelText="Kontak"
+                        value={newCustomer.contact_info}
+                        onChange={(event) => setNewCustomer((prev) => ({ ...prev, contact_info: event.target.value }))}
+                      />
+                      <Button kind="tertiary" size="lg" disabled={newCustomerStatus === 'pending'} onClick={handleCreateCustomer}>
+                        Simpan klien
+                      </Button>
+                      {newCustomerMessage ? (
+                        <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal menyimpan klien" subtitle={newCustomerMessage} />
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
               ) : null}
 
-              <div className="po-form__kisi">
-                <TextInput
-                  id="po-tanggal"
-                  size="lg"
-                  type="date"
-                  labelText="Tanggal PO"
-                  value={form.po_date}
-                  onChange={(event) => setForm((prev) => ({ ...prev, po_date: event.target.value }))}
-                />
-                <TextInput
-                  id="po-tanggal-kirim"
-                  size="lg"
-                  type="date"
-                  labelText="Tanggal kirim diminta"
-                  value={form.requested_ship_date}
-                  onChange={(event) => setForm((prev) => ({ ...prev, requested_ship_date: event.target.value }))}
-                />
-                <TextInput
-                  id="po-pic-nama"
-                  size="lg"
-                  labelText="Nama PIC"
-                  value={form.pic_name}
-                  onChange={(event) => setForm((prev) => ({ ...prev, pic_name: event.target.value }))}
-                />
-                <TextInput
-                  id="po-pic-jabatan"
-                  size="lg"
-                  labelText="Jabatan PIC"
-                  value={form.pic_position}
-                  onChange={(event) => setForm((prev) => ({ ...prev, pic_position: event.target.value }))}
-                />
-                <TextInput
-                  id="po-pic-hp"
-                  size="lg"
-                  labelText="No. HP PIC"
-                  value={form.pic_phone}
-                  onChange={(event) => setForm((prev) => ({ ...prev, pic_phone: event.target.value }))}
-                />
-                <TextInput
-                  id="po-pic-email"
-                  size="lg"
-                  type="email"
-                  labelText="Email PIC"
-                  value={form.pic_email}
-                  onChange={(event) => setForm((prev) => ({ ...prev, pic_email: event.target.value }))}
-                />
-                <Dropdown
-                  id="po-syarat-bayar"
-                  size="lg"
-                  titleText="Syarat pembayaran"
-                  label="Pilih syarat"
-                  items={paymentTermsOptions}
-                  itemToString={(o: string) => (o === 'full' ? 'Lunas di muka' : 'Tempo')}
-                  selectedItem={form.payment_terms}
-                  onChange={({ selectedItem }: { selectedItem: string | null }) => setForm((prev) => ({ ...prev, payment_terms: selectedItem ?? 'full' }))}
-                />
-              </div>
-
-              <div className="po-baris">
-                <div className="po-baris__kepala">
-                  <h3 className="halaman__subjudul halaman__subjudul--rapat">Baris item</h3>
-                  <Button kind="tertiary" size="sm" renderIcon={Add} onClick={addLine}>
-                    Tambah baris
-                  </Button>
-                </div>
-                {form.lines.map((line, index) => (
-                  <div key={index} className="po-baris__isi">
-                    <Dropdown
-                      id={`po-item-${index}`}
-                      size="lg"
-                      titleText="Item"
-                      label="Pilih item..."
-                      items={items}
-                      itemToString={(i: ItemOption | null) => (i ? `${i.item_code} — ${i.name}` : '')}
-                      selectedItem={items.find((i) => String(i.item_id) === line.item_id) ?? null}
-                      onChange={({ selectedItem }: { selectedItem: ItemOption | null }) => updateLine(index, { item_id: selectedItem ? String(selectedItem.item_id) : '' })}
-                    />
-                    <NumberInput
-                      id={`po-qty-${index}`}
-                      label="Qty"
-                      min={0}
-                      allowEmpty
-                      hideSteppers
-                      value={line.qty_ordered === '' ? '' : Number(line.qty_ordered)}
-                      onChange={(_e: unknown, { value }: { value: number | string }) => updateLine(index, { qty_ordered: String(value ?? '') })}
-                    />
-                    <NumberInput
-                      id={`po-harga-${index}`}
-                      label="Harga satuan"
-                      min={0}
-                      allowEmpty
-                      hideSteppers
-                      value={line.unit_price === '' ? '' : Number(line.unit_price)}
-                      onChange={(_e: unknown, { value }: { value: number | string }) => updateLine(index, { unit_price: String(value ?? '') })}
-                    />
-                    <Button kind="danger--tertiary" size="sm" renderIcon={TrashCan} disabled={form.lines.length <= 1} onClick={() => removeLine(index)}>
-                      Hapus baris
-                    </Button>
-                  </div>
-                ))}
-              </div>
-
-              {formMessage ? (
-                <div className="po-form__lebar-penuh">
-                  <InlineNotification
-                    kind={formStatus === 'success' ? 'success' : 'error'}
-                    lowContrast
-                    hideCloseButton
-                    title={formStatus === 'success' ? 'Berhasil' : 'Gagal menyimpan'}
-                    subtitle={formMessage}
+              {/* LANGKAH 2 — Orang yang dihubungi: PIC di pihak klien. */}
+              {langkah === 1 ? (
+                <div className="po-form__bagian">
+                  <TextInput
+                    id="po-pic-nama"
+                    size="lg"
+                    labelText="Nama PIC"
+                    value={form.pic_name}
+                    onChange={(event) => setForm((prev) => ({ ...prev, pic_name: event.target.value }))}
+                  />
+                  <TextInput
+                    id="po-pic-jabatan"
+                    size="lg"
+                    labelText="Jabatan PIC"
+                    value={form.pic_position}
+                    onChange={(event) => setForm((prev) => ({ ...prev, pic_position: event.target.value }))}
+                  />
+                  <TextInput
+                    id="po-pic-hp"
+                    size="lg"
+                    labelText="No. HP PIC"
+                    value={form.pic_phone}
+                    onChange={(event) => setForm((prev) => ({ ...prev, pic_phone: event.target.value }))}
+                  />
+                  <TextInput
+                    id="po-pic-email"
+                    size="lg"
+                    type="email"
+                    labelText="Email PIC"
+                    value={form.pic_email}
+                    onChange={(event) => setForm((prev) => ({ ...prev, pic_email: event.target.value }))}
                   />
                 </div>
               ) : null}
+
+              {/* LANGKAH 3 — Tanggal & pembayaran: kapan dan bagaimana dibayar. */}
+              {langkah === 2 ? (
+                <div className="po-form__bagian">
+                  <TextInput
+                    id="po-tanggal"
+                    size="lg"
+                    type="date"
+                    labelText="Tanggal PO"
+                    value={form.po_date}
+                    onChange={(event) => setForm((prev) => ({ ...prev, po_date: event.target.value }))}
+                  />
+                  <TextInput
+                    id="po-tanggal-kirim"
+                    size="lg"
+                    type="date"
+                    labelText="Tanggal kirim diminta"
+                    value={form.requested_ship_date}
+                    onChange={(event) => setForm((prev) => ({ ...prev, requested_ship_date: event.target.value }))}
+                  />
+                  <Dropdown
+                    id="po-syarat-bayar"
+                    size="lg"
+                    titleText="Syarat pembayaran"
+                    label="Pilih syarat"
+                    items={paymentTermsOptions}
+                    itemToString={(o: string) => (o === 'full' ? 'Lunas di muka' : 'Tempo')}
+                    selectedItem={form.payment_terms}
+                    onChange={({ selectedItem }: { selectedItem: string | null }) => setForm((prev) => ({ ...prev, payment_terms: selectedItem ?? 'full' }))}
+                  />
+                </div>
+              ) : null}
+
+              {/* LANGKAH 4 — Barang yang dipesan. */}
+              {langkah === 3 ? (
+                <div className="po-baris">
+                  <div className="po-baris__kepala">
+                    <h3 className="halaman__subjudul halaman__subjudul--rapat">Baris item</h3>
+                    <Button kind="tertiary" size="sm" renderIcon={Add} onClick={addLine}>
+                      Tambah baris
+                    </Button>
+                  </div>
+                  {form.lines.map((line, index) => (
+                    <div key={index} className="po-baris__isi">
+                      <Dropdown
+                        id={`po-item-${index}`}
+                        size="lg"
+                        titleText="Item"
+                        label="Pilih item..."
+                        items={items}
+                        itemToString={(i: ItemOption | null) => (i ? `${i.item_code} — ${i.name}` : '')}
+                        selectedItem={items.find((i) => String(i.item_id) === line.item_id) ?? null}
+                        onChange={({ selectedItem }: { selectedItem: ItemOption | null }) => updateLine(index, { item_id: selectedItem ? String(selectedItem.item_id) : '' })}
+                      />
+                      <NumberInput
+                        id={`po-qty-${index}`}
+                        label="Qty"
+                        min={0}
+                        allowEmpty
+                        hideSteppers
+                        value={line.qty_ordered === '' ? '' : Number(line.qty_ordered)}
+                        onChange={(_e: unknown, { value }: { value: number | string }) => updateLine(index, { qty_ordered: String(value ?? '') })}
+                      />
+                      <NumberInput
+                        id={`po-harga-${index}`}
+                        label="Harga satuan"
+                        min={0}
+                        allowEmpty
+                        hideSteppers
+                        value={line.unit_price === '' ? '' : Number(line.unit_price)}
+                        onChange={(_e: unknown, { value }: { value: number | string }) => updateLine(index, { unit_price: String(value ?? '') })}
+                      />
+                      <Button kind="danger--tertiary" size="sm" renderIcon={TrashCan} disabled={form.lines.length <= 1} onClick={() => removeLine(index)}>
+                        Hapus baris
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {/* Pesan hasil TIDAK ikut dilangkahkan: ia menyangkut seluruh formulir, dan
+                  menyembunyikannya di langkah lain berarti pengguna bisa kehilangan alasan
+                  kegagalan hanya karena berpindah langkah. */}
+              {formMessage ? (
+                <InlineNotification
+                  kind={formStatus === 'success' ? 'success' : 'error'}
+                  lowContrast
+                  hideCloseButton
+                  title={formStatus === 'success' ? 'Berhasil' : 'Gagal menyimpan'}
+                  subtitle={formMessage}
+                />
+              ) : null}
             </div>
           </ModalBody>
-          {/* `children` WAJIB pada ModalFooter di @carbon/react 1.114. */}
-          <ModalFooter>
-            <Button
-              kind="secondary"
-              onClick={() => {
-                resetForm();
-                setIsFormModalOpen(false);
-              }}
-            >
-              Batal
-            </Button>
-            <Button kind="primary" disabled={formStatus === 'pending'} onClick={handleSubmit}>
-              {formStatus === 'pending' ? 'Menyimpan...' : 'Buat PO klien'}
-            </Button>
+          {/* FOOTER BERTAHAP — bentuknya dari Carbon, bukan dirancang sendiri:
+              Batal di kiri, lalu Sebelumnya + Berikutnya berpasangan di kanan, masing-masing
+              25% lebar modal dan menempel penuh ke tepi. Di langkah TERAKHIR label
+              "Berikutnya" berganti jadi aksi finalnya.
+
+              DIPAKAI PROP `secondaryButtons`, BUKAN children: hanya lewat prop itu Carbon
+              memasang kelas `--modal-footer--three-button` yang memberi lebar 25%. Menulis
+              tiga tombol sebagai children menghasilkan tiga tombol selebar 50% yang meluber.
+
+              DEVIASI YANG DISEBUT TERBUKA: halaman Usage Carbon menggambar tombol Batal
+              sebagai GHOST, sedangkan komponen React-nya merender kedua tombol sekunder
+              dengan kind="secondary" dan tidak menyediakan pilihan. Yang diikuti di sini
+              adalah KOMPONENNYA, bukan gambarnya — merakit footer sendiri demi satu warna
+              tombol akan melahirkan jalur hidup kedua untuk hal yang sudah ada. */}
+          <ModalFooter
+            secondaryButtons={[
+              {
+                buttonText: 'Batal',
+                onClick: () => {
+                  resetForm();
+                  setIsFormModalOpen(false);
+                }
+              },
+              {
+                buttonText: 'Sebelumnya',
+                onClick: () => setLangkah((n) => Math.max(0, n - 1))
+              }
+            ]}
+            primaryButtonText={
+              langkah < LANGKAH_PO.length - 1
+                ? 'Berikutnya'
+                : formStatus === 'pending'
+                  ? 'Menyimpan...'
+                  : 'Buat PO klien'
+            }
+            primaryButtonDisabled={formStatus === 'pending'}
+            onRequestSubmit={() => {
+              if (langkah < LANGKAH_PO.length - 1) {
+                setLangkah((n) => n + 1);
+                return;
+              }
+              void handleSubmit();
+            }}
+          >
+            {/* `children` DIWAJIBKAN oleh tipe ModalFooter di @carbon/react 1.114, tetapi
+                komponennya TIDAK merendernya sama sekali ketika secondaryButtons dan
+                primaryButtonText dipakai — ia merakit tombolnya sendiri. Jadi ini `null`
+                untuk memenuhi tipe, bukan tempat menaruh isi. */}
+            {null}
           </ModalFooter>
         </ComposedModal>
       ) : null}

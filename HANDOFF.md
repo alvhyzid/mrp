@@ -2,6 +2,31 @@
 
 Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`). Tiap sesi Claude Code WAJIB baca ini dulu sebelum mulai, dan memperbarui bagian relevan begitu sesi selesai. Klaim di sini harus tetap diverifikasi ulang, bukan otomatis dipercaya — HANDOFF ini rangkuman, bukan pengganti bukti.
 
+## VV — ATURAN FOKUS BERLAKU UNTUK ARSITEK JUGA, DAN DILANGGAR SEHARI SESUDAH DISUSUN (26 Agu 2026)
+
+> **Arsitek mengubah pertanyaan ALUR KERJA menjadi SYARAT pekerjaan UI, dan itu persis
+> pelanggaran aturan fokus yang ia susun sendiri sehari sebelumnya. Ditegur pemilik produk.**
+
+Yang terjadi: sebelum modal bertahap boleh dikerjakan, disyaratkan dulu jawaban atas
+*"apakah PIC diisi orang yang sama"* dan apakah dibutuhkan simpanan sementara. Keduanya
+pertanyaan **cara kerja pabrik**, bukan pertanyaan tampilan — dan menjadikannya syarat berarti
+**menahan pekerjaan UI di belakang pertanyaan yang bukan urusannya.**
+
+**Yang dilakukan sebagai gantinya**: pertanyaannya dicatat sebagai task tersendiri (`FND-05`)
+dengan **pemicu yang tegas** — ada formulir yang **terbukti** tidak bisa diselesaikan satu
+orang dalam satu duduk. Dugaan bahwa "mungkin datanya belum lengkap" **bukan** pemicu. Modal
+bertahapnya dikerjakan tanpa menunggu, dan selesai.
+
+**Kenapa ini layak dicatat, bukan sekadar dibetulkan**: aturan fokus di CLAUDE.md sudah
+menyebut dengan huruf besar bahwa ia **MENGIKAT ARSITEK JUGA**, dan contoh yang ditulis di
+sana persis bentuk ini — laporan dijawab dengan pekerjaan baru alih-alih dicatat. Sehari
+kemudian bentuk yang sama muncul lagi, hanya berbalik arah: bukan menambah pekerjaan,
+melainkan **menambah syarat**.
+
+> **Menambah SYARAT sama berbahayanya dengan menambah PEKERJAAN.** Keduanya membuat satu
+> giliran tidak menyelesaikan apa pun, dan yang kedua lebih sulit dilihat karena terasa
+> seperti kehati-hatian.
+
 ## SS — TYPECHECK HIJAU, TEST HIJAU, DEV JALAN — DAN BUILD PRODUKSI GAGAL (26 Agu 2026)
 
 **Situs tayang berhenti diperbarui, dan tidak satu pun pemeriksaan yang ada berbunyi.**

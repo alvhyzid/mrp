@@ -87,18 +87,24 @@
   gap: $spacing-06;
 }
 
-.po-form__kisi {
-  display: grid;
-  grid-template-columns: 1fr;
+// SATU KOLOM, dan bukan pilihan gaya (DS-18, 26 Agu 2026).
+// Carbon menyebutnya langsung di halaman Usage modal: "form inputs and other components
+// expand the entire width of a modal". Margin kanan 20% di modal besar berlaku untuk TEKS
+// PENJELASAN, bukan untuk field.
+//
+// Sebelum ini kelas ini menjadi DUA KOLOM di atas 672px, dan itu salah satu dari empat modal
+// yang membuat pemilik produk bertanya kenapa modal antar halaman tidak konsisten. Dua kolom
+// dipakai untuk MEMUATKAN field yang kebanyakan — jawabannya bukan dua kolom, melainkan
+// memecah formulirnya jadi langkah (lihat LANGKAH_PO).
+.po-form__bagian {
+  display: flex;
+  flex-direction: column;
   gap: $spacing-05;
-
-  @include breakpoint('md') {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
-.po-form__lebar-penuh {
-  grid-column: 1 / -1;
+// Jarak penanda langkah ke isi bagiannya.
+.po-form__langkah {
+  margin-block-end: $spacing-06;
 }
 
 // Dropdown klien + tombol "Klien baru" adalah SATU isian: memilih klien. Karena itu mereka
@@ -114,17 +120,14 @@
   }
 }
 
+// Satu kolom juga — alasan yang sama seperti .po-form__bagian di atas.
 .po-klien-baru {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
   gap: $spacing-05;
   padding: $spacing-05;
   background-color: $layer-01;
   border: 1px solid $border-subtle-01;
-
-  @include breakpoint('lg') {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 .po-baris {
@@ -157,4 +160,18 @@
     grid-column: 1 / -1;
     justify-self: end;
   }
+}
+
+// BATAL DIDORONG KE KIRI — mengisi yang komponennya tidak lakukan, bukan menimpa Carbon.
+//
+// Halaman Usage Carbon menggambar footer bertahap dengan Batal di KIRI dan Sebelumnya +
+// Berikutnya berpasangan di kanan. Komponen React-nya memakai `justify-content: flex-end`
+// untuk seluruh tombol, jadi ketiganya menempel ke kanan dan Batal berakhir di tengah.
+//
+// DUA ALASAN, bukan satu: (1) itu yang digambar spesifikasinya; (2) aturan proyek nomor 9 —
+// aksi yang membuang pekerjaan tidak boleh berjarak satu jari dari aksi sehari-hari.
+// Lebar 25% tiap tombol tetap milik Carbon (kelas --modal-footer--three-button); yang
+// ditambahkan di sini HANYA jaraknya.
+.cds--modal-footer--three-button .cds--btn:first-child {
+  margin-inline-end: auto;
 }

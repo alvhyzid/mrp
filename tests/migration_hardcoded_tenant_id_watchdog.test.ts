@@ -1,5 +1,6 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { readFileSync, readdirSync, writeFileSync, mkdirSync, rmSync } from 'fs';
+import { tanpaKomentarSql } from './util/tanpaKomentar';
 import { join, relative } from 'path';
 
 // II.2 (22 Agu 2026) — pengawas permanen untuk kelas bug yang ditemukan lewat
@@ -128,7 +129,19 @@ function scanMigrationsDir(dir: string): Violation[] {
 
   for (const file of files) {
     const path = join(dir, file);
-    const content = readFileSync(path, 'utf8');
+    // KOMENTAR SQL DIBUANG LEBIH DULU (AUD-42, 27 Agu 2026), lewat varian SQL pembantu
+    // bersama — BUKAN varian JavaScript. Komentar SQL memakai `--`, yang tidak dikenal
+    // varian JavaScript sama sekali; memakainya di sini akan terasa seperti perlindungan
+    // padahal bentuk komentar yang paling lazim di migrasi dibiarkan utuh.
+    //
+    // Yang ditutup: migrasi yang MENJELASKAN pola terlarang di dalam komentarnya —
+    // dan berkas migrasi di proyek ini memang panjang komentarnya. Yang TIDAK ditutup:
+    // badan $mig$ ... $mig$ SENGAJA tetap disisir (lihat catatan di berkas pembantunya),
+    // sebab hampir seluruh isi migrasi ini hidup di dalamnya.
+    //
+    // Panjang teks dipertahankan pembantu itu, jadi hitungan nomor baris di bawah
+    // (`content.slice(0, f.index).split('\n').length`) tetap menunjuk baris yang benar.
+    const content = tanpaKomentarSql(readFileSync(path, 'utf8'));
 
     let headerMatch: RegExpExecArray | null;
     headerRe.lastIndex = 0;
@@ -234,6 +247,43 @@ describe('Pengawas company_id hardcode di migrasi (II.2, 22 Agu 2026)', () => {
 
       const violations = scanMigrationsDir(fixtureDir);
       expect(violations).toHaveLength(0);
+
+      rmSync(fixtureDir, { recursive: true, force: true });
+    });
+
+    // DITAMBAHKAN 27 Agu 2026 (AUD-42 batch B-01). Uji di atas BERJUDUL "STRING/komentar"
+    // tapi fixture-nya tidak memuat satu pun komentar SQL — jadi kelas ini belum pernah
+    // benar-benar diuji. Dibuktikan dua arah saat ditambahkan: sebelum pengawas memakai
+    // pembuang komentar SQL, kasus ini MERAH; sesudahnya HIJAU.
+    it('pelanggaran yang ditulis DI DALAM komentar SQL (--) tidak salah tuduh', () => {
+      mkdirSync(fixtureDir, { recursive: true });
+      const isiKomentar = [
+        '-- Migrasi ini MENJELASKAN pola yang dilarang, tanpa menjalankannya:',
+        "--   insert into public.build_tasks (company_id, task_code) values (1, 'ZZZ-97');",
+        '-- Penjelasan seperti ini lazim di migrasi proyek ini, dan bukan pelanggaran.',
+        'select 1;',
+        ''
+      ].join('\n');
+      writeFileSync(fixtureFile, isiKomentar, 'utf8');
+
+      expect(scanMigrationsDir(fixtureDir)).toHaveLength(0);
+
+      rmSync(fixtureDir, { recursive: true, force: true });
+    });
+
+    it('pelanggaran yang sama DI LUAR komentar tetap terdeteksi — bukti arah sebaliknya', () => {
+      mkdirSync(fixtureDir, { recursive: true });
+      const isiKode = [
+        '-- Migrasi ini benar-benar menjalankannya:',
+        "insert into public.build_tasks (company_id, task_code) values (1, 'ZZZ-97');",
+        ''
+      ].join('\n');
+      writeFileSync(fixtureFile, isiKode, 'utf8');
+
+      const pelanggaran = scanMigrationsDir(fixtureDir);
+      expect(pelanggaran).toHaveLength(1);
+      expect(pelanggaran[0].literal).toBe('1');
+      expect(pelanggaran[0].line).toBe(2);
 
       rmSync(fixtureDir, { recursive: true, force: true });
     });

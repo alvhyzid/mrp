@@ -86,6 +86,81 @@ export function tanpaKomentar(teks: string): string {
   return keluar.join('');
 }
 
+// ============================================================================
+// VARIAN SQL (ditambahkan 27 Agu 2026, AUD-42 batch B-01)
+// ============================================================================
+// Dibutuhkan karena penjaga migrasi menyisir berkas .sql, dan komentar SQL memakai `--`
+// yang TIDAK dikenal `tanpaKomentar` di atas. Menjalankan pembuang komentar JavaScript
+// terhadap SQL bukan setengah benar melainkan MENYESATKAN: ia akan melaporkan "komentar
+// sudah dibuang" sementara justru bentuk komentar yang paling lazim di SQL dibiarkan utuh.
+//
+// INI MENANGANI: komentar `--` sampai akhir baris, blok `/* ... */`, dan tahu bahwa `--`
+// di dalam string ('a--b') BUKAN komentar. Kutip tunggal SQL di-escape dengan MENGGANDAKAN
+// ('' di dalam '...'), bukan dengan garis miring terbalik — itu ditangani.
+//
+// INI TIDAK MENANGANI, dan batasnya disebut karena diam soal ini justru berbahaya:
+//   1. DOLLAR QUOTING ($mig$ ... $mig$) SENGAJA TIDAK diperlakukan sebagai string. Seluruh
+//      migrasi di proyek ini membungkus badan DO block dengan $mig$, dan isinya adalah SQL
+//      yang memang HARUS ikut disisir penjaga. Memperlakukannya sebagai string akan
+//      membutakan penjaga terhadap hampir seluruh isi migrasi.
+//   2. Karena (1), string di dalam badan dollar-quoted tetap dikenali sebagai string biasa —
+//      yang benar untuk kasus kita, tapi bukan perilaku parser PostgreSQL yang sesungguhnya.
+//   3. Blok bersarang `/* /* */ */` (sah di PostgreSQL) diperlakukan datar, bukan bersarang.
+//
+// PANJANG TEKS DIPERTAHANKAN, alasan yang sama dengan varian JavaScript: penjaga migrasi
+// menghitung nomor baris dari indeks karakter, dan indeks itu harus tetap menunjuk tempat
+// yang sama di berkas aslinya.
+export function tanpaKomentarSql(teks: string): string {
+  const keluar = teks.split('');
+  let i = 0;
+  let didalamKutip = false;
+
+  while (i < teks.length) {
+    const c = teks[i];
+    const n = teks[i + 1];
+
+    if (didalamKutip) {
+      // '' di dalam string SQL adalah satu kutip literal, bukan penutup.
+      if (c === "'" && n === "'") {
+        i += 2;
+        continue;
+      }
+      if (c === "'") didalamKutip = false;
+      i += 1;
+      continue;
+    }
+
+    if (c === "'") {
+      didalamKutip = true;
+      i += 1;
+      continue;
+    }
+
+    if (c === '-' && n === '-') {
+      while (i < teks.length && teks[i] !== '\n') {
+        keluar[i] = ' ';
+        i += 1;
+      }
+      continue;
+    }
+
+    if (c === '/' && n === '*') {
+      while (i < teks.length && !(teks[i] === '*' && teks[i + 1] === '/')) {
+        if (teks[i] !== '\n') keluar[i] = ' ';
+        i += 1;
+      }
+      if (i < teks.length) keluar[i] = ' ';
+      if (i + 1 < teks.length) keluar[i + 1] = ' ';
+      i += 2;
+      continue;
+    }
+
+    i += 1;
+  }
+
+  return keluar.join('');
+}
+
 /// Nomor baris (1-based) untuk sebuah indeks karakter. Dipakai penyisir yang perlu melaporkan
 /// "berkas:baris" -- dan benar HANYA karena `tanpaKomentar` mempertahankan panjang teks.
 export function nomorBaris(teks: string, indeks: number): number {

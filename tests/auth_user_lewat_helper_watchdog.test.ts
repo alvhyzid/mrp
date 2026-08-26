@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'fs';
+import { tanpaKomentar } from './util/tanpaKomentar';
 import { join } from 'path';
 
 // AUD-21 — PENGAWAS PERMANEN: pembuatan pengguna auth di test WAJIB lewat ensureAuthUser.
@@ -45,7 +46,11 @@ describe('AUD-21 — pembuatan pengguna auth di test wajib lewat ensureAuthUser'
 
     for (const nama of readdirSync(DIR_TEST)) {
       if (!nama.endsWith('.ts') || BERKAS_DIKECUALIKAN.has(nama)) continue;
-      const isi = readFileSync(join(DIR_TEST, nama), 'utf8');
+      // Komentar dibuang lebih dulu lewat pembantu bersama (AUD-42): sebelum 27 Agu 2026
+      // berkas ini menyisir teks mentah, jadi satu kalimat penjelasan yang MENYEBUT
+      // auth.admin.createUser sudah cukup untuk membuatnya menuduh berkas yang bersih.
+      // Panjang teks dipertahankan pembantu itu, jadi nomor baris tetap benar.
+      const isi = tanpaKomentar(readFileSync(join(DIR_TEST, nama), 'utf8'));
       isi.split('\n').forEach((baris, i) => {
         if (POLA_TERLARANG.test(baris)) pelanggaran.push(`${nama}:${i + 1}`);
       });
@@ -61,7 +66,9 @@ describe('AUD-21 — pembuatan pengguna auth di test wajib lewat ensureAuthUser'
   });
 
   it('helper-nya sendiri masih ada dan masih menangani "sudah terdaftar"', () => {
-    const isi = readFileSync(join(DIR_TEST, 'ensureAuthUser.ts'), 'utf8');
+    // Dibersihkan juga: bila kelak pemanggilan createUser-nya dikomentari, penjaga ini
+    // HARUS gagal — bukan lulus karena menemukan namanya di dalam komentar.
+    const isi = tanpaKomentar(readFileSync(join(DIR_TEST, 'ensureAuthUser.ts'), 'utf8'));
 
     expect(POLA_TERLARANG.test(isi), 'ensureAuthUser harus tetap yang memanggil createUser').toBe(true);
     expect(

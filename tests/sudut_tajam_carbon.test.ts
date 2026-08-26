@@ -4,6 +4,7 @@ import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readdirSync, statSync } from 'node:fs';
+import { tanpaKomentar } from './util/tanpaKomentar';
 
 // DS-01 / FF.1 lanjutan (25 Agu 2026) — SUDUT TAJAM CARBON, DIUKUR DARI CSS KELUARAN.
 //
@@ -101,8 +102,13 @@ describe('DS-01 — sudut tajam Carbon dijaga dari CSS yang benar-benar dipancar
   it('kelas sudut bulat yang dikecualikan hanya dipakai di tempat yang memang bulat', () => {
     const berkas = [...berkasTsx(join(AKAR, 'src')), ...berkasTsx(join(AKAR, 'app'))];
     const pemakai: string[] = [];
+    // KOMENTAR DIBUANG LEBIH DULU (AUD-42, 27 Agu 2026). Test ini SENDIRI memuat kalimat
+    // penjelasan yang menyebut `rounded-full` dan `border-radius: 50%` — dan test lain di
+    // proyek ini sudah pernah menuduh berkas yang cuma MENYEBUT nama, bukan memakainya.
+    // Berkas sumber yang menjelaskan kenapa sesuatu TIDAK lagi bulat tidak boleh dihitung
+    // sebagai berkas yang membuatnya bulat.
     for (const f of berkas) {
-      if (/\brounded-full\b/.test(readFileSync(f, 'utf8'))) pemakai.push(f.replace(AKAR + '/', ''));
+      if (/\brounded-full\b/.test(tanpaKomentar(readFileSync(f, 'utf8')))) pemakai.push(f.replace(AKAR + '/', ''));
     }
 
     // Foto profil dan titik hitung notifikasi memang bulat menurut konvensi mana pun.
@@ -116,7 +122,10 @@ describe('DS-01 — sudut tajam Carbon dijaga dari CSS yang benar-benar dipancar
     // melahirkan penjaga ini: memeriksa satu tempat lalu menyimpulkan seluruhnya.
     for (const f of [...berkasTsx(join(AKAR, 'app')), ...berkasTsx(join(AKAR, 'src'))]) {
       if (!/\.scss$/.test(f)) continue;
-      if (/border-radius:\s*(50%|9999px)/.test(readFileSync(f, 'utf8'))) {
+      // SCSS memakai bentuk komentar yang sama dengan JavaScript (// dan /* */), jadi
+      // pembantu yang sama berlaku apa adanya — bukan kebetulan, tapi disebut supaya tidak
+      // dikira berlaku juga untuk .sql (yang memakai `--` dan punya varian sendiri).
+      if (/border-radius:\s*(50%|9999px)/.test(tanpaKomentar(readFileSync(f, 'utf8')))) {
         pemakai.push(f.replace(AKAR + '/', '') + ' (border-radius di SCSS)');
       }
     }

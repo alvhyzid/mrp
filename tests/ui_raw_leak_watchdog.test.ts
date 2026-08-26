@@ -1,5 +1,6 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { readFileSync, readdirSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'fs';
+import { tanpaKomentar } from './util/tanpaKomentar';
 import { join, relative } from 'path';
 
 // Sesi 6 — penutupan (21 Agu 2026), diminta pemilik produk setelah menyadari
@@ -144,16 +145,32 @@ function listPageFiles(root: string): string[] {
 
 function scanFileForRawLeaks(absFile: string, repoRoot: string): Finding[] {
   const relFile = relative(repoRoot, absFile);
-  const lines = readFileSync(absFile, 'utf8').split('\n');
+  const asli = readFileSync(absFile, 'utf8');
+
+  // URUTAN DUA LANGKAH INI PENTING DAN MUDAH TERBALIK, jadi disebut terbuka:
+  //
+  //   1. PENANDA PENGECUALIAN DIBACA DARI TEKS ASLI. Penandanya SENDIRI berupa komentar
+  //      (`penjaga-kebocoran:mulai`), jadi membacanya dari teks yang komentarnya sudah
+  //      dibuang akan menghapus seluruh pengecualian sekaligus — penjaga langsung menuduh
+  //      setiap baris yang selama ini sah.
+  //   2. PENYISIRAN dilakukan pada teks yang komentarnya SUDAH dibuang, lewat pembantu
+  //      bersama tests/util/tanpaKomentar.ts.
+  //
+  // Sebelum 27 Agu 2026 berkas ini membuang komentar dengan caranya sendiri:
+  // `trimmed.startsWith('//')`. Itu hanya menutup komentar yang berdiri di AWAL baris, dan
+  // membiarkan dua bentuk lain lolos: komentar yang MENEMPEL di ujung baris kode, dan baris
+  // tengah blok /* ... */ yang tidak diawali bintang. Keduanya persis bentuk yang sudah
+  // lima kali membuat penjaga di proyek ini salah tuduh.
+  const lines = asli.split('\n');
   const dikecualikan = barisDikecualikan(relFile, lines);
+  const barisBersih = tanpaKomentar(asli).split('\n');
   const findings: Finding[] = [];
 
-  lines.forEach((line, idx) => {
+  barisBersih.forEach((line, idx) => {
     const lineNo = idx + 1;
     if (dikecualikan.has(lineNo)) return;
 
     const trimmed = line.trim();
-    if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return;
     if (trimmed.startsWith('import ')) return;
     if (/\.(from|select|eq|order|rpc|insert|update|delete|upsert)\(/.test(line)) return;
     if (/^return \{/.test(trimmed)) return; // objek JS biasa, bukan JSX

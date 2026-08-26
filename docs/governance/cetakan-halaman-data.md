@@ -339,6 +339,40 @@ alurnya bercabang. Formulir yang urutannya tetap — sepanjang apa pun — cukup
 **Komponennya sudah ada di paket terpasang**: `ProgressIndicator` di `@carbon/react`.
 Jangan merakit penanda langkah sendiri.
 
+### 6e-3. ISI MODAL YANG MELEWATI BATAS GULIR MENELAN KLIK PERTAMA (ditetapkan 26 Agu 2026)
+
+**Ini bukan soal kerapian. Tombol yang berada tepat di batas gulir modal TIDAK BEKERJA pada
+klik pertama.**
+
+Terukur langsung di peramban, pada tombol "Simpan produk" di dalam panel tambah-produk:
+
+```
+[NATIVE] mousedown  -> terjadi
+[GESER]  saat mousedown  y=563  scrollTop=121
+[GULIR]  scrollTop=205                      <- isi modal MENGGULIR SENDIRI
+[GESER]  50 ms sesudah   y=479  scrollTop=205   <- tombolnya pindah 84px
+[NATIVE] mouseup   -> TIDAK PERNAH terjadi
+[NATIVE] click     -> TIDAK PERNAH terjadi
+```
+
+**Mekanismenya**: tombol yang belum sepenuhnya tampak menerima fokus saat ditekan, peramban
+menggulirkannya ke tampak, dan `mouseup` mendarat di tempat yang sudah bergeser — sehingga
+peristiwa `click` **tidak pernah terbentuk**. Gejala yang dilihat pengguna: **klik pertama
+tidak melakukan apa-apa, klik kedua baru bekerja.**
+
+**Kenapa ini berbahaya melebihi cacat tampilan biasa**: tidak ada galat, tidak ada pesan, dan
+kodenya benar. Pemeriksaan yang menekan tombol satu kali akan melaporkan **fiturnya rusak**;
+pemeriksaan yang kebetulan menekan dua kali akan melaporkan **fiturnya baik-baik saja**. Dua
+kesimpulan berlawanan dari kode yang sama.
+
+**ATURAN**: panel yang muncul di dalam modal (tambah-produk, tambah-klien, dan sejenisnya)
+**tidak boleh menambah tinggi** sampai isinya melewati batas gulir. Bila ia panjang,
+**sembunyikan isi yang sedang tidak dipakai** — di PO klien, daftar baris item disembunyikan
+selagi panel produk baru terbuka. Sesudah itu `scrollTop` tetap **0** dan klik pertama bekerja.
+
+**CARA MEMERIKSANYA**, karena mata tidak bisa: pasang pendengar `mousedown`/`mouseup`/`click`
+pada tombolnya dan bandingkan. Bila `mousedown` ada tetapi `click` tidak, itu cacat ini.
+
 ---
 
 ## 6d. BUKTI VISUAL WAJIB MENCAKUP KEADAAN TERBUKA (ditetapkan 26 Agu 2026, dari DS-14)

@@ -136,6 +136,13 @@
   gap: $spacing-05;
 }
 
+// Dua tombol di kepala bagian: "Produk baru" dan "Tambah baris".
+.po-baris__aksi {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-03;
+}
+
 .po-baris__kepala {
   display: flex;
   flex-wrap: wrap;
@@ -144,6 +151,18 @@
   gap: $spacing-04;
 }
 
+// SATU BARIS ITEM = DUA BARIS ISIAN (keputusan pemilik produk, 26 Agu 2026):
+//   baris 1 : Item        -> lebar penuh
+//   baris 2 : Qty + Harga -> 50 / 50
+//
+// Sebelumnya ketiganya sebaris (2fr 1fr 1fr) dan hasilnya berdesakan: nama item panjang
+// terhimpit, sementara dua kolom angka di sebelahnya justru kelebihan ruang.
+//
+// KENAPA INI TIDAK MELANGGAR "field memenuhi lebar modal": aturan itu melarang MEMBELAH
+// FORMULIR jadi dua kolom untuk memuatkan lebih banyak field. Di sini yang berdampingan
+// adalah dua field ANGKA PENDEK, dan pola form Carbon justru memintanya — "the field widths
+// should reflect the intended length of the content". Kotak Qty selebar 645px akan salah,
+// bukan rapi.
 .po-baris__isi {
   display: grid;
   grid-template-columns: 1fr;
@@ -152,8 +171,17 @@
   background-color: $layer-01;
   border: 1px solid $border-subtle-01;
 
-  @include breakpoint('lg') {
-    grid-template-columns: 2fr 1fr 1fr;
+  // Di bawah 672px tetap satu kolom — aturan responsive proyek: "field form jadi satu kolom
+  // penuh di layar sempit". Dua kotak angka berdampingan di 360px menyisakan ~150px masing-
+  // masing, dan itu di bawah target sentuh yang nyaman.
+  @include breakpoint('md') {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  // Item mengambil kedua kolom: ia baris pertama, sendirian.
+  > .cds--dropdown__wrapper,
+  > .cds--list-box__wrapper {
+    grid-column: 1 / -1;
   }
 
   .cds--btn--danger--tertiary {

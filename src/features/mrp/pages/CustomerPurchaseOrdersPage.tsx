@@ -47,6 +47,16 @@ import { formatCurrency, formatNumberId } from '@/lib/currency';
 const paymentTermsOptions = ['full', 'tempo'];
 const customerTypes = ['company', 'individual'];
 
+// Tipe item — disalin nilainya dari itemValidation.ts di sisi server, yang jadi penentu sah
+// atau tidaknya. Labelnya Bahasa Indonesia karena ini yang dibaca orang, bukan kodenya.
+const TIPE_ITEM: { kode: string; label: string }[] = [
+  { kode: 'raw_material', label: 'Bahan baku' },
+  { kode: 'wip', label: 'Setengah jadi' },
+  { kode: 'finished_good', label: 'Produk jadi' },
+  { kode: 'packaging', label: 'Kemasan' }
+];
+const itemBaruKosong = { item_code: '', name: '', type: 'finished_good', base_uom: '' };
+
 const statusLabels: Record<string, string> = {
   new: 'Baru',
   on_hold: 'Ditunda',
@@ -190,6 +200,13 @@ export default function CustomerPurchaseOrdersPage() {
   const [newCustomer, setNewCustomer] = useState({ name: '', customer_type: 'company', contact_info: '' });
   const [newCustomerStatus, setNewCustomerStatus] = useState<'idle' | 'pending' | 'error'>('idle');
   const [newCustomerMessage, setNewCustomerMessage] = useState('');
+  // PRODUK BARU DARI DALAM MODAL PO — pola yang sama dengan "Klien baru" di langkah 1.
+  // Tanpa ini, orang yang menerima PO berisi produk yang belum terdaftar harus membatalkan
+  // seluruh isian, pergi ke Master Item, lalu mengulang PO-nya dari nol.
+  const [showItemBaru, setShowItemBaru] = useState(false);
+  const [itemBaru, setItemBaru] = useState(itemBaruKosong);
+  const [itemBaruStatus, setItemBaruStatus] = useState<'idle' | 'pending' | 'error'>('idle');
+  const [itemBaruMessage, setItemBaruMessage] = useState('');
 
   // FASE 3 (Carbon "DataTable with toolbar") — form "Buat PO client baru" pindah ke
   // modal toolbar. Customer TETAP sebagai section expand INLINE di dalam modal yang
@@ -307,6 +324,38 @@ export default function CustomerPurchaseOrdersPage() {
     setNewCustomer({ name: '', customer_type: 'company', contact_info: '' });
     await loadCustomers();
     setForm((prev) => ({ ...prev, customer_id: String(body.customer.customer_id) }));
+  };
+
+  const handleCreateItem = async () => {
+    setItemBaruStatus('pending');
+    setItemBaruMessage('');
+    // purchase_uom sengaja tidak diminta di sini: server menyamakannya dengan satuan dasar
+    // bila kosong. Meminta empat field, bukan enam, karena ini jalan pintas — rinciannya
+    // (faktor konversi, masa simpan, biaya standar) dilengkapi nanti di Master Item.
+    const { ok, body } = await authedFetch('/api/items', {
+      method: 'POST',
+      body: JSON.stringify({ ...itemBaru, purchase_uom: itemBaru.base_uom })
+    });
+    if (!ok) {
+      setItemBaruStatus('error');
+      setItemBaruMessage(body.error || 'Gagal membuat produk.');
+      return;
+    }
+    setItemBaruStatus('idle');
+    setItemBaruMessage('');
+    setShowItemBaru(false);
+    setItemBaru(itemBaruKosong);
+    await loadItems();
+    // Langsung dipasang ke baris pertama yang itemnya masih kosong — orang membuat produk
+    // baru justru KARENA sedang mengisi baris itu.
+    const idBaru = String(body.item?.item_id ?? '');
+    if (idBaru) {
+      setForm((prev) => {
+        const indeks = prev.lines.findIndex((l) => !l.item_id);
+        if (indeks === -1) return prev;
+        return { ...prev, lines: prev.lines.map((l, i) => (i === indeks ? { ...l, item_id: idBaru } : l)) };
+      });
+    }
   };
 
   // Dipanggil dari ModalFooter Carbon, bukan dari <form onSubmit>.
@@ -893,11 +942,76 @@ export default function CustomerPurchaseOrdersPage() {
                 <div className="po-baris">
                   <div className="po-baris__kepala">
                     <h3 className="halaman__subjudul halaman__subjudul--rapat">Baris item</h3>
-                    <Button kind="tertiary" size="sm" renderIcon={Add} onClick={addLine}>
-                      Tambah baris
-                    </Button>
+                    <div className="po-baris__aksi">
+                      <Button kind="tertiary" size="sm" onClick={() => setShowItemBaru((v) => !v)}>
+                        {showItemBaru ? 'Kembali ke baris item' : 'Produk baru'}
+                      </Button>
+                      {showItemBaru ? null : (
+                        <Button kind="tertiary" size="sm" renderIcon={Add} onClick={addLine}>
+                          Tambah baris
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                  {form.lines.map((line, index) => (
+
+                  {/* PRODUK BARU tanpa keluar dari modal — pola yang sama dengan "Klien baru".
+                      SATU pintu untuk seluruh baris, bukan satu tombol per baris: yang jarang
+                      terjadi adalah "produknya belum terdaftar", bukan "baris ini butuh produk
+                      sendiri". Empat field saja; rinciannya dilengkapi nanti di Master Item. */}
+                  {showItemBaru ? (
+                    <div className="po-klien-baru">
+                      <TextInput
+                        id="po-item-baru-kode"
+                        size="lg"
+                        labelText="Kode item"
+                        value={itemBaru.item_code}
+                        onChange={(event) => setItemBaru((prev) => ({ ...prev, item_code: event.target.value }))}
+                      />
+                      <TextInput
+                        id="po-item-baru-nama"
+                        size="lg"
+                        labelText="Nama item"
+                        value={itemBaru.name}
+                        onChange={(event) => setItemBaru((prev) => ({ ...prev, name: event.target.value }))}
+                      />
+                      <Dropdown
+                        id="po-item-baru-tipe"
+                        size="lg"
+                        titleText="Tipe"
+                        label="Pilih tipe"
+                        items={TIPE_ITEM}
+                        itemToString={(t: { kode: string; label: string } | null) => (t ? t.label : '')}
+                        selectedItem={TIPE_ITEM.find((t) => t.kode === itemBaru.type) ?? null}
+                        onChange={({ selectedItem }: { selectedItem: { kode: string; label: string } | null }) =>
+                          setItemBaru((prev) => ({ ...prev, type: selectedItem ? selectedItem.kode : 'finished_good' }))
+                        }
+                      />
+                      <TextInput
+                        id="po-item-baru-satuan"
+                        size="lg"
+                        labelText="Satuan dasar"
+                        helperText="Satuan yang dipakai saat dicatat stoknya. Contoh: g, ml, pcs."
+                        value={itemBaru.base_uom}
+                        onChange={(event) => setItemBaru((prev) => ({ ...prev, base_uom: event.target.value }))}
+                      />
+                      <Button kind="tertiary" size="lg" disabled={itemBaruStatus === 'pending'} onClick={handleCreateItem}>
+                        {itemBaruStatus === 'pending' ? 'Menyimpan...' : 'Simpan produk'}
+                      </Button>
+                      {itemBaruMessage ? (
+                        <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal membuat produk" subtitle={itemBaruMessage} />
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {/* Baris item disembunyikan selagi panel "Produk baru" terbuka.
+                      BUKAN kerapian: dengan keduanya tampil sekaligus, isi modal jadi lebih
+                      tinggi daripada modalnya, dan tombol "Simpan produk" berakhir tepat di
+                      batas gulir. Diukur 26 Agu 2026 — saat tombol itu ditekan, isi modal
+                      MENGGULIR SENDIRI 84px karena tombolnya baru menerima fokus, sehingga
+                      mouseup mendarat di tempat yang sudah bergeser dan peristiwa `click`
+                      TIDAK PERNAH TERBENTUK. Gejalanya: klik pertama tidak melakukan apa-apa,
+                      klik kedua baru bekerja.
+                      Dengan panel berdiri sendiri, isinya muat dan gulirannya tidak terjadi. */}
+                  {showItemBaru ? null : form.lines.map((line, index) => (
                     <div key={index} className="po-baris__isi">
                       <Dropdown
                         id={`po-item-${index}`}

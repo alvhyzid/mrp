@@ -136,16 +136,30 @@ describe('DS-02 — layar publik tetap Carbon', () => {
     telusuri(join(AKAR, 'app'));
     telusuri(join(AKAR, 'src'));
 
-    // DUA titik, dan tepat dua:
-    //   (public) -> tujuh layar publik
-    //   (shell)  -> seluruh layar di dalam aplikasi, sejak DS-04
-    // Impor ketiga berarti seseorang menambahkannya per halaman lagi, dan halaman kedelapan
+    // TIGA titik, dan tepat tiga — daftar putih, bukan angka yang wajar bertumbuh:
+    //   (public)     -> tujuh layar publik
+    //   (shell)      -> seluruh layar di dalam aplikasi, sejak DS-04
+    //   surat-jalan  -> halaman CETAK, DITAMBAHKAN 26 Agu 2026
+    //
+    // Impor keempat berarti seseorang menambahkannya per halaman lagi, dan halaman kedelapan
     // akan lupa. Impor di app/(shell)/company/setelan/layout.tsx sudah DICABUT di DS-04 —
     // ia jadi ganda begitu kerangka aplikasi memuat Carbon, dan impor ganda tidak
     // menghasilkan galat sehingga bisa bertahan lama tanpa ada yang menyadarinya.
+    //
+    // KENAPA surat-jalan SAH jadi titik ketiga, dan kenapa ia justru WAJIB ada di sini:
+    // halaman cetak SENGAJA berada di luar kerangka aplikasi — ia dokumen, bukan layar — jadi
+    // ia tidak kebagian CSS dari (shell) maupun (public). Sebelum 26 Agu 2026 ia memuat
+    // CSS-nya sendiri lewat `@carbon/react/index.scss`, dan ITULAH yang MEMBUAT BUILD PRODUKSI
+    // GAGAL: berkas itu memancarkan @font-face ber-awalan `~@ibm/plex/...`, sintaks webpack
+    // yang Turbopack tidak kenal. Deployment gagal dua kali sementara typecheck, seluruh test,
+    // dan `next dev` semuanya hijau.
+    //
+    // Jadi memindahkannya ke berkas bersama BUKAN sekadar kerapian — berkas bersama menyetel
+    // `$css--font-face: false`, dan itu yang membuat build-nya jalan.
     expect(pengimpor.sort()).toEqual([
       'app/(public)/layout.tsx',
-      'app/(shell)/layout.tsx'
+      'app/(shell)/layout.tsx',
+      'app/shipments/[shipmentId]/surat-jalan/layout.tsx'
     ]);
   });
 

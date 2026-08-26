@@ -25,6 +25,10 @@
 @use '@carbon/styles/scss/themes';
 @use '@carbon/styles/scss/theme';
 @use '@carbon/react';
+// Dipakai area notifikasi & kerangka halaman bersama di kaki berkas ini.
+// Token jarak dan token tipografi, bukan angka px.
+@use '@carbon/react/scss/spacing';
+@use '@carbon/react/scss/type';
 
 // Tema dipancarkan EKSPLISIT lewat mixin resmi Carbon, bukan lewat `with ($theme:)`.
 // Percobaan ketiga memakai `with` dan hasilnya token :root tetap putih (#ffffff),
@@ -128,4 +132,330 @@ $area-sentuh-minimum: 2.75rem; // 44px
 // Butir halaman sekarang tetap berwarna teks utama -- ia menandai POSISI, bukan tujuan.
 .cds--breadcrumb-item--current > span.cds--link {
   color: var(--cds-text-primary);
+}
+
+// ============================================================================
+// AREA NOTIFIKASI — kanan atas, di bawah header (25 Agu 2026)
+// ============================================================================
+// Carbon TIDAK menetapkan posisi toast: `_toast-notification.scss` punya nol aturan
+// `position`. Jadi penempatannya keputusan kita, dan keputusan itu hidup di SATU tempat ini
+// supaya tiap halaman tidak memilih sudutnya sendiri-sendiri.
+//
+// Jaraknya dari atas mengikuti tinggi header kerangka aplikasi. Layar PUBLIK tidak punya
+// header itu; bila kelak mereka memakai area ini, variabel di bawah WAJIB disetel ulang
+// ke 0 di stylesheet layar publik.
+:root {
+  --fabrix-offset-notifikasi: 3rem;
+}
+
+.area-notifikasi {
+  position: fixed;
+  inset-block-start: var(--fabrix-offset-notifikasi);
+  inset-inline-end: 0;
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-03;
+  padding: spacing.$spacing-05;
+  // Wadahnya TIDAK boleh menangkap klik — tanpa ini, seluruh sudut kanan atas layar jadi
+  // mati meski tidak ada satu pun pesan yang terlihat di sana.
+  pointer-events: none;
+}
+
+.area-notifikasi > * {
+  pointer-events: auto;
+}
+
+// ============================================================================
+// KERANGKA HALAMAN BERSAMA — dipakai SELURUH halaman yang dimigrasikan (25 Agu 2026)
+// ============================================================================
+// KENAPA DI SINI, bukan di stylesheet tiap halaman: penerapan Carbon menyentuh 29 halaman.
+// Bila tiap halaman menyalin kerangkanya sendiri dengan awalan nama sendiri, cetakannya
+// tersalin 29 kali — dan perbaikan berikutnya harus menemukan 29 tempat. Itu persis kelas
+// "dua jalur hidup" yang sudah menggigit proyek ini lewat 88 warna dan 36 pengambil token.
+//
+// Aturannya untuk halaman baru: pakai kelas `halaman-*` di bawah untuk KERANGKA, dan buat
+// kelas sendiri HANYA untuk hal yang khas halaman itu (mis. kolom angka, kartu detail).
+.halaman {
+  padding: spacing.$spacing-06 spacing.$spacing-05 spacing.$spacing-09;
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-05;
+}
+
+// Remah roti menggantikan baris hiasan huruf kapital yang dulu dipakai tiap halaman: ia
+// memberi tahu POSISI dan menyediakan jalan kembali.
+.halaman__remah {
+  margin-block-end: spacing.$spacing-03;
+}
+
+// Tingkat yang BUKAN halaman tidak boleh tampak seperti tautan.
+//
+// Carbon menempelkan kelas `cds--link` ke SETIAP butir remah roti, termasuk yang tidak punya
+// alamat — sehingga nama kelompok menu tampil biru dan terlihat bisa diklik. Tautan yang
+// diklik lalu tidak melakukan apa-apa membuat orang mengira sistemnya rusak.
+.halaman__remah-mati {
+  color: theme.$text-secondary;
+  cursor: default;
+}
+
+.halaman__judul {
+  @include type.type-style('productive-heading-04');
+  margin-block-end: spacing.$spacing-02;
+}
+
+.halaman__pengantar {
+  @include type.type-style('body-01');
+  color: theme.$text-secondary;
+  margin-block-end: spacing.$spacing-05;
+}
+
+// Saringan di toolbar. Lebarnya dibatasi supaya tidak mendorong tombol utama keluar layar,
+// dan menyusut sendiri di layar sempit tanpa media query.
+.halaman__saring {
+  inline-size: min(100%, 14rem);
+}
+
+.halaman__redup {
+  @include type.type-style('body-01');
+  color: theme.$text-secondary;
+}
+
+// ANGKA RINGKASAN (kartu metrik di dashboard).
+// Carbon TIDAK punya komponen "kartu angka" — idiomnya Tile + token tipografi. Ditulis sekali
+// di sini supaya tujuh dashboard tidak memilih ukuran angkanya sendiri-sendiri.
+.kisi-metrik {
+  display: grid;
+  gap: spacing.$spacing-05;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 42rem) {
+  .kisi-metrik {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 66rem) {
+  .kisi-metrik {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.metrik__label {
+  @include type.type-style('label-01');
+  color: theme.$text-secondary;
+  display: block;
+  margin-block-end: spacing.$spacing-03;
+}
+
+.metrik__angka {
+  @include type.type-style('productive-heading-05');
+  display: block;
+}
+
+.metrik__angka--waspada {
+  color: theme.$text-error;
+}
+
+// ============================================================================
+// KARTU KPI — komponen bersama, dipakai halaman KPI dan KPI saya
+// ============================================================================
+.kartu-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-03;
+}
+
+.kartu-kpi__kepala {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: spacing.$spacing-03;
+}
+
+.kartu-kpi__judul {
+  display: flex;
+  align-items: center;
+  gap: spacing.$spacing-02;
+  margin-block-end: 0;
+}
+
+.kartu-kpi__belum-lengkap {
+  @include type.type-style('label-01');
+  color: theme.$support-warning-inverse;
+}
+
+.kartu-kpi__banding {
+  @include type.type-style('label-01');
+  display: flex;
+  flex-wrap: wrap;
+  gap: spacing.$spacing-02 spacing.$spacing-05;
+  color: theme.$text-secondary;
+}
+
+.kartu-kpi__selisih {
+  color: theme.$text-secondary;
+}
+
+.kartu-kpi__selisih--baik {
+  color: theme.$support-success;
+}
+
+.kartu-kpi__selisih--buruk {
+  color: theme.$text-error;
+}
+
+.kartu-kpi__grafik {
+  color: theme.$interactive;
+}
+
+// SUBJUDUL BAGIAN di dalam halaman. SATU nama untuk seluruh sistem.
+//
+// Sempat lahir TIGA nama untuk hal yang sama -- .ai-subjudul, .debug-subjudul, .kpi-subjudul --
+// masing-masing di stylesheet halaman yang berbeda, dan salah satunya bahkan dipakai halaman
+// LAIN yang tidak memuatnya (kebetulan berhasil karena Next menggabungkan CSS jadi satu
+// bundel). Itu persis kelas cacat yang sedang diberantas tugas ini.
+.halaman__subjudul {
+  @include type.type-style('productive-heading-03');
+  margin-block-end: spacing.$spacing-03;
+}
+
+// Aksi merusak didorong berjauhan dari aksi biasa (aturan modal butir 9).
+.tenant-aksi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: spacing.$spacing-03;
+}
+
+.tenant-aksi__keluar {
+  margin-inline-start: auto;
+}
+
+.halaman__subjudul--rapat {
+  margin-block-start: spacing.$spacing-02;
+}
+
+// ============================================================================
+// DEVIASI RESMI — TABEL JADI KARTU BERTUMPUK DI LAYAR SEMPIT
+// ============================================================================
+// Carbon TIDAK melakukan ini: DataTable-nya menggulir menyamping di layar sempit.
+//
+// Aturan proyek melarang gulir menyamping di lebar mana pun, dan alasannya bukan estetika —
+// tabel delapan kolom yang diperkecil sampai muat di HP tetap tidak terbaca, sementara kolom
+// yang terpotong diam-diam sudah jadi cacat berulang di proyek ini (RSP-01, RSP-02).
+//
+// Yang dilakukan: di bawah 42rem, tiap BARIS berubah jadi satu KARTU dengan kolomnya tersusun
+// ke bawah. Nama kolomnya dibawa lewat atribut `data-label` pada tiap sel, jadi informasinya
+// SAMA — hanya penyajiannya yang berubah bentuk.
+//
+// SESI BERIKUTNYA: ini deviasi yang sudah didokumentasikan, bukan kelalaian. Jangan
+// "memperbaikinya" jadi tabel yang menggulir.
+//
+// DIPINDAHKAN KE SINI 26 Agu 2026. Sebelumnya ia hidup di items.scss dengan nama
+// `.item-tabel`, dan akibatnya HANYA Master Item yang barisnya menumpuk jadi kartu di HP —
+// tujuh halaman bertabel lain tetap terpotong. Itu persis kelas "dua jalur hidup": aturan
+// yang benar, diterapkan di satu tempat saja.
+//
+// CARA PAKAI: beri `className="tabel-responsif"` pada <Table>, dan `data-label={judulKolom}`
+// pada TIAP <TableCell>. Tanpa data-label, kartunya kehilangan nama kolomnya.
+@media (max-width: 41.98rem) {
+  .tabel-responsif thead {
+    // Judul kolom pindah ke tiap sel lewat data-label; menyisakan kepala tabel di layar sempit
+    // hanya menampilkan deretan judul tanpa isinya.
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  // SETIAP bagian tabel dijadikan block, termasuk <tbody>.
+  //
+  // Versi pertama hanya mengubah <tr> dan <td>, dan hasilnya BARIS SALING MENINDIH: selama
+  // <tbody> masih `table-row-group`, peramban tetap menata anak-anaknya sebagai baris tabel
+  // dan tinggi tetap bawaan Carbon ikut berlaku. Ditemukan dari MELIHAT tangkapan layarnya —
+  // pengukuran "nol gulir menyamping" tetap hijau padahal barisnya tumpang tindih.
+  .tabel-responsif,
+  .tabel-responsif tbody {
+    display: block;
+    inline-size: 100%;
+  }
+
+  .tabel-responsif tbody tr {
+    display: block;
+    block-size: auto;
+    min-block-size: 0;
+    margin-block-end: spacing.$spacing-05;
+    padding: spacing.$spacing-03 0;
+    background-color: theme.$layer;
+  }
+
+  .tabel-responsif tbody td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: spacing.$spacing-05;
+    inline-size: 100%;
+    max-inline-size: none;
+    block-size: auto;
+    min-block-size: 0;
+    padding-block: spacing.$spacing-03;
+  }
+
+  .tabel-responsif tbody td::before {
+    content: attr(data-label);
+    @include type.type-style('label-01');
+    color: theme.$text-secondary;
+    flex-shrink: 0;
+  }
+
+  // Sel tombol mekar: tetap sebaris, tapi TANPA label — ia bukan kolom data.
+  .tabel-responsif tbody td.cds--table-expand {
+    justify-content: flex-start;
+    padding-block: 0;
+  }
+
+  .tabel-responsif tbody td.cds--table-expand::before {
+    content: none;
+  }
+
+  // Baris detail memakai seluruh lebar dan TIDAK dijadikan kartu — ia isi, bukan ringkasan.
+  .tabel-responsif tbody tr.cds--expandable-row {
+    margin-block-start: calc(-1 * #{spacing.$spacing-05});
+  }
+
+  .tabel-responsif tbody tr.cds--expandable-row td {
+    display: block;
+    padding-inline: spacing.$spacing-05;
+  }
+
+  .tabel-responsif tbody tr.cds--expandable-row td::before {
+    content: none;
+  }
+}
+
+// ============================================================================
+// RANGKA PEMUATAN TABEL TIDAK BOLEH MELUBER (26 Agu 2026)
+// ============================================================================
+// DataTableSkeleton Carbon memakai lebar kolom TETAP. Diukur di 360px: rangkanya selebar
+// 864px, dan halamannya menggulir menyamping 880px — melanggar aturan proyek "tidak boleh
+// ada gulir menyamping di lebar mana pun".
+//
+// Yang penting dari temuan ini: gulirnya HANYA muncul selama memuat, jadi ia lolos dari
+// pemeriksaan yang dilakukan setelah halaman selesai. Sapuan 360px sempat melaporkan
+// DELAPAN halaman bergulir; setelah ditelusuri, penyebabnya satu dan sama.
+//
+// Perbaikannya menyempitkan rangkanya, bukan membuatnya menggulir sendiri: ia cuma
+// penanda "sedang datang", tidak ada informasi yang hilang bila batangnya lebih pendek.
+.cds--skeleton.cds--data-table {
+  inline-size: 100%;
+  max-inline-size: 100%;
+  table-layout: fixed;
+}
+
+.cds--skeleton.cds--data-table th,
+.cds--skeleton.cds--data-table td {
+  overflow: hidden;
 }

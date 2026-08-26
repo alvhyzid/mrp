@@ -1,0 +1,106 @@
+@use '@carbon/react/scss/spacing' as *;
+@use '@carbon/react/scss/theme' as *;
+@use '@carbon/react/scss/type' as *;
+@use '@carbon/react/scss/breakpoint' as *;
+
+// Gaya khas halaman Pembelian. Nol angka px, nol warna heksadesimal.
+
+.beli-tombol-kembali {
+  align-self: flex-start;
+}
+
+.beli-sel-bahan {
+  display: flex;
+  flex-direction: column;
+}
+
+.beli-sel-bahan__kode {
+  @include type-style('body-compact-01');
+  color: $text-primary;
+}
+
+.beli-sel-bahan__alias {
+  @include type-style('label-01');
+  color: $text-secondary;
+}
+
+// AKSI: yang biasa di kiri, yang merusak didorong ke kanan dengan seluruh lebar sel di
+// antaranya — aturan "aksi merusak tidak berdempetan dengan aksi biasa".
+.beli-aksi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-05;
+}
+
+.beli-aksi__biasa {
+  display: flex;
+  align-items: center;
+}
+
+.beli-aksi__merusak {
+  margin-inline-start: auto;
+  padding-inline-start: $spacing-05;
+}
+
+.beli-detail {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+  padding-block: $spacing-03;
+}
+
+.beli-detail__kepala {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-04;
+}
+
+.beli-form {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: $spacing-05;
+
+  @include breakpoint('md') {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.beli-form__lebar-penuh {
+  grid-column: 1 / -1;
+}
+
+.beli-baris {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+  padding-block-start: $spacing-06;
+}
+
+.beli-baris__kepala {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-04;
+}
+
+.beli-baris__isi {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: $spacing-05;
+  padding: $spacing-05;
+  background-color: $layer-01;
+  border: 1px solid $border-subtle-01;
+
+  @include breakpoint('lg') {
+    grid-template-columns: 2fr 1fr 1fr;
+  }
+
+  .cds--btn--danger--tertiary {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+}

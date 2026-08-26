@@ -49,6 +49,29 @@ function tanpaKomentar(s: string): string {
   return s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 }
 
+// Penjaga ini SEBELUMNYA mencari kata "carbon.scss" di mana pun di dalam berkas, termasuk di
+// dalam KOMENTAR. Ia menuduh src/components/ui/notifikasi.tsx mengimpor CSS Carbon padahal
+// berkas itu cuma MENYEBUT nama berkasnya untuk menjelaskan di mana gayanya tinggal.
+//
+// Ini bentuk salah tuduh KEEMPAT dengan pola yang sama persis di proyek ini: penjaga
+// mencocokkan teks tanpa membedakan KODE dari PENJELASAN. Yang sebelumnya: kata "input" di
+// kalimat penjelasan halaman POD, `visiting.delete(...)` yang dikira penulisan ke basis data,
+// dan `value={docForm.doc_type}` pada <CarbonSelect>.
+//
+// Aturan proyek: penjaga yang salah tuduh DIPERKETAT, bukan dibiarkan -- penjaga yang keliru
+// melatih orang mengabaikan hasilnya, dan sejak saat itu ia tidak menjaga apa pun sambil
+// tetap terlihat menjaga.
+//
+// BATASNYA, disebut supaya tidak dikira lebih pintar dari kenyataannya: ini masih pencocokan
+// teks, bukan parser. Ia sekarang membuang komentar lebih dulu dan mensyaratkan bentuk
+// pernyataan impor yang sungguhan -- tidak lebih dari itu.
+function mengimporCarbonCss(isi: string): boolean {
+  const tanpaKomentar = isi
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  return /import\s+['"][^'"]*carbon\.scss['"]/.test(tanpaKomentar);
+}
+
 describe('DS-02 — layar publik tetap Carbon', () => {
   it('setiap layar publik memakai komponen Carbon, bukan komponen bersama lama', () => {
     const melanggar: string[] = [];
@@ -105,7 +128,7 @@ describe('DS-02 — layar publik tetap Carbon', () => {
         if (nama === 'node_modules' || nama === '.next' || nama.startsWith('.')) continue;
         const p = join(dir, nama);
         if (statSync(p).isDirectory()) telusuri(p);
-        else if (/\.tsx$/.test(nama) && readFileSync(p, 'utf8').includes("carbon.scss")) {
+        else if (/\.tsx$/.test(nama) && mengimporCarbonCss(readFileSync(p, 'utf8'))) {
           pengimpor.push(p.replace(AKAR + '/', ''));
         }
       }

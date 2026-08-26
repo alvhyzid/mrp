@@ -1,35 +1,64 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import type { ColumnDef } from '@tanstack/react-table';
 import { DndContext, DragOverlay, useDraggable, useDroppable, useSensor, useSensors, PointerSensor, pointerWithin } from '@dnd-kit/core';
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { DataTable } from '@/components/ui/data-table';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Button,
+  ComposedModal,
+  DataTable,
+  DataTableSkeleton,
+  ContentSwitcher,
+  Dropdown,
+  InlineNotification,
+  ModalBody,
+  ModalFooter,
+  ModalHeader,
+  NumberInput,
+  Switch,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableToolbar,
+  TableToolbarContent,
+  TableToolbarSearch,
+  Tag,
+  TextInput
+} from '@carbon/react';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
+
+// DASHBOARD PPIC — dimigrasikan ke Carbon 26 Agu 2026 (DS-09), cetakan Master Item.
+//
+// PENGECUALIAN YANG DISEBUT TERBUKA: papan Gantt di halaman ini tetap memakai <table>
+// biasa, BUKAN Table Carbon. Alasannya bukan kelalaian — Gantt-nya memakai `table-fixed`
+// dengan lebar kolom yang dihitung per hari dan sel yang bisa dijatuhi (drag & drop).
+// Carbon tidak punya komponen Gantt, dan Table Carbon membawa aturan tinggi baris serta
+// padding yang justru merusak kisi waktunya. Yang lain di halaman ini memakai Carbon.
 import { canAccessPpicDashboard, canManageWorkCenterCapacity, canManageWorkOrder, canRecordStepProgress, canProposeProductionStandard, canDecideProductionStandardProposal } from '@/lib/roles';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 import { formatNumberId } from '@/lib/currency';
 
 const statusLabels: Record<string, string> = { planned: 'Direncanakan', in_progress: 'Berjalan', paused: 'Dijeda', completed: 'Selesai', cancelled: 'Batal' };
-const statusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical' | 'secondary'> = {
-  planned: 'info',
-  in_progress: 'warning',
-  paused: 'secondary',
-  completed: 'success',
-  cancelled: 'critical'
+/// Warna Tag mengikuti ARTI. "Berjalan" ungu, bukan kuning: pekerjaan yang sedang jalan
+/// bukan peringatan. Hanya "dibatalkan" dan "terhambat" yang merah.
+const statusWarnaTag: Record<string, 'blue' | 'purple' | 'gray' | 'green' | 'red'> = {
+  planned: 'blue',
+  in_progress: 'purple',
+  paused: 'gray',
+  completed: 'green',
+  cancelled: 'red'
 };
 const readinessLabels: Record<string, string> = { ready: 'Siap Mulai', blocked: 'Terhambat' };
-const readinessBadgeVariant: Record<string, 'success' | 'critical'> = { ready: 'success', blocked: 'critical' };
+const readinessWarnaTag: Record<string, 'green' | 'red'> = { ready: 'green', blocked: 'red' };
 const bomStatusLabels: Record<string, string> = { draft: 'Draft', active: 'Aktif', archived: 'Diarsipkan' };
-const bomStatusBadgeVariant: Record<string, 'warning' | 'success' | 'secondary'> = { draft: 'warning', active: 'success', archived: 'secondary' };
+const bomStatusWarnaTag: Record<string, 'purple' | 'green' | 'cool-gray'> = { draft: 'purple', active: 'green', archived: 'cool-gray' };
 
 type PendingApproval = { customer_po_approval_id: number; customer_purchase_order_id: number; po_number: string; po_date: string | null; requested_ship_date: string | null; customer_name: string | null };
 type WorkOrder = { work_order_id: number; item_code: string | null; planned_qty: number; item_base_uom: string | null; status: string; readiness: string; open_alert_count: number; so_number: string | null };
@@ -46,10 +75,16 @@ type WorkCenterCapacity = {
   utilization_pct: number | null;
 };
 
-function utilizationBadgeVariant(pct: number): 'success' | 'warning' | 'critical' {
-  if (pct > 100) return 'critical';
-  if (pct >= 80) return 'warning';
-  return 'success';
+/// Warna Tag pemakaian kapasitas. Hijau = masih lega, magenta = mulai padat, merah = lewat
+/// kapasitas.
+///
+/// AMBANGNYA TIDAK DIUBAH: >100% merah, >=80% magenta. Angka 80 adalah ambang BISNIS yang
+/// sudah dipakai sebelum migrasi ini — bukan pilihan gaya, jadi tidak boleh digeser sambil
+/// mengganti warna.
+function utilizationWarnaTag(pct: number): 'green' | 'magenta' | 'red' {
+  if (pct > 100) return 'red';
+  if (pct >= 80) return 'magenta';
+  return 'green';
 }
 
 type GanttWorkCenter = { work_center_id: number; name: string; code: string | null; capacity_hours_per_day: number | null };
@@ -289,6 +324,10 @@ export default function PpicDashboardPage() {
   const [approvalsError, setApprovalsError] = useState('');
   const [approvalsLoading, setApprovalsLoading] = useState(true);
   const [approvalBusyId, setApprovalBusyId] = useState<number | null>(null);
+
+  // Pencarian dan saringan Work Order: Carbon DataTable tidak membawanya.
+  const [cariWo, setCariWo] = useState('');
+  const [saringWo, setSaringWo] = useState<string>('semua');
   const [approvalMessage, setApprovalMessage] = useState('');
 
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
@@ -721,52 +760,82 @@ export default function PpicDashboardPage() {
     await loadApprovals();
   };
 
-  const approvalColumns = useMemo<ColumnDef<PendingApproval>[]>(
-    () => [
-      { accessorKey: 'po_number', header: 'No. PO Client' },
-      { accessorKey: 'customer_name', header: 'Client' },
-      { accessorKey: 'requested_ship_date', header: 'Kirim Diminta', cell: ({ row }) => row.original.requested_ship_date ?? '-' },
-      {
-        id: 'actions',
-        header: 'Aksi',
-        cell: ({ row }) => (
-          <div className="flex gap-2">
-            <Button size="sm" disabled={approvalBusyId === row.original.customer_po_approval_id} onClick={() => handleApprove(row.original.customer_po_approval_id, 'approved')}>
-              Approve
-            </Button>
-            <Button size="sm" variant="destructive" disabled={approvalBusyId === row.original.customer_po_approval_id} onClick={() => handleApprove(row.original.customer_po_approval_id, 'rejected')}>
-              Reject
-            </Button>
-          </div>
-        )
-      }
-    ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [approvalBusyId]
+  // ==========================================================================
+  // TABEL — cetakan Master Item. Baris memuat NILAI YANG DITAMPILKAN supaya
+  // pengurutan Carbon mengurut yang dibaca orang, bukan enum mentah.
+  // ==========================================================================
+  const kolomApproval = [
+    { key: 'po_number', header: 'No. PO klien' },
+    { key: 'customer_name', header: 'Klien' },
+    { key: 'requested_ship_date', header: 'Kirim diminta' },
+    { key: 'aksi', header: 'Aksi' }
+  ];
+
+  const barisApproval = useMemo(
+    () =>
+      approvals.map((a) => ({
+        id: String(a.customer_po_approval_id),
+        po_number: a.po_number,
+        customer_name: a.customer_name ?? '',
+        requested_ship_date: a.requested_ship_date ?? '',
+        aksi: ''
+      })),
+    [approvals]
   );
 
-  const woColumns = useMemo<ColumnDef<WorkOrder>[]>(
-    () => [
-      { accessorKey: 'item_code', header: 'Item' },
-      { id: 'so', header: 'SO', cell: ({ row }) => row.original.so_number ?? '-' },
-      { id: 'qty', header: 'Planned Qty', cell: ({ row }) => `${formatNumberId(row.original.planned_qty, 2)} ${row.original.item_base_uom ?? ''}` },
-      { accessorKey: 'status', header: 'Status', cell: ({ row }) => <Badge variant={statusBadgeVariant[row.original.status] ?? 'secondary'}>{statusLabels[row.original.status] ?? row.original.status}</Badge> },
-      {
-        id: 'readiness',
-        header: 'Kesiapan',
-        cell: ({ row }) =>
-          readinessLabels[row.original.readiness] ? (
-            <Badge variant={readinessBadgeVariant[row.original.readiness]}>
-              {readinessLabels[row.original.readiness]}
-              {row.original.open_alert_count > 0 ? ` (${formatNumberId(row.original.open_alert_count, 0)})` : ''}
-            </Badge>
-          ) : (
-            '-'
-          )
-      }
-    ],
-    []
+  const kolomWo = [
+    { key: 'item_code', header: 'Item' },
+    { key: 'so', header: 'SO' },
+    { key: 'qty', header: 'Qty rencana' },
+    { key: 'status', header: 'Status' },
+    { key: 'readiness', header: 'Kesiapan' }
+  ];
+
+  const woTersaring = useMemo(() => {
+    const kata = cariWo.trim().toLowerCase();
+    return workOrders.filter((wo) => {
+      if (saringWo !== 'semua' && wo.status !== saringWo) return false;
+      if (!kata) return true;
+      return `${wo.item_code ?? ''} ${wo.so_number ?? ''}`.toLowerCase().includes(kata);
+    });
+  }, [workOrders, cariWo, saringWo]);
+
+  const barisWo = useMemo(
+    () =>
+      woTersaring.map((wo) => ({
+        id: String(wo.work_order_id),
+        item_code: wo.item_code ?? '',
+        so: wo.so_number ?? '',
+        qty: wo.planned_qty,
+        status: statusLabels[wo.status] ?? wo.status,
+        readiness: readinessLabels[wo.readiness] ?? ''
+      })),
+    [woTersaring]
   );
+
+  const isiSelWo = (wo: WorkOrder, kunci: string) => {
+    switch (kunci) {
+      case 'item_code':
+        return wo.item_code;
+      case 'so':
+        return wo.so_number ?? <span className="halaman__redup">—</span>;
+      case 'qty':
+        return `${formatNumberId(wo.planned_qty, 2)} ${wo.item_base_uom ?? ''}`;
+      case 'status':
+        return <Tag type={statusWarnaTag[wo.status] ?? 'gray'}>{statusLabels[wo.status] ?? wo.status}</Tag>;
+      case 'readiness':
+        return readinessLabels[wo.readiness] ? (
+          <Tag type={readinessWarnaTag[wo.readiness] ?? 'gray'}>
+            {readinessLabels[wo.readiness]}
+            {wo.open_alert_count > 0 ? ` (${formatNumberId(wo.open_alert_count, 0)})` : ''}
+          </Tag>
+        ) : (
+          <span className="halaman__redup">—</span>
+        );
+      default:
+        return null;
+    }
+  };
 
   const ganttBlocksByCell = useMemo(() => {
     const map = new Map<string, GanttBlock[]>();
@@ -821,88 +890,220 @@ export default function PpicDashboardPage() {
     setGanttView('daily');
   };
 
-  const bomColumns = useMemo<ColumnDef<Bom>[]>(
-    () => [
-      { accessorKey: 'parent_item_code', header: 'Item' },
-      { accessorKey: 'version', header: 'Versi', cell: ({ row }) => `v${row.original.version}` },
-      { accessorKey: 'status', header: 'Status', cell: ({ row }) => <Badge variant={bomStatusBadgeVariant[row.original.status] ?? 'secondary'}>{bomStatusLabels[row.original.status] ?? row.original.status}</Badge> },
-      { id: 'yield', header: 'Hasil Standar', cell: ({ row }) => `${formatNumberId(row.original.standard_yield_qty, 2)} ${row.original.standard_yield_uom}` },
-      { id: 'lines', header: 'Jumlah Komponen', cell: ({ row }) => row.original.lines.length }
-    ],
-    []
+
+  const kolomBom = [
+    { key: 'parent_item_code', header: 'Item' },
+    { key: 'version', header: 'Versi' },
+    { key: 'status', header: 'Status' },
+    { key: 'yield', header: 'Hasil standar' },
+    { key: 'lines', header: 'Jumlah komponen' }
+  ];
+
+  const barisBom = useMemo(
+    () =>
+      boms.map((b) => ({
+        id: String(b.bom_id),
+        parent_item_code: b.parent_item_code ?? '',
+        version: b.version,
+        status: bomStatusLabels[b.status] ?? b.status,
+        yield: b.standard_yield_qty,
+        lines: b.lines.length
+      })),
+    [boms]
   );
+
+  const isiSelBom = (b: Bom, kunci: string) => {
+    switch (kunci) {
+      case 'parent_item_code':
+        return b.parent_item_code;
+      case 'version':
+        return `v${b.version}`;
+      case 'status':
+        return <Tag type={bomStatusWarnaTag[b.status] ?? 'gray'}>{bomStatusLabels[b.status] ?? b.status}</Tag>;
+      case 'yield':
+        return `${formatNumberId(b.standard_yield_qty, 2)} ${b.standard_yield_uom}`;
+      case 'lines':
+        return b.lines.length;
+      default:
+        return null;
+    }
+  };
 
   if (checkingAccess) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="px-6 text-center text-sm text-muted-foreground">Memuat...</div>
-      </main>
+      <div className="halaman">
+        <DataTableSkeleton columnCount={5} rowCount={6} showHeader showToolbar />
+      </div>
     );
   }
 
   if (accessDenied) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="max-w-3xl px-6">
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em] text-destructive">Akses Ditolak</CardDescription>
-              <CardTitle className="text-2xl">Dashboard PPIC</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <p className="text-sm text-muted-foreground">Halaman ini khusus company_admin, general_manager, ppic_manager, atau ppic_staff.</p>
-              <Button onClick={() => router.push('/dashboard')} className="w-fit">
-                Kembali ke Dashboard
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+      <div className="halaman">
+        <KepalaHalaman remah={[]} judul="PPIC" />
+        <InlineNotification kind="error" lowContrast hideCloseButton title="Akses ditolak" subtitle="Halaman ini khusus peran yang berwenang atas perencanaan produksi." />
+        <Button className="ppic-tombol-kembali" onClick={() => router.push('/dashboard')}>
+          Kembali ke ringkasan
+        </Button>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-muted/30 py-10">
-      <div className="flex w-full flex-col gap-6 px-6">
-        <div>
-          <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Dashboard Department</p>
-          <h1 className="text-2xl font-semibold text-foreground">PPIC</h1>
-        </div>
+    <div className="halaman">
+      <KepalaHalaman
+        remah={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Planning & APS' }, { label: 'PPIC' }]}
+        judul="PPIC"
+        pengantar={`${approvals.length} PO klien menunggu persetujuan, ${woTersaring.length} Work Order${cariWo.trim() || saringWo !== 'semua' ? ' sesuai saringan' : ''}, ${proposals.length} usulan standar menunggu keputusan.`}
+      />
 
-        <Card>
-          <CardHeader>
-            <CardDescription className="uppercase tracking-[0.2em]">Approval</CardDescription>
-            <CardTitle className="text-xl">PO Client Menunggu Approval PPIC</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            {approvalsError ? <p className="text-sm text-destructive">{approvalsError}</p> : null}
-            {approvalMessage ? <p className="text-sm text-destructive">{approvalMessage}</p> : null}
-            {approvalsLoading ? <p className="text-sm text-muted-foreground">Memuat...</p> : <DataTable columns={approvalColumns} data={approvals} emptyMessage="Tidak ada PO client menunggu approval PPIC." />}
-          </CardContent>
-        </Card>
+      <h2 className="halaman__subjudul">PO klien menunggu persetujuan PPIC</h2>
+      {approvalsError ? <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal memuat" subtitle={approvalsError} /> : null}
+      {approvalMessage ? <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal" subtitle={approvalMessage} /> : null}
+      {approvalsLoading ? (
+        <DataTableSkeleton columnCount={4} rowCount={3} showHeader={false} showToolbar={false} />
+      ) : (
+        <DataTable rows={barisApproval} headers={kolomApproval} isSortable size="lg">
+          {(rp: any) => (
+            <TableContainer {...rp.getTableContainerProps()}>
+              <Table {...rp.getTableProps()} className="tabel-responsif">
+                <TableHead>
+                  <TableRow>
+                    {rp.headers.map((h: any) => {
+                      const { key, ...sisa } = rp.getHeaderProps({ header: h }) as { key?: string };
+                      void key;
+                      return (
+                        <TableHeader key={h.key} {...sisa} isSortable={h.key !== 'aksi'}>
+                          {h.header}
+                        </TableHeader>
+                      );
+                    })}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {rp.rows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={kolomApproval.length}>Tidak ada PO klien menunggu persetujuan PPIC.</TableCell>
+                    </TableRow>
+                  ) : (
+                    rp.rows.map((row: any) => {
+                      const a = approvals.find((x) => String(x.customer_po_approval_id) === row.id);
+                      if (!a) return null;
+                      const { key, ...sisaBaris } = rp.getRowProps({ row }) as { key?: string };
+                      void key;
+                      return (
+                        <TableRow key={row.id} {...sisaBaris}>
+                          <TableCell data-label="No. PO klien">{a.po_number}</TableCell>
+                          <TableCell data-label="Klien">{a.customer_name ?? '—'}</TableCell>
+                          <TableCell data-label="Kirim diminta">{a.requested_ship_date ?? '—'}</TableCell>
+                          <TableCell data-label="Aksi">
+                            <div className="ppic-aksi">
+                              <Button size="sm" disabled={approvalBusyId === a.customer_po_approval_id} onClick={() => handleApprove(a.customer_po_approval_id, 'approved')}>
+                                Setujui
+                              </Button>
+                              {/* Aksi merusak DIPISAH: menolak menghentikan PO, dan tombolnya tidak
+                                  boleh berjarak satu jari dari "Setujui" di layar sentuh. */}
+                              <span className="ppic-aksi__pemisah" />
+                              <Button
+                                kind="danger--tertiary"
+                                size="sm"
+                                disabled={approvalBusyId === a.customer_po_approval_id}
+                                onClick={() => handleApprove(a.customer_po_approval_id, 'rejected')}
+                              >
+                                Tolak
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DataTable>
+      )}
 
-        <Card>
-          <CardHeader>
-            <CardDescription className="uppercase tracking-[0.2em]">Produksi</CardDescription>
-            <CardTitle className="text-xl">Work Order & Status Kesiapan</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {woError ? <p className="text-sm text-destructive">{woError}</p> : null}
-            {woLoading ? <p className="text-sm text-muted-foreground">Memuat...</p> : <DataTable columns={woColumns} data={workOrders} emptyMessage="Belum ada Work Order." />}
-            <div className="mt-3">
-              <Link href="/work-orders" className="text-sm text-muted-foreground underline">
-                Buka halaman Work Order lengkap
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
+      <h2 className="halaman__subjudul">Work Order &amp; status kesiapan</h2>
+      {woError ? <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal memuat Work Order" subtitle={woError} /> : null}
+      {woLoading ? (
+        <DataTableSkeleton columnCount={5} rowCount={5} showHeader showToolbar />
+      ) : (
+        <DataTable rows={barisWo} headers={kolomWo} isSortable size="lg">
+          {(rp: any) => (
+            <TableContainer {...rp.getTableContainerProps()}>
+              <TableToolbar>
+                <TableToolbarContent>
+                  {/* MELIPAT, bukan selalu terbuka — bawaan Carbon, `persistent` tidak dipakai. */}
+                  <TableToolbarSearch
+                    placeholder="Cari kode item atau nomor SO…"
+                    labelText="Cari Work Order"
+                    onChange={(e: React.ChangeEvent<HTMLInputElement> | '') => setCariWo(typeof e === 'string' ? '' : e.target.value)}
+                  />
+                  <Dropdown
+                    id="ppic-saring-wo"
+                    size="lg"
+                    className="halaman__saring"
+                    label="Status"
+                    titleText="Status"
+                    hideLabel
+                    items={['semua', ...Object.keys(statusLabels)]}
+                    itemToString={(v: string) => (v === 'semua' ? 'Semua status' : statusLabels[v] ?? v)}
+                    selectedItem={saringWo}
+                    onChange={({ selectedItem }: { selectedItem: string | null }) => setSaringWo(selectedItem ?? 'semua')}
+                  />
+                </TableToolbarContent>
+              </TableToolbar>
+              <Table {...rp.getTableProps()} className="tabel-responsif">
+                <TableHead>
+                  <TableRow>
+                    {rp.headers.map((h: any) => {
+                      const { key, ...sisa } = rp.getHeaderProps({ header: h }) as { key?: string };
+                      void key;
+                      return (
+                        <TableHeader key={h.key} {...sisa} isSortable>
+                          {h.header}
+                        </TableHeader>
+                      );
+                    })}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {rp.rows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={kolomWo.length}>
+                        {cariWo.trim() || saringWo !== 'semua' ? 'Tidak ada Work Order yang cocok dengan pencarian atau saringan.' : 'Belum ada Work Order.'}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    rp.rows.map((row: any) => {
+                      const wo = workOrders.find((x) => String(x.work_order_id) === row.id);
+                      if (!wo) return null;
+                      const { key, ...sisaBaris } = rp.getRowProps({ row }) as { key?: string };
+                      void key;
+                      return (
+                        <TableRow key={row.id} {...sisaBaris}>
+                          {kolomWo.map((h) => (
+                            <TableCell key={h.key} data-label={h.header}>
+                              {isiSelWo(wo, h.key)}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DataTable>
+      )}
+      <Link href="/work-orders" className="cds--link">
+        Buka halaman Work Order lengkap
+      </Link>
 
-        <Card>
-          <CardHeader>
-            <CardDescription className="uppercase tracking-[0.2em]">K8 — Standar Ber-Asal-Usul</CardDescription>
-            <CardTitle className="text-xl">Usulan Standar Produksi Menunggu Keputusan</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
+      <h2 className="halaman__subjudul">Usulan Standar Produksi Menunggu Keputusan</h2>
             <p className="text-sm text-muted-foreground">
               Sistem mengusulkan pembaruan standar dari sampel batch nyata — TIDAK PERNAH diterapkan otomatis. Sahkan atau tolak di sini; nilai lama tetap dipakai sampai Anda memutuskan.
             </p>
@@ -939,7 +1140,7 @@ export default function PpicDashboardPage() {
                         </td>
                         <td className="px-3 py-1.5 font-medium text-foreground">
                           {formatNumberId(p.proposed_value, 2)}
-                          {p.will_flip_to_dipelajari ? <Badge variant="warning" className="ml-2">akan jadi DIPELAJARI</Badge> : null}
+                          {p.will_flip_to_dipelajari ? <Tag type="purple">akan jadi DIPELAJARI</Tag> : null}
                         </td>
                         <td className="px-3 py-1.5">{p.change_pct === null ? '-' : `${p.change_pct > 0 ? '+' : ''}${formatNumberId(p.change_pct, 2)}%`}</td>
                         <td className="px-3 py-1.5 text-xs text-muted-foreground">
@@ -951,7 +1152,7 @@ export default function PpicDashboardPage() {
                               <Button size="sm" disabled={proposalBusyId === p.production_standard_proposal_id} onClick={() => handleDecideProposal(p.production_standard_proposal_id, 'approved')}>
                                 Sahkan
                               </Button>
-                              <Button size="sm" variant="destructive" disabled={proposalBusyId === p.production_standard_proposal_id} onClick={() => handleDecideProposal(p.production_standard_proposal_id, 'rejected')}>
+                              <Button kind="danger--tertiary" size="sm" disabled={proposalBusyId === p.production_standard_proposal_id} onClick={() => handleDecideProposal(p.production_standard_proposal_id, 'rejected')}>
                                 Tolak
                               </Button>
                             </div>
@@ -965,14 +1166,8 @@ export default function PpicDashboardPage() {
                 </table>
               </div>
             )}
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardDescription className="uppercase tracking-[0.2em]">Perencanaan Kapasitas</CardDescription>
-            <CardTitle className="flex items-center gap-1 text-xl">
-              Kapasitas per Work Center — Minggu Ini
+      <h2 className="halaman__subjudul">Kapasitas per Work Center — Minggu Ini
               <ProvenanceInfoButton
                 label="Kapasitas & Utilisasi Work Center"
                 envelope={{
@@ -980,10 +1175,7 @@ export default function PpicDashboardPage() {
                     'Kapasitas harian (work_centers.capacity_hours_per_day × jumlah unit) × hari kerja/minggu = Kapasitas Minggu Ini. Jam Terjadwal = Σ durasi batch produksi aktif minggu ini di work center itu. Utilisasi = Jam Terjadwal ÷ Kapasitas Minggu Ini × 100%.',
                   inputs: [{ label: 'Hari kerja/minggu', value: String(workingDaysPerWeek) }]
                 }}
-              />
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
+              /></h2>
             <p className="text-sm text-muted-foreground">
               Jam terjadwal dihitung dari batch produksi aktif minggu ini (Senin–Minggu). Kapasitas tersedia = kapasitas per hari × {workingDaysPerWeek} hari kerja/minggu.
             </p>
@@ -1017,26 +1209,43 @@ export default function PpicDashboardPage() {
                         <td className="px-3 py-1.5">
                           {canManageWorkCenterCapacity(role) ? (
                             <div className="flex items-center gap-2">
-                              <Input
-                                type="number"
+                              {/* KAPASITAS adalah SATU isian bermakna: jam per unit × jumlah unit.
+                                  Keduanya berdampingan di bawah satu kelompok, bukan dua field
+                                  berlabel sendiri-sendiri yang kebetulan bersebelahan. */}
+                              <NumberInput
+                                id={`kapasitas-jam-${wc.work_center_id}`}
+                                label="Jam per unit"
+                                hideLabel
                                 min={0}
-                                step="0.5"
-                                placeholder="jam/unit"
-                                className="h-8 w-20"
-                                value={capacityEdits[wc.work_center_id] ?? (wc.capacity_hours_per_day !== null ? String(wc.capacity_hours_per_day) : '')}
-                                onChange={(event) => setCapacityEdits((prev) => ({ ...prev, [wc.work_center_id]: event.target.value }))}
+                                step={0.5}
+                                allowEmpty
+                                hideSteppers
+                                className="ppic-kapasitas-jam"
+                                value={
+                                  (capacityEdits[wc.work_center_id] ?? (wc.capacity_hours_per_day !== null ? String(wc.capacity_hours_per_day) : '')) === ''
+                                    ? ''
+                                    : Number(capacityEdits[wc.work_center_id] ?? wc.capacity_hours_per_day)
+                                }
+                                onChange={(_e: unknown, { value }: { value: number | string }) =>
+                                  setCapacityEdits((prev) => ({ ...prev, [wc.work_center_id]: String(value ?? '') }))
+                                }
                               />
-                              <span className="text-xs text-muted-foreground">×</span>
-                              <Input
-                                type="number"
+                              <span className="halaman__redup">×</span>
+                              <NumberInput
+                                id={`kapasitas-unit-${wc.work_center_id}`}
+                                label="Jumlah unit"
+                                hideLabel
                                 min={1}
-                                step="1"
-                                placeholder="unit"
-                                className="h-8 w-16"
-                                value={unitCountEdits[wc.work_center_id] ?? String(wc.unit_count ?? 1)}
-                                onChange={(event) => setUnitCountEdits((prev) => ({ ...prev, [wc.work_center_id]: event.target.value }))}
+                                step={1}
+                                allowEmpty
+                                hideSteppers
+                                className="ppic-kapasitas-unit"
+                                value={Number(unitCountEdits[wc.work_center_id] ?? wc.unit_count ?? 1)}
+                                onChange={(_e: unknown, { value }: { value: number | string }) =>
+                                  setUnitCountEdits((prev) => ({ ...prev, [wc.work_center_id]: String(value ?? '') }))
+                                }
                               />
-                              <Button size="sm" variant="outline" disabled={capacitySavingId === wc.work_center_id} onClick={() => handleSaveCapacity(wc.work_center_id)}>
+                              <Button kind="tertiary" size="sm" disabled={capacitySavingId === wc.work_center_id} onClick={() => handleSaveCapacity(wc.work_center_id)}>
                                 {capacitySavingId === wc.work_center_id ? '...' : 'Simpan'}
                               </Button>
                             </div>
@@ -1055,7 +1264,7 @@ export default function PpicDashboardPage() {
                             <td className="px-3 py-1.5">{formatNumberId(wc.total_capacity_hours, 2)} jam</td>
                             <td className="px-3 py-1.5">{formatNumberId(wc.scheduled_hours, 2)} jam</td>
                             <td className="px-3 py-1.5">
-                              <Badge variant={utilizationBadgeVariant(wc.utilization_pct ?? 0)}>{formatNumberId(wc.utilization_pct, 2)}%</Badge>
+                              <Tag type={utilizationWarnaTag(wc.utilization_pct ?? 0)}>{formatNumberId(wc.utilization_pct, 2)}%</Tag>
                             </td>
                           </>
                         )}
@@ -1065,73 +1274,68 @@ export default function PpicDashboardPage() {
                 </table>
               </div>
             )}
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardDescription className="uppercase tracking-[0.2em]">Perencanaan Kapasitas</CardDescription>
-            <CardTitle className="text-xl">Gantt Produksi per Work Center</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
+      <h2 className="halaman__subjudul">Gantt Produksi per Work Center</h2>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm text-muted-foreground">
                 Blok = 1 tahap routing per batch. Posisi tanggal dihitung dari waktu aktif + waktu tunggu tahap-tahap sebelumnya (mis. tahap sesudah curing 48 jam baru muncul 2 hari kemudian); lebar blok cuma durasi aktif mesin (waktu tunggu tidak menyibukkan mesin, beda dari posisinya). Klik blok untuk lihat detail.
                 {ganttView === 'weekly' ? ' Seret batch berstatus Direncanakan untuk jadwalkan ulang (tetap di Work Center yang sama) — batch yang sudah berjalan/selesai tidak bisa diseret.' : ''}
               </p>
-              <div className="flex items-center gap-1 border">
-                <Button size="sm" variant={ganttView === 'daily' ? 'default' : 'ghost'} className="rounded-none" onClick={() => setGanttView('daily')}>
-                  Harian
-                </Button>
-                <Button size="sm" variant={ganttView === 'weekly' ? 'default' : 'ghost'} className="rounded-none" onClick={() => setGanttView('weekly')}>
-                  Mingguan
-                </Button>
-                <Button size="sm" variant={ganttView === 'monthly' ? 'default' : 'ghost'} className="rounded-none" onClick={() => setGanttView('monthly')}>
-                  Bulanan
-                </Button>
-              </div>
+              {/* ContentSwitcher, BUKAN tiga tombol yang saling menyalakan. Carbon memakai
+                  ContentSwitcher persis untuk ini: memilih SATU dari beberapa TAMPILAN atas
+                  data yang sama — bukan menyaring, bukan menavigasi. */}
+              <ContentSwitcher
+                selectedIndex={ganttView === 'daily' ? 0 : ganttView === 'weekly' ? 1 : 2}
+                onChange={({ index }: { index?: number }) => setGanttView(index === 0 ? 'daily' : index === 1 ? 'weekly' : 'monthly')}
+                size="md"
+                className="ppic-pemilih-tampilan"
+              >
+                <Switch name="daily" text="Harian" />
+                <Switch name="weekly" text="Mingguan" />
+                <Switch name="monthly" text="Bulanan" />
+              </ContentSwitcher>
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-2">
               {ganttView === 'weekly' ? (
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setGanttWeekOffset((prev) => prev - 1)}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button kind="tertiary" size="sm" onClick={() => setGanttWeekOffset((prev) => prev - 1)}>
                     ← Minggu Sebelumnya
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => setGanttWeekOffset(0)} disabled={ganttWeekOffset === 0}>
+                  <Button kind="tertiary" size="sm" onClick={() => setGanttWeekOffset(0)} disabled={ganttWeekOffset === 0}>
                     Minggu Ini
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => setGanttWeekOffset((prev) => prev + 1)}>
+                  <Button kind="tertiary" size="sm" onClick={() => setGanttWeekOffset((prev) => prev + 1)}>
                     Minggu Berikutnya →
                   </Button>
                 </div>
               ) : ganttView === 'daily' ? (
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" onClick={() => handleShiftDailyDate(-1)}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button kind="tertiary" size="sm" onClick={() => handleShiftDailyDate(-1)}>
                     ← Hari Sebelumnya
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => setGanttDailyDate(dateToDateString(new Date()))} disabled={ganttDailyDate === dateToDateString(new Date())}>
+                  <Button kind="tertiary" size="sm" onClick={() => setGanttDailyDate(dateToDateString(new Date()))} disabled={ganttDailyDate === dateToDateString(new Date())}>
                     Hari Ini
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => handleShiftDailyDate(1)}>
+                  <Button kind="tertiary" size="sm" onClick={() => handleShiftDailyDate(1)}>
                     Hari Berikutnya →
                   </Button>
                   <span className="text-sm font-medium text-foreground">{ganttDailyDate}</span>
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" onClick={() => handleShiftMonth(-1)}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button kind="tertiary" size="sm" onClick={() => handleShiftMonth(-1)}>
                     ← Bulan Sebelumnya
                   </Button>
                   <Button
                     size="sm"
-                    variant="outline"
+                    kind="tertiary"
                     onClick={() => { const now = new Date(); setGanttMonth({ year: now.getFullYear(), month: now.getMonth() + 1 }); }}
                     disabled={(() => { const now = new Date(); return ganttMonth.year === now.getFullYear() && ganttMonth.month === now.getMonth() + 1; })()}
                   >
                     Bulan Ini
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => handleShiftMonth(1)}>
+                  <Button kind="tertiary" size="sm" onClick={() => handleShiftMonth(1)}>
                     Bulan Berikutnya →
                   </Button>
                   <span className="text-sm font-medium text-foreground">
@@ -1298,11 +1502,11 @@ export default function PpicDashboardPage() {
                               );
                             }
                             const capacityMinutes = wc.capacity_hours_per_day ? wc.capacity_hours_per_day * 60 : null;
-                            const variant = capacityMinutes ? utilizationBadgeVariant((entry.active_minutes / capacityMinutes) * 100) : 'secondary';
+                            const warnaTag = capacityMinutes ? utilizationWarnaTag((entry.active_minutes / capacityMinutes) * 100) : 'gray';
                             return (
                               <td key={day} className="px-1 py-2 text-center">
                                 <button type="button" onClick={() => handleGoToDaily(day)} title={`${formatNumberId(entry.batch_count, 0)} batch · ${formatNumberId(Math.round(entry.active_minutes), 0)} mnt aktif — klik untuk detail Harian`}>
-                                  <Badge variant={variant}>{formatNumberId(entry.batch_count, 0)}</Badge>
+                                  <Tag type={warnaTag}>{formatNumberId(entry.batch_count, 0)}</Tag>
                                 </button>
                               </td>
                             );
@@ -1314,32 +1518,71 @@ export default function PpicDashboardPage() {
                 </div>
               </>
             )}
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardDescription className="uppercase tracking-[0.2em]">Resep</CardDescription>
-            <CardTitle className="text-xl">BOM</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {bomsError ? <p className="text-sm text-destructive">{bomsError}</p> : null}
-            {bomsLoading ? <p className="text-sm text-muted-foreground">Memuat...</p> : <DataTable columns={bomColumns} data={boms} emptyMessage="Belum ada BOM." />}
+      <h2 className="halaman__subjudul">BOM</h2>
+      {bomsError ? <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal memuat BOM" subtitle={bomsError} /> : null}
+      {bomsLoading ? (
+        <DataTableSkeleton columnCount={5} rowCount={4} showHeader={false} showToolbar={false} />
+      ) : (
+        <DataTable rows={barisBom} headers={kolomBom} isSortable size="lg">
+          {(rp: any) => (
+            <TableContainer {...rp.getTableContainerProps()}>
+              <Table {...rp.getTableProps()} className="tabel-responsif">
+                <TableHead>
+                  <TableRow>
+                    {rp.headers.map((h: any) => {
+                      const { key, ...sisa } = rp.getHeaderProps({ header: h }) as { key?: string };
+                      void key;
+                      return (
+                        <TableHeader key={h.key} {...sisa} isSortable>
+                          {h.header}
+                        </TableHeader>
+                      );
+                    })}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {rp.rows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={kolomBom.length}>Belum ada BOM.</TableCell>
+                    </TableRow>
+                  ) : (
+                    rp.rows.map((row: any) => {
+                      const b = boms.find((x) => String(x.bom_id) === row.id);
+                      if (!b) return null;
+                      const { key, ...sisaBaris } = rp.getRowProps({ row }) as { key?: string };
+                      void key;
+                      return (
+                        <TableRow key={row.id} {...sisaBaris}>
+                          {kolomBom.map((h) => (
+                            <TableCell key={h.key} data-label={h.header}>
+                              {isiSelBom(b, h.key)}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DataTable>
+      )}
             <div className="mt-3">
-              <Link href="/boms" className="text-sm text-muted-foreground underline">
+              <Link href="/boms" className="cds--link">
                 Buka halaman BOM lengkap
               </Link>
             </div>
-          </CardContent>
-        </Card>
-      </div>
 
-      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>{blockDetail ? `${blockDetail.batch.batch_number} — ${blockDetail.step.step_name}` : 'Detail Tahap Produksi'}</DialogTitle>
-            <DialogDescription>{blockDetail?.item ? (blockDetail.item.item_code ?? blockDetail.item.item_name) : ''}</DialogDescription>
-          </DialogHeader>
+      {/* MODAL BERTAHAP: progres tahap dicatat dan disimpan dari dalam modal ini. */}
+      <ComposedModal open={detailOpen} size="md" onClose={() => { setDetailOpen(false); return true; }}>
+        <ModalHeader
+          label={blockDetail?.item ? blockDetail.item.item_code ?? blockDetail.item.item_name ?? 'Batch' : 'Batch'}
+          title={blockDetail ? `${blockDetail.batch.batch_number} — ${blockDetail.step.step_name}` : 'Detail tahap produksi'}
+          closeModal={() => setDetailOpen(false)}
+        />
+        <ModalBody hasForm>
 
           {blockDetailLoading ? <p className="text-sm text-muted-foreground">Memuat detail...</p> : null}
           {blockDetailError ? <p className="text-sm text-destructive">{blockDetailError}</p> : null}
@@ -1386,7 +1629,7 @@ export default function PpicDashboardPage() {
 
                 <div className="text-xs uppercase tracking-wide text-muted-foreground">Status Batch</div>
                 <div className="text-right">
-                  <Badge variant={statusBadgeVariant[blockDetail.batch.status] ?? 'secondary'}>{statusLabels[blockDetail.batch.status] ?? blockDetail.batch.status}</Badge>
+                  <Tag type={statusWarnaTag[blockDetail.batch.status] ?? 'gray'}>{statusLabels[blockDetail.batch.status] ?? blockDetail.batch.status}</Tag>
                 </div>
               </div>
 
@@ -1412,7 +1655,7 @@ export default function PpicDashboardPage() {
               <div>
                 <div className="mb-2 flex items-center justify-between">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Progres Tercatat</p>
-                  <Button size="sm" variant="outline" onClick={handleOpenYieldSummary}>
+                  <Button kind="tertiary" size="sm" onClick={handleOpenYieldSummary}>
                     Ringkasan Yield Batch
                   </Button>
                 </div>
@@ -1448,53 +1691,87 @@ export default function PpicDashboardPage() {
                       ({progressSuggestion.source === 'previous_step' ? 'dari output tahap sebelumnya' : 'dari planned_qty batch — tahap pertama/belum ada data sebelumnya'}) — bisa diubah.
                     </p>
                   ) : null}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="col-span-2">
-                      <label className="mb-1 block text-xs text-muted-foreground">Status</label>
-                      <Select value={progressForm.status} onValueChange={(v) => setProgressForm((prev) => ({ ...prev, status: v }))}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="pending">Belum Mulai</SelectItem>
-                          <SelectItem value="in_progress">Berjalan</SelectItem>
-                          <SelectItem value="completed">Selesai</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs text-muted-foreground">Jumlah Masuk (Input)</label>
-                      <Input type="number" step="any" value={progressForm.qty_input} onChange={(e) => setProgressForm((prev) => ({ ...prev, qty_input: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs text-muted-foreground">Satuan Masuk</label>
-                      <Input value={progressForm.uom_input} onChange={(e) => setProgressForm((prev) => ({ ...prev, uom_input: e.target.value }))} placeholder="mis. kg" />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs text-muted-foreground">Jumlah Keluar (Output)</label>
-                      <Input type="number" step="any" value={progressForm.qty_recorded} onChange={(e) => setProgressForm((prev) => ({ ...prev, qty_recorded: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs text-muted-foreground">Satuan Keluar</label>
-                      <Input value={progressForm.uom} onChange={(e) => setProgressForm((prev) => ({ ...prev, uom: e.target.value }))} placeholder="mis. kg" />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs text-muted-foreground">Tanggal Kejadian</label>
-                      <Input type="date" value={progressForm.record_date} onChange={(e) => setProgressForm((prev) => ({ ...prev, record_date: e.target.value }))} />
-                      <span className="text-xs text-muted-foreground">Kapan tahap ini SEBENARNYA terjadi — boleh mundur (mis. mencatat hari ini untuk kejadian kemarin), tidak boleh maju.</span>
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs text-muted-foreground">Jumlah Reject (opsional)</label>
-                      <Input type="number" step="any" min="0" value={progressForm.qty_reject} onChange={(e) => setProgressForm((prev) => ({ ...prev, qty_reject: e.target.value }))} placeholder="mis. 125" />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="mb-1 block text-xs text-muted-foreground">Alasan Reject (opsional)</label>
-                      <Input value={progressForm.reject_reason} onChange={(e) => setProgressForm((prev) => ({ ...prev, reject_reason: e.target.value }))} placeholder="mis. sachet bocor" />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="mb-1 block text-xs text-muted-foreground">Catatan (opsional)</label>
-                      <Input value={progressForm.notes} onChange={(e) => setProgressForm((prev) => ({ ...prev, notes: e.target.value }))} />
-                    </div>
+                  <div className="ppic-form">
+                    <Dropdown
+                      id="ppic-progres-status"
+                      size="lg"
+                      className="ppic-form__lebar-penuh"
+                      titleText="Status"
+                      label="Pilih status"
+                      items={['pending', 'in_progress', 'completed']}
+                      itemToString={(v: string) => (v === 'pending' ? 'Belum mulai' : v === 'in_progress' ? 'Berjalan' : 'Selesai')}
+                      selectedItem={progressForm.status}
+                      onChange={({ selectedItem }: { selectedItem: string | null }) => setProgressForm((prev) => ({ ...prev, status: selectedItem ?? 'pending' }))}
+                    />
+                    {/* JUMLAH dan SATUAN adalah SATU isian bermakna, jadi berdampingan di
+                        bawah satu kelompok — bukan dua field berlabel sendiri-sendiri. */}
+                    <NumberInput
+                      id="ppic-qty-input"
+                      label="Jumlah masuk (input)"
+                      allowEmpty
+                      hideSteppers
+                      value={progressForm.qty_input === '' ? '' : Number(progressForm.qty_input)}
+                      onChange={(_e: unknown, { value }: { value: number | string }) => setProgressForm((prev) => ({ ...prev, qty_input: String(value ?? '') }))}
+                    />
+                    <TextInput
+                      id="ppic-uom-input"
+                      size="lg"
+                      labelText="Satuan masuk"
+                      placeholder="mis. kg"
+                      value={progressForm.uom_input}
+                      onChange={(e) => setProgressForm((prev) => ({ ...prev, uom_input: e.target.value }))}
+                    />
+                    <NumberInput
+                      id="ppic-qty-output"
+                      label="Jumlah keluar (output)"
+                      allowEmpty
+                      hideSteppers
+                      value={progressForm.qty_recorded === '' ? '' : Number(progressForm.qty_recorded)}
+                      onChange={(_e: unknown, { value }: { value: number | string }) => setProgressForm((prev) => ({ ...prev, qty_recorded: String(value ?? '') }))}
+                    />
+                    <TextInput
+                      id="ppic-uom-output"
+                      size="lg"
+                      labelText="Satuan keluar"
+                      placeholder="mis. kg"
+                      value={progressForm.uom}
+                      onChange={(e) => setProgressForm((prev) => ({ ...prev, uom: e.target.value }))}
+                    />
+                    <TextInput
+                      id="ppic-tanggal"
+                      size="lg"
+                      type="date"
+                      labelText="Tanggal kejadian"
+                      helperText="Kapan tahap ini SEBENARNYA terjadi — boleh mundur, tidak boleh maju."
+                      value={progressForm.record_date}
+                      onChange={(e) => setProgressForm((prev) => ({ ...prev, record_date: e.target.value }))}
+                    />
+                    <NumberInput
+                      id="ppic-reject"
+                      label="Jumlah reject (opsional)"
+                      min={0}
+                      allowEmpty
+                      hideSteppers
+                      value={progressForm.qty_reject === '' ? '' : Number(progressForm.qty_reject)}
+                      onChange={(_e: unknown, { value }: { value: number | string }) => setProgressForm((prev) => ({ ...prev, qty_reject: String(value ?? '') }))}
+                    />
+                    <TextInput
+                      id="ppic-alasan-reject"
+                      size="lg"
+                      className="ppic-form__lebar-penuh"
+                      labelText="Alasan reject (opsional)"
+                      placeholder="mis. sachet bocor"
+                      value={progressForm.reject_reason}
+                      onChange={(e) => setProgressForm((prev) => ({ ...prev, reject_reason: e.target.value }))}
+                    />
+                    <TextInput
+                      id="ppic-catatan"
+                      size="lg"
+                      className="ppic-form__lebar-penuh"
+                      labelText="Catatan (opsional)"
+                      value={progressForm.notes}
+                      onChange={(e) => setProgressForm((prev) => ({ ...prev, notes: e.target.value }))}
+                    />
                   </div>
                   {progressFormMessage ? <p className={`mt-2 text-sm ${progressFormStatus === 'error' ? 'text-destructive' : 'text-success'}`}>{progressFormMessage}</p> : null}
                   <Button size="sm" className="mt-2" disabled={progressFormStatus === 'saving'} onClick={handleSubmitProgress}>
@@ -1504,15 +1781,17 @@ export default function PpicDashboardPage() {
               ) : null}
             </div>
           ) : null}
-        </DialogContent>
-      </Dialog>
+        </ModalBody>
+      </ComposedModal>
 
-      <Dialog open={yieldOpen} onOpenChange={setYieldOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Ringkasan Yield {yieldSummary ? `— ${yieldSummary.batch_number}` : 'Batch'}</DialogTitle>
-            <DialogDescription>Input → output → % susut tiap tahap, dan total yield keseluruhan batch.</DialogDescription>
-          </DialogHeader>
+      {/* MODAL PASIF: hanya memberi tahu, tidak ada keputusan yang diambil di dalamnya. */}
+      <ComposedModal open={yieldOpen} size="md" onClose={() => { setYieldOpen(false); return true; }}>
+        <ModalHeader
+          label="Input → output → susut per tahap"
+          title={`Ringkasan yield ${yieldSummary ? `— ${yieldSummary.batch_number}` : 'batch'}`}
+          closeModal={() => setYieldOpen(false)}
+        />
+        <ModalBody>
           {yieldLoading ? <p className="text-sm text-muted-foreground">Memuat ringkasan yield...</p> : null}
           {yieldError ? <p className="text-sm text-destructive">{yieldError}</p> : null}
           {yieldSummary && !yieldLoading ? (
@@ -1595,7 +1874,7 @@ export default function PpicDashboardPage() {
                   <p className="mb-2 text-xs text-muted-foreground">
                     K8 — kalau batch ini SUDAH selesai semua tahapnya, ajukan datanya sebagai sampel belajar standar produksi (yield, unit/batch, durasi tiap tahap). Batch dengan log tahap belum lengkap otomatis DIKECUALIKAN (dilaporkan, bukan dilewati diam-diam).
                   </p>
-                  <Button size="sm" variant="outline" disabled={learnStatus === 'pending'} onClick={handleLearnFromBatch}>
+                  <Button kind="tertiary" size="sm" disabled={learnStatus === 'pending'} onClick={handleLearnFromBatch}>
                     {learnStatus === 'pending' ? 'Memproses...' : 'Ajukan sebagai Sampel Standar'}
                   </Button>
                   {learnMessage ? <p className={`mt-2 text-sm ${learnStatus === 'error' ? 'text-destructive' : 'text-foreground'}`}>{learnMessage}</p> : null}
@@ -1603,8 +1882,8 @@ export default function PpicDashboardPage() {
               ) : null}
             </div>
           ) : null}
-        </DialogContent>
-      </Dialog>
-    </main>
+        </ModalBody>
+      </ComposedModal>
+    </div>
   );
 }

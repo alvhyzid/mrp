@@ -1,0 +1,116 @@
+@use '@carbon/react/scss/spacing' as *;
+@use '@carbon/react/scss/theme' as *;
+@use '@carbon/react/scss/type' as *;
+@use '@carbon/react/scss/breakpoint' as *;
+
+// Gaya khas halaman Routing. Nol angka px ditulis langsung.
+
+.routing-sel-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.routing-sel-item__kode {
+  @include type-style('body-compact-01');
+  color: $text-primary;
+}
+
+.routing-sel-item__nama {
+  @include type-style('label-01');
+  color: $text-secondary;
+}
+
+// AKSI: yang biasa di kiri, yang merusak didorong ke kanan dengan seluruh lebar sel di
+// antaranya. Ini penerapan aturan "aksi merusak ditempatkan terpisah dan berjauhan".
+.routing-aksi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-05;
+}
+
+.routing-aksi__biasa {
+  display: flex;
+  align-items: center;
+}
+
+.routing-aksi__merusak {
+  margin-inline-start: auto;
+  padding-inline-start: $spacing-05;
+}
+
+// Tinggi 3rem menyamakan kotak centang dengan tinggi baris toolbar Carbon; tanpa itu ia
+// duduk lebih tinggi dari kontrol di sebelahnya. Cetakannya sama dengan halaman Pelanggan.
+.routing-saring-arsip {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding-inline: $spacing-05;
+  block-size: 3rem;
+  flex-shrink: 0;
+}
+
+.routing-saring-arsip .cds--checkbox-label {
+  margin: 0;
+}
+
+.routing-tombol-masuk {
+  align-self: flex-start;
+}
+
+.routing-detail {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+}
+
+.routing-form {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-06;
+}
+
+.routing-tahap {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+}
+
+.routing-tahap__kepala {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-04;
+}
+
+// SATU KOLOM di layar sempit, tujuh kolom di layar lebar. Versi sebelumnya memakai kisi
+// tetap 7 kolom di semua lebar, jadi di HP kolomnya terjepit sampai tidak terbaca —
+// persis kelas cacat "kolom terpotong diam-diam" yang sudah dua kali dicatat.
+.routing-tahap__baris {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: $spacing-05;
+  padding: $spacing-05;
+  background-color: $layer-01;
+  border: 1px solid $border-subtle-01;
+
+  // TIGA kolom, BUKAN tujuh. Tujuh kolom diukur di dalam modal lebar `lg` dan hasilnya
+  // terjepit: placeholder terpotong jadi "mis. Mi:" dan tombolnya jadi "Hapus tahap" tanpa
+  // ruang. Tiga kolom juga menempatkan "Durasi aktif" tepat di sebelah "Laju" — dan itu
+  // memang dua field yang saling membatalkan, jadi keduanya harus terlihat bersamaan.
+  @include breakpoint('md') {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @include breakpoint('lg') {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+// Tombol hapus tahap mengambil barisnya sendiri dan rata kanan — terpisah dari isian,
+// mengikuti aturan aksi merusak tidak berdempetan dengan aksi biasa.
+.routing-tahap__baris .cds--btn--danger--tertiary {
+  grid-column: 1 / -1;
+  justify-self: end;
+}

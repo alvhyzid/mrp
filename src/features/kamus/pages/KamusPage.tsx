@@ -3,15 +3,44 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Tile,
+  Tag,
+  Button,
+  TextInput,
+  Dropdown,
+  InlineNotification,
+  SkeletonText,
+  Accordion,
+  AccordionItem,
+  CodeSnippet
+} from '@carbon/react';
+import { ChevronDown, ChevronRight } from '@carbon/icons-react';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
 import { formatNumberId } from '@/lib/currency';
 import { getKamusTermTitle, humanizeKamusDraft } from '@/lib/glossary';
 import { useIsCompanyAdmin } from '@/lib/useIsCompanyAdmin';
+
+// HALAMAN KAMUS — dimigrasikan ke Carbon 26 Agu 2026 (DS-09).
+//
+// POLA: Carbon TIDAK punya pola untuk "antrean pertanyaan yang harus dijawab orang".
+// Disebut terbuka sesuai aturan B.2 — jangan diam-diam merancang sendiri lalu mengaku
+// mengikuti pola. Acuan terdekat yang dipakai: pola Forms (tiap kartu adalah satu formulir
+// pendek berisi tiga pertanyaan), digabung dengan Filtering, Empty state, dan Notifications.
+//
+// KENAPA BUKAN DataTable: tiap baris di sini butuh TIGA isian teks bebas yang dijawab di
+// tempat. Tabel dengan sel yang bisa diketik akan menyempitkan jawaban jadi satu baris kecil,
+// padahal jawabannya justru inti halaman ini. Tile per istilah memberi ruang menulis.
+//
+// KEPALA HALAMAN mengikuti cetakan Master Item — itu layar yang sudah disetujui pemilik
+// produk, dan bentuknya berlaku untuk semua layar berikutnya: remah roti (Dashboard >
+// workspace yang TIDAK bisa diklik > halaman ini), satu judul, lalu satu baris pengantar
+// yang menyebut BERAPA BANYAK yang sedang dilihat.
+//
+// Versi pertama halaman ini melewatkan remah roti dengan alasan "Kamus item tingkat atas".
+// Itu keliru: ia anak workspace Administration di menu akun, persis seperti Items anak
+// Product & Engineering.
 
 type KamusTerm = {
   kamus_term_id: number;
@@ -34,18 +63,22 @@ type KamusTerm = {
 const statusLabels: Record<string, string> = {
   BELUM: 'Belum',
   DRAF_AI: 'Draf AI (belum dijawab)',
-  DIJAWAB: 'Sudah Dijawab',
+  DIJAWAB: 'Sudah dijawab',
   DIKONFIRMASI: 'Dikonfirmasi',
-  TIDAK_RELEVAN: 'Tidak Relevan'
+  TIDAK_RELEVAN: 'Tidak relevan'
 };
-const statusBadgeVariant: Record<string, 'success' | 'warning' | 'secondary' | 'critical' | 'info'> = {
-  BELUM: 'secondary',
-  DRAF_AI: 'warning',
-  DIJAWAB: 'info',
-  DIKONFIRMASI: 'success',
-  TIDAK_RELEVAN: 'critical'
+/// Warna Tag per status. TIDAK_RELEVAN SENGAJA BUKAN MERAH: ia berarti "sudah diputuskan
+/// tidak perlu dijawab", bukan kegagalan. Warna merah akan membuat keputusan yang benar
+/// terlihat seperti masalah, dan orang akan mencoba "memperbaikinya".
+const statusWarnaTag: Record<string, 'gray' | 'purple' | 'blue' | 'green' | 'cool-gray'> = {
+  BELUM: 'gray',
+  DRAF_AI: 'purple',
+  DIJAWAB: 'blue',
+  DIKONFIRMASI: 'green',
+  TIDAK_RELEVAN: 'cool-gray'
 };
 const domainLabels: Record<string, string> = { uang: 'Uang', kuantitas: 'Kuantitas', status: 'Status', standar: 'Standar', proses: 'Proses', lainnya: 'Lainnya' };
+type PilihanDropdown = { id: string; label: string };
 const departmentLabels: Record<string, string> = {
   finance: 'Finance',
   production: 'SPV Produksi',
@@ -56,6 +89,20 @@ const departmentLabels: Record<string, string> = {
   hr: 'HRD',
   qc: 'QC'
 };
+
+/// PILIHAN "SEMUA" DITULIS SEBAGAI BARIS TERSENDIRI, bukan hanya sebagai placeholder.
+/// Versi sebelumnya memakai placeholder "Semua status" yang TIDAK BISA DIPILIH KEMBALI:
+/// begitu satu status dipilih, tidak ada jalan kembali ke seluruhnya selain memuat ulang
+/// halaman. Placeholder menerangkan keadaan awal; ia bukan pilihan.
+const pilihanStatus: PilihanDropdown[] = [
+  { id: '', label: 'Semua status' },
+  ...Object.entries(statusLabels).map(([id, label]) => ({ id, label }))
+];
+const pilihanPrioritas: PilihanDropdown[] = [
+  { id: '', label: 'Semua prioritas' },
+  ...[1, 2, 3, 4, 5].map((p) => ({ id: String(p), label: `Prioritas ${p}` }))
+];
+const pilihanDepartemen: PilihanDropdown[] = Object.entries(departmentLabels).map(([id, label]) => ({ id, label }));
 
 export default function KamusPage() {
   const router = useRouter();
@@ -234,231 +281,262 @@ export default function KamusPage() {
     await loadTerms();
   };
 
+
   if (checkingAccess) {
+    // SkeletonText, bukan tulisan "Memuat...". Rangkanya menunjukkan APA yang sedang datang;
+    // kalimat "memuat" hanya menyatakan bahwa sesuatu sedang terjadi.
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="px-6 text-center text-sm text-muted-foreground">Memuat...</div>
-      </main>
+      <div className="halaman">
+        <SkeletonText heading width="22rem" />
+        <SkeletonText paragraph lineCount={2} />
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-muted/30 py-10">
-      <div className="flex w-full flex-col gap-6 px-6">
-        <div>
-          <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Internal</p>
-          <h1 className="text-2xl font-semibold text-foreground">Kamus — Antrean Penjelasan Data</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Jelaskan makna kolom/metrik data supaya sistem (dan tim baru) bisa memahami tanpa bertanya berulang. Jawab yang Anda tahu, tugaskan ke departemen lain kalau tidak.
-          </p>
-        </div>
+    <div className="halaman">
+      <KepalaHalaman
+        remah={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Administration' }, { label: 'Glossary Queue' }]}
+        judul="Antrean istilah"
+        pengantar={`${terms.length} istilah sesuai saringan — jelaskan maknanya supaya tim baru paham tanpa bertanya berulang. Jawab yang Anda tahu, tugaskan ke departemen lain kalau tidak.`}
+      />
 
-        <Card>
-          <CardContent className="flex flex-col gap-1 pt-6">
-            <span className="flex items-center gap-1 text-xs uppercase tracking-wide text-muted-foreground">
-              Progres Prioritas 1-2
-              <ProvenanceInfoButton
-                label="Progres Prioritas 1-2"
-                envelope={{
-                  formula: 'Dari baris kamus_terms yang saat ini termuat di halaman (sesuai filter status/prioritas/scope aktif): jumlah prioritas 1-2 berstatus DIJAWAB atau DIKONFIRMASI, dibagi total baris prioritas 1-2 yang termuat. Angka ini mengikuti filter yang sedang aktif, BUKAN selalu total keseluruhan perusahaan.',
-                  inputs: [
-                    { label: 'Terisi (DIJAWAB/DIKONFIRMASI)', value: formatNumberId(progressByPriority.answered, 0) },
-                    { label: 'Total prioritas 1-2 (sesuai filter)', value: formatNumberId(progressByPriority.total, 0) }
-                  ]
-                }}
-              />
-            </span>
-            <span className="text-2xl font-semibold text-foreground">
-              {formatNumberId(progressByPriority.answered, 0)} dari {formatNumberId(progressByPriority.total, 0)} terisi
-            </span>
-          </CardContent>
-        </Card>
+      <div className="kisi-metrik">
+        <Tile>
+          <span className="metrik__label">
+            Progres prioritas 1-2
+            <ProvenanceInfoButton
+              label="Progres prioritas 1-2"
+              envelope={{
+                formula:
+                  'Dari baris kamus_terms yang saat ini termuat di halaman (sesuai filter status/prioritas/scope aktif): jumlah prioritas 1-2 berstatus DIJAWAB atau DIKONFIRMASI, dibagi total baris prioritas 1-2 yang termuat. Angka ini mengikuti filter yang sedang aktif, BUKAN selalu total keseluruhan perusahaan.',
+                inputs: [
+                  { label: 'Terisi (DIJAWAB/DIKONFIRMASI)', value: formatNumberId(progressByPriority.answered, 0) },
+                  { label: 'Total prioritas 1-2 (sesuai filter)', value: formatNumberId(progressByPriority.total, 0) }
+                ]
+              }}
+            />
+          </span>
+          <span className="metrik__angka">
+            {formatNumberId(progressByPriority.answered, 0)} dari {formatNumberId(progressByPriority.total, 0)} terisi
+          </span>
+        </Tile>
+      </div>
 
-        {isLeadership ? (
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em]">Admin</CardDescription>
-              <CardTitle className="text-lg">Generator & Ekspor</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              <div className="flex flex-wrap items-center gap-3">
-                <Button size="sm" variant="outline" onClick={handleGenerate}>
-                  Jalankan Generator Backlog
-                </Button>
-                <Button size="sm" variant="outline" onClick={handleExport}>
-                  Ekspor Kamus Terkonfirmasi
-                </Button>
-                {generateStatus ? <span className="text-xs text-muted-foreground">{generateStatus}</span> : null}
-              </div>
-              {exportOutput ? (
-                <div className="flex flex-col gap-2">
-                  {Object.entries(exportOutput).map(([filename, content]) => (
-                    <details key={filename} className="rounded-md border p-2">
-                      <summary className="cursor-pointer text-sm font-medium">docs/kamus/{filename}</summary>
-                      <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap text-xs">{content}</pre>
-                    </details>
-                  ))}
+      {isLeadership ? (
+        <Tile className="kamus-alat">
+          <h2 className="halaman__subjudul halaman__subjudul--rapat">Generator &amp; ekspor</h2>
+          <div className="kamus-alat__tombol">
+            <Button kind="tertiary" size="md" onClick={handleGenerate}>
+              Jalankan generator backlog
+            </Button>
+            <Button kind="tertiary" size="md" onClick={handleExport}>
+              Ekspor kamus terkonfirmasi
+            </Button>
+            {generateStatus ? <span className="halaman__redup">{generateStatus}</span> : null}
+          </div>
+          {exportOutput ? (
+            // Accordion + CodeSnippet menggantikan <details> + <pre> mentah. CodeSnippet
+            // type="multi" memang komponen Carbon untuk teks berbaris banyak, dan ia SUDAH
+            // membawa tombol salin serta batas tinggi sendiri — jadi tidak perlu ditambal.
+            <Accordion className="kamus-ekspor">
+              {Object.entries(exportOutput).map(([filename, content]) => (
+                <AccordionItem key={filename} title={`docs/kamus/${filename}`}>
+                  <CodeSnippet type="multi" feedback="Tersalin" wrapText>
+                    {content}
+                  </CodeSnippet>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          ) : null}
+        </Tile>
+      ) : null}
+
+      {/* `.halaman__saring` adalah kelas untuk KONTROLNYA (membatasi lebar), BUKAN untuk
+          pembungkusnya. Dipakai sebagai pembungkus, kedua saringan tertumpuk selebar 14rem
+          dan tidak terbaca sebagai satu baris saringan. */}
+      <div className="kamus-saring">
+        <Dropdown
+          id="kamus-saring-status"
+          className="halaman__saring"
+          // titleText DIISI lalu disembunyikan, BUKAN dikosongkan: string kosong tetap
+          // merender elemen labelnya dan mendorong kotaknya turun. hideLabel menyembunyikan
+          // secara visual sambil tetap memberi nama bagi pembaca layar.
+          titleText="Status"
+          hideLabel
+          size="md"
+          label="Semua status"
+          items={pilihanStatus}
+          itemToString={(item: PilihanDropdown | null) => item?.label ?? ''}
+          selectedItem={pilihanStatus.find((p) => p.id === statusFilter) ?? pilihanStatus[0]}
+          onChange={({ selectedItem }: { selectedItem: PilihanDropdown | null }) => setStatusFilter(selectedItem?.id ?? '')}
+        />
+        <Dropdown
+          id="kamus-saring-prioritas"
+          className="halaman__saring"
+          titleText="Prioritas"
+          hideLabel
+          size="md"
+          label="Semua prioritas"
+          items={pilihanPrioritas}
+          itemToString={(item: PilihanDropdown | null) => item?.label ?? ''}
+          selectedItem={pilihanPrioritas.find((p) => p.id === priorityFilter) ?? pilihanPrioritas[0]}
+          onChange={({ selectedItem }: { selectedItem: PilihanDropdown | null }) => setPriorityFilter(selectedItem?.id ?? '')}
+        />
+      </div>
+
+      {error ? <InlineNotification kind="error" lowContrast title="Gagal memuat kamus" subtitle={error} hideCloseButton /> : null}
+
+      {loading ? (
+        <Tile>
+          <SkeletonText heading width="16rem" />
+          <SkeletonText paragraph lineCount={3} />
+        </Tile>
+      ) : terms.length === 0 ? (
+        <Tile>
+          <p className="halaman__redup">Tidak ada istilah yang cocok dengan filter ini.</p>
+        </Tile>
+      ) : (
+        <div className="kamus-daftar">
+          {terms.map((term) => {
+            const draft = drafts[term.kamus_term_id] ?? { plain: term.answer_plain ?? '', pitfall: term.answer_pitfall ?? '', range: term.answer_range ?? '' };
+            const terbuka = Boolean(expandedTechDetail[term.kamus_term_id]);
+            return (
+              <Tile key={term.kamus_term_id} className="kamus-kartu">
+                <div className="kamus-kartu__kepala">
+                  <h2 className="halaman__subjudul halaman__subjudul--rapat">{getKamusTermTitle(term)}</h2>
+                  <div className="kamus-kartu__tag">
+                    {/* Tag dipakai untuk MENGGOLONGKAN — prioritas, domain, dan status memang
+                        kategori baris ini, dan itulah konteks pemakaian Tag menurut Carbon. */}
+                    <Tag type="outline">Prioritas {term.priority}</Tag>
+                    <Tag type="outline">{domainLabels[term.domain] ?? term.domain}</Tag>
+                    <Tag type={statusWarnaTag[term.status] ?? 'gray'}>{statusLabels[term.status] ?? term.status}</Tag>
+                  </div>
                 </div>
-              ) : null}
-            </CardContent>
-          </Card>
-        ) : null}
 
-        <Card>
-          <CardContent className="flex flex-wrap gap-3 pt-6">
-            <Select value={statusFilter || undefined} onValueChange={(value) => setStatusFilter(value)}>
-              <SelectTrigger className="w-56">
-                <SelectValue placeholder="Semua status" />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(statusLabels).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={priorityFilter || undefined} onValueChange={(value) => setPriorityFilter(value)}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Semua prioritas" />
-              </SelectTrigger>
-              <SelectContent>
-                {[1, 2, 3, 4, 5].map((p) => (
-                  <SelectItem key={p} value={String(p)}>
-                    Prioritas {p}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </CardContent>
-        </Card>
-
-        {error ? (
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-sm text-destructive">{error}</p>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {loading ? (
-          <p className="text-sm text-muted-foreground">Memuat...</p>
-        ) : terms.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Tidak ada istilah yang cocok dengan filter ini.</p>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {terms.map((term) => {
-              const draft = drafts[term.kamus_term_id] ?? { plain: term.answer_plain ?? '', pitfall: term.answer_pitfall ?? '', range: term.answer_range ?? '' };
-              return (
-                <Card key={term.kamus_term_id}>
-                  <CardHeader>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <CardTitle className="text-base">{getKamusTermTitle(term)}</CardTitle>
-                      <div className="flex gap-2">
-                        <Badge variant="secondary">Prioritas {term.priority}</Badge>
-                        <Badge variant="secondary">{domainLabels[term.domain] ?? term.domain}</Badge>
-                        <Badge variant={statusBadgeVariant[term.status] ?? 'secondary'}>{statusLabels[term.status] ?? term.status}</Badge>
+                {isCompanyAdmin ? (
+                  <div className="kamus-kartu__teknis">
+                    <Button
+                      kind="ghost"
+                      size="sm"
+                      renderIcon={terbuka ? ChevronDown : ChevronRight}
+                      onClick={() => setExpandedTechDetail((prev) => ({ ...prev, [term.kamus_term_id]: !prev[term.kamus_term_id] }))}
+                    >
+                      Detail teknis
+                    </Button>
+                    {terbuka ? (
+                      <div className="kamus-kartu__teknis-isi">
+                        {/* penjaga-kebocoran:mulai identifier mentah SENGAJA ditampilkan di
+                            sini, dan hanya untuk company_admin (Sesi 6, 6.4). */}
+                        <p>{term.term_key}</p>
+                        {term.ai_draft ? <p>{term.ai_draft}</p> : null}
+                        {/* penjaga-kebocoran:selesai */}
                       </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <p className="halaman__redup">
+                  {term.suggested_role
+                    ? `Sebaiknya dijawab: ${departmentLabels[term.suggested_role] ?? term.suggested_role}`
+                    : 'Departemen belum ditentukan'}
+                </p>
+                {term.assigned_to_role ? (
+                  <p className="halaman__redup">
+                    Ditugaskan ke: {departmentLabels[term.assigned_to_role] ?? term.assigned_to_role}
+                    {term.assigned_note ? ` — ${term.assigned_note}` : ''}
+                  </p>
+                ) : null}
+
+                {term.ai_draft ? (
+                  <InlineNotification
+                    kind="warning"
+                    lowContrast
+                    hideCloseButton
+                    title="Draf AI — perlu konfirmasi manusia"
+                    subtitle={humanizeKamusDraft(term) ?? ''}
+                  />
+                ) : null}
+
+                {term.status !== 'DIKONFIRMASI' ? (
+                  <>
+                    <TextInput
+                      id={`kamus-plain-${term.kamus_term_id}`}
+                      size="lg"
+                      labelText="Kalau menjelaskan ke karyawan baru, Anda bilang apa?"
+                      value={draft.plain}
+                      onChange={(e) => updateDraft(term.kamus_term_id, { plain: e.target.value })}
+                    />
+                    <TextInput
+                      id={`kamus-pitfall-${term.kamus_term_id}`}
+                      size="lg"
+                      labelText="Kesalahpahaman apa yang biasa terjadi?"
+                      value={draft.pitfall}
+                      onChange={(e) => updateDraft(term.kamus_term_id, { pitfall: e.target.value })}
+                    />
+                    <TextInput
+                      id={`kamus-range-${term.kamus_term_id}`}
+                      size="lg"
+                      labelText="Berapa nilai wajar, berapa yang mencurigakan?"
+                      value={draft.range}
+                      onChange={(e) => updateDraft(term.kamus_term_id, { range: e.target.value })}
+                    />
+
+                    <div className="kamus-kartu__aksi">
+                      <Button size="md" disabled={savingId === term.kamus_term_id} onClick={() => handleAnswer(term)}>
+                        Simpan dan lanjut
+                      </Button>
+                      <Button kind="tertiary" size="md" disabled={savingId === term.kamus_term_id} onClick={() => handleSkip(term)}>
+                        Lewati (tidak relevan)
+                      </Button>
+                      <Dropdown
+                        id={`kamus-tugaskan-${term.kamus_term_id}`}
+                        titleText="Tugaskan ke departemen"
+                        hideLabel
+                        size="md"
+                        label="Saya tidak tahu — tanyakan ke..."
+                        items={pilihanDepartemen}
+                        itemToString={(item: PilihanDropdown | null) => item?.label ?? ''}
+                        // selectedItem SENGAJA null: ini bukan saringan yang menyimpan pilihan,
+                        // melainkan tindakan. Begitu dipilih, kartunya berpindah status dan
+                        // pilihan yang menempel di kotak akan berbohong tentang keadaan sekarang.
+                        selectedItem={null}
+                        onChange={({ selectedItem }: { selectedItem: PilihanDropdown | null }) => {
+                          if (selectedItem) handleAssign(term, selectedItem.id);
+                        }}
+                      />
                     </div>
-                    {isCompanyAdmin ? (
-                      <div className="mt-1">
-                        <button
-                          type="button"
-                          onClick={() => setExpandedTechDetail((prev) => ({ ...prev, [term.kamus_term_id]: !prev[term.kamus_term_id] }))}
-                          className="text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
-                        >
-                          {expandedTechDetail[term.kamus_term_id] ? '▾' : '▸'} Detail Teknis
-                        </button>
-                        {expandedTechDetail[term.kamus_term_id] ? (
-                          <div className="mt-1 flex flex-col gap-0.5">
-                            <p className="font-mono text-xs text-muted-foreground">{term.term_key}</p>
-                            {term.ai_draft ? <p className="font-mono text-xs text-muted-foreground">{term.ai_draft}</p> : null}
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-                    {term.suggested_role ? (
-                      <CardDescription>Sebaiknya dijawab: {departmentLabels[term.suggested_role] ?? term.suggested_role}</CardDescription>
-                    ) : (
-                      <CardDescription>Departemen belum ditentukan</CardDescription>
-                    )}
-                    {term.assigned_to_role ? (
-                      <CardDescription>Ditugaskan ke: {departmentLabels[term.assigned_to_role] ?? term.assigned_to_role}{term.assigned_note ? ` — ${term.assigned_note}` : ''}</CardDescription>
-                    ) : null}
-                  </CardHeader>
-                  <CardContent className="flex flex-col gap-3">
-                    {term.ai_draft ? (
-                      <p className="rounded-md border border-warning/40 bg-warning-subtle p-2 text-xs text-warning-subtle-foreground">
-                        Draf AI (perlu konfirmasi manusia): {humanizeKamusDraft(term)}
+                  </>
+                ) : (
+                  <div className="kamus-kartu__jawaban">
+                    <p>
+                      <strong>Penjelasan:</strong> {term.answer_plain}
+                    </p>
+                    {term.answer_pitfall ? (
+                      <p>
+                        <strong>Kesalahpahaman:</strong> {term.answer_pitfall}
                       </p>
                     ) : null}
-
-                    {term.status !== 'DIKONFIRMASI' ? (
-                      <>
-                        <label className="flex flex-col gap-1">
-                          <span className="text-xs font-medium text-foreground">Kalau menjelaskan ke karyawan baru, Anda bilang apa?</span>
-                          <Input value={draft.plain} onChange={(e) => updateDraft(term.kamus_term_id, { plain: e.target.value })} />
-                        </label>
-                        <label className="flex flex-col gap-1">
-                          <span className="text-xs font-medium text-foreground">Kesalahpahaman apa yang biasa terjadi?</span>
-                          <Input value={draft.pitfall} onChange={(e) => updateDraft(term.kamus_term_id, { pitfall: e.target.value })} />
-                        </label>
-                        <label className="flex flex-col gap-1">
-                          <span className="text-xs font-medium text-foreground">Berapa nilai wajar, berapa yang mencurigakan?</span>
-                          <Input value={draft.range} onChange={(e) => updateDraft(term.kamus_term_id, { range: e.target.value })} />
-                        </label>
-
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Button size="sm" disabled={savingId === term.kamus_term_id} onClick={() => handleAnswer(term)}>
-                            Simpan dan Lanjut
-                          </Button>
-                          <Button size="sm" variant="outline" disabled={savingId === term.kamus_term_id} onClick={() => handleSkip(term)}>
-                            Lewati (Tidak Relevan)
-                          </Button>
-                          <Select onValueChange={(value) => handleAssign(term, value)}>
-                            <SelectTrigger className="w-64">
-                              <SelectValue placeholder="Saya tidak tahu — tanyakan ke..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {Object.entries(departmentLabels).map(([value, label]) => (
-                                <SelectItem key={value} value={value}>
-                                  {label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex flex-col gap-1 text-sm">
-                        <p>
-                          <span className="font-medium">Penjelasan:</span> {term.answer_plain}
-                        </p>
-                        {term.answer_pitfall ? (
-                          <p>
-                            <span className="font-medium">Kesalahpahaman:</span> {term.answer_pitfall}
-                          </p>
-                        ) : null}
-                        {term.answer_range ? (
-                          <p>
-                            <span className="font-medium">Nilai wajar:</span> {term.answer_range}
-                          </p>
-                        ) : null}
-                      </div>
-                    )}
-
-                    {isLeadership && term.status === 'DIJAWAB' ? (
-                      <Button size="sm" variant="outline" disabled={savingId === term.kamus_term_id} onClick={() => handleConfirm(term)}>
-                        Konfirmasi Jawaban Ini
-                      </Button>
+                    {term.answer_range ? (
+                      <p>
+                        <strong>Nilai wajar:</strong> {term.answer_range}
+                      </p>
                     ) : null}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </main>
+                  </div>
+                )}
+
+                {isLeadership && term.status === 'DIJAWAB' ? (
+                  <div className="kamus-kartu__aksi">
+                    <Button kind="tertiary" size="md" disabled={savingId === term.kamus_term_id} onClick={() => handleConfirm(term)}>
+                      Konfirmasi jawaban ini
+                    </Button>
+                  </div>
+                ) : null}
+              </Tile>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }

@@ -40,7 +40,7 @@ export async function getCompanySettings(request: NextRequest): Promise<ApiResul
 
     // Katalog yang menentukan daftarnya, BUKAN isi database. Setelan yang belum pernah diisi
     // tetap muncul di layar dengan nilai kosong — kalau daftarnya diambil dari database,
-    // perusahaan baru akan melihat halaman kosong tanpa tahu ada 17 hal yang perlu diisi.
+    // perusahaan baru akan melihat halaman kosong tanpa tahu ada belasan hal yang perlu diisi.
     const setelan = KATALOG_SETELAN.map((def) => ({
       kunci: def.kunci,
       label: def.label,

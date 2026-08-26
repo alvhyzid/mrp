@@ -1,0 +1,36 @@
+// Gaya khas halaman Apa yang Baru. KERANGKA memakai kelas bersama `halaman-*`.
+@use '@carbon/react/scss/spacing';
+@use '@carbon/react/scss/type';
+
+.baru-daftar {
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-05;
+}
+
+.baru-kartu {
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-03;
+}
+
+// Judul dan tanggal menumpuk di layar sempit — tanggal yang terjepit di sebelah judul
+// panjang akan terpotong, dan tanggal yang terpotong tidak berarti apa-apa.
+.baru-kartu__kepala {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: spacing.$spacing-03;
+}
+
+@media (min-width: 42rem) {
+  .baru-kartu__kepala {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.baru-kartu__judul {
+  @include type.type-style('productive-heading-03');
+}

@@ -1,0 +1,23 @@
+@use '@carbon/react/scss/spacing' as *;
+@use '@carbon/react/scss/breakpoint' as *;
+
+// Gaya khas Dashboard HRD. Nol angka px ditulis langsung.
+
+.hr-tombol-kembali {
+  align-self: flex-start;
+}
+
+// Formulir karyawan: satu kolom di layar sempit, dua kolom mulai 672px (breakpoint Carbon).
+.hr-form {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: $spacing-05;
+
+  @include breakpoint('md') {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.hr-form__lebar-penuh {
+  grid-column: 1 / -1;
+}

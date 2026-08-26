@@ -1,18 +1,42 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import type { ColumnDef } from '@tanstack/react-table';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { DataTable } from '@/components/ui/data-table';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Button,
+  ComposedModal,
+  DataTable,
+  DataTableSkeleton,
+  Dropdown,
+  InlineNotification,
+  ModalBody,
+  ModalFooter,
+  ModalHeader,
+  NumberInput,
+  Pagination,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableExpandHeader,
+  TableExpandRow,
+  TableExpandedRow,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableToolbar,
+  TableToolbarContent,
+  TableToolbarSearch,
+  Tag,
+  TextInput
+} from '@carbon/react';
+import { Add, TrashCan } from '@carbon/icons-react';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
 import { canManageBom, canViewFinancialData } from '@/lib/roles';
-import { typeLabels, typeBadgeVariant } from '../itemTypeLabels';
+import { typeLabels } from '../itemTypeLabels';
+
+// BOM — dimigrasikan ke Carbon 26 Agu 2026 (DS-09), cetakan Master Item.
 import { formatCurrency, formatNumberId } from '@/lib/currency';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 
@@ -24,10 +48,12 @@ const statusLabels: Record<string, string> = {
   archived: 'Diarsipkan'
 };
 
-const statusBadgeVariant: Record<string, 'warning' | 'success' | 'secondary'> = {
-  draft: 'warning',
-  active: 'success',
-  archived: 'secondary'
+/// Warna Tag mengikuti ARTI. "Draf" ungu, bukan kuning: ia belum dipakai produksi, dan itu
+/// keadaan yang sah — bukan peringatan. "Diarsipkan" abu, juga bukan merah.
+const statusWarnaTag: Record<string, 'purple' | 'green' | 'cool-gray'> = {
+  draft: 'purple',
+  active: 'green',
+  archived: 'cool-gray'
 };
 
 type BomLine = {
@@ -119,6 +145,13 @@ export default function BomsPage() {
   // dipanggil di handleSubmit supaya formMessage tidak ikut ke-reset); modal ditutup
   // manual oleh user (Batal/X/klik luar), yang barulah memanggil resetForm().
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+
+  // Pencarian, saringan, dan pembagian halaman: Carbon DataTable tidak membawanya.
+  const [cari, setCari] = useState('');
+  const [saringStatus, setSaringStatus] = useState<string>('semua');
+  const [halaman, setHalaman] = useState(1);
+  const [perHalaman, setPerHalaman] = useState(15);
+  const adaSaringan = cari.trim() !== '' || saringStatus !== 'semua';
 
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
@@ -292,8 +325,8 @@ export default function BomsPage() {
     });
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  // Dipanggil dari ModalFooter Carbon, bukan dari <form onSubmit>.
+  const handleSubmit = async () => {
     setFormStatus('pending');
     setFormMessage('');
 
@@ -360,460 +393,517 @@ export default function BomsPage() {
     await loadBoms();
   };
 
-  const viewingBom = boms.find((bom) => bom.bom_id === viewingBomId) ?? null;
 
-  const columns = useMemo<ColumnDef<Bom>[]>(
+  // ==========================================================================
+  // TABEL BOM — cetakan Master Item
+  // ==========================================================================
+  const kolom = useMemo(
     () => [
-      {
-        id: 'parent_item',
-        header: 'Item (Hasil)',
-        cell: ({ row }) => (
-          <div className="flex flex-col">
-            <span className="font-medium text-foreground">{row.original.parent_item_code}</span>
-            <span className="text-xs text-muted-foreground">{row.original.parent_item_name}</span>
-          </div>
-        )
-      },
-      {
-        accessorKey: 'version',
-        header: 'Versi',
-        cell: ({ row }) => <span className="text-data">v{row.original.version}</span>
-      },
-      {
-        accessorKey: 'status',
-        header: 'Status',
-        cell: ({ row }) => (
-          <Badge variant={statusBadgeVariant[row.original.status] ?? 'secondary'}>
-            {statusLabels[row.original.status] ?? row.original.status}
-          </Badge>
-        )
-      },
-      {
-        id: 'yield',
-        header: 'Hasil Standar',
-        cell: ({ row }) => (
-          <span className="text-data" title={`Angka presisi penuh: ${formatNumberId(row.original.standard_yield_qty, 6)}`}>
-            ±{formatNumberId(Math.round(row.original.standard_yield_qty), 0)} {row.original.parent_item_base_uom ?? row.original.standard_yield_uom}
-          </span>
-        )
-      },
-      {
-        id: 'line_count',
-        header: 'Jumlah Komponen',
-        cell: ({ row }) => <span className="text-data">{row.original.lines.length}</span>
-      },
-      {
-        id: 'actions',
-        header: 'Aksi',
-        cell: ({ row }) => (
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setViewingBomId((current) => (current === row.original.bom_id ? null : row.original.bom_id));
-                setEditingBomId(null);
-              }}
-            >
-              {viewingBomId === row.original.bom_id ? 'Tutup' : 'Detail'}
-            </Button>
-            {canManage ? (
-              <Button size="sm" variant="outline" onClick={() => startEdit(row.original)}>
-                Edit
-              </Button>
-            ) : null}
-          </div>
-        )
-      }
+      { key: 'parent_item', header: 'Item (hasil)' },
+      { key: 'version', header: 'Versi' },
+      { key: 'status', header: 'Status' },
+      { key: 'yield', header: 'Hasil standar' },
+      { key: 'line_count', header: 'Jumlah komponen' },
+      { key: 'aksi', header: 'Aksi' }
     ],
-    [canManage, viewingBomId]
+    []
+  );
+
+  const bomTersaring = useMemo(() => {
+    const kata = cari.trim().toLowerCase();
+    return boms.filter((b) => {
+      if (saringStatus !== 'semua' && b.status !== saringStatus) return false;
+      if (!kata) return true;
+      return `${b.parent_item_code ?? ''} ${b.parent_item_name ?? ''}`.toLowerCase().includes(kata);
+    });
+  }, [boms, cari, saringStatus]);
+
+  const bomHalamanIni = useMemo(() => bomTersaring.slice((halaman - 1) * perHalaman, halaman * perHalaman), [bomTersaring, halaman, perHalaman]);
+  const bomById = useMemo(() => new Map(boms.map((b) => [String(b.bom_id), b])), [boms]);
+
+  const baris = useMemo(
+    () =>
+      bomHalamanIni.map((b) => ({
+        id: String(b.bom_id),
+        parent_item: b.parent_item_code ?? '',
+        version: b.version,
+        status: statusLabels[b.status] ?? b.status,
+        yield: b.standard_yield_qty,
+        line_count: b.lines.length,
+        aksi: ''
+      })),
+    [bomHalamanIni]
+  );
+
+  const isiSel = (b: Bom, kunci: string) => {
+    switch (kunci) {
+      case 'parent_item':
+        return (
+          <div className="bom-sel-item">
+            <span className="bom-sel-item__kode">{b.parent_item_code}</span>
+            <span className="bom-sel-item__nama">{b.parent_item_name}</span>
+          </div>
+        );
+      case 'version':
+        return `v${b.version}`;
+      case 'status':
+        return <Tag type={statusWarnaTag[b.status] ?? 'gray'}>{statusLabels[b.status] ?? b.status}</Tag>;
+      case 'yield':
+        // Angka dibulatkan DI LAYAR, tapi yang dipakai perhitungan tetap presisi penuh —
+        // itu sebabnya ada tanda ±, dan angka penuhnya ada di panel Asal-Usul.
+        return `±${formatNumberId(Math.round(b.standard_yield_qty), 0)} ${b.parent_item_base_uom ?? b.standard_yield_uom}`;
+      case 'line_count':
+        return b.lines.length;
+      case 'aksi':
+        return canManage ? (
+          <Button kind="ghost" size="sm" onClick={() => startEdit(b)}>
+            Ubah
+          </Button>
+        ) : (
+          <span className="halaman__redup">—</span>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const detailBom = (b: Bom) => (
+    <div className="bom-detail">
+      <div className="bom-detail__kepala">
+        <h3 className="halaman__subjudul halaman__subjudul--rapat">
+          Komponen per ±{formatNumberId(Math.round(b.standard_yield_qty), 0)} {b.parent_item_base_uom ?? b.standard_yield_uom}
+        </h3>
+        <ProvenanceInfoButton
+          label="Hasil standar per batch"
+          envelope={{
+            formula: b.standard_yield_basis_note ?? 'Belum ada keterangan asal angka — isi lewat formulir ubah BOM.',
+            inputs: [
+              {
+                label: 'Angka presisi penuh dipakai perhitungan',
+                value: `${formatNumberId(b.standard_yield_qty, 6)} ${b.parent_item_base_uom ?? b.standard_yield_uom} per batch`
+              }
+            ],
+            standardStatus: b.standard_yield_source as 'ESTIMASI_MANUAL' | 'DIPELAJARI' | null
+          }}
+        />
+      </div>
+      {b.buffer_percentage !== null && b.buffer_percentage !== undefined ? (
+        <p className="halaman__redup">Buffer {formatNumberId(b.buffer_percentage, 2)}% — kebutuhan bahan per batch dihitung dengan tambahan ini.</p>
+      ) : null}
+
+      <Table size="lg">
+        <TableHead>
+          <TableRow>
+            <TableHeader>Komponen</TableHeader>
+            <TableHeader>Tipe</TableHeader>
+            <TableHeader>
+              Jumlah per batch
+              <ProvenanceInfoButton
+                label="Jumlah per batch"
+                envelope={{
+                  formula:
+                    'Per Unit Output (kolom di sebelah kanan) × Hasil Standar per Batch BOM ini. Angka skala-batch, supaya kelihatan total kebutuhan komponen kalau produksi 1 batch penuh sesuai resep.',
+                  inputs: [
+                    { label: 'Hasil standar per batch', value: `${formatNumberId(b.standard_yield_qty, 6)} ${b.parent_item_base_uom ?? b.standard_yield_uom}` }
+                  ]
+                }}
+              />
+            </TableHeader>
+            <TableHeader>Per unit output</TableHeader>
+            <TableHeader>Tahap SOP</TableHeader>
+            {canViewCost ? (
+              <TableHeader>
+                Biaya standar
+                <ProvenanceInfoButton
+                  label="Biaya standar komponen"
+                  envelope={{
+                    formula:
+                      'Diambil langsung dari items.standard_cost milik item komponen ini — data master (input manual di halaman Item), bukan hasil kalkulasi BOM.',
+                    inputs: [{ label: 'Sumber', value: 'Master Item → Biaya Standar' }]
+                  }}
+                />
+              </TableHeader>
+            ) : null}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {b.lines.map((line) => (
+            <TableRow key={line.bom_line_id}>
+              <TableCell>
+                <div className="bom-sel-item">
+                  <span className="bom-sel-item__kode">{line.component_item_code}</span>
+                  <span className="bom-sel-item__nama">{line.component_item_name}</span>
+                </div>
+              </TableCell>
+              <TableCell>
+                {line.component_item_type ? <Tag type="outline">{typeLabels[line.component_item_type] ?? line.component_item_type}</Tag> : null}
+              </TableCell>
+              <TableCell>
+                {(line.qty_per_unit_output * b.standard_yield_qty).toLocaleString('id-ID', { maximumFractionDigits: 4 })} {line.uom}
+              </TableCell>
+              <TableCell>
+                {line.qty_per_unit_output.toLocaleString('id-ID', { maximumFractionDigits: 6 })} {line.uom}
+              </TableCell>
+              <TableCell>
+                {line.routing_step_id && routingStepById.get(line.routing_step_id) ? (
+                  `${routingStepById.get(line.routing_step_id)!.sequence_no}. ${routingStepById.get(line.routing_step_id)!.step_name}`
+                ) : (
+                  <span className="halaman__redup">Sejak tahap 1</span>
+                )}
+              </TableCell>
+              {canViewCost ? <TableCell>{formatCurrency(line.component_standard_cost)}</TableCell> : null}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 
   if (checkingAccess) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="px-6 text-center text-sm text-muted-foreground">Memuat...</div>
-      </main>
+      <div className="halaman">
+        <DataTableSkeleton columnCount={6} rowCount={6} showHeader showToolbar />
+      </div>
     );
   }
 
   if (accessDenied) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="max-w-3xl px-6">
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em] text-destructive">Akses Ditolak</CardDescription>
-              <CardTitle className="text-2xl">Sesi tidak valid</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <p className="text-sm text-muted-foreground">Silakan login ulang untuk mengakses daftar BOM.</p>
-              <Button onClick={() => router.push('/login?redirectTo=/boms')} className="w-fit">
-                Ke Halaman Login
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+      <div className="halaman">
+        <KepalaHalaman remah={[]} judul="Daftar BOM" />
+        <InlineNotification kind="error" lowContrast hideCloseButton title="Sesi tidak valid" subtitle="Silakan masuk ulang untuk membuka daftar BOM." />
+        <Button className="bom-tombol-masuk" onClick={() => router.push('/login?redirectTo=/boms')}>
+          Ke halaman masuk
+        </Button>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-muted/30 py-10">
-      <div className="flex w-full flex-col gap-6 px-6">
-        <Card>
-          <CardHeader>
-            <CardDescription className="uppercase tracking-[0.2em]">Master Data</CardDescription>
-            <CardTitle className="text-2xl">BOM (Resep/Komposisi)</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {bomsError ? <p className="text-sm text-destructive">{bomsError}</p> : null}
-            {bomsLoading ? (
-              <p className="text-sm text-muted-foreground">Memuat BOM...</p>
-            ) : (
-              <DataTable
-                columns={columns}
-                data={boms}
-                emptyMessage="Belum ada BOM."
-                searchPlaceholder="Cari kode atau nama item hasil..."
-                getSearchText={(bom) => `${bom.parent_item_code ?? ''} ${bom.parent_item_name ?? ''}`}
-                paginated
-                pageSize={15}
-                primaryAction={canManage ? { label: 'Tambah BOM', onClick: startCreate } : undefined}
-              />
-            )}
-          </CardContent>
-        </Card>
+    <div className="halaman">
+      <KepalaHalaman
+        remah={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Product & Engineering' }, { label: 'BOM' }]}
+        judul="Daftar BOM"
+        pengantar={`${bomTersaring.length} BOM${adaSaringan ? ` dari ${boms.length} yang tercatat` : ' tercatat'} — resep/komposisi per item hasil, dihitung PER UNIT OUTPUT supaya resepnya ikut berskala.`}
+      />
 
-        {viewingBom ? (
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em]">Detail Komponen</CardDescription>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                {viewingBom.parent_item_code} — v{viewingBom.version} (±{formatNumberId(Math.round(viewingBom.standard_yield_qty), 0)} {viewingBom.parent_item_base_uom ?? viewingBom.standard_yield_uom})
-                <ProvenanceInfoButton
-                  label="Hasil Standar per Batch"
-                  envelope={{
-                    formula: viewingBom.standard_yield_basis_note ?? 'Belum ada keterangan asal angka — isi lewat form edit BOM.',
-                    inputs: [{ label: 'Angka presisi penuh dipakai perhitungan', value: `${formatNumberId(viewingBom.standard_yield_qty, 6)} ${viewingBom.parent_item_base_uom ?? viewingBom.standard_yield_uom} per batch` }],
-                    standardStatus: viewingBom.standard_yield_source as 'ESTIMASI_MANUAL' | 'DIPELAJARI' | null
-                  }}
-                />
-              </CardTitle>
-              {viewingBom.buffer_percentage !== null && viewingBom.buffer_percentage !== undefined ? (
-                <CardDescription>Buffer {formatNumberId(viewingBom.buffer_percentage, 2)}% — kebutuhan bahan per batch dihitung dengan tambahan ini.</CardDescription>
-              ) : null}
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-hidden rounded-md border">
-                <table className="w-full text-data">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Komponen</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Tipe</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          Jumlah per {formatNumberId(viewingBom.standard_yield_qty, 6)} {viewingBom.parent_item_base_uom ?? viewingBom.standard_yield_uom}
-                          <ProvenanceInfoButton
-                            label="Jumlah per Batch"
-                            envelope={{
-                              formula: 'Per Unit Output (kolom di sebelah kanan) × Hasil Standar per Batch BOM ini. Angka skala-batch, supaya kelihatan total kebutuhan komponen kalau produksi 1 batch penuh sesuai resep.',
-                              inputs: [{ label: 'Hasil standar per batch', value: `${formatNumberId(viewingBom.standard_yield_qty, 6)} ${viewingBom.parent_item_base_uom ?? viewingBom.standard_yield_uom}` }]
-                            }}
-                          />
-                        </span>
-                      </th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Per Unit Output</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Tahap SOP</th>
-                      {canViewCost ? (
-                        <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            Biaya Standar
-                            <ProvenanceInfoButton
-                              label="Biaya Standar Komponen"
-                              envelope={{
-                                formula: 'Diambil langsung dari items.standard_cost milik item komponen ini — data master (input manual di halaman Item), bukan hasil kalkulasi BOM.',
-                                inputs: [{ label: 'Sumber', value: 'Master Item → Biaya Standar' }]
+      {bomsError ? <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal memuat BOM" subtitle={bomsError} /> : null}
+
+      {bomsLoading ? (
+        <DataTableSkeleton columnCount={6} rowCount={6} showHeader showToolbar />
+      ) : (
+        <>
+          <DataTable rows={baris} headers={kolom} isSortable size="lg">
+            {(rp: any) => (
+              <TableContainer {...rp.getTableContainerProps()}>
+                <TableToolbar>
+                  <TableToolbarContent>
+                    {/* MELIPAT, bukan selalu terbuka — bawaan Carbon, `persistent` tidak dipakai. */}
+                    <TableToolbarSearch
+                      placeholder="Cari kode atau nama item hasil…"
+                      labelText="Cari BOM"
+                      onChange={(e: React.ChangeEvent<HTMLInputElement> | '') => {
+                        setCari(typeof e === 'string' ? '' : e.target.value);
+                        setHalaman(1);
+                      }}
+                    />
+                    <Dropdown
+                      id="bom-saring-status"
+                      size="lg"
+                      className="halaman__saring"
+                      label="Status"
+                      titleText="Status"
+                      hideLabel
+                      items={['semua', ...bomStatuses]}
+                      itemToString={(v: string) => (v === 'semua' ? 'Semua status' : statusLabels[v] ?? v)}
+                      selectedItem={saringStatus}
+                      onChange={({ selectedItem }: { selectedItem: string | null }) => {
+                        setSaringStatus(selectedItem ?? 'semua');
+                        setHalaman(1);
+                      }}
+                    />
+                    {canManage ? (
+                      <Button size="lg" renderIcon={Add} onClick={startCreate}>
+                        Tambah BOM
+                      </Button>
+                    ) : null}
+                  </TableToolbarContent>
+                </TableToolbar>
+                <Table {...rp.getTableProps()} className="tabel-responsif">
+                  <TableHead>
+                    <TableRow>
+                      <TableExpandHeader aria-label="Buka daftar komponen" />
+                      {rp.headers.map((h: any) => {
+                        const { key, ...sisa } = rp.getHeaderProps({ header: h }) as { key?: string };
+                        void key;
+                        return (
+                          <TableHeader key={h.key} {...sisa} isSortable={h.key !== 'aksi'}>
+                            {h.header}
+                          </TableHeader>
+                        );
+                      })}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {rp.rows.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={kolom.length + 1}>
+                          {adaSaringan ? 'Tidak ada BOM yang cocok dengan pencarian atau saringan.' : 'Belum ada BOM.'}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      rp.rows.map((row: any) => {
+                        const b = bomById.get(row.id);
+                        if (!b) return null;
+                        const { key, ...sisaBaris } = rp.getRowProps({ row }) as { key?: string };
+                        void key;
+                        return (
+                          <React.Fragment key={row.id}>
+                            <TableExpandRow
+                              {...sisaBaris}
+                              isExpanded={viewingBomId === b.bom_id}
+                              onExpand={() => {
+                                setViewingBomId((kini) => (kini === b.bom_id ? null : b.bom_id));
+                                setEditingBomId(null);
                               }}
-                            />
-                          </span>
-                        </th>
-                      ) : null}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {viewingBom.lines.map((line) => (
-                      <tr key={line.bom_line_id} className="border-b last:border-0">
-                        <td className="px-3 py-1.5">
-                          <div className="flex flex-col">
-                            <span className="font-medium text-foreground">{line.component_item_code}</span>
-                            <span className="text-xs text-muted-foreground">{line.component_item_name}</span>
-                          </div>
-                        </td>
-                        <td className="px-3 py-1.5">
-                          {line.component_item_type ? (
-                            <Badge variant={typeBadgeVariant[line.component_item_type] ?? 'secondary'}>
-                              {typeLabels[line.component_item_type] ?? line.component_item_type}
-                            </Badge>
-                          ) : null}
-                        </td>
-                        <td className="px-3 py-1.5">
-                          {(line.qty_per_unit_output * viewingBom.standard_yield_qty).toLocaleString('id-ID', { maximumFractionDigits: 4 })} {line.uom}
-                        </td>
-                        <td className="px-3 py-1.5">
-                          {line.qty_per_unit_output.toLocaleString('id-ID', { maximumFractionDigits: 6 })} {line.uom}
-                        </td>
-                        <td className="px-3 py-1.5 text-xs">
-                          {line.routing_step_id && routingStepById.get(line.routing_step_id) ? (
-                            <span>
-                              {routingStepById.get(line.routing_step_id)!.sequence_no}. {routingStepById.get(line.routing_step_id)!.step_name}
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">Sejak tahap 1</span>
-                          )}
-                        </td>
-                        {canViewCost ? <td className="px-3 py-1.5">{formatCurrency(line.component_standard_cost)}</td> : null}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
+                              aria-label={`Komponen ${b.parent_item_code}`}
+                            >
+                              {kolom.map((h) => (
+                                <TableCell key={h.key} data-label={h.header}>
+                                  {isiSel(b, h.key)}
+                                </TableCell>
+                              ))}
+                            </TableExpandRow>
+                            <TableExpandedRow colSpan={kolom.length + 1}>{viewingBomId === b.bom_id ? detailBom(b) : null}</TableExpandedRow>
+                          </React.Fragment>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </DataTable>
 
-        {canManage ? (
-          <Dialog
-            open={isFormModalOpen}
-            onOpenChange={(open) => {
-              if (!open) {
+          <Pagination
+            page={halaman}
+            pageSize={perHalaman}
+            pageSizes={[15, 30, 50]}
+            totalItems={bomTersaring.length}
+            onChange={({ page, pageSize }: { page: number; pageSize: number }) => {
+              setHalaman(page);
+              setPerHalaman(pageSize);
+            }}
+            backwardText="Halaman sebelumnya"
+            forwardText="Halaman berikutnya"
+            itemsPerPageText="Baris per halaman"
+            itemRangeText={(mulai: number, akhir: number, total: number) => `${mulai}–${akhir} dari ${total} BOM`}
+            pageRangeText={(_kini: number, total: number) => `dari ${total} halaman`}
+            pageNumberText="Nomor halaman"
+          />
+        </>
+      )}
+
+      {canManage ? (
+        // MODAL BERTAHAP: komponen ditambah dan dihapus sebelum disimpan.
+        <ComposedModal
+          open={isFormModalOpen}
+          size="lg"
+          onClose={() => {
+            resetForm();
+            setIsFormModalOpen(false);
+            return true;
+          }}
+        >
+          <ModalHeader
+            label="Master data"
+            title={editingBomId ? `Ubah BOM: ${form.parent_item_id ? itemsById.get(Number(form.parent_item_id))?.item_code ?? '' : ''}` : 'Buat BOM baru'}
+            closeModal={() => {
+              resetForm();
+              setIsFormModalOpen(false);
+            }}
+          />
+          <ModalBody hasForm>
+            <div className="bom-form">
+              <div className="bom-form__kisi">
+                <Dropdown
+                  id="bom-item-induk"
+                  size="lg"
+                  titleText="Item hasil (induk)"
+                  label="Pilih item..."
+                  disabled={editingBomId !== null}
+                  items={items}
+                  itemToString={(i: ItemOption | null) => (i ? `${i.item_code} — ${i.name}` : '')}
+                  selectedItem={items.find((i) => String(i.item_id) === form.parent_item_id) ?? null}
+                  onChange={({ selectedItem }: { selectedItem: ItemOption | null }) => handleParentItemChange(selectedItem ? String(selectedItem.item_id) : '')}
+                  helperText={editingBomId ? 'Item induk tidak bisa diubah — buat BOM baru kalau perlu item lain.' : undefined}
+                />
+                {/* HASIL STANDAR: angka dan satuan adalah SATU isian, jadi satu label. */}
+                <div className="bom-form__hasil">
+                  <span className="cds--label">Hasil standar per batch</span>
+                  <div className="bom-form__hasil-isi">
+                    <NumberInput
+                      id="bom-hasil-qty"
+                      label="Jumlah"
+                      hideLabel
+                      min={0}
+                      allowEmpty
+                      hideSteppers
+                      value={form.standard_yield_qty === '' ? '' : Number(form.standard_yield_qty)}
+                      onChange={(_e: unknown, { value }: { value: number | string }) => setForm((prev) => ({ ...prev, standard_yield_qty: String(value ?? '') }))}
+                    />
+                    <TextInput
+                      id="bom-hasil-satuan"
+                      size="lg"
+                      labelText="Satuan"
+                      hideLabel
+                      placeholder="satuan"
+                      value={form.standard_yield_uom}
+                      onChange={(event) => setForm((prev) => ({ ...prev, standard_yield_uom: event.target.value }))}
+                    />
+                  </div>
+                </div>
+                <Dropdown
+                  id="bom-sumber-hasil"
+                  size="lg"
+                  titleText="Sumber angka hasil standar"
+                  label="Belum ditentukan"
+                  items={Object.keys(yieldSourceLabels)}
+                  itemToString={(v: string) => yieldSourceLabels[v] ?? v}
+                  selectedItem={form.standard_yield_source || null}
+                  onChange={({ selectedItem }: { selectedItem: string | null }) => setForm((prev) => ({ ...prev, standard_yield_source: selectedItem ?? '' }))}
+                />
+                <Dropdown
+                  id="bom-status"
+                  size="lg"
+                  titleText="Status"
+                  label="Pilih status"
+                  items={bomStatuses}
+                  itemToString={(v: string) => statusLabels[v] ?? v}
+                  selectedItem={form.status}
+                  onChange={({ selectedItem }: { selectedItem: string | null }) => setForm((prev) => ({ ...prev, status: selectedItem ?? 'draft' }))}
+                />
+                <NumberInput
+                  id="bom-buffer"
+                  label="Buffer (%)"
+                  min={0}
+                  max={100}
+                  allowEmpty
+                  hideSteppers
+                  helperText="Kompensasi kehilangan produksi — dipakai saat menghitung kebutuhan bahan per batch."
+                  value={form.buffer_percentage === '' ? '' : Number(form.buffer_percentage)}
+                  onChange={(_e: unknown, { value }: { value: number | string }) => setForm((prev) => ({ ...prev, buffer_percentage: String(value ?? '') }))}
+                />
+                <TextInput
+                  id="bom-keterangan-hasil"
+                  size="lg"
+                  className="bom-form__lebar-penuh"
+                  labelText="Keterangan asal angka hasil standar"
+                  placeholder='mis. "10.000 g adonan × yield 85% ÷ 2,5 g/gummy ÷ 60 gummy/botol"'
+                  helperText="Ini yang muncul di panel Asal-Usul — tulisan di sini yang menjelaskan angkanya kelak."
+                  value={form.standard_yield_basis_note}
+                  onChange={(event) => setForm((prev) => ({ ...prev, standard_yield_basis_note: event.target.value }))}
+                />
+              </div>
+
+              <div className="bom-komponen">
+                <div className="bom-komponen__kepala">
+                  <h3 className="halaman__subjudul halaman__subjudul--rapat">
+                    Komponen per {form.standard_yield_qty || '?'} {form.standard_yield_uom || 'satuan hasil'}
+                  </h3>
+                  <Button kind="tertiary" size="sm" renderIcon={Add} onClick={addLine}>
+                    Tambah komponen
+                  </Button>
+                </div>
+
+                {form.lines.map((line, index) => (
+                  <div key={index} className="bom-komponen__baris">
+                    <Dropdown
+                      id={`bom-komponen-${index}`}
+                      size="lg"
+                      titleText="Item komponen"
+                      label="Pilih item..."
+                      items={items.filter((item) => String(item.item_id) !== form.parent_item_id)}
+                      itemToString={(i: ItemOption | null) => (i ? `${i.item_code} — ${i.name} (${typeLabels[i.type] ?? i.type})` : '')}
+                      selectedItem={items.find((i) => String(i.item_id) === line.component_item_id) ?? null}
+                      onChange={({ selectedItem }: { selectedItem: ItemOption | null }) => handleComponentChange(index, selectedItem ? String(selectedItem.item_id) : '')}
+                    />
+                    <NumberInput
+                      id={`bom-qty-${index}`}
+                      label="Jumlah per batch"
+                      min={0}
+                      allowEmpty
+                      hideSteppers
+                      value={line.qty_per_batch === '' ? '' : Number(line.qty_per_batch)}
+                      onChange={(_e: unknown, { value }: { value: number | string }) => updateLine(index, { qty_per_batch: String(value ?? '') })}
+                    />
+                    <TextInput
+                      id={`bom-satuan-${index}`}
+                      size="lg"
+                      labelText="Satuan"
+                      value={line.uom}
+                      onChange={(event) => updateLine(index, { uom: event.target.value })}
+                    />
+                    {selectedParentRouting ? (
+                      <Dropdown
+                        id={`bom-tahap-${index}`}
+                        size="lg"
+                        titleText="Tahap SOP"
+                        label="Sejak tahap 1 (bawaan)"
+                        items={['', ...[...selectedParentRouting.steps].sort((a, b) => a.sequence_no - b.sequence_no).map((s) => String(s.routing_step_id))]}
+                        itemToString={(v: string) => {
+                          if (!v) return 'Sejak tahap 1 (bawaan)';
+                          const step = selectedParentRouting.steps.find((s) => String(s.routing_step_id) === v);
+                          return step ? `${step.sequence_no}. ${step.step_name}` : v;
+                        }}
+                        selectedItem={line.routing_step_id || ''}
+                        onChange={({ selectedItem }: { selectedItem: string | null }) => updateLine(index, { routing_step_id: selectedItem ?? '' })}
+                      />
+                    ) : (
+                      <TextInput
+                        id={`bom-tahap-kosong-${index}`}
+                        size="lg"
+                        labelText="Tahap SOP"
+                        readOnly
+                        value="Item induk belum punya Routing"
+                        helperText="Buat Routing untuk item induknya dulu supaya komponen bisa ditempelkan ke tahap tertentu."
+                      />
+                    )}
+                    <Button kind="danger--tertiary" size="sm" renderIcon={TrashCan} disabled={form.lines.length <= 1} onClick={() => removeLine(index)}>
+                      Hapus komponen
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              {formMessage ? (
+                <InlineNotification
+                  kind={formStatus === 'success' ? 'success' : 'error'}
+                  lowContrast
+                  hideCloseButton
+                  title={formStatus === 'success' ? 'Berhasil' : 'Gagal menyimpan'}
+                  subtitle={formMessage}
+                />
+              ) : null}
+            </div>
+          </ModalBody>
+          {/* `children` WAJIB pada ModalFooter di @carbon/react 1.114. */}
+          <ModalFooter>
+            <Button
+              kind="secondary"
+              onClick={() => {
                 resetForm();
                 setIsFormModalOpen(false);
-              }
-            }}
-          >
-            <DialogContent className="max-w-3xl">
-              <DialogHeader>
-                <DialogTitle>{editingBomId ? `Edit: ${form.parent_item_id ? itemsById.get(Number(form.parent_item_id))?.item_code : ''}` : 'Buat BOM baru'}</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-sm font-medium text-foreground">Item Hasil (Induk)</span>
-                      <Select
-                        value={form.parent_item_id}
-                        onValueChange={handleParentItemChange}
-                        disabled={editingBomId !== null}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Pilih item..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {items.map((item) => (
-                            <SelectItem key={item.item_id} value={String(item.item_id)}>
-                              {item.item_code} — {item.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </label>
-
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-sm font-medium text-foreground">Jumlah Hasil Standar</span>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={form.standard_yield_qty}
-                        onChange={(event) => setForm((prev) => ({ ...prev, standard_yield_qty: event.target.value }))}
-                        required
-                      />
-                    </label>
-
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-sm font-medium text-foreground">Satuan Hasil</span>
-                      <Input
-                        value={form.standard_yield_uom}
-                        onChange={(event) => setForm((prev) => ({ ...prev, standard_yield_uom: event.target.value }))}
-                        required
-                      />
-                    </label>
-                  </div>
-
-                  <div className="grid max-w-2xl gap-3 sm:grid-cols-2">
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-sm font-medium text-foreground">Sumber Angka Hasil Standar (opsional)</span>
-                      <Select
-                        value={form.standard_yield_source || undefined}
-                        onValueChange={(value) => setForm((prev) => ({ ...prev, standard_yield_source: value }))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Belum ditentukan" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(yieldSourceLabels).map(([value, label]) => (
-                            <SelectItem key={value} value={value}>
-                              {label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </label>
-
-                    <label className="flex flex-col gap-1.5 sm:col-span-2">
-                      <span className="text-sm font-medium text-foreground">Keterangan Asal Angka Hasil Standar (opsional)</span>
-                      <Input
-                        placeholder='mis. "10.000 g adonan × yield 85% ÷ 2,5 g/gummy ÷ 60 gummy/botol"'
-                        value={form.standard_yield_basis_note}
-                        onChange={(event) => setForm((prev) => ({ ...prev, standard_yield_basis_note: event.target.value }))}
-                      />
-                    </label>
-                  </div>
-
-                  <div className="grid max-w-md gap-3 sm:grid-cols-2">
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-sm font-medium text-foreground">Status</span>
-                      <Select value={form.status} onValueChange={(value) => setForm((prev) => ({ ...prev, status: value }))}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {bomStatuses.map((statusOption) => (
-                            <SelectItem key={statusOption} value={statusOption}>
-                              {statusLabels[statusOption]}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </label>
-
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-sm font-medium text-foreground">Buffer % (opsional)</span>
-                      <Input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="any"
-                        placeholder="mis. 5"
-                        value={form.buffer_percentage}
-                        onChange={(event) => setForm((prev) => ({ ...prev, buffer_percentage: event.target.value }))}
-                      />
-                      <span className="text-xs text-muted-foreground">Kompensasi kehilangan produksi — dipakai saat hitung kebutuhan bahan per batch.</span>
-                    </label>
-                  </div>
-
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-foreground">
-                        Komponen (per {form.standard_yield_qty || '?'} {form.standard_yield_uom || 'satuan hasil'})
-                      </span>
-                      <Button type="button" size="sm" variant="outline" onClick={addLine}>
-                        + Tambah Komponen
-                      </Button>
-                    </div>
-
-                    {form.lines.map((line, index) => (
-                      <div key={index} className="grid grid-cols-[1fr_120px_90px_170px_auto] items-end gap-2 rounded-md border p-2">
-                        <label className="flex flex-col gap-1">
-                          <span className="text-xs font-medium text-muted-foreground">Item Komponen</span>
-                          <Select value={line.component_item_id} onValueChange={(value) => handleComponentChange(index, value)}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Pilih item..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {items
-                                .filter((item) => String(item.item_id) !== form.parent_item_id)
-                                .map((item) => (
-                                  <SelectItem key={item.item_id} value={String(item.item_id)}>
-                                    {item.item_code} — {item.name} ({typeLabels[item.type] ?? item.type})
-                                  </SelectItem>
-                                ))}
-                            </SelectContent>
-                          </Select>
-                        </label>
-
-                        <label className="flex flex-col gap-1">
-                          <span className="text-xs font-medium text-muted-foreground">Jumlah per Batch</span>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="any"
-                            value={line.qty_per_batch}
-                            onChange={(event) => updateLine(index, { qty_per_batch: event.target.value })}
-                            required
-                          />
-                        </label>
-
-                        <label className="flex flex-col gap-1">
-                          <span className="text-xs font-medium text-muted-foreground">Satuan</span>
-                          <Input value={line.uom} onChange={(event) => updateLine(index, { uom: event.target.value })} required />
-                        </label>
-
-                        <label className="flex flex-col gap-1">
-                          <span className="text-xs font-medium text-muted-foreground">Tahap SOP (opsional)</span>
-                          {selectedParentRouting ? (
-                            <Select
-                              value={line.routing_step_id}
-                              onValueChange={(value) => updateLine(index, { routing_step_id: value === '__none__' ? '' : value })}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Sejak tahap 1 (default)" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="__none__">Sejak tahap 1 (default)</SelectItem>
-                                {[...selectedParentRouting.steps]
-                                  .sort((a, b) => a.sequence_no - b.sequence_no)
-                                  .map((step) => (
-                                    <SelectItem key={step.routing_step_id} value={String(step.routing_step_id)}>
-                                      {step.sequence_no}. {step.step_name}
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <span className="rounded-md border border-dashed px-2 py-1.5 text-xs text-muted-foreground">
-                              Item induk belum punya Routing
-                            </span>
-                          )}
-                        </label>
-
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="destructive"
-                          disabled={form.lines.length <= 1}
-                          onClick={() => removeLine(index)}
-                        >
-                          Hapus
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <Button type="submit" disabled={formStatus === 'pending'}>
-                      {formStatus === 'pending' ? 'Menyimpan...' : editingBomId ? 'Simpan Perubahan' : 'Buat BOM'}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        resetForm();
-                        setIsFormModalOpen(false);
-                      }}
-                    >
-                      {formStatus === 'success' ? 'Tutup' : 'Batal'}
-                    </Button>
-                  </div>
-
-                  {formMessage ? (
-                    <p className={`text-sm ${formStatus === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>{formMessage}</p>
-                  ) : null}
-                </form>
-            </DialogContent>
-          </Dialog>
-        ) : null}
-      </div>
-    </main>
+              }}
+            >
+              {formStatus === 'success' ? 'Tutup' : 'Batal'}
+            </Button>
+            <Button kind="primary" disabled={formStatus === 'pending'} onClick={handleSubmit}>
+              {formStatus === 'pending' ? 'Menyimpan...' : editingBomId ? 'Simpan perubahan' : 'Buat BOM'}
+            </Button>
+          </ModalFooter>
+        </ComposedModal>
+      ) : null}
+    </div>
   );
 }

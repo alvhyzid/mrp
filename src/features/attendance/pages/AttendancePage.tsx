@@ -3,11 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Breadcrumb, BreadcrumbItem, Button, Dropdown, InlineNotification, SkeletonText, Tag, TextInput, Tile } from '@carbon/react';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 import { formatNumberId } from '@/lib/currency';
 import { ATTENDANCE_EVENT_TYPE_LABELS } from '@/lib/glossary';
@@ -49,15 +45,19 @@ const statusLabels: Record<string, string> = {
   on_leave: 'Cuti',
   sick: 'Sakit'
 };
-const statusBadgeVariant: Record<string, 'success' | 'warning' | 'secondary' | 'critical' | 'info'> = {
-  HADIR: 'success',
-  TERLAMBAT: 'warning',
-  PULANG: 'success',
-  DI_LUAR_AREA: 'critical',
-  ALPA: 'critical',
-  IZIN: 'secondary',
-  SAKIT: 'warning',
-  CUTI: 'secondary'
+// Warna Tag mengikuti ARTI, bukan selera: hijau = hadir sesuai aturan, magenta = perlu
+// diperiksa manusia, merah = tidak hadir tanpa keterangan, biru = tidak hadir DENGAN
+// keterangan yang sah. Membedakan dua yang terakhir penting -- keduanya "tidak masuk", dan
+// hanya satu yang jadi masalah.
+const tagStatusAbsensi: Record<string, 'green' | 'magenta' | 'red' | 'blue' | 'gray'> = {
+  HADIR: 'green',
+  PULANG: 'green',
+  TERLAMBAT: 'magenta',
+  DI_LUAR_AREA: 'magenta',
+  ALPA: 'red',
+  IZIN: 'blue',
+  SAKIT: 'blue',
+  CUTI: 'blue'
 };
 
 export default function AttendancePage() {
@@ -177,188 +177,206 @@ export default function AttendancePage() {
 
   if (checkingAccess) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="px-6 text-center text-sm text-muted-foreground">Memuat...</div>
-      </main>
+      <div className="halaman">
+        <SkeletonText heading width="16rem" />
+        <SkeletonText paragraph lineCount={4} />
+      </div>
     );
   }
 
+  const jam = (nilai: string | null) =>
+    nilai ? new Date(nilai).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '—';
+
   return (
-    <main className="min-h-screen bg-muted/30 py-10">
-      <div className="flex w-full flex-col gap-6 px-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Absensi</p>
-            <h1 className="text-2xl font-semibold text-foreground">Kehadiran Harian</h1>
-          </div>
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-44" />
-        </div>
+    <div className="halaman">
+      <Breadcrumb noTrailingSlash className="halaman__remah">
+        <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
+        <BreadcrumbItem isCurrentPage>
+          <span className="cds--link halaman__remah-mati">People</span>
+        </BreadcrumbItem>
+        <BreadcrumbItem isCurrentPage>Attendance</BreadcrumbItem>
+      </Breadcrumb>
 
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
-
-        {isHr ? (
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em]">HRD</CardDescription>
-              <CardTitle className="text-lg">Catat Kehadiran Manual</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Belum ada tablet gerbang/aplikasi HP karyawan (Gelombang 2/3 — belum dikerjakan). Untuk sekarang, HRD mencatat kehadiran manual di sini.
-              </p>
-            </CardHeader>
-            <CardContent className="flex flex-wrap items-end gap-3">
-              <Select value={manualForm.employeeId || undefined} onValueChange={(value) => setManualForm((prev) => ({ ...prev, employeeId: value }))}>
-                <SelectTrigger className="w-56">
-                  <SelectValue placeholder="Pilih karyawan" />
-                </SelectTrigger>
-                <SelectContent>
-                  {employees.map((e) => (
-                    <SelectItem key={e.employee_id} value={String(e.employee_id)}>
-                      {e.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={manualForm.eventType} onValueChange={(value) => setManualForm((prev) => ({ ...prev, eventType: value }))}>
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="IN">Masuk</SelectItem>
-                  <SelectItem value="OUT">Pulang</SelectItem>
-                </SelectContent>
-              </Select>
-              <Input type="datetime-local" value={manualForm.occurredAt} onChange={(e) => setManualForm((prev) => ({ ...prev, occurredAt: e.target.value }))} className="w-56" />
-              <Button onClick={submitManual} disabled={savingManual || !manualForm.employeeId}>
-                Catat
-              </Button>
-              {manualMessage ? <span className="text-sm text-muted-foreground">{manualMessage}</span> : null}
-            </CardContent>
-          </Card>
-        ) : null}
-
-        <Card>
-          <CardHeader>
-            <CardDescription className="uppercase tracking-[0.2em]">Rekap</CardDescription>
-            <CardTitle className="text-lg">Kehadiran Tanggal {date}</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            {attendance.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Belum ada data kehadiran untuk tanggal ini.</p>
-            ) : (
-              attendance.map((row) => (
-                <div key={row.employee_attendance_id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm">
-                  <div>
-                    <p className="font-medium text-foreground">{row.employee_name ?? `#${row.employee_id}`}</p>
-                    <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                      {row.check_in_at ? new Date(row.check_in_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'} —{' '}
-                      {row.check_out_at ? new Date(row.check_out_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}
-                      {row.work_minutes != null ? ` · ${Math.round(row.work_minutes)} menit kerja` : ''}
-                      {row.late_minutes ? ` · terlambat ${formatNumberId(row.late_minutes, 0)} menit` : ''}
-                      {row.overtime_minutes ? ` · lembur ${formatNumberId(row.overtime_minutes, 0)} menit` : ''}
-                      <ProvenanceInfoButton
-                        label="Jam Kerja/Terlambat/Lembur"
-                        envelope={{
-                          formula:
-                            'Terlambat = jam masuk − jam mulai shift (Senin-Jumat/Sabtu dari Pengaturan Perusahaan) − toleransi keterlambatan. Jam kerja = (jam pulang − jam masuk) − menit istirahat (dari koreksi eksplisit kalau ada, kalau tidak dari jadwal istirahat standar). Lembur = jam kerja − standar jam shift. Dihitung ULANG dari event scan (IN/OUT), tidak pernah diedit manual.',
-                          inputs: [
-                            { label: 'Jam kerja', value: row.work_minutes != null ? `${Math.round(row.work_minutes)} menit` : '-' },
-                            { label: 'Terlambat', value: row.late_minutes ? `${formatNumberId(row.late_minutes, 0)} menit` : '0 menit' },
-                            { label: 'Lembur', value: row.overtime_minutes ? `${formatNumberId(row.overtime_minutes, 0)} menit` : '0 menit' }
-                          ],
-                          sourceDocument: 'recomputeAttendanceDay.ts'
-                        }}
-                      />
-                    </p>
-                  </div>
-                  <Badge variant={statusBadgeVariant[row.status] ?? 'secondary'}>{statusLabels[row.status] ?? row.status}</Badge>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-
-        {isHr ? (
-          <>
-            <Card>
-              <CardHeader>
-                <CardDescription className="uppercase tracking-[0.2em]">Perlu Ditinjau</CardDescription>
-                <CardTitle className="text-lg">Antrean Review (Di Luar Area / Auto-Close)</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-2">
-                {reviewQueue.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Tidak ada yang perlu ditinjau.</p>
-                ) : (
-                  reviewQueue.map((row) => (
-                    <div key={row.employee_attendance_id} className="flex items-center justify-between rounded-md border p-2 text-sm">
-                      <span>
-                        {row.employee_name} — {row.attendance_date ?? ''}
-                      </span>
-                      <Badge variant="warning">{(row.flags as any)?.auto_closed ? 'Lupa clock-out (auto-close)' : 'Di luar area'}</Badge>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardDescription className="uppercase tracking-[0.2em]">Persetujuan</CardDescription>
-                <CardTitle className="text-lg">Koreksi Absensi Menunggu</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-2">
-                {pendingCorrections.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Tidak ada koreksi menunggu persetujuan.</p>
-                ) : (
-                  pendingCorrections.map((row) => (
-                    <div key={row.attendance_correction_id} className="flex items-center justify-between rounded-md border p-2 text-sm">
-                      <span>
-                        {row.employee_name} — {row.attendance_date} — {ATTENDANCE_EVENT_TYPE_LABELS[row.requested_event_type] ?? row.requested_event_type} pukul{' '}
-                        {new Date(row.requested_occurred_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} ({row.reason})
-                      </span>
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => decideCorrection(row.attendance_correction_id, true)}>
-                          Setujui
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => decideCorrection(row.attendance_correction_id, false)}>
-                          Tolak
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardDescription className="uppercase tracking-[0.2em]">Persetujuan</CardDescription>
-                <CardTitle className="text-lg">Izin/Sakit/Cuti Menunggu</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-2">
-                {pendingLeaveRequests.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Tidak ada pengajuan menunggu persetujuan.</p>
-                ) : (
-                  pendingLeaveRequests.map((row) => (
-                    <div key={row.leave_request_id} className="flex items-center justify-between rounded-md border p-2 text-sm">
-                      <span>
-                        {row.employee_name} — {leaveTypeLabels[row.leave_type] ?? row.leave_type} — {row.start_date} s/d {row.end_date}
-                      </span>
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => decideLeave(row.leave_request_id, true)}>
-                          Setujui
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => decideLeave(row.leave_request_id, false)}>
-                          Tolak
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-          </>
-        ) : null}
+      <div>
+        <h1 className="halaman__judul">Kehadiran harian</h1>
+        <p className="halaman__pengantar">
+          {attendance.length === 0 ? 'Belum ada data kehadiran' : `${attendance.length} karyawan tercatat`} untuk tanggal{' '}
+          {date}. Jam kerja, keterlambatan, dan lembur dihitung ULANG dari catatan masuk-pulang — tidak pernah diketik.
+        </p>
       </div>
-    </main>
+
+      <TextInput
+        id="absensi-tanggal"
+        type="date"
+        size="lg"
+        labelText="Tanggal"
+        className="halaman__saring"
+        value={date}
+        onChange={(e) => setDate(e.target.value)}
+      />
+
+      {error ? <InlineNotification kind="error" lowContrast title="Gagal memuat" subtitle={error} hideCloseButton /> : null}
+
+      {isHr ? (
+        <Tile className="absensi-kartu">
+          <h2 className="halaman__subjudul">Catat kehadiran manual</h2>
+          <p className="halaman__redup">
+            Belum ada tablet gerbang atau aplikasi HP karyawan (Gelombang 2 dan 3, belum dikerjakan).
+            Untuk sekarang HRD mencatat kehadiran manual di sini.
+          </p>
+          <div className="absensi-form">
+            <Dropdown
+              id="absensi-karyawan"
+              size="lg"
+              titleText="Karyawan"
+              label="Pilih karyawan"
+              items={employees.map((e) => String(e.employee_id))}
+              selectedItem={manualForm.employeeId || null}
+              itemToString={(item: string) => employees.find((e) => String(e.employee_id) === item)?.name ?? item}
+              onChange={({ selectedItem }: { selectedItem: string | null }) =>
+                setManualForm((prev) => ({ ...prev, employeeId: selectedItem ?? '' }))
+              }
+            />
+            <Dropdown
+              id="absensi-jenis"
+              size="lg"
+              titleText="Jenis"
+              label="Pilih jenis"
+              items={['IN', 'OUT']}
+              selectedItem={manualForm.eventType}
+              itemToString={(item: string) => (item === 'IN' ? 'Masuk' : 'Pulang')}
+              onChange={({ selectedItem }: { selectedItem: string | null }) =>
+                selectedItem && setManualForm((prev) => ({ ...prev, eventType: selectedItem }))
+              }
+            />
+            <TextInput
+              id="absensi-waktu"
+              type="datetime-local"
+              size="lg"
+              labelText="Waktu"
+              value={manualForm.occurredAt}
+              onChange={(e) => setManualForm((prev) => ({ ...prev, occurredAt: e.target.value }))}
+            />
+            <Button className="absensi-form__tombol" onClick={submitManual} disabled={savingManual || !manualForm.employeeId}>
+              {savingManual ? 'Menyimpan…' : 'Catat'}
+            </Button>
+          </div>
+          {manualMessage ? <p className="halaman__redup">{manualMessage}</p> : null}
+        </Tile>
+      ) : null}
+
+      <Tile className="absensi-kartu">
+        <h2 className="halaman__subjudul">Kehadiran tanggal {date}</h2>
+        {attendance.length === 0 ? (
+          <p className="halaman__redup">Belum ada data kehadiran untuk tanggal ini.</p>
+        ) : (
+          <div className="absensi-daftar">
+            {attendance.map((row) => (
+              <div key={row.employee_attendance_id} className="absensi-baris">
+                <div>
+                  <p className="absensi-baris__nama">{row.employee_name ?? `#${row.employee_id}`}</p>
+                  <p className="absensi-baris__rincian">
+                    {jam(row.check_in_at)} — {jam(row.check_out_at)}
+                    {row.work_minutes != null ? ` · ${Math.round(row.work_minutes)} menit kerja` : ''}
+                    {row.late_minutes ? ` · terlambat ${formatNumberId(row.late_minutes, 0)} menit` : ''}
+                    {row.overtime_minutes ? ` · lembur ${formatNumberId(row.overtime_minutes, 0)} menit` : ''}
+                    <ProvenanceInfoButton
+                      label="Jam Kerja/Terlambat/Lembur"
+                      envelope={{
+                        formula:
+                          'Terlambat = jam masuk − jam mulai shift (Senin-Jumat/Sabtu dari Pengaturan Perusahaan) − toleransi keterlambatan. Jam kerja = (jam pulang − jam masuk) − menit istirahat (dari koreksi eksplisit kalau ada, kalau tidak dari jadwal istirahat standar). Lembur = jam kerja − standar jam shift. Dihitung ULANG dari event scan (IN/OUT), tidak pernah diedit manual.',
+                        inputs: [
+                          { label: 'Jam kerja', value: row.work_minutes != null ? `${Math.round(row.work_minutes)} menit` : '-' },
+                          { label: 'Terlambat', value: row.late_minutes ? `${formatNumberId(row.late_minutes, 0)} menit` : '0 menit' },
+                          { label: 'Lembur', value: row.overtime_minutes ? `${formatNumberId(row.overtime_minutes, 0)} menit` : '0 menit' }
+                        ],
+                        sourceDocument: 'recomputeAttendanceDay.ts'
+                      }}
+                    />
+                  </p>
+                </div>
+                <Tag type={tagStatusAbsensi[row.status] ?? 'gray'}>{statusLabels[row.status] ?? row.status}</Tag>
+              </div>
+            ))}
+          </div>
+        )}
+      </Tile>
+
+      {isHr ? (
+        <>
+          <Tile className="absensi-kartu">
+            <h2 className="halaman__subjudul">Perlu ditinjau — di luar area atau lupa pulang</h2>
+            {reviewQueue.length === 0 ? (
+              <p className="halaman__redup">Tidak ada yang perlu ditinjau.</p>
+            ) : (
+              <div className="absensi-daftar">
+                {reviewQueue.map((row) => (
+                  <div key={row.employee_attendance_id} className="absensi-baris">
+                    <span>
+                      {row.employee_name} — {row.attendance_date ?? ''}
+                    </span>
+                    <Tag type="magenta">
+                      {(row.flags as { auto_closed?: boolean } | null)?.auto_closed ? 'Lupa mencatat pulang (ditutup otomatis)' : 'Di luar area'}
+                    </Tag>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Tile>
+
+          <Tile className="absensi-kartu">
+            <h2 className="halaman__subjudul">Koreksi absensi menunggu keputusan</h2>
+            {pendingCorrections.length === 0 ? (
+              <p className="halaman__redup">Tidak ada koreksi menunggu persetujuan.</p>
+            ) : (
+              <div className="absensi-daftar">
+                {pendingCorrections.map((row) => (
+                  <div key={row.attendance_correction_id} className="absensi-baris">
+                    <span>
+                      {row.employee_name} — {row.attendance_date} —{' '}
+                      {ATTENDANCE_EVENT_TYPE_LABELS[row.requested_event_type] ?? row.requested_event_type} pukul{' '}
+                      {jam(row.requested_occurred_at)} ({row.reason})
+                    </span>
+                    <div className="absensi-putusan">
+                      <Button size="sm" kind="tertiary" onClick={() => decideCorrection(row.attendance_correction_id, true)}>
+                        Setujui
+                      </Button>
+                      <Button size="sm" kind="danger--tertiary" onClick={() => decideCorrection(row.attendance_correction_id, false)}>
+                        Tolak
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Tile>
+
+          <Tile className="absensi-kartu">
+            <h2 className="halaman__subjudul">Izin, sakit, dan cuti menunggu keputusan</h2>
+            {pendingLeaveRequests.length === 0 ? (
+              <p className="halaman__redup">Tidak ada pengajuan menunggu persetujuan.</p>
+            ) : (
+              <div className="absensi-daftar">
+                {pendingLeaveRequests.map((row) => (
+                  <div key={row.leave_request_id} className="absensi-baris">
+                    <span>
+                      {row.employee_name} — {leaveTypeLabels[row.leave_type] ?? row.leave_type} — {row.start_date} s/d {row.end_date}
+                    </span>
+                    <div className="absensi-putusan">
+                      <Button size="sm" kind="tertiary" onClick={() => decideLeave(row.leave_request_id, true)}>
+                        Setujui
+                      </Button>
+                      <Button size="sm" kind="danger--tertiary" onClick={() => decideLeave(row.leave_request_id, false)}>
+                        Tolak
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Tile>
+        </>
+      ) : null}
+    </div>
   );
 }

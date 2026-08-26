@@ -3,8 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Breadcrumb, BreadcrumbItem, InlineNotification, SkeletonText, Tag, Tile } from '@carbon/react';
 import { formatCurrency, formatNumberId } from '@/lib/currency';
 import { getRoleLabel } from '@/lib/glossary';
 
@@ -93,65 +92,81 @@ export default function MyKpiPage() {
   }
 
   return (
-    <main className="min-h-screen bg-muted/30 py-10">
-      <div className="flex w-full flex-col gap-6 px-6">
-        <div>
-          <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Personal</p>
-          <h1 className="text-2xl font-semibold text-foreground">KPI Saya</h1>
-          <p className="mt-1 text-sm text-muted-foreground">KPI yang relevan dengan peran Anda, dan tindakan yang jadi tanggung jawab Anda. Bukan papan peringkat -- tidak ada perbandingan antar pegawai di sini.</p>
-        </div>
+    <div className="halaman">
+      <Breadcrumb noTrailingSlash className="halaman__remah">
+        <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
+        <BreadcrumbItem isCurrentPage>
+          <span className="cds--link halaman__remah-mati">Data &amp; Analytics</span>
+        </BreadcrumbItem>
+        <BreadcrumbItem isCurrentPage>My KPI</BreadcrumbItem>
+      </Breadcrumb>
 
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
-        {loading ? <p className="text-sm text-muted-foreground">Memuat...</p> : null}
-
-        {data && !loading ? (
-          <>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {data.kpis.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Belum ada KPI yang relevan dengan peran Anda ({getRoleLabel(data.role)}).</p>
-              ) : (
-                data.kpis.map((k) => (
-                  <Card key={k.kpi_registry_id}>
-                    <CardContent className="flex flex-col gap-1 pt-6">
-                      <span className="text-xs uppercase tracking-wide text-muted-foreground">{DISPLAY_TITLES[k.metric_key] ?? k.metric_key}</span>
-                      <span className="text-xl font-semibold text-foreground">{formatValueForMetric(k.metric_key, k.value)}</span>
-                      <span className="text-xs text-muted-foreground">Target: {k.target_value !== null ? formatValueForMetric(k.metric_key, k.target_value) : 'belum ditetapkan, baseline berjalan'}</span>
-                      <p className="text-xs italic text-muted-foreground">{k.note}</p>
-                    </CardContent>
-                  </Card>
-                ))
-              )}
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardDescription className="uppercase tracking-[0.2em]">Tindak Lanjut</CardDescription>
-                <CardTitle className="text-lg">Tindakan Terbuka Anda</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {data.open_actions.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Tidak ada tindakan terbuka yang ditugaskan ke Anda saat ini.</p>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {data.open_actions.map((a) => (
-                      <div key={a.kpi_action_id} className="flex items-center justify-between rounded-md border p-2 text-sm">
-                        <div>
-                          <p className="font-medium text-foreground">{a.finding}</p>
-                          <p className="text-xs text-muted-foreground">{a.action_text}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {a.due_date ? <span className="text-xs text-muted-foreground">Tenggat {a.due_date}</span> : null}
-                          <Badge variant="secondary">{ACTION_STATUS_LABELS[a.status] ?? a.status}</Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </>
-        ) : null}
+      <div>
+        <h1 className="halaman__judul">KPI saya</h1>
+        <p className="halaman__pengantar">
+          KPI yang relevan dengan peran Anda, dan tindakan yang jadi tanggung jawab Anda.
+          Bukan papan peringkat — tidak ada perbandingan antar pegawai di sini.
+        </p>
       </div>
-    </main>
+
+      {error ? <InlineNotification kind="error" lowContrast title="Gagal memuat" subtitle={error} hideCloseButton /> : null}
+
+      {loading ? (
+        <>
+          <SkeletonText heading width="14rem" />
+          <SkeletonText paragraph lineCount={3} />
+        </>
+      ) : null}
+
+      {data && !loading ? (
+        <>
+          {data.kpis.length === 0 ? (
+            <p className="halaman__pengantar">
+              Belum ada KPI yang relevan dengan peran Anda ({getRoleLabel(data.role)}).
+            </p>
+          ) : (
+            <div className="kisi-metrik">
+              {data.kpis.map((k) => (
+                <Tile key={k.kpi_registry_id}>
+                  <span className="metrik__label">{DISPLAY_TITLES[k.metric_key] ?? k.metric_key}</span>
+                  <span className="metrik__angka">{formatValueForMetric(k.metric_key, k.value)}</span>
+                  <p className="kpi-target">
+                    Target:{' '}
+                    {k.target_value !== null
+                      ? formatValueForMetric(k.metric_key, k.target_value)
+                      : 'belum ditetapkan, baseline berjalan'}
+                  </p>
+                  <p className="kpi-catatan">{k.note}</p>
+                </Tile>
+              ))}
+            </div>
+          )}
+
+          <div>
+            <h2 className="halaman__subjudul">Tindakan terbuka Anda</h2>
+            {data.open_actions.length === 0 ? (
+              <p className="halaman__pengantar">Tidak ada tindakan terbuka yang ditugaskan ke Anda saat ini.</p>
+            ) : (
+              <div className="kpi-tindakan">
+                {data.open_actions.map((a) => (
+                  <Tile key={a.kpi_action_id} className="kpi-tindakan__baris">
+                    <div>
+                      <p className="kpi-tindakan__temuan">{a.finding}</p>
+                      <p className="halaman__redup">{a.action_text}</p>
+                    </div>
+                    <div className="kpi-tindakan__kanan">
+                      {a.due_date ? <span className="halaman__redup">Tenggat {a.due_date}</span> : null}
+                      <Tag type={a.status === 'SELESAI' ? 'green' : a.status === 'BERJALAN' ? 'blue' : 'gray'}>
+                        {ACTION_STATUS_LABELS[a.status] ?? a.status}
+                      </Tag>
+                    </div>
+                  </Tile>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      ) : null}
+    </div>
   );
 }

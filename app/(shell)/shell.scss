@@ -176,8 +176,10 @@
   color: theme.$text-primary;
 }
 
-// Avatar berupa inisial. Bulat karena itu konvensi avatar di mana pun — satu dari dua tempat
-// di seluruh sistem yang memang boleh bulat (lihat penjaga sudut tajam).
+// Avatar: foto bila ada, ikon Carbon bila belum. Bulat karena itu konvensi avatar di mana
+// pun — satu dari dua tempat di seluruh sistem yang memang boleh bulat (lihat penjaga sudut
+// tajam). Inisial DICABUT 25 Agu 2026: ia terlihat seperti data padahal cuma tebakan dari
+// nama, sementara ikon jujur berkata "belum ada foto".
 .shell-akun__avatar {
   @include type.type-style('label-01');
   display: inline-flex;
@@ -189,6 +191,18 @@
   flex-shrink: 0;
   background-color: theme.$background-inverse;
   color: theme.$text-inverse;
+}
+
+// overflow: hidden WAJIB, kalau tidak foto persegi akan menonjol keluar dari lingkarannya.
+.shell-akun__avatar {
+  overflow: hidden;
+}
+
+.shell-akun__foto {
+  inline-size: 100%;
+  block-size: 100%;
+  // Foto profil hampir tidak pernah persegi. Tanpa object-fit ia akan gepeng.
+  object-fit: cover;
 }
 
 .shell-akun__teks {
@@ -284,4 +298,97 @@
   background-color: theme.$support-error;
   color: theme.$text-on-color;
   line-height: 1;
+}
+
+// ============================================================================
+// FOTO PROFIL YANG BISA DIKLIK (halaman Profil)
+// ============================================================================
+// Tombol Carbon di-nolkan padding-nya supaya yang terlihat HANYA lingkaran fotonya. Ini
+// deviasi tampilan yang disengaja: komponennya tetap FileUploaderButton Carbon (yang
+// mengurus input tersembunyi, aksesibilitas, dan penyaringan format), hanya kulitnya yang
+// diganti jadi avatar. Menggantinya dengan <input type="file"> mentah akan melepas ketiga
+// hal itu sekaligus.
+.profil-foto {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: spacing.$spacing-03;
+  flex-shrink: 0;
+}
+
+.profil-foto .cds--btn {
+  padding: 0;
+  min-block-size: 0;
+  border: 0;
+  background: transparent;
+}
+
+.profil-foto .cds--btn:hover,
+.profil-foto .cds--btn:focus {
+  background: transparent;
+}
+
+.profil-foto__lingkaran {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 6rem;
+  block-size: 6rem;
+  border-radius: 50%;
+  overflow: hidden;
+  background-color: theme.$layer-02;
+  color: theme.$icon-secondary;
+  // Jauh di atas syarat sentuh 44px (DS-07): 96px.
+  transition: box-shadow 70ms cubic-bezier(0.2, 0, 0.38, 0.9);
+}
+
+.profil-foto .cds--btn:hover .profil-foto__lingkaran {
+  box-shadow: 0 0 0 2px theme.$border-interactive;
+}
+
+.profil-foto .cds--btn:focus-visible .profil-foto__lingkaran {
+  box-shadow: 0 0 0 2px theme.$focus;
+}
+
+.profil-foto__gambar {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+// Keterangan yang MENETAP, bukan yang muncul saat kursor lewat. Di HP dan tablet, petunjuk
+// yang hanya muncul saat hover tidak pernah terbaca sama sekali.
+.profil-foto__keterangan {
+  @include type.type-style('label-01');
+  color: theme.$text-secondary;
+  text-align: center;
+  max-inline-size: 8rem;
+}
+
+// Tanda tangan: KOTAK, bukan lingkaran, dan gambarnya ditampilkan UTUH (contain), bukan
+// dipotong (cover). Memotong tanda tangan berarti memotong bagian dari tanda tangan orang.
+.profil-foto--lebar .profil-foto__keterangan {
+  max-inline-size: 12rem;
+}
+
+.profil-foto__kotak {
+  inline-size: 12rem;
+  block-size: 6rem;
+  border-radius: 0;
+  border: 1px solid theme.$border-subtle-01;
+}
+
+.profil-foto__gambar--utuh {
+  object-fit: contain;
+}
+
+// Kartu di halaman Profil memakai Tile Carbon; jarak dalamnya dari token, bukan angka.
+.profil-kartu {
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-05;
+}
+
+.profil-tombol {
+  align-self: flex-start;
 }

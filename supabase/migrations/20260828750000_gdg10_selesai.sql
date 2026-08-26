@@ -1,0 +1,35 @@
+-- GDG-10 dibangun (25 Agu 2026), dengan satu pertanyaan tersisa untuk pemilik produk.
+do $mig$
+begin
+  update build_tasks set status = 'selesai',
+    notes = concat_ws(chr(10), coalesce(notes, ''), '',
+      '=== DIBANGUN 25 Agu 2026 ===',
+      'Kalimatnya disusun di src/features/mrp/alasanPeringatanBahan.ts -- murni perhitungan,',
+      'tanpa database, jadi aturannya bisa diuji tanpa fixture sama sekali.',
+      '',
+      'Bentuk kalimat nyata dari test yang berjalan:',
+      '  "GBG-GULA - perlu dipesan. Sisa 80 kg, di bawah ambang 200 kg, DAN kurang 40 kg untuk',
+      '   1 perintah produksi yang sedang berjalan."',
+      'Bila kedua sebab BERTENTANGAN, kepalanya berubah jadi "PERIKSA DULU", bukan',
+      '"perlu dipesan" -- keadaan itulah yang paling perlu dilihat manusia.',
+      '',
+      'TIGA BELAS test: delapan tanpa database, lima sampai ke database.',
+      '',
+      'DUA CACAT DITEMUKAN SAAT TEST DIJALANKAN, bukan saat kodenya dibaca:',
+      '  1. bahan TANPA ambang tersaring keluar sebelum sempat dinilai, jadi kekurangannya',
+      '     untuk produksi tidak pernah berbunyi di mana pun;',
+      '  2. peringatan yang sudah terbuka TIDAK PERNAH BISA DITUTUP -- begitu sebabnya hilang,',
+      '     itemnya keluar dari daftar yang diperiksa, dan peringatannya menggantung selamanya.',
+      'Keduanya sudah ditutup, dan test yang menemukannya tetap ada sebagai penjaga.',
+      '',
+      '=== SATU PERTANYAAN UNTUK PEMILIK PRODUK, BELUM DIPUTUSKAN ===',
+      'Peringatan material_shortage PER WORK ORDER dari fungsi database',
+      'recompute_work_order_material_readiness MASIH BERJALAN seperti biasa, dan sengaja tidak',
+      'dicabut sendiri. Granularitasnya berbeda: per perintah produksi, bukan per bahan.',
+      'Selama belum diputuskan, satu bahan yang kurang bisa memunculkan DUA hal sekaligus:',
+      'peringatan gabungan per bahan (baru) DAN peringatan per Work Order (lama).',
+      '',
+      'PEMICU BERKALA belum ada; masih menumpang rencana GDG-09/AUD-13 seperti tercatat di',
+      'detail pekerjaan.')
+  where task_code = 'GDG-10';
+end $mig$;

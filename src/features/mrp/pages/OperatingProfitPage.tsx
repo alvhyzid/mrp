@@ -3,8 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Breadcrumb, BreadcrumbItem, Dropdown, InlineNotification, SkeletonText, Tile } from '@carbon/react';
 import { canViewFinancialData } from '@/lib/roles';
 import { formatCurrency } from '@/lib/currency';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
@@ -95,151 +94,147 @@ export default function OperatingProfitPage() {
 
   if (checkingAccess) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="px-6 text-center text-sm text-muted-foreground">Memuat...</div>
-      </main>
+      <div className="halaman">
+        <SkeletonText heading width="16rem" />
+        <SkeletonText paragraph lineCount={3} />
+      </div>
     );
   }
 
   if (accessDenied) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="max-w-3xl px-6">
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em] text-destructive">Akses Ditolak</CardDescription>
-              <CardTitle className="text-2xl">Laba Operasional</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Halaman ini khusus company_admin, general_manager, atau finance_manager.</p>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+      <div className="halaman">
+        <h1 className="halaman__judul">Laba operasional</h1>
+        <InlineNotification
+          kind="error"
+          lowContrast
+          hideCloseButton
+          title="Halaman ini khusus pimpinan perusahaan dan Manajer Finance"
+          subtitle="Akun Anda tidak punya izin melihat angka laba operasional."
+        />
+      </div>
     );
   }
 
   const years = Array.from({ length: 5 }, (_, i) => now.getFullYear() - 2 + i);
 
+  // Tiga kartu angka disusun dari satu daftar, bukan tiga blok yang disalin. Panel Asal-Usul
+  // ikut per kartu -- setiap angka keuangan wajib bisa menjawab "ini metode apa".
+  const kartu = result
+    ? [
+        {
+          kunci: 'margin',
+          label: 'Margin kontribusi (terealisasi)',
+          nilai: formatCurrency(result.total_margin, { maxDecimals: 0 }),
+          keterangan: 'Dari semua pengiriman yang sudah keluar gudang di periode ini',
+          waspada: false,
+          asalUsul: {
+            label: 'Margin Kontribusi Bulanan',
+            envelope: {
+              formula:
+                'Σ (qty_shipped × (harga jual per unit − unit_cost lot yang dikirim)) untuk semua baris pengiriman berstatus terkirim/diterima dalam periode ini. unit_cost diambil dari lot aktual yang dikirim (biaya sungguhan lot itu, bukan standar) — kalau lot belum punya unit_cost, dianggap 0 di baris itu.',
+              inputs: [{ label: 'Periode', value: `${formatDateId(result.period_start)} – ${formatDateId(result.period_end)}` }],
+              sourceDocument: 'get_monthly_operating_profit (migration 20260821140000)'
+            }
+          }
+        },
+        {
+          kunci: 'overhead',
+          label: 'Overhead SDM',
+          nilai: formatCurrency(result.overhead, { maxDecimals: 0 }),
+          keterangan: 'Angka standar bulanan (belum dialokasikan per batch)',
+          waspada: false,
+          asalUsul: {
+            label: 'Overhead SDM Bulanan',
+            envelope: {
+              formula:
+                'Nilai tetap dari company_settings.monthly_overhead_baseline untuk periode ini — TIDAK dialokasikan ke batch/order tertentu di v1 (overhead_allocation="off").',
+              inputs: [{ label: 'Periode', value: `${formatDateId(result.period_start)} – ${formatDateId(result.period_end)}` }],
+              sourceDocument: 'docs/spesifikasi-aturan-biaya-v1.md (K2 Tingkat 2)'
+            }
+          }
+        },
+        {
+          kunci: 'laba',
+          label: 'Laba operasional',
+          nilai: formatCurrency(result.operating_profit, { maxDecimals: 0 }),
+          keterangan: 'Margin kontribusi − overhead SDM',
+          waspada: result.operating_profit < 0,
+          asalUsul: {
+            label: 'Laba Operasional',
+            envelope: {
+              formula:
+                'Margin Kontribusi (Realized) − Overhead SDM, keduanya untuk periode yang sama. Bukan angka tersimpan sendiri — hasil pengurangan langsung dari dua kartu di sebelahnya.',
+              inputs: [
+                { label: 'Margin Kontribusi', value: formatCurrency(result.total_margin, { maxDecimals: 0 }) },
+                { label: 'Overhead SDM', value: formatCurrency(result.overhead, { maxDecimals: 0 }) }
+              ]
+            }
+          }
+        }
+      ]
+    : [];
+
   return (
-    <main className="min-h-screen bg-muted/30 py-10">
-      <div className="flex w-full flex-col gap-6 px-6">
-        <div>
-          <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Laporan Finance</p>
-          <h1 className="text-2xl font-semibold text-foreground">Laba Operasional</h1>
-        </div>
+    <div className="halaman">
+      <Breadcrumb noTrailingSlash className="halaman__remah">
+        <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
+        <BreadcrumbItem isCurrentPage>
+          <span className="cds--link halaman__remah-mati">Finance &amp; Costing</span>
+        </BreadcrumbItem>
+        <BreadcrumbItem isCurrentPage>Operating Profit</BreadcrumbItem>
+      </Breadcrumb>
 
-        <Card>
-          <CardHeader>
-            <CardDescription className="uppercase tracking-[0.2em]">Pilih Periode</CardDescription>
-            <CardTitle className="text-xl">
-              {monthLabels[month - 1]} {year}
-              {result ? (
-                <span className="ml-2 text-sm font-normal text-muted-foreground">
-                  ({formatDateId(result.period_start)} — {formatDateId(result.period_end)})
-                </span>
-              ) : null}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-3">
-            <Select value={String(month)} onValueChange={(value) => setMonth(Number(value))}>
-              <SelectTrigger className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {monthLabels.map((label, idx) => (
-                  <SelectItem key={label} value={String(idx + 1)}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={String(year)} onValueChange={(value) => setYear(Number(value))}>
-              <SelectTrigger className="w-28">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {years.map((y) => (
-                  <SelectItem key={y} value={String(y)}>
-                    {y}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </CardContent>
-        </Card>
-
-        {error ? (
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-sm text-destructive">{error}</p>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {loading ? (
-          <p className="text-sm text-muted-foreground">Memuat...</p>
-        ) : result ? (
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Card>
-              <CardContent className="flex flex-col gap-1 pt-6">
-                <span className="flex items-center gap-1 text-xs uppercase tracking-wide text-muted-foreground">
-                  Margin Kontribusi (Realized)
-                  <ProvenanceInfoButton
-                    label="Margin Kontribusi Bulanan"
-                    envelope={{
-                      formula:
-                        'Σ (qty_shipped × (harga jual per unit − unit_cost lot yang dikirim)) untuk semua baris pengiriman berstatus terkirim/diterima dalam periode ini. unit_cost diambil dari lot aktual yang dikirim (biaya sungguhan lot itu, bukan standar) — kalau lot belum punya unit_cost, dianggap 0 di baris itu.',
-                      inputs: [{ label: 'Periode', value: `${formatDateId(result.period_start)} – ${formatDateId(result.period_end)}` }],
-                      sourceDocument: 'get_monthly_operating_profit (migration 20260821140000)'
-                    }}
-                  />
-                </span>
-                <span className="text-2xl font-semibold text-foreground">{formatCurrency(result.total_margin, { maxDecimals: 0 })}</span>
-                <span className="text-xs text-muted-foreground">Dari semua pengiriman yang sudah keluar gudang di periode ini</span>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="flex flex-col gap-1 pt-6">
-                <span className="flex items-center gap-1 text-xs uppercase tracking-wide text-muted-foreground">
-                  Overhead SDM
-                  <ProvenanceInfoButton
-                    label="Overhead SDM Bulanan"
-                    envelope={{
-                      formula: 'Nilai tetap dari company_settings.monthly_overhead_baseline untuk periode ini — TIDAK dialokasikan ke batch/order tertentu di v1 (overhead_allocation="off").',
-                      inputs: [{ label: 'Periode', value: `${formatDateId(result.period_start)} – ${formatDateId(result.period_end)}` }],
-                      sourceDocument: 'docs/spesifikasi-aturan-biaya-v1.md (K2 Tingkat 2)'
-                    }}
-                  />
-                </span>
-                <span className="text-2xl font-semibold text-foreground">{formatCurrency(result.overhead, { maxDecimals: 0 })}</span>
-                <span className="text-xs text-muted-foreground">Angka standar bulanan (belum alokasi per batch)</span>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="flex flex-col gap-1 pt-6">
-                <span className="flex items-center gap-1 text-xs uppercase tracking-wide text-muted-foreground">
-                  Laba Operasional
-                  <ProvenanceInfoButton
-                    label="Laba Operasional"
-                    envelope={{
-                      formula: 'Margin Kontribusi (Realized) − Overhead SDM, keduanya untuk periode yang sama. Bukan angka tersimpan sendiri — hasil pengurangan langsung dari dua kartu di sebelahnya.',
-                      inputs: [
-                        { label: 'Margin Kontribusi', value: formatCurrency(result.total_margin, { maxDecimals: 0 }) },
-                        { label: 'Overhead SDM', value: formatCurrency(result.overhead, { maxDecimals: 0 }) }
-                      ]
-                    }}
-                  />
-                </span>
-                <span className={`text-2xl font-semibold ${result.operating_profit < 0 ? 'text-destructive' : 'text-success'}`}>
-                  {formatCurrency(result.operating_profit, { maxDecimals: 0 })}
-                </span>
-                <span className="text-xs text-muted-foreground">Margin Kontribusi − Overhead SDM</span>
-              </CardContent>
-            </Card>
-          </div>
-        ) : null}
+      <div>
+        <h1 className="halaman__judul">Laba operasional</h1>
+        <p className="halaman__pengantar">
+          {monthLabels[month - 1]} {year}
+          {result ? ` — periode ${formatDateId(result.period_start)} sampai ${formatDateId(result.period_end)}` : ''}.
+          Periodenya mengikuti tanggal gajian perusahaan, bukan bulan kalender.
+        </p>
       </div>
-    </main>
+
+      <div className="laba-periode">
+        <Dropdown
+          id="laba-bulan"
+          size="lg"
+          titleText="Bulan"
+          label="Pilih bulan"
+          items={monthLabels.map((_, idx) => idx + 1)}
+          selectedItem={month}
+          itemToString={(item: number) => monthLabels[item - 1]}
+          onChange={({ selectedItem }: { selectedItem: number | null }) => selectedItem && setMonth(selectedItem)}
+        />
+        <Dropdown
+          id="laba-tahun"
+          size="lg"
+          titleText="Tahun"
+          label="Pilih tahun"
+          items={years}
+          selectedItem={year}
+          itemToString={(item: number) => String(item)}
+          onChange={({ selectedItem }: { selectedItem: number | null }) => selectedItem && setYear(selectedItem)}
+        />
+      </div>
+
+      {error ? <InlineNotification kind="error" lowContrast title="Gagal memuat" subtitle={error} hideCloseButton /> : null}
+
+      {loading ? (
+        <SkeletonText paragraph lineCount={3} />
+      ) : result ? (
+        <div className="kisi-metrik laba-kisi">
+          {kartu.map((k) => (
+            <Tile key={k.kunci}>
+              <span className="metrik__label laba-label">
+                {k.label}
+                <ProvenanceInfoButton label={k.asalUsul.label} envelope={k.asalUsul.envelope} />
+              </span>
+              <span className={`metrik__angka ${k.waspada ? 'metrik__angka--waspada' : ''}`}>{k.nilai}</span>
+              <p className="halaman__redup laba-keterangan">{k.keterangan}</p>
+            </Tile>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }

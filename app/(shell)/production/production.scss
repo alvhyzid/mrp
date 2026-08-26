@@ -1,0 +1,128 @@
+@use '@carbon/react/scss/spacing' as *;
+@use '@carbon/react/scss/theme' as *;
+@use '@carbon/react/scss/type' as *;
+@use '@carbon/react/scss/breakpoint' as *;
+
+// Gaya khas Dashboard Produksi. Nol angka px, nol warna heksadesimal.
+
+.produksi-tombol-kembali,
+.produksi-tombol-gangguan {
+  align-self: flex-start;
+}
+
+.produksi-aksi-sel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-03;
+}
+
+.produksi-progres {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+  padding-block: $spacing-03;
+}
+
+.produksi-batch-aksi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-04;
+  padding: $spacing-04 $spacing-05;
+  background-color: $layer-02;
+  border: 1px solid $border-subtle-01;
+}
+
+.produksi-tahap {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-04;
+  padding: $spacing-05;
+  background-color: $layer-02;
+  border: 1px solid $border-subtle-01;
+}
+
+.produksi-tahap__kepala {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-04;
+}
+
+.produksi-tahap__nama {
+  @include type-style('heading-compact-01');
+  color: $text-primary;
+}
+
+.produksi-tahap__isi {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: $spacing-05;
+  align-items: end;
+
+  @include breakpoint('md') {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @include breakpoint('lg') {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .cds--btn {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+}
+
+.produksi-output {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+  padding-block-start: $spacing-05;
+  border-block-start: 1px solid $border-subtle-01;
+}
+
+.produksi-output__kepala {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-04;
+}
+
+.produksi-output__baris {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: $spacing-05;
+  padding: $spacing-05;
+  background-color: $layer-02;
+  border: 1px solid $border-subtle-01;
+
+  @include breakpoint('md') {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @include breakpoint('lg') {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .cds--btn--danger--tertiary {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+}
+
+.produksi-form {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: $spacing-05;
+
+  @include breakpoint('md') {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.produksi-form__lebar-penuh {
+  grid-column: 1 / -1;
+}

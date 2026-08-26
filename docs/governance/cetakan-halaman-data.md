@@ -92,6 +92,26 @@ kontrolnya di dalam.
 itulah yang dipakai menghitung tanggal kedaluwarsa; menyembunyikannya membuat pengguna tidak
 punya cara memeriksa apakah sistem memahami maksudnya.
 
+**DUA ATURAN TURUNAN, keduanya lahir dari kasus nyata:**
+
+**SATU LABEL, bukan label per bagian.** Dua field bisa berdampingan dan tetap tidak terbaca
+sebagai satu isian bila masing-masing punya label sendiri. **Bukan jaraknya yang memisahkan,
+melainkan labelnya.** "Shelf life" + "Satuan shelf life" terbaca sebagai dua hal; satu kelompok
+berlabel "Masa simpan" terbaca sebagai satu.
+
+**FIELD YANG SALING MEMBATALKAN wajib berdekatan, dan hubungannya wajib TERLIHAT** — bukan
+hanya diketahui kode. Bila mengisi satu field membuat field lain tidak berlaku, letakkan
+keduanya berdampingan dan katakan hubungannya di layar (mis. `warnText` pada yang diabaikan).
+
+Ini lebih berat daripada aturan label: yang itu membuat orang **tidak menemukan** isiannya;
+yang ini membuat orang **mengisi sesuatu yang diam-diam tidak berlaku**.
+
+**PEMERIKSAAN WAJIB SAAT MEMIGRASIKAN SETIAP HALAMAN** — sapuan otomatis hanya bisa melihat
+form yang sudah Carbon, jadi 31 halaman sisanya tertangkap di sini:
+1. Adakah isian yang secara makna satu hal tapi punya label per bagian?
+2. Adakah field yang mengisinya membuat field lain tidak berlaku?
+Bila ya untuk salah satunya, satukan sebelum halaman dinyatakan selesai.
+
 ---
 
 ## 4. Keadaan
@@ -161,3 +181,27 @@ Diperbaiki **sekali di `src/styles/carbon.scss`**, berlaku seluruh halaman.
 `components/data-table/usage` · `components/breadcrumb/usage` · `components/modal/usage` ·
 `components/tag/usage` · `patterns/filtering` · `patterns/empty-states-pattern` ·
 `react.carbondesignsystem.com` untuk propertinya.
+
+---
+
+## 9. KERANGKA HALAMAN BERSAMA (ditetapkan 25 Agu 2026, saat DS-09 dimulai)
+
+**Sebelum menyentuh halaman, pakai kelas kerangka yang SUDAH ADA di `src/styles/carbon.scss`.**
+
+| Kelas | Untuk |
+|---|---|
+| `.halaman` | Pembungkus halaman: padding + jarak antar bagian |
+| `.halaman__remah` | Remah roti |
+| `.halaman__remah-mati` | Tingkat yang bukan halaman — Carbon membuat SEMUA butir remah tampak biru dan bisa diklik |
+| `.halaman__judul` | Judul halaman (`productive-heading-04`) |
+| `.halaman__pengantar` | Kalimat pengantar, menyebut jumlah dan hasil saringan |
+| `.halaman__saring` | Saringan di toolbar; lebarnya dibatasi supaya tidak mendorong tombol utama keluar |
+| `.halaman__redup` | Teks sekunder, mis. tanda "—" untuk nilai kosong |
+| `.kisi-metrik` + `.metrik__*` | Kartu angka di dashboard — Carbon **tidak punya** komponen "kartu angka" |
+
+**Kelas sendiri HANYA untuk yang khas halaman itu** (kolom angka, kartu detail, susunan isian khusus). Bila tergoda menyalin kerangka dengan awalan nama sendiri: itu **cetakan yang tersalin**, dan perbaikan berikutnya harus mencari di 29 tempat.
+
+### Dua jebakan yang sudah terbukti, sebutkan lagi saat menyentuh halaman serupa
+
+1. **Kontrol Carbon TIDAK menaruh nilainya di `FormData`.** Halaman yang membaca formnya lewat `FormData` saat submit perlu menyimpan nilainya di state dan meneruskannya lewat input tersembunyi. **Lapisan servernya tidak perlu diubah sama sekali.**
+2. **Komponen Carbon di konteks yang tidak diatur Carbon perlu ditempatkan sendiri.** `Checkbox` di dalam toolbar tabel membawa margin atas dan tidak menyejajarkan diri; `ToastNotification` tidak punya posisi sama sekali. Ini **bukan menimpa gaya Carbon** — ini mengisi yang memang tidak diatur.

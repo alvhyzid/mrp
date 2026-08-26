@@ -35,7 +35,22 @@ export async function listItems(request: NextRequest): Promise<ApiResult> {
     const canSeeCost = canViewFinancialData(appUser.role);
     const items = (data ?? []).map((item) => (canSeeCost ? item : { ...item, standard_cost: null }));
 
-    return { status: 200, body: { items } };
+    // PERSEN BAWAAN PERUSAHAAN (setelan ke-18, MST-27) ikut dikirim — BUKAN untuk dihitung
+    // di layar, melainkan supaya layar bisa MENYEBUTKAN ambang mana yang sedang menang saat
+    // kedua kolom item dikosongkan. Tanpa ini, form menampilkan dua kolom kosong dan diam
+    // soal apa yang sebenarnya berlaku, dan itu persis kelas cacat "field yang saling
+    // membatalkan tanpa keterangan siapa yang menang".
+    const { data: setelan } = await adminClient
+      .from('company_settings')
+      .select('setting_value')
+      .eq('company_id', appUser.company_id)
+      .eq('setting_key', 'default_min_stock_percent')
+      .maybeSingle();
+    const mentah = setelan?.setting_value;
+    const persen_bawaan_perusahaan =
+      mentah === undefined || mentah === null || String(mentah).trim() === '' ? null : Number(mentah);
+
+    return { status: 200, body: { items, persen_bawaan_perusahaan } };
   } catch (error) {
     return { status: 401, body: { error: error instanceof Error ? error.message : String(error) } };
   }

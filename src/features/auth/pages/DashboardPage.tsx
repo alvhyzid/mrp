@@ -2,9 +2,23 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { Tile, SkeletonText, InlineNotification } from '@carbon/react';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import { getDashboardRouteForRole, isCompanyLeadership } from '@/lib/roles';
-import { Card, CardContent } from '@/components/ui/card';
+
+// HALAMAN RINGKASAN — dimigrasikan ke Carbon 25 Agu 2026.
+//
+// POLA: halaman ini BUKAN halaman data bertabel, jadi cetakan halaman data tidak berlaku
+// penuh. Carbon tidak punya pola "dashboard" tersendiri; yang terdekat adalah Tile sebagai
+// wadah isi berkelompok. Disebut terbuka sesuai aturan B.2 — jangan diam-diam merancang
+// sendiri lalu mengaku mengikuti pola.
+//
+// REMAH ROTI SENGAJA TIDAK ADA: halaman ini akar navigasi. Remah roti satu butir hanya
+// menunjukkan tempat yang sudah jelas, dan menambah baris tanpa menambah keterangan.
+//
+// KARTU ANGKA memakai kelas bersama `.kisi-metrik`/`.metrik__*` di src/styles/carbon.scss —
+// Carbon tidak punya komponen "kartu angka", jadi ukurannya ditetapkan sekali di sana supaya
+// dashboard berikutnya tidak memilih ukuran angkanya sendiri.
 
 type Summary = {
   newPoCount: number;
@@ -61,7 +75,7 @@ export default function DashboardPage() {
       }
 
       setUserEmail(data.session.user.email ?? null);
-      setIsLeadership(meResponse.ok && isCompanyLeadership(meData?.user?.role));
+      setIsLeadership(meResponse.ok ? isCompanyLeadership(meData?.user?.role) : false);
       setLoading(false);
     };
 
@@ -69,18 +83,23 @@ export default function DashboardPage() {
   }, [router]);
 
   useEffect(() => {
-    // KPI lintas-department cuma relevan untuk company_admin/general_manager —
-    // department lain sudah punya dashboard sendiri sebagai halaman utama mereka.
     if (!isLeadership) return;
 
     const loadSummary = async () => {
-      const accessToken = await getAccessToken();
-      if (!accessToken) return;
       setSummaryLoading(true);
-      const response = await fetch('/api/dashboard-summary', { headers: { Authorization: `Bearer ${accessToken}` } });
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        setSummaryError('Sesi tidak valid.');
+        setSummaryLoading(false);
+        return;
+      }
+
+      const response = await fetch('/api/dashboard/summary', {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
       const data = await response.json();
       if (!response.ok) {
-        setSummaryError(data.error || 'Gagal memuat ringkasan KPI.');
+        setSummaryError(data.error || 'Gagal memuat ringkasan.');
         setSummaryLoading(false);
         return;
       }
@@ -93,61 +112,50 @@ export default function DashboardPage() {
   }, [isLeadership, getAccessToken]);
 
   if (loading) {
+    // SkeletonText Carbon menggantikan tulisan "Memuat dashboard...". Bentuk rangkanya
+    // menunjukkan APA yang sedang datang; kalimat "memuat" hanya menyatakan bahwa sesuatu
+    // sedang terjadi.
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="px-6 text-center text-sm text-muted-foreground">Memuat dashboard...</div>
-      </main>
+      <div className="halaman">
+        <SkeletonText heading width="18rem" />
+        <SkeletonText paragraph lineCount={2} />
+      </div>
     );
   }
 
-  return (
-    <main className="min-h-screen bg-muted/30 py-10">
-      <div className="flex w-full flex-col gap-6 px-6">
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Ringkasan</p>
-            <h1 className="mt-2 text-2xl font-semibold text-foreground">Selamat datang</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Halo <span className="font-semibold text-foreground">{userEmail ?? 'pengguna'}</span>. Gunakan menu di kiri untuk membuka modul yang Anda perlukan.
-            </p>
-            {error ? <p className="mt-4 text-sm text-destructive">{error}</p> : null}
-          </CardContent>
-        </Card>
+  const metrik: { label: string; nilai: number | undefined; waspada?: boolean }[] = [
+    { label: 'PO klien baru menunggu persetujuan', nilai: summary?.newPoCount },
+    { label: 'Pesanan penjualan sedang berjalan', nilai: summary?.activeSoCount },
+    { label: 'Karyawan aktif', nilai: summary?.activeEmployeeCount },
+    { label: 'Bahan di bawah stok minimum', nilai: summary?.belowMinStockCount, waspada: (summary?.belowMinStockCount ?? 0) > 0 }
+  ];
 
-        {isLeadership ? (
-          <>
-            {summaryError ? <p className="text-sm text-destructive">{summaryError}</p> : null}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Card>
-                <CardContent className="flex flex-col gap-1 pt-6">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">PO Baru / Menunggu Approval</span>
-                  <span className="text-3xl font-semibold text-foreground">{summaryLoading ? '...' : (summary?.newPoCount ?? 0)}</span>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="flex flex-col gap-1 pt-6">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">SO Sedang Berjalan</span>
-                  <span className="text-3xl font-semibold text-foreground">{summaryLoading ? '...' : (summary?.activeSoCount ?? 0)}</span>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="flex flex-col gap-1 pt-6">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">Karyawan Aktif</span>
-                  <span className="text-3xl font-semibold text-foreground">{summaryLoading ? '...' : (summary?.activeEmployeeCount ?? 0)}</span>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="flex flex-col gap-1 pt-6">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">Item Bahan di Bawah Min. Stok</span>
-                  <span className={`text-3xl font-semibold ${summary && summary.belowMinStockCount > 0 ? 'text-destructive' : 'text-foreground'}`}>
-                    {summaryLoading ? '...' : (summary?.belowMinStockCount ?? 0)}
-                  </span>
-                </CardContent>
-              </Card>
-            </div>
-          </>
-        ) : null}
+  return (
+    <div className="halaman">
+      <div>
+        <h1 className="halaman__judul">Ringkasan</h1>
+        <p className="halaman__pengantar">
+          Halo {userEmail ?? 'pengguna'}. Gunakan menu di kiri untuk membuka modul yang Anda perlukan.
+        </p>
       </div>
-    </main>
+
+      {error ? <InlineNotification kind="error" lowContrast title="Konfigurasi bermasalah" subtitle={error} hideCloseButton /> : null}
+      {summaryError ? <InlineNotification kind="error" lowContrast title="Gagal memuat ringkasan" subtitle={summaryError} hideCloseButton /> : null}
+
+      {isLeadership ? (
+        <div className="kisi-metrik">
+          {metrik.map((m) => (
+            <Tile key={m.label}>
+              <span className="metrik__label">{m.label}</span>
+              {summaryLoading ? (
+                <SkeletonText heading width="4rem" />
+              ) : (
+                <span className={`metrik__angka ${m.waspada ? 'metrik__angka--waspada' : ''}`}>{m.nilai ?? 0}</span>
+              )}
+            </Tile>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }

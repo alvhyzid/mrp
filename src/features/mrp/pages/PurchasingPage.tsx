@@ -1,27 +1,44 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import type { ColumnDef } from '@tanstack/react-table';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { DataTable } from '@/components/ui/data-table';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { formatCurrency, formatNumberId } from '@/lib/currency';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogBody,
-  DialogFooter,
-  DialogTitle,
-  DialogDescription,
-  carbonModalContent,
-  carbonModalHeader
-} from '@/components/ui/dialog';
+  Button,
+  ComposedModal,
+  DataTable,
+  DataTableSkeleton,
+  Dropdown,
+  InlineNotification,
+  ModalBody,
+  ModalFooter,
+  ModalHeader,
+  NumberInput,
+  Pagination,
+  SkeletonText,
+  StructuredListBody,
+  StructuredListCell,
+  StructuredListRow,
+  StructuredListWrapper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableExpandHeader,
+  TableExpandRow,
+  TableExpandedRow,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableToolbar,
+  TableToolbarContent,
+  TableToolbarSearch,
+  Tag,
+  TextInput
+} from '@carbon/react';
+import { Add, TrashCan } from '@carbon/icons-react';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
+import { formatCurrency, formatNumberId } from '@/lib/currency';
 import { canManagePurchasing } from '@/lib/roles';
 
 type Supplier = {
@@ -91,12 +108,14 @@ const emptySupplierPriceForm = {
 };
 
 const supplierTypeLabels: Record<string, string> = { material_supplier: 'Pemasok Bahan', subcontractor: 'Subkontraktor', both: 'Keduanya' };
-const poStatusVariant: Record<string, 'info' | 'warning' | 'success' | 'secondary' | 'critical'> = {
-  draft: 'secondary',
-  ordered: 'info',
-  partially_received: 'warning',
-  received: 'success',
-  cancelled: 'critical'
+/// Warna Tag mengikuti ARTI. "Diterima sebagian" ungu, bukan kuning: itu kemajuan yang
+/// normal, bukan peringatan. Hanya "dibatalkan" yang merah.
+const poStatusWarnaTag: Record<string, 'gray' | 'blue' | 'purple' | 'green' | 'red'> = {
+  draft: 'gray',
+  ordered: 'blue',
+  partially_received: 'purple',
+  received: 'green',
+  cancelled: 'red'
 };
 
 export default function PurchasingPage() {
@@ -144,6 +163,15 @@ export default function PurchasingPage() {
   // 'ringkasan' (draf ditampilkan, baru dikonfirmasi). Lihat handleLanjutKeRingkasan.
   const [tahapSupplier, setTahapSupplier] = useState<'isian' | 'ringkasan'>('isian');
   const [isPoModalOpen, setIsPoModalOpen] = useState(false);
+
+  // Pencarian, saringan, dan pembagian halaman: Carbon DataTable tidak membawanya.
+  const [cariSupplier, setCariSupplier] = useState('');
+  const [saringSupplier, setSaringSupplier] = useState<string>('aktif');
+  const [cariPo, setCariPo] = useState('');
+  const [saringPo, setSaringPo] = useState<string>('semua');
+  const [halamanPo, setHalamanPo] = useState(1);
+  const [perHalamanPo, setPerHalamanPo] = useState(15);
+  const adaSaringan = cariSupplier.trim() !== '' || saringSupplier !== 'aktif' || cariPo.trim() !== '' || saringPo !== 'semua';
   const [expandedPoId, setExpandedPoId] = useState<number | null>(null);
 
   const getAccessToken = useCallback(async () => {
@@ -223,6 +251,15 @@ export default function PurchasingPage() {
     loadSuppliers(showArchivedSuppliers);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showArchivedSuppliers]);
+
+  /// Menutup modal supplier DAN mengembalikannya ke tahap isian. Tanpa mengembalikan
+  /// tahapnya, modal yang ditutup saat sedang menampilkan ringkasan akan terbuka kembali
+  /// langsung di ringkasan draf yang sudah tidak relevan.
+  const tutupSupplierModal = () => {
+    setIsSupplierModalOpen(false);
+    setTahapSupplier('isian');
+    resetSupplierForm();
+  };
 
   const resetSupplierForm = () => {
     setTahapSupplier('isian');
@@ -498,609 +535,873 @@ export default function PurchasingPage() {
     await loadPurchaseOrders();
   };
 
-  const supplierColumns = useMemo<ColumnDef<Supplier>[]>(
-    () => [
-      { id: 'name', header: 'Nama', cell: ({ row }) => <span className="font-medium text-foreground">{row.original.name}</span> },
-      { id: 'pic', header: 'PIC', cell: ({ row }) => row.original.pic_name ?? '-' },
-      { id: 'lead_time', header: 'Lead Time', cell: ({ row }) => (row.original.lead_time_days !== null ? `${formatNumberId(row.original.lead_time_days, 0)} hari` : '-') },
-      { id: 'type', header: 'Jenis', cell: ({ row }) => supplierTypeLabels[row.original.supplier_type] ?? row.original.supplier_type },
-      {
-        id: 'status',
-        header: 'Status',
-        cell: ({ row }) =>
-          row.original.archived_at ? (
-            <span className="text-data text-xs text-muted-foreground">
-              Diarsipkan{row.original.archived_by_name ? ` oleh ${row.original.archived_by_name}` : ''}
-            </span>
-          ) : (
-            <span className="text-data text-success-subtle-foreground">Aktif</span>
-          )
-      },
-      {
-        id: 'actions',
-        header: 'Aksi',
-        cell: ({ row }) => (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" variant="outline" onClick={() => toggleSupplierDetail(row.original)}>
-              {expandedSupplierId === row.original.supplier_id ? 'Tutup' : 'Bahan Dipasok'}
-            </Button>
-            {canManage && !row.original.archived_at ? (
-              <Button size="sm" variant="outline" onClick={() => startEditSupplier(row.original)}>
-                Edit
-              </Button>
-            ) : null}
-            {canManage && row.original.archived_at ? (
-              <Button size="sm" variant="outline" onClick={() => handleRestoreSupplier(row.original)}>
-                Pulihkan
-              </Button>
-            ) : null}
-            {canManage && !row.original.archived_at && row.original.can_delete ? (
-              <Button size="sm" variant="destructive" onClick={() => handleDeleteSupplier(row.original)}>
-                Hapus
-              </Button>
-            ) : null}
-            {canManage && !row.original.archived_at && !row.original.can_delete ? (
-              <Button size="sm" variant="destructive" onClick={() => handleArchiveSupplier(row.original)}>
-                Arsipkan
-              </Button>
-            ) : null}
-          </div>
-        )
-      }
-    ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [canManage, expandedSupplierId]
+
+  // ==========================================================================
+  // TABEL SUPPLIER — cetakan Master Item
+  // ==========================================================================
+  const kolomSupplier = [
+    { key: 'name', header: 'Nama' },
+    { key: 'pic', header: 'PIC' },
+    { key: 'lead_time', header: 'Lead time' },
+    { key: 'type', header: 'Jenis' },
+    { key: 'status', header: 'Status' },
+    { key: 'aksi', header: 'Aksi' }
+  ];
+
+  const supplierTersaring = useMemo(() => {
+    const kata = cariSupplier.trim().toLowerCase();
+    return suppliers.filter((s) => {
+      if (saringSupplier === 'aktif' && s.archived_at) return false;
+      if (saringSupplier === 'diarsipkan' && !s.archived_at) return false;
+      if (!kata) return true;
+      return s.name.toLowerCase().includes(kata);
+    });
+  }, [suppliers, cariSupplier, saringSupplier]);
+
+  const supplierById = useMemo(() => new Map(suppliers.map((s) => [String(s.supplier_id), s])), [suppliers]);
+
+  const barisSupplier = useMemo(
+    () =>
+      supplierTersaring.map((s) => ({
+        id: String(s.supplier_id),
+        name: s.name,
+        pic: s.pic_name ?? '',
+        lead_time: s.lead_time_days ?? 0,
+        type: supplierTypeLabels[s.supplier_type] ?? s.supplier_type,
+        status: s.archived_at ? 'Diarsipkan' : 'Aktif',
+        aksi: ''
+      })),
+    [supplierTersaring]
   );
 
+  const isiSelSupplier = (s: Supplier, kunci: string) => {
+    switch (kunci) {
+      case 'name':
+        return s.name;
+      case 'pic':
+        return s.pic_name ?? <span className="halaman__redup">—</span>;
+      case 'lead_time':
+        return s.lead_time_days !== null ? `${formatNumberId(s.lead_time_days, 0)} hari` : <span className="halaman__redup">—</span>;
+      case 'type':
+        return supplierTypeLabels[s.supplier_type] ?? s.supplier_type;
+      case 'status':
+        return s.archived_at ? (
+          <Tag type="cool-gray">Diarsipkan{s.archived_by_name ? ` oleh ${s.archived_by_name}` : ''}</Tag>
+        ) : (
+          <Tag type="green">Aktif</Tag>
+        );
+      case 'aksi':
+        return (
+          <div className="beli-aksi">
+            <div className="beli-aksi__biasa">
+              {canManage && !s.archived_at ? (
+                <Button kind="ghost" size="sm" onClick={() => startEditSupplier(s)}>
+                  Ubah
+                </Button>
+              ) : null}
+              {canManage && s.archived_at ? (
+                <Button kind="ghost" size="sm" onClick={() => handleRestoreSupplier(s)}>
+                  Pulihkan
+                </Button>
+              ) : null}
+            </div>
+            {/* AKSI MERUSAK DIDORONG KE KANAN, terpisah dari aksi sehari-hari. */}
+            {canManage && !s.archived_at ? (
+              <div className="beli-aksi__merusak">
+                {s.can_delete ? (
+                  <Button kind="danger--tertiary" size="sm" onClick={() => handleDeleteSupplier(s)}>
+                    Hapus
+                  </Button>
+                ) : (
+                  <Button kind="danger--tertiary" size="sm" onClick={() => handleArchiveSupplier(s)}>
+                    Arsipkan
+                  </Button>
+                )}
+              </div>
+            ) : null}
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
   const renderSupplierDetail = (supplier: Supplier) => (
-    <div className="flex flex-col gap-3">
+    <div className="beli-detail">
       {supplierActionMessage && supplierActionMessage.supplierId === supplier.supplier_id ? (
-        <p className={`text-sm ${supplierActionMessage.kind === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>{supplierActionMessage.message}</p>
+        <InlineNotification
+          kind={supplierActionMessage.kind === 'success' ? 'success' : 'error'}
+          lowContrast
+          hideCloseButton
+          title={supplierActionMessage.kind === 'success' ? 'Berhasil' : 'Gagal'}
+          subtitle={supplierActionMessage.message}
+        />
       ) : null}
-      <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-        <span>Alamat: {supplier.address ?? '-'}</span>
-        <span>NPWP: {supplier.npwp ?? '-'}</span>
-        <span>PIC: {supplier.pic_name ?? '-'}{supplier.pic_phone ? ` — ${supplier.pic_phone}` : ''}{supplier.pic_email ? ` — ${supplier.pic_email}` : ''}</span>
-        <span>Termin Pembayaran: {supplier.payment_terms ?? '-'}</span>
-      </div>
-      <div className="flex items-center justify-between">
-        <h4 className="text-sm font-semibold text-foreground">Bahan yang Dipasok</h4>
+
+      <StructuredListWrapper isCondensed aria-label={`Rincian supplier ${supplier.name}`}>
+        <StructuredListBody>
+          {[
+            ['Alamat', supplier.address ?? '—'],
+            ['NPWP', supplier.npwp ?? '—'],
+            ['PIC', `${supplier.pic_name ?? '—'}${supplier.pic_phone ? ` — ${supplier.pic_phone}` : ''}${supplier.pic_email ? ` — ${supplier.pic_email}` : ''}`],
+            ['Termin pembayaran', supplier.payment_terms ?? '—']
+          ].map(([label, nilai]) => (
+            <StructuredListRow key={String(label)}>
+              <StructuredListCell noWrap>{label}</StructuredListCell>
+              <StructuredListCell>{nilai}</StructuredListCell>
+            </StructuredListRow>
+          ))}
+        </StructuredListBody>
+      </StructuredListWrapper>
+
+      <div className="beli-detail__kepala">
+        <h4 className="halaman__subjudul halaman__subjudul--rapat">Bahan yang dipasok</h4>
         {canManage && !supplier.archived_at ? (
-          <Button size="sm" onClick={startAddPrice}>
-            + Tambah Bahan
+          <Button kind="tertiary" size="sm" renderIcon={Add} onClick={startAddPrice}>
+            Tambah bahan
           </Button>
         ) : null}
       </div>
+
       {supplierPricesLoading ? (
-        <p className="text-sm text-muted-foreground">Memuat...</p>
+        <SkeletonText paragraph lineCount={3} />
       ) : supplierPrices.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Belum ada bahan yang dipasok tercatat untuk supplier ini.</p>
+        <p className="halaman__redup">Belum ada bahan yang dipasok tercatat untuk supplier ini.</p>
       ) : (
-        <div className="flex flex-col gap-2">
-          {supplierPrices.map((price) => (
-            <div key={price.supplier_item_price_id} className="rounded-md border bg-background p-3 text-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-medium text-foreground">
-                    {price.item_code} — {price.item_name}
-                  </p>
-                  {price.supplier_item_code || price.supplier_item_name ? (
-                    <p className="text-xs text-muted-foreground">
-                      Kode/nama menurut supplier: {price.supplier_item_code ?? '-'} {price.supplier_item_name ? `(${price.supplier_item_name})` : ''}
-                    </p>
-                  ) : null}
-                </div>
-                {canManage && !supplier.archived_at ? (
-                  <div className="flex shrink-0 gap-2">
-                    <Button size="sm" variant="outline" onClick={() => startEditPrice(price)}>
-                      Edit
-                    </Button>
-                    <Button size="sm" variant="destructive" onClick={() => handleDeletePrice(price)}>
-                      Hapus
-                    </Button>
+        <Table size="lg" className="tabel-responsif">
+          <TableHead>
+            <TableRow>
+              <TableHeader>Bahan</TableHeader>
+              <TableHeader>Harga acuan</TableHeader>
+              <TableHeader>Minimum order</TableHeader>
+              <TableHeader>Lead time khusus</TableHeader>
+              {canManage && !supplier.archived_at ? <TableHeader>Aksi</TableHeader> : null}
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {supplierPrices.map((price) => (
+              <TableRow key={price.supplier_item_price_id}>
+                <TableCell data-label="Bahan">
+                  <div className="beli-sel-bahan">
+                    <span className="beli-sel-bahan__kode">
+                      {price.item_code} — {price.item_name}
+                    </span>
+                    {price.supplier_item_code || price.supplier_item_name ? (
+                      <span className="beli-sel-bahan__alias">
+                        Menurut supplier: {price.supplier_item_code ?? '—'} {price.supplier_item_name ? `(${price.supplier_item_name})` : ''}
+                      </span>
+                    ) : null}
+                    {price.notes ? <span className="beli-sel-bahan__alias">Catatan: {price.notes}</span> : null}
                   </div>
-                ) : null}
-              </div>
-              <div className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
-                <span>
-                  Harga acuan — belum ada pembelian nyata:{' '}
-                  {price.reference_price !== null ? formatCurrency(price.reference_price, { maxDecimals: 0 }) : '-'}
+                </TableCell>
+                <TableCell data-label="Harga acuan">
+                  {/* DISEBUT TERBUKA: ini harga ACUAN, bukan harga pembelian nyata. Menyebutnya
+                      "harga" saja membuat orang mengira ini yang benar-benar dibayar. */}
+                  {price.reference_price !== null ? formatCurrency(price.reference_price, { maxDecimals: 0 }) : '—'}
                   {price.price_valid_from ? ` (berlaku sejak ${price.price_valid_from})` : ''}
-                </span>
-                <span>
-                  Minimum Order: {price.min_order_qty !== null ? `${formatNumberId(price.min_order_qty, 2)} ${price.min_order_uom ?? ''}` : '-'}
-                </span>
-                <span>Lead Time Khusus: {price.lead_time_days_override !== null ? `${price.lead_time_days_override} hari` : '(pakai lead time umum supplier)'}</span>
-                {price.notes ? <span>Catatan: {price.notes}</span> : null}
-              </div>
-            </div>
-          ))}
-        </div>
+                </TableCell>
+                <TableCell data-label="Minimum order">
+                  {price.min_order_qty !== null ? `${formatNumberId(price.min_order_qty, 2)} ${price.min_order_uom ?? ''}` : '—'}
+                </TableCell>
+                <TableCell data-label="Lead time khusus">
+                  {price.lead_time_days_override !== null ? `${price.lead_time_days_override} hari` : 'Pakai lead time umum supplier'}
+                </TableCell>
+                {canManage && !supplier.archived_at ? (
+                  <TableCell data-label="Aksi">
+                    <div className="beli-aksi">
+                      <div className="beli-aksi__biasa">
+                        <Button kind="ghost" size="sm" onClick={() => startEditPrice(price)}>
+                          Ubah
+                        </Button>
+                      </div>
+                      <div className="beli-aksi__merusak">
+                        <Button kind="danger--tertiary" size="sm" onClick={() => handleDeletePrice(price)}>
+                          Hapus
+                        </Button>
+                      </div>
+                    </div>
+                  </TableCell>
+                ) : null}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </div>
   );
 
-  const poColumns = useMemo<ColumnDef<PurchaseOrder>[]>(
-    () => [
-      { id: 'po_number', header: 'No. PO', cell: ({ row }) => <span className="font-medium text-foreground">PO-{String(row.original.purchase_order_id).padStart(4, '0')}</span> },
-      {
-        id: 'supplier',
-        header: 'Supplier',
-        cell: ({ row }) => (
-          <div className="flex flex-col gap-0.5">
-            <span>{row.original.supplier_name ?? '-'}</span>
-            {row.original.identity_predates_snapshot ? (
-              <span className="text-xs text-muted-foreground">Terbit sebelum pembekuan identitas berlaku</span>
-            ) : null}
-          </div>
-        )
-      },
-      { id: 'plant', header: 'Lokasi', cell: ({ row }) => row.original.production_plant_name ?? '-' },
-      { id: 'status', header: 'Status', cell: ({ row }) => <Badge variant={poStatusVariant[row.original.status] ?? 'secondary'}>{row.original.status_label}</Badge> },
-      { id: 'order_date', header: 'Tanggal Pesan', cell: ({ row }) => row.original.order_date },
-      { id: 'expected_date', header: 'Perkiraan Datang', cell: ({ row }) => row.original.expected_date ?? '-' },
-      {
-        id: 'actions',
-        header: 'Aksi',
-        cell: ({ row }) => (
-          <Button size="sm" variant="outline" onClick={() => setExpandedPoId((current) => (current === row.original.purchase_order_id ? null : row.original.purchase_order_id))}>
-            {expandedPoId === row.original.purchase_order_id ? 'Tutup' : 'Detail'}
-          </Button>
-        )
-      }
-    ],
-    [expandedPoId]
+  // ==========================================================================
+  // TABEL PO KE SUPPLIER
+  // ==========================================================================
+  const kolomPo = [
+    { key: 'po_number', header: 'No. PO' },
+    { key: 'supplier', header: 'Supplier' },
+    { key: 'plant', header: 'Lokasi' },
+    { key: 'status', header: 'Status' },
+    { key: 'order_date', header: 'Tanggal pesan' },
+    { key: 'expected_date', header: 'Perkiraan datang' }
+  ];
+
+  const poTersaring = useMemo(() => {
+    const kata = cariPo.trim().toLowerCase();
+    return purchaseOrders.filter((po) => {
+      if (saringPo !== 'semua' && po.status !== saringPo) return false;
+      if (!kata) return true;
+      return `PO-${String(po.purchase_order_id).padStart(4, '0')} ${po.supplier_name ?? ''}`.toLowerCase().includes(kata);
+    });
+  }, [purchaseOrders, cariPo, saringPo]);
+
+  const poHalamanIni = useMemo(() => poTersaring.slice((halamanPo - 1) * perHalamanPo, halamanPo * perHalamanPo), [poTersaring, halamanPo, perHalamanPo]);
+  const poById = useMemo(() => new Map(purchaseOrders.map((po) => [String(po.purchase_order_id), po])), [purchaseOrders]);
+
+  const barisPo = useMemo(
+    () =>
+      poHalamanIni.map((po) => ({
+        id: String(po.purchase_order_id),
+        po_number: `PO-${String(po.purchase_order_id).padStart(4, '0')}`,
+        supplier: po.supplier_name ?? '',
+        plant: po.production_plant_name ?? '',
+        status: po.status_label,
+        order_date: po.order_date,
+        expected_date: po.expected_date ?? ''
+      })),
+    [poHalamanIni]
   );
 
-  const renderPoDetail = (po: PurchaseOrder) => (
-    <div className="overflow-x-auto rounded-md border bg-background">
-      <table className="w-full text-data">
-        <thead>
-          <tr className="border-b">
-            <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Item</th>
-            <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Dipesan</th>
-            <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Diterima</th>
-            {po.lines.some((l) => l.unit_price !== null) ? <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Harga Satuan</th> : null}
-          </tr>
-        </thead>
-        <tbody>
-          {po.lines.map((line) => (
-            <tr key={line.purchase_order_line_id} className="border-b last:border-0">
-              <td className="px-3 py-1.5">{line.item_code ?? line.item_name}</td>
-              <td className="px-3 py-1.5">
-                {formatNumberId(line.qty_ordered, 2)} {line.purchase_uom}
-              </td>
-              <td className="px-3 py-1.5">
-                {formatNumberId(line.qty_received, 2)} {line.purchase_uom}
-              </td>
-              {po.lines.some((l) => l.unit_price !== null) ? <td className="px-3 py-1.5">{formatCurrency(line.unit_price, { maxDecimals: 0 })}</td> : null}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+  const isiSelPo = (po: PurchaseOrder, kunci: string) => {
+    switch (kunci) {
+      case 'po_number':
+        return `PO-${String(po.purchase_order_id).padStart(4, '0')}`;
+      case 'supplier':
+        return (
+          <div className="beli-sel-bahan">
+            <span className="beli-sel-bahan__kode">{po.supplier_name ?? '—'}</span>
+            {po.identity_predates_snapshot ? <span className="beli-sel-bahan__alias">Terbit sebelum pembekuan identitas berlaku</span> : null}
+          </div>
+        );
+      case 'plant':
+        return po.production_plant_name ?? <span className="halaman__redup">—</span>;
+      case 'status':
+        return <Tag type={poStatusWarnaTag[po.status] ?? 'gray'}>{po.status_label}</Tag>;
+      case 'order_date':
+        return po.order_date;
+      case 'expected_date':
+        return po.expected_date ?? <span className="halaman__redup">—</span>;
+      default:
+        return null;
+    }
+  };
+
+  const renderPoDetail = (po: PurchaseOrder) => {
+    const adaKolomHarga = po.lines.some((l) => l.unit_price !== null);
+    return (
+      <div className="beli-detail">
+        <Table size="lg" className="tabel-responsif">
+          <TableHead>
+            <TableRow>
+              <TableHeader>Item</TableHeader>
+              <TableHeader>Dipesan</TableHeader>
+              <TableHeader>Diterima</TableHeader>
+              {/* Server menyembunyikan harga untuk peran yang tidak berhak. Kepala dan isi
+                  memakai kondisi yang SAMA supaya jumlah kolomnya tidak pernah berbeda. */}
+              {adaKolomHarga ? <TableHeader>Harga satuan</TableHeader> : null}
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {po.lines.map((line) => (
+              <TableRow key={line.purchase_order_line_id}>
+                <TableCell data-label="Item">{line.item_code ?? line.item_name}</TableCell>
+                <TableCell data-label="Dipesan">
+                  {formatNumberId(line.qty_ordered, 2)} {line.purchase_uom}
+                </TableCell>
+                <TableCell data-label="Diterima">
+                  {formatNumberId(line.qty_received, 2)} {line.purchase_uom}
+                </TableCell>
+                {adaKolomHarga ? <TableCell data-label="Harga satuan">{formatCurrency(line.unit_price, { maxDecimals: 0 })}</TableCell> : null}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  };
 
   if (checkingAccess) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="px-6 text-center text-sm text-muted-foreground">Memuat...</div>
-      </main>
+      <div className="halaman">
+        <DataTableSkeleton columnCount={6} rowCount={6} showHeader showToolbar />
+      </div>
     );
   }
 
   if (accessDenied) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="max-w-3xl px-6">
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em] text-destructive">Akses Ditolak</CardDescription>
-              <CardTitle className="text-2xl">Purchasing</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <p className="text-sm text-muted-foreground">Sesi tidak valid — silakan login ulang.</p>
-              <Button onClick={() => router.push('/login')} className="w-fit">
-                Ke Halaman Login
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+      <div className="halaman">
+        <KepalaHalaman remah={[]} judul="Pembelian" />
+        <InlineNotification kind="error" lowContrast hideCloseButton title="Akses ditolak" subtitle="Halaman ini khusus peran yang berwenang atas pembelian." />
+        <Button className="beli-tombol-kembali" onClick={() => router.push('/dashboard')}>
+          Kembali ke ringkasan
+        </Button>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-muted/30 py-10">
-      <div className="flex w-full flex-col gap-6 px-6">
-        <div>
-          <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Master Data</p>
-          <h1 className="text-2xl font-semibold text-foreground">Purchasing — PO ke Supplier</h1>
-        </div>
+    <div className="halaman">
+      <KepalaHalaman
+        remah={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Supply Chain' }, { label: 'Purchasing' }]}
+        judul="Pembelian"
+        pengantar={`${supplierTersaring.length} supplier dan ${poTersaring.length} PO ke supplier${adaSaringan ? ' sesuai saringan' : ' tercatat'}.`}
+      />
 
-        <Card>
-          <CardHeader>
-            <CardDescription className="uppercase tracking-[0.2em]">Master Data</CardDescription>
-            <CardTitle className="text-xl">Supplier</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              <input type="checkbox" checked={showArchivedSuppliers} onChange={(e) => setShowArchivedSuppliers(e.target.checked)} />
-              Tampilkan yang diarsipkan
-            </label>
-            {suppliersLoading ? (
-              <p className="text-sm text-muted-foreground">Memuat...</p>
-            ) : (
-              <DataTable
-                columns={supplierColumns}
-                data={suppliers}
-                emptyMessage="Belum ada supplier."
-                searchPlaceholder="Cari nama supplier..."
-                getSearchText={(s) => s.name}
-                getRowId={(s) => String(s.supplier_id)}
-                expandedRowId={expandedSupplierId !== null ? String(expandedSupplierId) : null}
-                renderExpandedRow={renderSupplierDetail}
-                primaryAction={canManage ? { label: 'Tambah Supplier', onClick: startCreateSupplier } : undefined}
-              />
-            )}
-          </CardContent>
-        </Card>
-
-        {canManage ? (
-          <Dialog
-            open={isSupplierModalOpen}
-            onOpenChange={(open) => {
-              setIsSupplierModalOpen(open);
-              if (!open) resetSupplierForm();
-            }}
-          >
-            <DialogContent className={`max-w-lg ${carbonModalContent}`}>
-              {/* HEADER Carbon: label opsional di atas judul, judul, ikon tutup (x)
-                  disediakan DialogContent. Ikon x menutup TANPA menyimpan. */}
-              <DialogHeader className={carbonModalHeader}>
-                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {editingSupplierId ? 'Ubah data' : 'Data baru'}
-                </span>
-                <DialogTitle>{editingSupplierId ? `Ubah Supplier — ${supplierForm.name}` : 'Tambah Supplier Baru'}</DialogTitle>
-                <DialogDescription>
-                  {tahapSupplier === 'ringkasan'
-                    ? 'Periksa ringkasan di bawah. Data belum tersimpan sampai Anda menekan Simpan Supplier.'
-                    : 'Nama supplier wajib diisi. Sisanya boleh menyusul dan bisa diubah kapan saja.'}
-                </DialogDescription>
-              </DialogHeader>
-
-              <DialogBody>
-                {tahapSupplier === 'ringkasan' ? (
-                  <div className="flex flex-col gap-4">
-                    <p className="text-sm text-muted-foreground">
-                      Supplier berikut akan ditambahkan. Tekan Kembali bila masih ada yang perlu diperbaiki.
-                    </p>
-                    <dl className="divide-y border">
-                      {ringkasanDrafSupplier.map((baris) => (
-                        <div key={baris.label} className="grid gap-1 px-4 py-3 sm:grid-cols-3 sm:gap-4">
-                          <dt className="text-sm text-muted-foreground">{baris.label}</dt>
-                          <dd className="text-sm font-medium text-foreground sm:col-span-2">{baris.nilai}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-4">
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-sm font-medium text-foreground">Nama Supplier</span>
-                      <Input value={supplierForm.name} onChange={(e) => setSupplierForm((prev) => ({ ...prev, name: e.target.value }))} />
-                      {/* Aturan modal #5: placeholder TIDAK memuat instruksi/contoh --
-                          contoh dan penjelasan turun ke helper text seperti ini. */}
-                      <span className="text-xs text-muted-foreground">Contoh: PT Sumber Bahan Jaya.</span>
-                    </label>
-
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-sm font-medium text-foreground">Alamat</span>
-                      <Input value={supplierForm.address} onChange={(e) => setSupplierForm((prev) => ({ ...prev, address: e.target.value }))} />
-                      <span className="text-xs text-muted-foreground">Alamat lengkap supplier, dipakai di dokumen pembelian.</span>
-                    </label>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <label className="flex flex-col gap-1.5">
-                        <span className="text-sm font-medium text-foreground">NPWP</span>
-                        <Input value={supplierForm.npwp} onChange={(e) => setSupplierForm((prev) => ({ ...prev, npwp: e.target.value }))} />
-                        <span className="text-xs text-muted-foreground">Contoh: 01.234.567.8-901.000.</span>
-                      </label>
-                      <label className="flex flex-col gap-1.5">
-                        <span className="text-sm font-medium text-foreground">Lead Time Umum (hari)</span>
-                        <Input type="number" min={0} value={supplierForm.lead_time_days} onChange={(e) => setSupplierForm((prev) => ({ ...prev, lead_time_days: e.target.value }))} />
-                        <span className="text-xs text-muted-foreground">Bisa ditimpa per bahan lewat &quot;Bahan yang Dipasok&quot;.</span>
-                      </label>
-                    </div>
-
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-sm font-medium text-foreground">Termin Pembayaran</span>
-                      <Input value={supplierForm.payment_terms} onChange={(e) => setSupplierForm((prev) => ({ ...prev, payment_terms: e.target.value }))} />
-                      <span className="text-xs text-muted-foreground">Contoh: 30 hari setelah terima barang.</span>
-                    </label>
-
-                    <div className="flex flex-col gap-1.5">
-                      <span className="text-sm font-medium text-foreground">Kontak Person (PIC)</span>
-                      <div className="grid gap-3 sm:grid-cols-3">
-                        <Input aria-label="Nama PIC" value={supplierForm.pic_name} onChange={(e) => setSupplierForm((prev) => ({ ...prev, pic_name: e.target.value }))} />
-                        <Input aria-label="Telepon PIC" value={supplierForm.pic_phone} onChange={(e) => setSupplierForm((prev) => ({ ...prev, pic_phone: e.target.value }))} />
-                        <Input aria-label="Email PIC" value={supplierForm.pic_email} onChange={(e) => setSupplierForm((prev) => ({ ...prev, pic_email: e.target.value }))} />
-                      </div>
-                      <span className="text-xs text-muted-foreground">Berurutan: nama, telepon, email orang yang dihubungi di supplier ini.</span>
-                    </div>
-
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-sm font-medium text-foreground">Jenis Supplier</span>
-                      <Select value={supplierForm.supplier_type} onValueChange={(v) => setSupplierForm((prev) => ({ ...prev, supplier_type: v }))}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="material_supplier">Pemasok Bahan</SelectItem>
-                          <SelectItem value="subcontractor">Subkontraktor</SelectItem>
-                          <SelectItem value="both">Keduanya</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </label>
-
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-sm font-medium text-foreground">Kontak Lain (opsional)</span>
-                      <Input value={supplierForm.contact_info} onChange={(e) => setSupplierForm((prev) => ({ ...prev, contact_info: e.target.value }))} />
-                      <span className="text-xs text-muted-foreground">Catatan kontak tambahan, mis. nomor kantor atau alamat surel umum.</span>
-                    </label>
-                  </div>
-                )}
-
-                {supplierFormMessage ? (
-                  <p className={`mt-4 text-sm ${supplierFormStatus === 'error' ? 'text-destructive' : 'text-success'}`}>{supplierFormMessage}</p>
-                ) : null}
-              </DialogBody>
-
-              {/* FOOTER Carbon: tombol aksi LEBAR PENUH membentang tepi ke tepi. */}
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  className="h-16 rounded-none border-0 border-t"
-                  onClick={() => (tahapSupplier === 'ringkasan' ? setTahapSupplier('isian') : setIsSupplierModalOpen(false))}
-                >
-                  {tahapSupplier === 'ringkasan' ? 'Kembali' : 'Batal'}
-                </Button>
-                <Button
-                  className="h-16 rounded-none"
-                  disabled={supplierFormStatus === 'saving'}
-                  onClick={editingSupplierId || tahapSupplier === 'ringkasan' ? handleSaveSupplier : handleLanjutKeRingkasan}
-                >
-                  {supplierFormStatus === 'saving'
-                    ? 'Menyimpan...'
-                    : editingSupplierId
-                      ? 'Simpan Perubahan'
-                      : tahapSupplier === 'ringkasan'
-                        ? 'Simpan Supplier'
-                        : 'Lanjut: Periksa Ringkasan'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        ) : null}
-
-        {canManage ? (
-          <Dialog open={isPriceModalOpen} onOpenChange={setIsPriceModalOpen}>
-            <DialogContent className="max-w-lg">
-              <DialogHeader>
-                <DialogTitle>{editingPriceId ? 'Ubah Bahan yang Dipasok' : 'Tambah Bahan yang Dipasok'}</DialogTitle>
-              </DialogHeader>
-              <div className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto pr-1">
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">Bahan</span>
-                  <Select value={priceForm.item_id} onValueChange={(v) => setPriceForm((prev) => ({ ...prev, item_id: v }))} disabled={!!editingPriceId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Pilih dari daftar item..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {items.map((item) => (
-                        <SelectItem key={item.item_id} value={String(item.item_id)}>
-                          {item.item_code} — {item.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <span className="text-xs text-muted-foreground">Belum ada bahannya di daftar? Buat dulu di layar Item, jangan diketik bebas di sini.</span>
-                </label>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">Kode/Nama Menurut Supplier (opsional)</span>
-                  <Input
-                    placeholder="mis. sebutan/kode barang ini menurut supplier, sering beda dari nama kita"
-                    value={priceForm.supplier_item_name}
-                    onChange={(e) => setPriceForm((prev) => ({ ...prev, supplier_item_name: e.target.value }))}
+      <h2 className="halaman__subjudul">Supplier</h2>
+      {suppliersLoading ? (
+        <DataTableSkeleton columnCount={6} rowCount={5} showHeader showToolbar />
+      ) : (
+        <DataTable rows={barisSupplier} headers={kolomSupplier} isSortable size="lg">
+          {(rp: any) => (
+            <TableContainer {...rp.getTableContainerProps()}>
+              <TableToolbar>
+                <TableToolbarContent>
+                  {/* MELIPAT, bukan selalu terbuka — bawaan Carbon, `persistent` tidak dipakai. */}
+                  <TableToolbarSearch
+                    placeholder="Cari nama supplier…"
+                    labelText="Cari supplier"
+                    onChange={(e: React.ChangeEvent<HTMLInputElement> | '') => setCariSupplier(typeof e === 'string' ? '' : e.target.value)}
                   />
-                  <Input
-                    placeholder="Kode barang menurut supplier (opsional)"
-                    value={priceForm.supplier_item_code}
-                    onChange={(e) => setPriceForm((prev) => ({ ...prev, supplier_item_code: e.target.value }))}
+                  {/* SARINGAN, bukan kotak centang — bentuknya sama dengan Master Item, dan
+                      sekarang bisa menjawab "khusus yang diarsipkan". */}
+                  <Dropdown
+                    id="beli-saring-supplier"
+                    size="lg"
+                    className="halaman__saring"
+                    label="Status"
+                    titleText="Status"
+                    hideLabel
+                    items={['aktif', 'diarsipkan', 'semua']}
+                    itemToString={(v: string) => (v === 'aktif' ? 'Aktif' : v === 'diarsipkan' ? 'Diarsipkan' : 'Semua status')}
+                    selectedItem={saringSupplier}
+                    onChange={({ selectedItem }: { selectedItem: string | null }) => setSaringSupplier(selectedItem ?? 'aktif')}
                   />
-                </label>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">Harga Acuan</span>
-                    <Input type="number" min={0} placeholder="Perkiraan harga saat ini" value={priceForm.reference_price} onChange={(e) => setPriceForm((prev) => ({ ...prev, reference_price: e.target.value }))} />
-                    <span className="text-xs text-muted-foreground">Harga acuan — belum ada pembelian nyata. Bukan HPP.</span>
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">Berlaku Sejak</span>
-                    <Input type="date" value={priceForm.price_valid_from} onChange={(e) => setPriceForm((prev) => ({ ...prev, price_valid_from: e.target.value }))} />
-                  </label>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">Minimum Order</span>
-                    <Input type="number" min={0} placeholder="Jumlah" value={priceForm.min_order_qty} onChange={(e) => setPriceForm((prev) => ({ ...prev, min_order_qty: e.target.value }))} />
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">Satuan Minimum Order</span>
-                    <Input placeholder="mis. karung, drum" value={priceForm.min_order_uom} onChange={(e) => setPriceForm((prev) => ({ ...prev, min_order_uom: e.target.value }))} />
-                  </label>
-                </div>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">Lead Time Khusus Bahan Ini (hari, opsional)</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    placeholder="Kosongkan untuk pakai lead time umum supplier"
-                    value={priceForm.lead_time_days_override}
-                    onChange={(e) => setPriceForm((prev) => ({ ...prev, lead_time_days_override: e.target.value }))}
-                  />
-                </label>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">Catatan</span>
-                  <Input placeholder="Catatan tambahan (opsional)" value={priceForm.notes} onChange={(e) => setPriceForm((prev) => ({ ...prev, notes: e.target.value }))} />
-                </label>
-              </div>
-              {priceFormMessage ? <p className={`text-sm ${priceFormStatus === 'error' ? 'text-destructive' : 'text-success'}`}>{priceFormMessage}</p> : null}
-              <div className="flex items-center gap-3">
-                <Button disabled={priceFormStatus === 'saving'} onClick={handleSavePrice}>
-                  {priceFormStatus === 'saving' ? 'Menyimpan...' : 'Simpan'}
-                </Button>
-                <Button variant="outline" onClick={() => setIsPriceModalOpen(false)}>
-                  Batal
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        ) : null}
-
-        <Card>
-          <CardHeader>
-            <CardDescription className="uppercase tracking-[0.2em]">Purchasing</CardDescription>
-            <CardTitle className="text-xl">Purchase Order ke Supplier</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            {poError ? <p className="text-sm text-destructive">{poError}</p> : null}
-            {poLoading ? (
-              <p className="text-sm text-muted-foreground">Memuat...</p>
-            ) : (
-              <DataTable
-                columns={poColumns}
-                data={purchaseOrders}
-                emptyMessage="Belum ada PO ke supplier."
-                searchPlaceholder="Cari No. PO atau supplier..."
-                getSearchText={(po) => `PO-${String(po.purchase_order_id).padStart(4, '0')} ${po.supplier_name ?? ''}`}
-                paginated
-                pageSize={15}
-                getRowId={(po) => String(po.purchase_order_id)}
-                expandedRowId={expandedPoId !== null ? String(expandedPoId) : null}
-                renderExpandedRow={renderPoDetail}
-                primaryAction={canManage ? { label: 'Buat PO', onClick: () => setIsPoModalOpen(true) } : undefined}
-              />
-            )}
-          </CardContent>
-        </Card>
-
-        {canManage ? (
-          <Dialog open={isPoModalOpen} onOpenChange={setIsPoModalOpen}>
-            <DialogContent className="max-w-3xl">
-              <DialogHeader>
-                <DialogTitle>Buat PO Baru</DialogTitle>
-              </DialogHeader>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs text-muted-foreground">Supplier</label>
-                  <Select value={poForm.supplier_id} onValueChange={(v) => setPoForm((prev) => ({ ...prev, supplier_id: v }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Pilih supplier..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {suppliers.map((s) => (
-                        <SelectItem key={s.supplier_id} value={String(s.supplier_id)}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs text-muted-foreground">Lokasi Pabrik (Alamat Kirim)</label>
-                  <Select value={poForm.production_plant_id} onValueChange={(v) => setPoForm((prev) => ({ ...prev, production_plant_id: v }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Pilih lokasi..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {plants
-                        .filter((p) => p.is_active)
-                        .map((p) => (
-                          <SelectItem key={p.production_plant_id} value={String(p.production_plant_id)}>
-                            {p.name}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs text-muted-foreground">Perkiraan Tanggal Datang (opsional)</label>
-                  <Input type="date" value={poForm.expected_date} onChange={(e) => setPoForm((prev) => ({ ...prev, expected_date: e.target.value }))} />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-foreground">Baris Item</p>
-                <Button size="sm" variant="outline" onClick={addPoLine}>
-                  + Tambah Baris
-                </Button>
-              </div>
-              <div className="flex flex-col gap-2">
-                {poForm.lines.map((line, index) => {
-                  const selectedItem = items.find((i) => String(i.item_id) === line.item_id);
-                  return (
-                    <div key={index} className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] items-end gap-2">
-                      <div>
-                        <label className="mb-1 block text-xs text-muted-foreground">Item</label>
-                        <Select value={line.item_id} onValueChange={(v) => updatePoLine(index, 'item_id', v)}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Pilih item..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {items.map((i) => (
-                              <SelectItem key={i.item_id} value={String(i.item_id)}>
-                                {i.item_code} — {i.name}
-                              </SelectItem>
+                  {canManage ? (
+                    <Button size="lg" renderIcon={Add} onClick={startCreateSupplier}>
+                      Tambah supplier
+                    </Button>
+                  ) : null}
+                </TableToolbarContent>
+              </TableToolbar>
+              <Table {...rp.getTableProps()} className="tabel-responsif">
+                <TableHead>
+                  <TableRow>
+                    <TableExpandHeader aria-label="Buka bahan yang dipasok" />
+                    {rp.headers.map((h: any) => {
+                      const { key, ...sisa } = rp.getHeaderProps({ header: h }) as { key?: string };
+                      void key;
+                      return (
+                        <TableHeader key={h.key} {...sisa} isSortable={h.key !== 'aksi'}>
+                          {h.header}
+                        </TableHeader>
+                      );
+                    })}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {rp.rows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={kolomSupplier.length + 1}>
+                        {cariSupplier.trim() || saringSupplier !== 'aktif' ? 'Tidak ada supplier yang cocok dengan pencarian atau saringan.' : 'Belum ada supplier.'}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    rp.rows.map((row: any) => {
+                      const s = supplierById.get(row.id);
+                      if (!s) return null;
+                      const { key, ...sisaBaris } = rp.getRowProps({ row }) as { key?: string };
+                      void key;
+                      return (
+                        <React.Fragment key={row.id}>
+                          <TableExpandRow
+                            {...sisaBaris}
+                            isExpanded={expandedSupplierId === s.supplier_id}
+                            onExpand={() => toggleSupplierDetail(s)}
+                            aria-label={`Bahan dipasok ${s.name}`}
+                          >
+                            {kolomSupplier.map((h) => (
+                              <TableCell key={h.key} data-label={h.header}>
+                                {isiSelSupplier(s, h.key)}
+                              </TableCell>
                             ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs text-muted-foreground">Jumlah Pesan ({selectedItem?.purchase_uom ?? 'satuan beli'})</label>
-                        <Input type="number" min={0} step="any" value={line.qty_ordered} onChange={(e) => updatePoLine(index, 'qty_ordered', e.target.value)} />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs text-muted-foreground">Harga Satuan (opsional)</label>
-                        <Input type="number" min={0} step="any" value={line.unit_price} onChange={(e) => updatePoLine(index, 'unit_price', e.target.value)} />
-                      </div>
-                      <div className="text-xs text-muted-foreground">{selectedItem?.purchase_uom ?? ''}</div>
-                      <Button size="sm" variant="destructive" disabled={poForm.lines.length === 1} onClick={() => removePoLine(index)}>
-                        Hapus
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
+                          </TableExpandRow>
+                          <TableExpandedRow colSpan={kolomSupplier.length + 1}>
+                            {expandedSupplierId === s.supplier_id ? renderSupplierDetail(s) : null}
+                          </TableExpandedRow>
+                        </React.Fragment>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DataTable>
+      )}
 
-              {poFormMessage ? <p className={`text-sm ${poFormStatus === 'error' ? 'text-destructive' : 'text-success'}`}>{poFormMessage}</p> : null}
-              <div className="flex items-center gap-3">
-                <Button disabled={poFormStatus === 'saving'} onClick={handleCreatePo}>
-                  {poFormStatus === 'saving' ? 'Menyimpan...' : 'Buat PO'}
-                </Button>
-                <Button variant="outline" onClick={() => setIsPoModalOpen(false)}>
-                  Batal
+      <h2 className="halaman__subjudul">Purchase Order ke supplier</h2>
+      {poError ? <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal memuat PO" subtitle={poError} /> : null}
+      {poLoading ? (
+        <DataTableSkeleton columnCount={6} rowCount={5} showHeader showToolbar />
+      ) : (
+        <>
+          <DataTable rows={barisPo} headers={kolomPo} isSortable size="lg">
+            {(rp: any) => (
+              <TableContainer {...rp.getTableContainerProps()}>
+                <TableToolbar>
+                  <TableToolbarContent>
+                    <TableToolbarSearch
+                      placeholder="Cari nomor PO atau supplier…"
+                      labelText="Cari PO"
+                      onChange={(e: React.ChangeEvent<HTMLInputElement> | '') => {
+                        setCariPo(typeof e === 'string' ? '' : e.target.value);
+                        setHalamanPo(1);
+                      }}
+                    />
+                    <Dropdown
+                      id="beli-saring-po"
+                      size="lg"
+                      className="halaman__saring"
+                      label="Status"
+                      titleText="Status"
+                      hideLabel
+                      items={['semua', ...Object.keys(poStatusWarnaTag)]}
+                      itemToString={(v: string) => (v === 'semua' ? 'Semua status' : purchaseOrders.find((p) => p.status === v)?.status_label ?? v)}
+                      selectedItem={saringPo}
+                      onChange={({ selectedItem }: { selectedItem: string | null }) => {
+                        setSaringPo(selectedItem ?? 'semua');
+                        setHalamanPo(1);
+                      }}
+                    />
+                    {canManage ? (
+                      <Button size="lg" renderIcon={Add} onClick={() => setIsPoModalOpen(true)}>
+                        Buat PO
+                      </Button>
+                    ) : null}
+                  </TableToolbarContent>
+                </TableToolbar>
+                <Table {...rp.getTableProps()} className="tabel-responsif">
+                  <TableHead>
+                    <TableRow>
+                      <TableExpandHeader aria-label="Buka rincian PO" />
+                      {rp.headers.map((h: any) => {
+                        const { key, ...sisa } = rp.getHeaderProps({ header: h }) as { key?: string };
+                        void key;
+                        return (
+                          <TableHeader key={h.key} {...sisa} isSortable>
+                            {h.header}
+                          </TableHeader>
+                        );
+                      })}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {rp.rows.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={kolomPo.length + 1}>
+                          {cariPo.trim() || saringPo !== 'semua' ? 'Tidak ada PO yang cocok dengan pencarian atau saringan.' : 'Belum ada PO ke supplier.'}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      rp.rows.map((row: any) => {
+                        const po = poById.get(row.id);
+                        if (!po) return null;
+                        const { key, ...sisaBaris } = rp.getRowProps({ row }) as { key?: string };
+                        void key;
+                        return (
+                          <React.Fragment key={row.id}>
+                            <TableExpandRow
+                              {...sisaBaris}
+                              isExpanded={expandedPoId === po.purchase_order_id}
+                              onExpand={() => setExpandedPoId((kini) => (kini === po.purchase_order_id ? null : po.purchase_order_id))}
+                              aria-label={`Rincian PO-${String(po.purchase_order_id).padStart(4, '0')}`}
+                            >
+                              {kolomPo.map((h) => (
+                                <TableCell key={h.key} data-label={h.header}>
+                                  {isiSelPo(po, h.key)}
+                                </TableCell>
+                              ))}
+                            </TableExpandRow>
+                            <TableExpandedRow colSpan={kolomPo.length + 1}>
+                              {expandedPoId === po.purchase_order_id ? renderPoDetail(po) : null}
+                            </TableExpandedRow>
+                          </React.Fragment>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </DataTable>
+
+          <Pagination
+            page={halamanPo}
+            pageSize={perHalamanPo}
+            pageSizes={[15, 30, 50]}
+            totalItems={poTersaring.length}
+            onChange={({ page, pageSize }: { page: number; pageSize: number }) => {
+              setHalamanPo(page);
+              setPerHalamanPo(pageSize);
+            }}
+            backwardText="Halaman sebelumnya"
+            forwardText="Halaman berikutnya"
+            itemsPerPageText="Baris per halaman"
+            itemRangeText={(mulai: number, akhir: number, total: number) => `${mulai}–${akhir} dari ${total} PO`}
+            pageRangeText={(_kini: number, total: number) => `dari ${total} halaman`}
+            pageNumberText="Nomor halaman"
+          />
+        </>
+      )}
+
+      {/* ====================================================================
+          MODAL SUPPLIER — BERTAHAP untuk data BARU (isian → ringkasan draf),
+          langsung simpan untuk PERUBAHAN data lama. Aturan #7: ringkasan hanya
+          untuk data baru; saat mengubah, pengguna sudah melihat nilai lamanya.
+          ==================================================================== */}
+      {canManage ? (
+        <ComposedModal open={isSupplierModalOpen} size="md" onClose={() => { tutupSupplierModal(); return true; }}>
+          <ModalHeader
+            label="Master data"
+            title={editingSupplierId ? `Ubah supplier — ${supplierForm.name}` : tahapSupplier === 'ringkasan' ? 'Periksa dulu sebelum disimpan' : 'Tambah supplier baru'}
+            closeModal={tutupSupplierModal}
+          />
+          <ModalBody hasForm>
+            {tahapSupplier === 'ringkasan' ? (
+              <>
+                <p className="halaman__pengantar">Supplier berikut akan ditambahkan. Tekan Kembali bila masih ada yang perlu diperbaiki.</p>
+                <StructuredListWrapper isCondensed aria-label="Ringkasan draf supplier">
+                  <StructuredListBody>
+                    {ringkasanDrafSupplier.map((b) => (
+                      <StructuredListRow key={b.label}>
+                        <StructuredListCell noWrap>{b.label}</StructuredListCell>
+                        <StructuredListCell>{b.nilai}</StructuredListCell>
+                      </StructuredListRow>
+                    ))}
+                  </StructuredListBody>
+                </StructuredListWrapper>
+              </>
+            ) : (
+              <div className="beli-form">
+                <TextInput
+                  id="supplier-nama"
+                  size="lg"
+                  className="beli-form__lebar-penuh"
+                  labelText="Nama supplier"
+                  // Aturan modal: placeholder TIDAK memuat instruksi — contoh turun ke helper text.
+                  helperText="Contoh: PT Sumber Bahan Jaya."
+                  value={supplierForm.name}
+                  onChange={(e) => setSupplierForm((prev) => ({ ...prev, name: e.target.value }))}
+                />
+                <TextInput
+                  id="supplier-alamat"
+                  size="lg"
+                  className="beli-form__lebar-penuh"
+                  labelText="Alamat"
+                  helperText="Alamat lengkap supplier, dipakai di dokumen pembelian."
+                  value={supplierForm.address}
+                  onChange={(e) => setSupplierForm((prev) => ({ ...prev, address: e.target.value }))}
+                />
+                <TextInput
+                  id="supplier-npwp"
+                  size="lg"
+                  labelText="NPWP"
+                  value={supplierForm.npwp}
+                  onChange={(e) => setSupplierForm((prev) => ({ ...prev, npwp: e.target.value }))}
+                />
+                <NumberInput
+                  id="supplier-lead-time"
+                  label="Lead time (hari)"
+                  min={0}
+                  allowEmpty
+                  hideSteppers
+                  helperText="Berapa hari biasanya barang datang setelah PO dikirim."
+                  value={supplierForm.lead_time_days === '' ? '' : Number(supplierForm.lead_time_days)}
+                  onChange={(_e: unknown, { value }: { value: number | string }) => setSupplierForm((prev) => ({ ...prev, lead_time_days: String(value ?? '') }))}
+                />
+                <TextInput
+                  id="supplier-termin"
+                  size="lg"
+                  labelText="Termin pembayaran"
+                  value={supplierForm.payment_terms}
+                  onChange={(e) => setSupplierForm((prev) => ({ ...prev, payment_terms: e.target.value }))}
+                />
+                <Dropdown
+                  id="supplier-jenis"
+                  size="lg"
+                  titleText="Jenis supplier"
+                  label="Pilih jenis"
+                  items={Object.keys(supplierTypeLabels)}
+                  itemToString={(v: string) => supplierTypeLabels[v] ?? v}
+                  selectedItem={supplierForm.supplier_type}
+                  onChange={({ selectedItem }: { selectedItem: string | null }) => setSupplierForm((prev) => ({ ...prev, supplier_type: selectedItem ?? '' }))}
+                />
+                <TextInput
+                  id="supplier-pic-nama"
+                  size="lg"
+                  labelText="Nama PIC"
+                  value={supplierForm.pic_name}
+                  onChange={(e) => setSupplierForm((prev) => ({ ...prev, pic_name: e.target.value }))}
+                />
+                <TextInput
+                  id="supplier-pic-telepon"
+                  size="lg"
+                  labelText="Telepon PIC"
+                  value={supplierForm.pic_phone}
+                  onChange={(e) => setSupplierForm((prev) => ({ ...prev, pic_phone: e.target.value }))}
+                />
+                <TextInput
+                  id="supplier-pic-email"
+                  size="lg"
+                  labelText="Email PIC"
+                  value={supplierForm.pic_email}
+                  onChange={(e) => setSupplierForm((prev) => ({ ...prev, pic_email: e.target.value }))}
+                />
+                <TextInput
+                  id="supplier-kontak"
+                  size="lg"
+                  className="beli-form__lebar-penuh"
+                  labelText="Kontak lain"
+                  value={supplierForm.contact_info}
+                  onChange={(e) => setSupplierForm((prev) => ({ ...prev, contact_info: e.target.value }))}
+                />
+                {supplierFormMessage ? (
+                  <div className="beli-form__lebar-penuh">
+                    <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal" subtitle={supplierFormMessage} />
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </ModalBody>
+          {/* `children` WAJIB pada ModalFooter di @carbon/react 1.114. */}
+          <ModalFooter>
+            <Button kind="secondary" onClick={tahapSupplier === 'ringkasan' ? () => setTahapSupplier('isian') : tutupSupplierModal}>
+              {tahapSupplier === 'ringkasan' ? 'Kembali' : 'Batal'}
+            </Button>
+            <Button
+              kind="primary"
+              disabled={supplierFormStatus === 'saving'}
+              onClick={editingSupplierId ? handleSaveSupplier : tahapSupplier === 'ringkasan' ? handleSaveSupplier : handleLanjutKeRingkasan}
+            >
+              {supplierFormStatus === 'saving' ? 'Menyimpan...' : editingSupplierId ? 'Simpan perubahan' : tahapSupplier === 'ringkasan' ? 'Simpan supplier' : 'Lanjut'}
+            </Button>
+          </ModalFooter>
+        </ComposedModal>
+      ) : null}
+
+      {/* MODAL BAHAN YANG DIPASOK */}
+      {canManage ? (
+        <ComposedModal open={isPriceModalOpen} size="md" onClose={() => { setIsPriceModalOpen(false); return true; }}>
+          <ModalHeader
+            label="Supplier"
+            title={editingPriceId ? 'Ubah bahan yang dipasok' : 'Tambah bahan yang dipasok'}
+            closeModal={() => setIsPriceModalOpen(false)}
+          />
+          <ModalBody hasForm>
+            <div className="beli-form">
+              <Dropdown
+                id="harga-item"
+                size="lg"
+                className="beli-form__lebar-penuh"
+                titleText="Bahan"
+                label="Pilih bahan..."
+                disabled={!!editingPriceId}
+                items={items}
+                itemToString={(i: any) => (i ? `${i.item_code} — ${i.name}` : '')}
+                selectedItem={items.find((i) => String(i.item_id) === priceForm.item_id) ?? null}
+                onChange={({ selectedItem }: { selectedItem: any }) => setPriceForm((prev) => ({ ...prev, item_id: selectedItem ? String(selectedItem.item_id) : '' }))}
+                helperText={editingPriceId ? 'Bahan tidak bisa diubah — hapus baris ini lalu tambah yang baru bila salah.' : undefined}
+              />
+              <TextInput
+                id="harga-kode-supplier"
+                size="lg"
+                labelText="Kode menurut supplier"
+                helperText="Kosongkan kalau supplier memakai kode yang sama."
+                value={priceForm.supplier_item_code}
+                onChange={(e) => setPriceForm((prev) => ({ ...prev, supplier_item_code: e.target.value }))}
+              />
+              <TextInput
+                id="harga-nama-supplier"
+                size="lg"
+                labelText="Nama menurut supplier"
+                value={priceForm.supplier_item_name}
+                onChange={(e) => setPriceForm((prev) => ({ ...prev, supplier_item_name: e.target.value }))}
+              />
+              <NumberInput
+                id="harga-acuan"
+                label="Harga acuan"
+                min={0}
+                allowEmpty
+                hideSteppers
+                helperText="Perkiraan harga saat ini — BUKAN harga pembelian nyata."
+                value={priceForm.reference_price === '' ? '' : Number(priceForm.reference_price)}
+                onChange={(_e: unknown, { value }: { value: number | string }) => setPriceForm((prev) => ({ ...prev, reference_price: String(value ?? '') }))}
+              />
+              <TextInput
+                id="harga-berlaku"
+                size="lg"
+                type="date"
+                labelText="Berlaku sejak"
+                value={priceForm.price_valid_from}
+                onChange={(e) => setPriceForm((prev) => ({ ...prev, price_valid_from: e.target.value }))}
+              />
+              <NumberInput
+                id="harga-min-qty"
+                label="Minimum order"
+                min={0}
+                allowEmpty
+                hideSteppers
+                value={priceForm.min_order_qty === '' ? '' : Number(priceForm.min_order_qty)}
+                onChange={(_e: unknown, { value }: { value: number | string }) => setPriceForm((prev) => ({ ...prev, min_order_qty: String(value ?? '') }))}
+              />
+              <TextInput
+                id="harga-min-satuan"
+                size="lg"
+                labelText="Satuan minimum order"
+                placeholder="mis. karung"
+                value={priceForm.min_order_uom}
+                onChange={(e) => setPriceForm((prev) => ({ ...prev, min_order_uom: e.target.value }))}
+              />
+              <NumberInput
+                id="harga-lead-time"
+                label="Lead time khusus (hari)"
+                min={0}
+                allowEmpty
+                hideSteppers
+                helperText="Kosongkan untuk memakai lead time umum supplier."
+                value={priceForm.lead_time_days_override === '' ? '' : Number(priceForm.lead_time_days_override)}
+                onChange={(_e: unknown, { value }: { value: number | string }) => setPriceForm((prev) => ({ ...prev, lead_time_days_override: String(value ?? '') }))}
+              />
+              <TextInput
+                id="harga-catatan"
+                size="lg"
+                className="beli-form__lebar-penuh"
+                labelText="Catatan (opsional)"
+                value={priceForm.notes}
+                onChange={(e) => setPriceForm((prev) => ({ ...prev, notes: e.target.value }))}
+              />
+              {priceFormMessage ? (
+                <div className="beli-form__lebar-penuh">
+                  <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal" subtitle={priceFormMessage} />
+                </div>
+              ) : null}
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button kind="secondary" onClick={() => setIsPriceModalOpen(false)}>
+              Batal
+            </Button>
+            <Button kind="primary" disabled={priceFormStatus === 'saving'} onClick={handleSavePrice}>
+              {priceFormStatus === 'saving' ? 'Menyimpan...' : 'Simpan bahan'}
+            </Button>
+          </ModalFooter>
+        </ComposedModal>
+      ) : null}
+
+      {/* MODAL BUAT PO — BERTAHAP: baris item ditambah dan dihapus sebelum disimpan. */}
+      {canManage ? (
+        <ComposedModal open={isPoModalOpen} size="lg" onClose={() => { setIsPoModalOpen(false); return true; }}>
+          <ModalHeader label="Pembelian" title="Buat PO baru" closeModal={() => setIsPoModalOpen(false)} />
+          <ModalBody hasForm>
+            <div className="beli-form">
+              <Dropdown
+                id="po-supplier"
+                size="lg"
+                titleText="Supplier"
+                label="Pilih supplier..."
+                items={suppliers.filter((s) => !s.archived_at)}
+                itemToString={(s: any) => s?.name ?? ''}
+                selectedItem={suppliers.find((s) => String(s.supplier_id) === poForm.supplier_id) ?? null}
+                onChange={({ selectedItem }: { selectedItem: any }) => setPoForm((prev) => ({ ...prev, supplier_id: selectedItem ? String(selectedItem.supplier_id) : '' }))}
+              />
+              <Dropdown
+                id="po-lokasi"
+                size="lg"
+                titleText="Lokasi pabrik (alamat kirim)"
+                label="Pilih lokasi..."
+                items={plants}
+                itemToString={(p: any) => p?.name ?? ''}
+                selectedItem={plants.find((p) => String(p.production_plant_id) === poForm.production_plant_id) ?? null}
+                onChange={({ selectedItem }: { selectedItem: any }) =>
+                  setPoForm((prev) => ({ ...prev, production_plant_id: selectedItem ? String(selectedItem.production_plant_id) : '' }))
+                }
+              />
+              <TextInput
+                id="po-perkiraan"
+                size="lg"
+                type="date"
+                labelText="Perkiraan tanggal datang (opsional)"
+                value={poForm.expected_date}
+                onChange={(e) => setPoForm((prev) => ({ ...prev, expected_date: e.target.value }))}
+              />
+            </div>
+
+            <div className="beli-baris">
+              <div className="beli-baris__kepala">
+                <h4 className="halaman__subjudul halaman__subjudul--rapat">Baris item</h4>
+                <Button kind="tertiary" size="sm" renderIcon={Add} onClick={addPoLine}>
+                  Tambah baris
                 </Button>
               </div>
-            </DialogContent>
-          </Dialog>
-        ) : null}
-      </div>
-    </main>
+              {poForm.lines.map((line, index) => {
+                const selectedItem = items.find((i) => String(i.item_id) === line.item_id);
+                return (
+                  <div key={index} className="beli-baris__isi">
+                    <Dropdown
+                      id={`po-item-${index}`}
+                      size="lg"
+                      titleText="Item"
+                      label="Pilih item..."
+                      items={items}
+                      itemToString={(i: any) => (i ? `${i.item_code} — ${i.name}` : '')}
+                      selectedItem={selectedItem ?? null}
+                      onChange={({ selectedItem: dipilih }: { selectedItem: any }) => updatePoLine(index, 'item_id', dipilih ? String(dipilih.item_id) : '')}
+                    />
+                    <NumberInput
+                      id={`po-qty-${index}`}
+                      label={`Jumlah pesan (${selectedItem?.purchase_uom ?? 'satuan beli'})`}
+                      min={0}
+                      allowEmpty
+                      hideSteppers
+                      value={line.qty_ordered === '' ? '' : Number(line.qty_ordered)}
+                      onChange={(_e: unknown, { value }: { value: number | string }) => updatePoLine(index, 'qty_ordered', String(value ?? ''))}
+                    />
+                    <NumberInput
+                      id={`po-harga-${index}`}
+                      label="Harga satuan (opsional)"
+                      min={0}
+                      allowEmpty
+                      hideSteppers
+                      value={line.unit_price === '' ? '' : Number(line.unit_price)}
+                      onChange={(_e: unknown, { value }: { value: number | string }) => updatePoLine(index, 'unit_price', String(value ?? ''))}
+                    />
+                    <Button kind="danger--tertiary" size="sm" renderIcon={TrashCan} disabled={poForm.lines.length === 1} onClick={() => removePoLine(index)}>
+                      Hapus baris
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {poFormMessage ? <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal" subtitle={poFormMessage} /> : null}
+          </ModalBody>
+          <ModalFooter>
+            <Button kind="secondary" onClick={() => setIsPoModalOpen(false)}>
+              Batal
+            </Button>
+            <Button kind="primary" disabled={poFormStatus === 'saving'} onClick={handleCreatePo}>
+              {poFormStatus === 'saving' ? 'Menyimpan...' : 'Buat PO'}
+            </Button>
+          </ModalFooter>
+        </ComposedModal>
+      ) : null}
+    </div>
   );
 }

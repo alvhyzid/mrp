@@ -1,16 +1,34 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import type { ColumnDef } from '@tanstack/react-table';
+import {
+  Button,
+  ComposedModal,
+  DataTable,
+  DataTableSkeleton,
+  Dropdown,
+  InlineNotification,
+  ModalBody,
+  ModalFooter,
+  ModalHeader,
+  SkeletonText,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableToolbar,
+  TableToolbarContent,
+  TableToolbarSearch,
+  Tag,
+  TextInput
+} from '@carbon/react';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
+import { Add } from '@carbon/icons-react';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { DataTable } from '@/components/ui/data-table';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { COMPANY_ROLES, INVITABLE_ROLES } from '@/lib/roles';
 import { getRoleLabel } from '@/lib/glossary';
 
@@ -25,10 +43,11 @@ type Member = {
   status: string;
 };
 
-const statusBadgeVariant: Record<string, 'success' | 'critical' | 'warning'> = {
-  active: 'success',
-  suspended: 'critical',
-  invited: 'warning'
+// Warna Tag Carbon mengikuti ARTI: hijau = berjalan, merah = dicabut, biru = menunggu.
+const tagPeranStatus: Record<string, 'green' | 'red' | 'blue'> = {
+  active: 'green',
+  suspended: 'red',
+  invited: 'blue'
 };
 const statusLabels: Record<string, string> = {
   active: 'Aktif',
@@ -44,6 +63,7 @@ export default function TeamManagePage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [membersError, setMembersError] = useState('');
+  const [cari, setCari] = useState('');
   const [membersLoading, setMembersLoading] = useState(true);
   const [savingUserId, setSavingUserId] = useState<number | null>(null);
 
@@ -141,8 +161,7 @@ export default function TeamManagePage() {
     await loadMembers();
   };
 
-  const handleInvite = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const handleInvite = async () => {
     setInviteStatus('pending');
     setInviteMessage('');
 
@@ -176,194 +195,204 @@ export default function TeamManagePage() {
     await loadMembers();
   };
 
-  const columns = useMemo<ColumnDef<Member>[]>(
-    () => [
-      {
-        accessorKey: 'name',
-        header: 'Nama',
-        cell: ({ row }) => (
-          <span className="font-medium text-foreground">{row.original.name || <span className="text-muted-foreground">(belum diisi)</span>}</span>
-        )
-      },
-      {
-        accessorKey: 'email',
-        header: 'Email',
-        cell: ({ row }) => (
-          <span className="text-muted-foreground">
-            {row.original.email}
-            {row.original.user_id === currentUserId ? <span className="ml-2 text-xs">(Anda)</span> : null}
-          </span>
-        )
-      },
-      {
-        accessorKey: 'role',
-        header: 'Peran',
-        cell: ({ row }) => {
-          const member = row.original;
-          const isSelf = member.user_id === currentUserId;
-          const isSaving = savingUserId === member.user_id;
-          return (
-            <Select
-              value={member.role}
-              disabled={isSelf || isSaving}
-              onValueChange={(value) => handleUpdateMember(member.user_id, { role: value })}
-            >
-              <SelectTrigger className="w-44">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {memberRoles.map((roleOption) => (
-                  <SelectItem key={roleOption} value={roleOption}>
-                    {getRoleLabel(roleOption)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          );
-        }
-      },
-      {
-        accessorKey: 'status',
-        header: 'Status',
-        cell: ({ row }) => (
-          <Badge variant={statusBadgeVariant[row.original.status] ?? 'info'}>{statusLabels[row.original.status] ?? row.original.status}</Badge>
-        )
-      },
-      {
-        id: 'actions',
-        header: 'Aksi',
-        cell: ({ row }) => {
-          const member = row.original;
-          const isSelf = member.user_id === currentUserId;
-          const isSaving = savingUserId === member.user_id;
-
-          if (isSelf) {
-            return <span className="text-xs text-muted-foreground">-</span>;
-          }
-
-          if (member.status === 'suspended') {
-            return (
-              <Button size="sm" variant="default" disabled={isSaving} onClick={() => handleUpdateMember(member.user_id, { status: 'active' })}>
-                Aktifkan
-              </Button>
-            );
-          }
-
-          return (
-            <Button size="sm" variant="destructive" disabled={isSaving} onClick={() => handleUpdateMember(member.user_id, { status: 'suspended' })}>
-              Nonaktifkan
-            </Button>
-          );
-        }
-      }
-    ],
-    [currentUserId, savingUserId]
-  );
-
   if (checkingAccess) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="px-6 text-center text-sm text-muted-foreground">Memuat...</div>
-      </main>
+      <div className="halaman">
+        <SkeletonText heading width="18rem" />
+        <DataTableSkeleton columnCount={5} rowCount={5} showHeader={false} showToolbar={false} />
+      </div>
     );
   }
 
   if (accessDenied) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="max-w-3xl px-6">
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em] text-destructive">Akses Ditolak</CardDescription>
-              <CardTitle className="text-2xl">Halaman ini khusus company_admin</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <p className="text-sm text-muted-foreground">Akun Anda tidak memiliki izin untuk mengelola tim perusahaan.</p>
-              <Button onClick={() => router.push('/dashboard')} className="w-fit">
-                Kembali ke Dashboard
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+      <div className="halaman">
+        <h1 className="halaman__judul">Kelola tim</h1>
+        <InlineNotification
+          kind="error"
+          lowContrast
+          title="Halaman ini khusus Admin Perusahaan"
+          subtitle="Akun Anda tidak punya izin mengelola tim perusahaan."
+          hideCloseButton
+        />
+        <Button kind="tertiary" className="w-fit" onClick={() => router.push('/dashboard')}>
+          Kembali ke Ringkasan
+        </Button>
+      </div>
     );
   }
 
-  return (
-    <main className="min-h-screen bg-muted/30 py-10">
-      <div className="flex w-full flex-col gap-6 px-6">
-        <Card>
-          <CardHeader>
-            <CardDescription className="uppercase tracking-[0.2em]">Kelola Tim</CardDescription>
-            <CardTitle className="text-2xl">Anggota tim perusahaan</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {membersError ? <p className="text-sm text-destructive">{membersError}</p> : null}
-            {membersLoading ? (
-              <p className="text-sm text-muted-foreground">Memuat anggota...</p>
-            ) : (
-              <DataTable
-                columns={columns}
-                data={members}
-                emptyMessage="Belum ada anggota tim."
-                primaryAction={{ label: 'Undang Anggota Baru', onClick: () => setIsInviteModalOpen(true) }}
-              />
-            )}
-          </CardContent>
-        </Card>
+  const anggotaTerlihat = cari.trim()
+    ? members.filter((m) => `${m.name ?? ''} ${m.email}`.toLowerCase().includes(cari.trim().toLowerCase()))
+    : members;
 
-        <Dialog
-          open={isInviteModalOpen}
-          onOpenChange={(open) => {
-            setIsInviteModalOpen(open);
-            if (!open) {
-              setInviteStatus('idle');
-              setInviteMessage('');
-            }
+  // Baris memuat NILAI YANG DITAMPILKAN: mengurut kolom Peran harus mengurut "Manajer Gudang",
+  // bukan slug `warehouse_manager` yang tidak pernah dilihat siapa pun.
+  const barisTabel = anggotaTerlihat.map((m) => ({
+    id: String(m.user_id),
+    name: m.name || '',
+    email: m.email,
+    role: getRoleLabel(m.role),
+    status: m.status === 'active' ? 'Aktif' : 'Nonaktif',
+    aksi: ''
+  }));
+  const kolom = [
+    { key: 'name', header: 'Nama' },
+    { key: 'email', header: 'Email' },
+    { key: 'role', header: 'Peran' },
+    { key: 'status', header: 'Status' },
+    { key: 'aksi', header: 'Aksi' }
+  ];
+
+  const isiSel = (member: Member, key: string) => {
+    const isSelf = member.user_id === currentUserId;
+    const isSaving = savingUserId === member.user_id;
+
+    if (key === 'name') return member.name || <span className="halaman__redup">(belum diisi)</span>;
+    if (key === 'email')
+      return (
+        <span>
+          {member.email}
+          {isSelf ? <span className="halaman__redup"> (Anda)</span> : null}
+        </span>
+      );
+    if (key === 'role')
+      return (
+        <Dropdown
+          id={`peran-${member.user_id}`}
+          size="sm"
+          titleText="Peran"
+          hideLabel
+          label="Peran"
+          disabled={isSelf || isSaving}
+          items={memberRoles as unknown as string[]}
+          selectedItem={member.role}
+          itemToString={(item: string) => getRoleLabel(item)}
+          onChange={({ selectedItem }: { selectedItem: string | null }) => {
+            if (selectedItem && selectedItem !== member.role) handleUpdateMember(member.user_id, { role: selectedItem });
           }}
-        >
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Undang anggota baru</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleInvite} className="flex flex-col gap-4">
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium text-foreground">Email anggota</span>
-                <Input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} required />
-              </label>
+        />
+      );
+    if (key === 'status')
+      return <Tag type={tagPeranStatus[member.status] ?? 'gray'}>{statusLabels[member.status] ?? member.status}</Tag>;
 
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium text-foreground">Peran</span>
-                <Select value={inviteRole} onValueChange={setInviteRole}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {inviteRoles.map((roleOption) => (
-                      <SelectItem key={roleOption} value={roleOption}>
-                        {getRoleLabel(roleOption)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
+    // Aksi. Diri sendiri TIDAK bisa dinonaktifkan sendiri -- pengaman yang sudah ada, dan
+    // sengaja dipertahankan apa adanya: migrasi ini mengganti komponen, bukan aturan.
+    if (isSelf) return <span className="halaman__redup">—</span>;
+    if (member.status === 'suspended')
+      return (
+        <Button size="sm" kind="tertiary" disabled={isSaving} onClick={() => handleUpdateMember(member.user_id, { status: 'active' })}>
+          Aktifkan
+        </Button>
+      );
+    return (
+      <Button size="sm" kind="danger--tertiary" disabled={isSaving} onClick={() => handleUpdateMember(member.user_id, { status: 'suspended' })}>
+        Nonaktifkan
+      </Button>
+    );
+  };
 
-              <div className="flex items-center gap-3">
-                <Button type="submit" disabled={inviteStatus === 'pending'}>
-                  {inviteStatus === 'pending' ? 'Mengirim...' : 'Kirim Undangan'}
-                </Button>
-                <Button type="button" variant="outline" onClick={() => setIsInviteModalOpen(false)}>
-                  Batal
-                </Button>
-              </div>
+  return (
+    <div className="halaman">
+      <KepalaHalaman
+        remah={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Administration' }, { label: 'Team & Invitations' }]}
+        judul="Anggota tim perusahaan"
+        pengantar={`${membersLoading ? '…' : anggotaTerlihat.length} anggota${cari.trim() ? ` cocok dengan pencarian "${cari.trim()}"` : ' terdaftar'} — peran menentukan apa yang bisa dibuka seseorang; menonaktifkan mencabut aksesnya tanpa menghapus jejaknya.`}
+      />
 
-              {inviteMessage ? (
-                <p className={`text-sm ${inviteStatus === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>{inviteMessage}</p>
-              ) : null}
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-    </main>
+      {membersError ? (
+        <InlineNotification kind="error" lowContrast title="Gagal" subtitle={membersError} onClose={() => { setMembersError(''); return true; }} />
+      ) : null}
+
+      {membersLoading ? (
+        <DataTableSkeleton columnCount={5} rowCount={5} showHeader={false} />
+      ) : (
+        <DataTable rows={barisTabel} headers={kolom}>
+          {({ rows, headers, getTableProps, getHeaderProps, getRowProps }: any) => (
+            <TableContainer>
+              <TableToolbar>
+                <TableToolbarContent>
+                  {/* MELIPAT, bukan selalu terbuka — bawaan Carbon, `persistent` tidak dipakai. */}
+                  <TableToolbarSearch
+                    placeholder="Cari nama atau email…"
+                    labelText="Cari anggota"
+                    onChange={(e: React.ChangeEvent<HTMLInputElement> | '') => setCari(typeof e === 'string' ? '' : e.target.value)}
+                  />
+                  <Button size="lg" renderIcon={Add} onClick={() => setIsInviteModalOpen(true)}>
+                    Undang anggota
+                  </Button>
+                </TableToolbarContent>
+              </TableToolbar>
+              <Table {...getTableProps()} size="lg" className="tabel-responsif">
+                <TableHead>
+                  <TableRow>
+                    {headers.map((header: any) => {
+                      const { key, ...sisa } = getHeaderProps({ header });
+                      return (
+                        <TableHeader key={key} {...sisa} isSortable={header.key !== 'aksi'}>
+                          {header.header}
+                        </TableHeader>
+                      );
+                    })}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {rows.map((row: any) => {
+                    const member = anggotaTerlihat.find((m) => String(m.user_id) === row.id)!;
+                    const { key, ...sisa } = getRowProps({ row });
+                    return (
+                      <TableRow key={key} {...sisa}>
+                        {row.cells.map((cell: any) => (
+                          <TableCell key={cell.id} data-label={cell.info.header}>{isiSel(member, cell.info.header)}</TableCell>
+                        ))}
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+              {members.length === 0 ? <p className="halaman__pengantar">Belum ada anggota tim.</p> : null}
+            </TableContainer>
+          )}
+        </DataTable>
+      )}
+
+      <ComposedModal open={isInviteModalOpen} onClose={() => { setIsInviteModalOpen(false); setInviteMessage(''); setInviteStatus('idle'); return true; }} size="sm">
+        <ModalHeader title="Undang anggota baru" label="Kelola tim" />
+        <ModalBody hasForm>
+          <div className="flex flex-col gap-5">
+            <TextInput
+              id="undang-email"
+              size="lg"
+              type="email"
+              labelText="Email anggota"
+              helperText="Undangan dikirim ke alamat ini."
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+            />
+            <Dropdown
+              id="undang-peran"
+              size="lg"
+              titleText="Peran"
+              label="Pilih peran"
+              items={inviteRoles as unknown as string[]}
+              selectedItem={inviteRole}
+              itemToString={(item: string) => getRoleLabel(item)}
+              onChange={({ selectedItem }: { selectedItem: string | null }) => selectedItem && setInviteRole(selectedItem)}
+            />
+            {inviteMessage ? (
+              <InlineNotification kind={inviteStatus === 'success' ? 'success' : 'error'} lowContrast title={inviteMessage} hideCloseButton />
+            ) : null}
+          </div>
+        </ModalBody>
+        <ModalFooter>
+          <Button kind="secondary" onClick={() => setIsInviteModalOpen(false)}>
+            Batal
+          </Button>
+          <Button kind="primary" disabled={inviteStatus === 'pending' || !inviteEmail.trim()} onClick={() => handleInvite()}>
+            {inviteStatus === 'pending' ? 'Mengirim…' : 'Kirim undangan'}
+          </Button>
+        </ModalFooter>
+      </ComposedModal>
+    </div>
   );
 }

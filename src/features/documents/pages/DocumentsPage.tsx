@@ -3,12 +3,33 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Button,
+  ComposedModal,
+  DataTable,
+  DataTableSkeleton,
+  Dropdown,
+  FileUploaderButton,
+  InlineNotification,
+  ModalBody,
+  ModalFooter,
+  ModalHeader,
+  SkeletonText,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableToolbar,
+  TableToolbarContent,
+  TableToolbarSearch,
+  Tag,
+  TextInput
+} from '@carbon/react';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
+import { Add } from '@carbon/icons-react';
 import { isCompanyLeadership } from '@/lib/roles';
 import { formatNumberId } from '@/lib/currency';
 import { DEPARTMENT_LABELS } from '@/lib/glossary';
@@ -53,7 +74,15 @@ export default function DocumentsPage() {
   const [filterDocType, setFilterDocType] = useState('');
   const [filterDepartment, setFilterDepartment] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [cari, setCari] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
+  // Isian modal unggah dulu memakai <select> dan <input> mentah yang dibaca FormData saat
+  // submit. Kontrol Carbon TIDAK menaruh nilainya di FormData, jadi nilainya disimpan di sini
+  // dan diteruskan lewat input tersembunyi -- lapisan servernya sama sekali tidak berubah.
+  const [berkasTerpilih, setBerkasTerpilih] = useState('');
+  const [jenisTerpilih, setJenisTerpilih] = useState('');
+  const [sensitivitasTerpilih, setSensitivitasTerpilih] = useState('UMUM');
+  const [departemenTerpilih, setDepartemenTerpilih] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -184,229 +213,290 @@ export default function DocumentsPage() {
 
   if (checkingAccess) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="px-6 text-center text-sm text-muted-foreground">Memuat...</div>
-      </main>
+      <div className="halaman">
+        <SkeletonText heading width="18rem" />
+        <DataTableSkeleton columnCount={8} rowCount={6} showHeader={false} showToolbar={false} />
+      </div>
     );
   }
 
+  // Pencarian judul/nomor dokumen. Toolbar Carbon menyediakan kotaknya; menyaringnya
+  // tetap tugas halaman.
+  const dokumenTerlihat = cari.trim()
+    ? documents.filter((d) => `${d.title} ${d.doc_number ?? ''}`.toLowerCase().includes(cari.trim().toLowerCase()))
+    : documents;
+
+  const kolom = [
+    { key: 'judul', header: 'Judul' },
+    { key: 'jenis', header: 'Jenis' },
+    { key: 'departemen', header: 'Departemen' },
+    { key: 'sensitivitas', header: 'Sensitivitas' },
+    { key: 'status', header: 'Status' },
+    { key: 'ukuran', header: 'Ukuran' },
+    { key: 'diunggah', header: 'Diunggah' },
+    { key: 'aksi', header: 'Aksi' }
+  ];
+  // Baris memuat NILAI YANG DITAMPILKAN, bukan objek mentah: Carbon mengurutkan berdasarkan
+  // nilai di baris, jadi baris berisi enum mentah akan mengurut "TERBATAS" padahal layar
+  // menampilkan "Terbatas".
+  const barisTabel = dokumenTerlihat.map((d) => ({
+    id: String(d.document_id),
+    judul: `${d.title}${d.doc_number ? ` (${d.doc_number})` : ''}`,
+    jenis: documentTypes.find((t) => t.code === d.doc_type)?.name ?? d.doc_type,
+    departemen: d.department ? DEPARTMENT_LABELS[d.department] ?? d.department : '',
+    sensitivitas: SENSITIVITY_LABELS[d.sensitivity] ?? d.sensitivity,
+    status: STATUS_LABELS[d.status] ?? d.status,
+    ukuran: d.size_bytes,
+    diunggah: d.uploaded_at,
+    aksi: ''
+  }));
+
+  // Warna Tag mengikuti ARTI, bukan selera: merah = terbatas, biru = terbatas departemen,
+  // abu = boleh dilihat siapa saja.
+  const warnaSensitivitas: Record<string, 'red' | 'blue' | 'gray'> = {
+    TERBATAS: 'red',
+    DEPARTEMEN: 'blue',
+    UMUM: 'gray'
+  };
+
+  const isiSel = (doc: DocumentRow, key: string) => {
+    if (key === 'judul')
+      return (
+        <span>
+          {doc.title}
+          {doc.doc_number ? <span className="halaman__redup"> ({doc.doc_number})</span> : null}
+        </span>
+      );
+    if (key === 'jenis') return documentTypes.find((t) => t.code === doc.doc_type)?.name ?? doc.doc_type;
+    if (key === 'departemen') return doc.department ? DEPARTMENT_LABELS[doc.department] ?? doc.department : <span className="halaman__redup">—</span>;
+    if (key === 'sensitivitas')
+      return <Tag type={warnaSensitivitas[doc.sensitivity] ?? 'gray'}>{SENSITIVITY_LABELS[doc.sensitivity] ?? doc.sensitivity}</Tag>;
+    if (key === 'status') return STATUS_LABELS[doc.status] ?? doc.status;
+    if (key === 'ukuran') return formatBytes(doc.size_bytes);
+    if (key === 'diunggah') return new Date(doc.uploaded_at).toLocaleDateString('id-ID');
+    return (
+      <Button size="sm" kind="tertiary" onClick={() => openViewer(doc)}>
+        {doc.mime_type === 'application/pdf' || doc.mime_type.startsWith('image/') ? 'Lihat' : 'Unduh'}
+      </Button>
+    );
+  };
+
   return (
-    <main className="min-h-screen bg-muted/30 py-10">
-      <div className="flex w-full flex-col gap-6 px-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Registri</p>
-            <h1 className="text-2xl font-semibold text-foreground">Master Dokumen</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Satu tempat untuk semua berkas masuk/keluar sistem -- PO klien, POD, surat jalan, COA, sertifikat, spesifikasi, kontrak, SOP.</p>
-          </div>
-          <Button size="sm" onClick={() => setUploadOpen(true)}>
-            Unggah Dokumen
+    <div className="halaman">
+      <KepalaHalaman
+        remah={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Administration' }, { label: 'Documents' }]}
+        judul="Master dokumen"
+        pengantar={
+          loading
+            ? 'Memuat…'
+            : `${dokumenTerlihat.length} dokumen${cari.trim() ? ` cocok dengan pencarian "${cari.trim()}"` : ' terlihat untuk Anda'} — PO klien, bukti terima, surat jalan, COA, sertifikat, spesifikasi, kontrak, SOP.`
+        }
+      />
+
+      {error ? <InlineNotification kind="error" lowContrast title="Gagal" subtitle={error} onClose={() => { setError(''); return true; }} /> : null}
+
+      {documentTypes.length === 0 && isCompanyLeadership(role) ? (
+        <div className="dokumen-belum-ada-jenis">
+          {/* InlineNotification Carbon TIDAK punya prop `actions` (diperiksa di paket
+              terpasang); ActionableNotification punya, tapi ia dirancang untuk pesan yang
+              MEMBUTUHKAN tindakan segera. Di sini tombolnya cukup berdiri di bawah pesannya. */}
+          <InlineNotification
+            kind="info"
+            lowContrast
+            hideCloseButton
+            title="Belum ada jenis dokumen"
+            subtitle={seedMessage || 'Jenis dokumen awal perlu dibuat sekali sebelum dokumen bisa diunggah.'}
+          />
+          <Button size="sm" kind="tertiary" disabled={seeding} onClick={handleSeedDocumentTypes}>
+            {seeding ? 'Menjalankan…' : 'Buat jenis dokumen awal'}
           </Button>
         </div>
+      ) : null}
 
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {loading ? (
+        <DataTableSkeleton columnCount={8} rowCount={6} showHeader={false} />
+      ) : (
+        <DataTable rows={barisTabel} headers={kolom}>
+          {({ rows, headers, getTableProps, getHeaderProps, getRowProps }: any) => (
+            <TableContainer>
+              <TableToolbar>
+                <TableToolbarContent>
+                  {/* MELIPAT, bukan selalu terbuka — bawaan Carbon, `persistent` tidak dipakai. */}
+                  <TableToolbarSearch
+                    placeholder="Cari judul atau nomor dokumen…"
+                    labelText="Cari dokumen"
+                    onChange={(e: React.ChangeEvent<HTMLInputElement> | '') => setCari(typeof e === 'string' ? '' : e.target.value)}
+                  />
+                  {/* SARINGAN: label disembunyikan secara visual, TAPI TETAP ADA untuk pembaca
+                      layar. titleText kosong tetap merender elemen labelnya dan mendorong
+                      kotaknya turun -- pelajaran yang sudah dicatat di Master Item. */}
+                  <Dropdown
+                    id="saring-jenis"
+                    className="halaman__saring"
+                    size="lg"
+                    titleText="Jenis dokumen"
+                    hideLabel
+                    label="Semua jenis"
+                    items={['', ...documentTypes.map((t) => t.code)]}
+                    selectedItem={filterDocType}
+                    itemToString={(item: string) => (item === '' ? 'Semua jenis' : documentTypes.find((t) => t.code === item)?.name ?? item)}
+                    onChange={({ selectedItem }: { selectedItem: string | null }) => setFilterDocType(selectedItem ?? '')}
+                  />
+                  <Dropdown
+                    id="saring-departemen"
+                    className="halaman__saring"
+                    size="lg"
+                    titleText="Departemen"
+                    hideLabel
+                    label="Semua departemen"
+                    items={['', ...DEPARTMENTS]}
+                    selectedItem={filterDepartment}
+                    itemToString={(item: string) => (item === '' ? 'Semua departemen' : DEPARTMENT_LABELS[item] ?? item)}
+                    onChange={({ selectedItem }: { selectedItem: string | null }) => setFilterDepartment(selectedItem ?? '')}
+                  />
+                  <Dropdown
+                    id="saring-status"
+                    className="halaman__saring"
+                    size="lg"
+                    titleText="Status"
+                    hideLabel
+                    label="Semua status"
+                    items={['', ...Object.keys(STATUS_LABELS)]}
+                    selectedItem={filterStatus}
+                    itemToString={(item: string) => (item === '' ? 'Semua status' : STATUS_LABELS[item] ?? item)}
+                    onChange={({ selectedItem }: { selectedItem: string | null }) => setFilterStatus(selectedItem ?? '')}
+                  />
+                  <Button size="lg" renderIcon={Add} onClick={() => setUploadOpen(true)}>
+                    Unggah dokumen
+                  </Button>
+                </TableToolbarContent>
+              </TableToolbar>
+              <Table {...getTableProps()} size="lg" className="tabel-responsif">
+                <TableHead>
+                  <TableRow>
+                    {headers.map((header: any) => {
+                      const { key, ...sisa } = getHeaderProps({ header });
+                      return (
+                        <TableHeader key={key} {...sisa} isSortable={header.key !== 'aksi'}>
+                          {header.header}
+                        </TableHeader>
+                      );
+                    })}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {rows.map((row: any) => {
+                    const doc = documents.find((d) => String(d.document_id) === row.id)!;
+                    const { key, ...sisa } = getRowProps({ row });
+                    return (
+                      <TableRow key={key} {...sisa}>
+                        {row.cells.map((cell: any) => (
+                          <TableCell key={cell.id} data-label={cell.info.header}>{isiSel(doc, cell.info.header)}</TableCell>
+                        ))}
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+              {documents.length === 0 ? (
+                <p className="halaman__pengantar">Belum ada dokumen yang bisa Anda lihat.</p>
+              ) : null}
+            </TableContainer>
+          )}
+        </DataTable>
+      )}
 
-        {documentTypes.length === 0 && isCompanyLeadership(role) ? (
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em]">Belum Ada Jenis Dokumen</CardDescription>
-              <CardTitle className="text-lg">Seed jenis dokumen awal untuk memulai</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-2">
-              <Button size="sm" className="w-fit" disabled={seeding} onClick={handleSeedDocumentTypes}>
-                {seeding ? 'Menjalankan...' : 'Seed Jenis Dokumen'}
-              </Button>
-              {seedMessage ? <p className="text-xs text-muted-foreground">{seedMessage}</p> : null}
-            </CardContent>
-          </Card>
-        ) : null}
+      <ComposedModal open={uploadOpen} onClose={() => { setUploadOpen(false); return true; }} size="md">
+        <ModalHeader title="Unggah dokumen" label="Master dokumen" />
+        <ModalBody hasForm>
+          <form id="form-unggah-dokumen" className="dokumen-form" onSubmit={(e) => { e.preventDefault(); handleUpload(e.currentTarget); }}>
+            {/* Berkas dipilih lewat FileUploaderButton Carbon, bukan <input type="file"> mentah
+                (aturan Pola Unggah Gambar). Input aslinya tetap ada di dalam komponen Carbon
+                dengan name="file", jadi FormData tetap membacanya seperti sebelumnya. */}
+            <div className="dokumen-berkas">
+              <span className="dokumen-berkas__label">Berkas</span>
+              <FileUploaderButton
+                name="file"
+                buttonKind="tertiary"
+                size="lg"
+                labelText={berkasTerpilih || 'Pilih berkas'}
+                disableLabelChanges
+                accept={['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.xlsx', '.docx']}
+                onChange={(e) => setBerkasTerpilih((e.target as HTMLInputElement).files?.[0]?.name ?? '')}
+              />
+              <span className="dokumen-berkas__bantuan">PDF, PNG, JPG, WEBP, XLSX, atau DOCX. Maksimal 20MB.</span>
+            </div>
 
-        <Card>
-          <CardContent className="flex flex-wrap gap-3 pt-6">
-            <Select value={filterDocType || 'ALL'} onValueChange={(v) => setFilterDocType(v === 'ALL' ? '' : v)}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Jenis Dokumen" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Semua Jenis</SelectItem>
-                {documentTypes.map((t) => (
-                  <SelectItem key={t.document_type_id} value={t.code}>
-                    {t.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filterDepartment || 'ALL'} onValueChange={(v) => setFilterDepartment(v === 'ALL' ? '' : v)}>
-              <SelectTrigger className="w-44">
-                <SelectValue placeholder="Departemen" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Semua Departemen</SelectItem>
-                {DEPARTMENTS.map((d) => (
-                  <SelectItem key={d} value={d}>
-                    {DEPARTMENT_LABELS[d] ?? d}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filterStatus || 'ALL'} onValueChange={(v) => setFilterStatus(v === 'ALL' ? '' : v)}>
-              <SelectTrigger className="w-44">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Semua Status</SelectItem>
-                {Object.entries(STATUS_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </CardContent>
-        </Card>
+            <Dropdown
+              id="unggah-jenis"
+              size="lg"
+              titleText="Jenis dokumen"
+              label="Pilih jenis dokumen"
+              items={documentTypes.map((t) => t.code)}
+              selectedItem={jenisTerpilih}
+              itemToString={(item: string) => documentTypes.find((t) => t.code === item)?.name ?? item}
+              onChange={({ selectedItem }: { selectedItem: string | null }) => setJenisTerpilih(selectedItem ?? '')}
+            />
+            <input type="hidden" name="doc_type" value={jenisTerpilih} />
 
-        {loading ? (
-          <p className="text-sm text-muted-foreground">Memuat dokumen...</p>
-        ) : documents.length === 0 ? (
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em]">Kosong</CardDescription>
-              <CardTitle className="text-lg">Belum ada dokumen yang bisa Anda lihat</CardTitle>
-            </CardHeader>
-          </Card>
-        ) : (
-          <div className="overflow-x-auto rounded-md border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2 text-left">Judul</th>
-                  <th className="px-3 py-2 text-left">Jenis</th>
-                  <th className="px-3 py-2 text-left">Departemen</th>
-                  <th className="px-3 py-2 text-left">Sensitivitas</th>
-                  <th className="px-3 py-2 text-left">Status</th>
-                  <th className="px-3 py-2 text-left">Ukuran</th>
-                  <th className="px-3 py-2 text-left">Diunggah</th>
-                  <th className="px-3 py-2 text-left">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {documents.map((doc) => (
-                  <tr key={doc.document_id}>
-                    <td className="px-3 py-1.5">
-                      {doc.title}
-                      {doc.doc_number ? <span className="text-muted-foreground"> ({doc.doc_number})</span> : null}
-                    </td>
-                    <td className="px-3 py-1.5">{documentTypes.find((t) => t.code === doc.doc_type)?.name ?? doc.doc_type}</td>
-                    <td className="px-3 py-1.5">{doc.department ? DEPARTMENT_LABELS[doc.department] ?? doc.department : '-'}</td>
-                    <td className="px-3 py-1.5">
-                      <Badge variant={doc.sensitivity === 'TERBATAS' ? 'destructive' : doc.sensitivity === 'DEPARTEMEN' ? 'secondary' : 'outline'}>{SENSITIVITY_LABELS[doc.sensitivity] ?? doc.sensitivity}</Badge>
-                    </td>
-                    <td className="px-3 py-1.5">{STATUS_LABELS[doc.status] ?? doc.status}</td>
-                    <td className="px-3 py-1.5">{formatBytes(doc.size_bytes)}</td>
-                    <td className="px-3 py-1.5">{new Date(doc.uploaded_at).toLocaleDateString('id-ID')}</td>
-                    <td className="px-3 py-1.5">
-                      <Button size="sm" variant="outline" onClick={() => openViewer(doc)}>
-                        {doc.mime_type === 'application/pdf' || doc.mime_type.startsWith('image/') ? 'Lihat' : 'Unduh'}
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+            <TextInput id="unggah-judul" name="title" size="lg" labelText="Judul" required />
+            <TextInput id="unggah-nomor" name="doc_number" size="lg" labelText="Nomor dokumen" helperText="Boleh dikosongkan." />
 
-        <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Unggah Dokumen</DialogTitle>
-            </DialogHeader>
-            <form
-              className="flex flex-col gap-3"
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleUpload(e.currentTarget);
-              }}
-            >
-              <div>
-                <label className="mb-1 block text-xs text-muted-foreground">Berkas (PDF/PNG/JPG/WEBP/XLSX/DOCX, maks 20MB)</label>
-                <input type="file" name="file" required className="w-full text-sm" />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs text-muted-foreground">Jenis Dokumen</label>
-                <select name="doc_type" className="h-9 w-full rounded-md border px-2 text-sm" required defaultValue="">
-                  <option value="" disabled>
-                    Pilih jenis dokumen
-                  </option>
-                  {documentTypes.map((t) => (
-                    <option key={t.document_type_id} value={t.code}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs text-muted-foreground">Judul</label>
-                <Input name="title" required />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs text-muted-foreground">Nomor Dokumen (opsional)</label>
-                <Input name="doc_number" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs text-muted-foreground">Sensitivitas</label>
-                  <select name="sensitivity" className="h-9 w-full rounded-md border px-2 text-sm" defaultValue="UMUM">
-                    <option value="UMUM">Umum</option>
-                    <option value="DEPARTEMEN">Departemen</option>
-                    <option value="TERBATAS">Terbatas</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs text-muted-foreground">Departemen (wajib kalau bukan Umum)</label>
-                  <select name="department" className="h-9 w-full rounded-md border px-2 text-sm" defaultValue="">
-                    <option value="">-</option>
-                    {DEPARTMENTS.map((d) => (
-                      <option key={d} value={d}>
-                        {DEPARTMENT_LABELS[d] ?? d}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs text-muted-foreground">Tanggal Terbit (opsional)</label>
-                  <Input type="date" name="issued_date" />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs text-muted-foreground">Tanggal Kedaluwarsa (opsional)</label>
-                  <Input type="date" name="expiry_date" />
-                </div>
-              </div>
-              {uploadError ? <p className="text-sm text-destructive">{uploadError}</p> : null}
-              <Button type="submit" disabled={uploading}>
-                {uploading ? 'Mengunggah...' : 'Unggah'}
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+            <div className="dokumen-sejajar">
+              <Dropdown
+                id="unggah-sensitivitas"
+                size="lg"
+                titleText="Sensitivitas"
+                label="Pilih sensitivitas"
+                items={['UMUM', 'DEPARTEMEN', 'TERBATAS']}
+                selectedItem={sensitivitasTerpilih}
+                itemToString={(item: string) => SENSITIVITY_LABELS[item] ?? item}
+                onChange={({ selectedItem }: { selectedItem: string | null }) => setSensitivitasTerpilih(selectedItem ?? 'UMUM')}
+              />
+              <input type="hidden" name="sensitivity" value={sensitivitasTerpilih} />
+              <Dropdown
+                id="unggah-departemen"
+                size="lg"
+                titleText="Departemen"
+                label="Pilih departemen"
+                helperText={sensitivitasTerpilih === 'UMUM' ? 'Tidak perlu diisi untuk dokumen Umum.' : 'Wajib diisi karena dokumen ini tidak Umum.'}
+                items={['', ...DEPARTMENTS]}
+                selectedItem={departemenTerpilih}
+                itemToString={(item: string) => (item === '' ? '—' : DEPARTMENT_LABELS[item] ?? item)}
+                onChange={({ selectedItem }: { selectedItem: string | null }) => setDepartemenTerpilih(selectedItem ?? '')}
+              />
+              <input type="hidden" name="department" value={departemenTerpilih} />
+            </div>
 
-        <Dialog open={viewerOpen} onOpenChange={setViewerOpen}>
-          <DialogContent className="max-w-4xl">
-            <DialogHeader>
-              <DialogTitle>{viewerData?.title}</DialogTitle>
-            </DialogHeader>
-            {viewerData?.mime === 'application/pdf' ? (
-              <iframe src={viewerData.url} className="h-[70vh] w-full rounded-md border" title={viewerData.title} />
-            ) : viewerData ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={viewerData.url} alt={viewerData.title} className="max-h-[70vh] w-full rounded-md border object-contain" />
-            ) : null}
-            <p className="text-xs text-muted-foreground">Tautan berlaku sementara (2 menit) -- tutup dan buka lagi kalau kedaluwarsa.</p>
-          </DialogContent>
-        </Dialog>
-      </div>
-    </main>
+            <div className="dokumen-sejajar">
+              <TextInput id="unggah-terbit" name="issued_date" type="date" size="lg" labelText="Tanggal terbit" helperText="Boleh dikosongkan." />
+              <TextInput id="unggah-kedaluwarsa" name="expiry_date" type="date" size="lg" labelText="Tanggal kedaluwarsa" helperText="Boleh dikosongkan." />
+            </div>
+
+            {uploadError ? <InlineNotification kind="error" lowContrast title={uploadError} hideCloseButton /> : null}
+          </form>
+        </ModalBody>
+        <ModalFooter>
+          <Button kind="secondary" onClick={() => setUploadOpen(false)}>
+            Batal
+          </Button>
+          <Button kind="primary" type="submit" form="form-unggah-dokumen" disabled={uploading}>
+            {uploading ? 'Mengunggah…' : 'Unggah'}
+          </Button>
+        </ModalFooter>
+      </ComposedModal>
+
+      <ComposedModal open={viewerOpen} onClose={() => { setViewerOpen(false); return true; }} size="lg">
+        <ModalHeader title={viewerData?.title ?? 'Dokumen'} label="Master dokumen" />
+        <ModalBody>
+          {viewerData?.mime === 'application/pdf' ? (
+            <iframe src={viewerData.url} className="dokumen-pratinjau" title={viewerData.title} />
+          ) : viewerData ? (
+            <img src={viewerData.url} alt={viewerData.title} className="dokumen-pratinjau dokumen-pratinjau--gambar" />
+          ) : null}
+          <p className="halaman__redup">Tautan berlaku sementara (2 menit) — tutup dan buka lagi bila kedaluwarsa.</p>
+        </ModalBody>
+      </ComposedModal>
+    </div>
   );
 }

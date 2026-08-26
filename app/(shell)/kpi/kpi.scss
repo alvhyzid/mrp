@@ -1,0 +1,75 @@
+// Gaya khas halaman KPI (KPI & KPI saya). KERANGKA halamannya memakai kelas bersama
+// `halaman-*` di src/styles/carbon.scss — di sini HANYA yang khas halaman ini.
+@use '@carbon/react/scss/spacing';
+@use '@carbon/react/scss/theme';
+@use '@carbon/react/scss/type';
+
+.kpi-target {
+  @include type.type-style('label-01');
+  color: theme.$text-secondary;
+  margin-block-start: spacing.$spacing-03;
+}
+
+// Catatan metode: dicetak miring karena ia menjelaskan ANGKANYA, bukan bagian dari angkanya.
+.kpi-catatan {
+  @include type.type-style('label-01');
+  color: theme.$text-helper;
+  font-style: italic;
+  margin-block-start: spacing.$spacing-02;
+}
+
+.kpi-tindakan {
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-03;
+}
+
+// Satu tindakan = satu baris. Menumpuk di layar sempit supaya tenggat dan statusnya tidak
+// terjepit di sebelah teks temuan yang panjang.
+.kpi-tindakan__baris {
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-03;
+}
+
+@media (min-width: 42rem) {
+  .kpi-tindakan__baris {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.kpi-tindakan__temuan {
+  @include type.type-style('body-compact-01');
+  font-weight: 600;
+}
+
+.kpi-tindakan__kanan {
+  display: flex;
+  align-items: center;
+  gap: spacing.$spacing-03;
+  flex-shrink: 0;
+}
+
+.kpi-aksi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: spacing.$spacing-05;
+}
+
+.kpi-kosong {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: spacing.$spacing-03;
+}
+
+// Kartu KPI memuat lebih banyak keterangan daripada kartu angka biasa, jadi tiga kolom di
+// layar lebar — bukan empat seperti kisi metrik bawaan.
+@media (min-width: 66rem) {
+  .kpi-kisi {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

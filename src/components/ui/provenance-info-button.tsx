@@ -208,7 +208,8 @@ export function ProvenanceInfoButton({
             </div>
           ) : null}
 
-          {/* Sesi 6 (21 Agu 2026, 6.4) — identifier tabel/kolom mentah TIDAK
+          {/* penjaga-kebocoran:mulai
+              Sesi 6 (21 Agu 2026, 6.4) — identifier tabel/kolom mentah TIDAK
               PERNAH dihapus dari sistem (fondasi Kamus & Fase AI), tapi
               dipindah ke sini: tertutup secara default, dan HANYA DIRENDER
               SAMA SEKALI (bukan disembunyikan CSS) kalau isCompanyAdmin true --
@@ -237,6 +238,7 @@ export function ProvenanceInfoButton({
               ) : null}
             </div>
           ) : null}
+          {/* penjaga-kebocoran:selesai */}
         </DialogContent>
       </Dialog>
     </>

@@ -1,24 +1,50 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import type { ColumnDef } from '@tanstack/react-table';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { DataTable } from '@/components/ui/data-table';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import {
+  Button,
+  DataTable,
+  DataTableSkeleton,
+  Dropdown,
+  InlineNotification,
+  NumberInput,
+  Pagination,
+  StructuredListBody,
+  StructuredListCell,
+  StructuredListRow,
+  StructuredListWrapper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableExpandHeader,
+  TableExpandRow,
+  TableExpandedRow,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableToolbar,
+  TableToolbarContent,
+  TableToolbarSearch,
+  Tag
+} from '@carbon/react';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
+
+// SALES ORDER — dimigrasikan ke Carbon 26 Agu 2026 (DS-09), cetakan Master Item.
 import { canViewPlanningFeasibility, canViewFinancialData } from '@/lib/roles';
 import { formatCurrency, formatNumberId } from '@/lib/currency';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 
 const statusLabels: Record<string, string> = { confirmed: 'Dikonfirmasi', in_production: 'Sedang Produksi', completed: 'Selesai', cancelled: 'Batal' };
-const statusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical'> = {
-  confirmed: 'info',
-  in_production: 'warning',
-  completed: 'success',
-  cancelled: 'critical'
+/// Warna Tag mengikuti ARTI. "Sedang diproduksi" ungu, bukan kuning: itu kemajuan yang
+/// normal, bukan peringatan. Hanya "dibatalkan" yang merah.
+const statusWarnaTag: Record<string, 'blue' | 'purple' | 'green' | 'red'> = {
+  confirmed: 'blue',
+  in_production: 'purple',
+  completed: 'green',
+  cancelled: 'red'
 };
 
 type SoLine = {
@@ -149,11 +175,11 @@ const marginCategoryProvenance: Record<string, { formula: string; sourceDocument
 };
 
 const shipmentStatusLabels: Record<string, string> = { draft: 'Draft', shipped: 'Terkirim', delivered: 'Diterima', cancelled: 'Batal' };
-const shipmentStatusBadgeVariant: Record<string, 'secondary' | 'warning' | 'success' | 'critical'> = {
-  draft: 'secondary',
-  shipped: 'warning',
-  delivered: 'success',
-  cancelled: 'critical'
+const shipmentStatusWarnaTag: Record<string, 'gray' | 'purple' | 'green' | 'red'> = {
+  draft: 'gray',
+  shipped: 'purple',
+  delivered: 'green',
+  cancelled: 'red'
 };
 
 export default function SalesOrdersPage() {
@@ -165,6 +191,13 @@ export default function SalesOrdersPage() {
   const [soError, setSoError] = useState('');
   const [soLoading, setSoLoading] = useState(true);
   const [expandedSoId, setExpandedSoId] = useState<number | null>(null);
+
+  // Pencarian, saringan, dan pembagian halaman: Carbon DataTable tidak membawanya.
+  const [cari, setCari] = useState('');
+  const [saringStatus, setSaringStatus] = useState<string>('semua');
+  const [halaman, setHalaman] = useState(1);
+  const [perHalaman, setPerHalaman] = useState(15);
+  const adaSaringan = cari.trim() !== '' || saringStatus !== 'semua';
   const [role, setRole] = useState<string | null>(null);
 
   const [feasibilityLineId, setFeasibilityLineId] = useState<number | null>(null);
@@ -400,121 +433,185 @@ export default function SalesOrdersPage() {
 
   const showPriceColumn = useMemo(() => salesOrders.some((so) => so.lines.some((line) => line.unit_price !== null)), [salesOrders]);
 
-  const columns = useMemo<ColumnDef<SalesOrder>[]>(
-    () => [
-      {
-        id: 'so_number',
-        header: 'No. SO',
-        cell: ({ row }) => (
-          <div className="flex flex-col">
-            <span className="font-medium text-foreground">{row.original.so_number}</span>
-            <span className="text-xs text-muted-foreground">{row.original.po_number ? `dari PO ${row.original.po_number}` : '-'}</span>
-          </div>
-        )
-      },
-      {
-        id: 'customer',
-        header: 'Client',
-        cell: ({ row }) => (
-          <div className="flex flex-col gap-0.5">
-            <span>{row.original.customer_name ?? '-'}</span>
-            {row.original.identity_predates_snapshot ? (
-              <span className="text-xs text-muted-foreground">Terbit sebelum pembekuan identitas berlaku</span>
-            ) : null}
-          </div>
-        )
-      },
-      { id: 'plant', header: 'Lokasi', cell: ({ row }) => row.original.production_plant_name ?? '-' },
-      { accessorKey: 'status', header: 'Status', cell: ({ row }) => <Badge variant={statusBadgeVariant[row.original.status] ?? 'secondary'}>{statusLabels[row.original.status] ?? row.original.status}</Badge> },
-      { id: 'lines', header: 'Jumlah Baris', cell: ({ row }) => row.original.lines.length },
-      {
-        id: 'created_at',
-        header: 'Dibuat',
-        cell: ({ row }) => (row.original.created_at ? new Date(row.original.created_at).toLocaleDateString('id-ID') : '-')
-      },
-      {
-        id: 'actions',
-        header: 'Aksi',
-        cell: ({ row }) => (
-          <Button size="sm" variant="outline" onClick={() => toggleExpand(row.original)}>
-            {expandedSoId === row.original.sales_order_id ? 'Tutup' : 'Detail'}
-          </Button>
-        )
-      }
-    ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [expandedSoId]
+  // ==========================================================================
+  // TABEL SALES ORDER — cetakan Master Item
+  // ==========================================================================
+  const kolom = [
+    { key: 'so_number', header: 'No. SO' },
+    { key: 'customer', header: 'Klien' },
+    { key: 'plant', header: 'Lokasi' },
+    { key: 'status', header: 'Status' },
+    { key: 'lines', header: 'Jumlah baris' },
+    { key: 'created_at', header: 'Dibuat' }
+  ];
+
+  const soTersaring = useMemo(() => {
+    const kata = cari.trim().toLowerCase();
+    return salesOrders.filter((so) => {
+      if (saringStatus !== 'semua' && so.status !== saringStatus) return false;
+      if (!kata) return true;
+      return `${so.so_number} ${so.customer_name ?? ''}`.toLowerCase().includes(kata);
+    });
+  }, [salesOrders, cari, saringStatus]);
+
+  const soHalamanIni = useMemo(() => soTersaring.slice((halaman - 1) * perHalaman, halaman * perHalaman), [soTersaring, halaman, perHalaman]);
+  const soById = useMemo(() => new Map(salesOrders.map((so) => [String(so.sales_order_id), so])), [salesOrders]);
+
+  const baris = useMemo(
+    () =>
+      soHalamanIni.map((so) => ({
+        id: String(so.sales_order_id),
+        so_number: so.so_number,
+        customer: so.customer_name ?? '',
+        plant: so.production_plant_name ?? '',
+        status: statusLabels[so.status] ?? so.status,
+        lines: so.lines.length,
+        created_at: so.created_at ?? ''
+      })),
+    [soHalamanIni]
   );
+
+  const isiSel = (so: SalesOrder, kunci: string) => {
+    switch (kunci) {
+      case 'so_number':
+        return (
+          <div className="so-sel-nomor">
+            <span className="so-sel-nomor__utama">{so.so_number}</span>
+            <span className="so-sel-nomor__asal">{so.po_number ? `dari PO ${so.po_number}` : 'tanpa PO klien'}</span>
+          </div>
+        );
+      case 'customer':
+        return (
+          <div className="so-sel-nomor">
+            <span className="so-sel-nomor__utama">{so.customer_name ?? '—'}</span>
+            {so.identity_predates_snapshot ? <span className="so-sel-nomor__asal">Terbit sebelum pembekuan identitas berlaku</span> : null}
+          </div>
+        );
+      case 'plant':
+        return so.production_plant_name ?? <span className="halaman__redup">—</span>;
+      case 'status':
+        return <Tag type={statusWarnaTag[so.status] ?? 'gray'}>{statusLabels[so.status] ?? so.status}</Tag>;
+      case 'lines':
+        return so.lines.length;
+      case 'created_at':
+        return so.created_at ? new Date(so.created_at).toLocaleDateString('id-ID') : '—';
+      default:
+        return null;
+    }
+  };
 
   const expandedSo = salesOrders.find((so) => so.sales_order_id === expandedSoId) ?? null;
 
   if (checkingAccess) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="px-6 text-center text-sm text-muted-foreground">Memuat...</div>
-      </main>
+      <div className="halaman">
+        <DataTableSkeleton columnCount={6} rowCount={6} showHeader showToolbar />
+      </div>
     );
   }
 
   if (accessDenied) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="max-w-3xl px-6">
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em] text-destructive">Akses Ditolak</CardDescription>
-              <CardTitle className="text-2xl">Sesi tidak valid</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <p className="text-sm text-muted-foreground">Silakan login ulang untuk mengakses Sales Order.</p>
-              <Button onClick={() => router.push('/login?redirectTo=/sales-orders')} className="w-fit">
-                Ke Halaman Login
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+      <div className="halaman">
+        <KepalaHalaman remah={[]} judul="Sales Order" />
+        <InlineNotification kind="error" lowContrast hideCloseButton title="Sesi tidak valid" subtitle="Silakan masuk ulang untuk membuka Sales Order." />
+        <Button className="so-tombol-masuk" onClick={() => router.push('/login?redirectTo=/sales-orders')}>
+          Ke halaman masuk
+        </Button>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-muted/30 py-10">
-      <div className="flex w-full flex-col gap-6 px-6">
-        <Card>
-          <CardHeader>
-            <CardDescription className="uppercase tracking-[0.2em]">Sales</CardDescription>
-            <CardTitle className="text-2xl">Sales Order</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <p className="text-sm text-muted-foreground">
-              Sales Order tercipta otomatis begitu PO Client diproses (lihat halaman PO Client) — tidak dibuat manual di sini.
-            </p>
-            {soError ? <p className="text-sm text-destructive">{soError}</p> : null}
-            {soLoading ? (
-              <p className="text-sm text-muted-foreground">Memuat Sales Order...</p>
-            ) : (
-              <DataTable
-                columns={columns}
-                data={salesOrders}
-                emptyMessage="Belum ada Sales Order."
-                searchPlaceholder="Cari No. SO atau client..."
-                getSearchText={(so) => `${so.so_number} ${so.customer_name ?? ''}`}
-                paginated
-                pageSize={15}
-              />
-            )}
-          </CardContent>
-        </Card>
+    <div className="halaman">
+      <KepalaHalaman
+        remah={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Sales & CRM' }, { label: 'Sales Orders' }]}
+        judul="Sales Order"
+        pengantar={`${soTersaring.length} Sales Order${adaSaringan ? ` dari ${salesOrders.length} yang tercatat` : ' tercatat'} — tercipta otomatis begitu PO klien diproses, tidak dibuat manual di sini.`}
+      />
 
-        {expandedSo ? (
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em]">Detail Sales Order</CardDescription>
-              <CardTitle className="text-xl">
-                {expandedSo.so_number} — {expandedSo.customer_name}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
+      {soError ? <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal memuat Sales Order" subtitle={soError} /> : null}
+
+      {soLoading ? (
+        <DataTableSkeleton columnCount={6} rowCount={6} showHeader showToolbar />
+      ) : (
+        <>
+          <DataTable rows={baris} headers={kolom} isSortable size="lg">
+            {(rp: any) => (
+              <TableContainer {...rp.getTableContainerProps()}>
+                <TableToolbar>
+                  <TableToolbarContent>
+                    {/* MELIPAT, bukan selalu terbuka — bawaan Carbon, `persistent` tidak dipakai. */}
+                    <TableToolbarSearch
+                      placeholder="Cari nomor SO atau nama klien…"
+                      labelText="Cari Sales Order"
+                      onChange={(e: React.ChangeEvent<HTMLInputElement> | '') => {
+                        setCari(typeof e === 'string' ? '' : e.target.value);
+                        setHalaman(1);
+                      }}
+                    />
+                    <Dropdown
+                      id="so-saring-status"
+                      size="lg"
+                      className="halaman__saring"
+                      label="Status"
+                      titleText="Status"
+                      hideLabel
+                      items={['semua', ...Object.keys(statusLabels)]}
+                      itemToString={(v: string) => (v === 'semua' ? 'Semua status' : statusLabels[v] ?? v)}
+                      selectedItem={saringStatus}
+                      onChange={({ selectedItem }: { selectedItem: string | null }) => {
+                        setSaringStatus(selectedItem ?? 'semua');
+                        setHalaman(1);
+                      }}
+                    />
+                  </TableToolbarContent>
+                </TableToolbar>
+                <Table {...rp.getTableProps()} className="tabel-responsif">
+                  <TableHead>
+                    <TableRow>
+                      <TableExpandHeader aria-label="Buka rincian Sales Order" />
+                      {rp.headers.map((h: any) => {
+                        const { key, ...sisa } = rp.getHeaderProps({ header: h }) as { key?: string };
+                        void key;
+                        return (
+                          <TableHeader key={h.key} {...sisa} isSortable>
+                            {h.header}
+                          </TableHeader>
+                        );
+                      })}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {rp.rows.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={kolom.length + 1}>
+                          {adaSaringan ? 'Tidak ada Sales Order yang cocok dengan pencarian atau saringan.' : 'Belum ada Sales Order.'}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      rp.rows.map((row: any) => {
+                        const so = soById.get(row.id);
+                        if (!so) return null;
+                        const { key, ...sisaBaris } = rp.getRowProps({ row }) as { key?: string };
+                        void key;
+                        return (
+                          <React.Fragment key={row.id}>
+                            <TableExpandRow
+                              {...sisaBaris}
+                              isExpanded={expandedSoId === so.sales_order_id}
+                              onExpand={() => toggleExpand(so)}
+                              aria-label={`Rincian ${so.so_number}`}
+                            >
+                              {kolom.map((h) => (
+                                <TableCell key={h.key} data-label={h.header}>
+                                  {isiSel(so, h.key)}
+                                </TableCell>
+                              ))}
+                            </TableExpandRow>
+                            <TableExpandedRow colSpan={kolom.length + 1}>
+                              {expandedSoId === so.sales_order_id && expandedSo ? (
+                                <div className="so-detail">
               <div className="grid gap-2 text-sm sm:grid-cols-2">
                 <div>
                   <span className="text-muted-foreground">PO Client Asal:</span> {expandedSo.po_number ?? '-'}
@@ -523,7 +620,7 @@ export default function SalesOrdersPage() {
                   <span className="text-muted-foreground">Lokasi Pabrik:</span> {expandedSo.production_plant_name ?? '-'}
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Status:</span> <Badge variant={statusBadgeVariant[expandedSo.status] ?? 'secondary'}>{statusLabels[expandedSo.status] ?? expandedSo.status}</Badge>
+                  <span className="text-muted-foreground">Status:</span> <Tag type={statusWarnaTag[expandedSo.status] ?? 'gray'}>{statusLabels[expandedSo.status] ?? expandedSo.status}</Tag>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Dibuat:</span> {new Date(expandedSo.created_at).toLocaleDateString('id-ID')}
@@ -566,8 +663,8 @@ export default function SalesOrdersPage() {
                         {canViewPlanningFeasibility(role) ? (
                           <td className="px-3 py-1.5">
                             <Button
+                              kind="tertiary"
                               size="sm"
-                              variant="outline"
                               disabled={feasibilityLoading && feasibilityLineId === line.sales_order_line_id}
                               onClick={() => handleCheckFeasibility(line.sales_order_line_id)}
                               title="Menghitung & menampilkan kelayakan jadwal dari data SAAT INI -- tidak menyimpan/mengunci apa pun. Untuk mengunci rencana sebagai acuan permanen, pakai tombol 'Kunci' di dalam panel."
@@ -579,8 +676,8 @@ export default function SalesOrdersPage() {
                         {canViewFinancialData(role) ? (
                           <td className="px-3 py-1.5">
                             <Button
+                              kind="tertiary"
                               size="sm"
-                              variant="outline"
                               disabled={marginLoading && marginLineId === line.sales_order_line_id}
                               onClick={() => handleCheckMarginWatch(line.sales_order_line_id)}
                               title="Menghitung & menampilkan margin dari data SAAT INI -- tidak menyimpan/mengunci apa pun. Untuk mengunci baseline sebagai acuan permanen, pakai tombol 'Kunci' di dalam panel."
@@ -616,7 +713,7 @@ export default function SalesOrdersPage() {
                                 onChange={(e) => setMarginRelockReason(e.target.value)}
                                 className="h-6 rounded border px-1 text-xs"
                               />
-                              <Button size="sm" variant="outline" disabled={marginLockStatus === 'locking'} onClick={() => handleLockMargin(marginLineId!, true)}>
+                              <Button kind="tertiary" size="sm" disabled={marginLockStatus === 'locking'} onClick={() => handleLockMargin(marginLineId!, true)}>
                                 Kunci Ulang
                               </Button>
                             </span>
@@ -628,8 +725,8 @@ export default function SalesOrdersPage() {
                           {canViewFinancialData(role) ? (
                             <div className="mt-1">
                               <Button
+                                kind="tertiary"
                                 size="sm"
-                                variant="outline"
                                 disabled={marginLockStatus === 'locking' || !marginResult.cost_data_complete || marginResult.estimated_from_reference_price_item_codes.length > 0}
                                 onClick={() => handleLockMargin(marginLineId!, false)}
                               >
@@ -740,18 +837,17 @@ export default function SalesOrdersPage() {
                       </div>
 
                       <div className="flex items-end gap-2 border-t pt-3">
-                        <label className="flex flex-col gap-1">
-                          <span className="text-xs font-medium text-muted-foreground">Ambang Margin Minimum (opsional)</span>
-                          <Input
-                            type="number"
-                            step="any"
-                            placeholder="mis. 35000000"
-                            className="w-48"
-                            value={marginThresholdInput}
-                            onChange={(event) => setMarginThresholdInput(event.target.value)}
-                          />
-                        </label>
-                        <Button size="sm" variant="outline" disabled={marginThresholdStatus === 'saving'} onClick={handleSaveMarginThreshold}>
+                        <NumberInput
+                          id="so-ambang-margin"
+                          label="Ambang margin minimum (opsional)"
+                          min={0}
+                          allowEmpty
+                          hideSteppers
+                          className="so-ambang"
+                          value={marginThresholdInput === '' ? '' : Number(marginThresholdInput)}
+                          onChange={(_e: unknown, { value }: { value: number | string }) => setMarginThresholdInput(String(value ?? ''))}
+                        />
+                        <Button kind="tertiary" size="sm" disabled={marginThresholdStatus === 'saving'} onClick={handleSaveMarginThreshold}>
                           {marginThresholdStatus === 'saving' ? 'Menyimpan...' : 'Simpan Ambang'}
                         </Button>
                         <span className="text-xs text-muted-foreground">Kirim peringatan ke Finance & Manajemen kalau proyeksi margin turun di bawah angka ini.</span>
@@ -829,7 +925,7 @@ export default function SalesOrdersPage() {
                                   onChange={(e) => setFeasibilityRelockReason(e.target.value)}
                                   className="h-6 rounded border px-1 text-xs"
                                 />
-                                <Button size="sm" variant="outline" disabled={feasibilityLockStatus === 'locking'} onClick={() => handleLockFeasibility(feasibilityLineId!, true)}>
+                                <Button kind="tertiary" size="sm" disabled={feasibilityLockStatus === 'locking'} onClick={() => handleLockFeasibility(feasibilityLineId!, true)}>
                                   Kunci Ulang
                                 </Button>
                               </span>
@@ -854,7 +950,7 @@ export default function SalesOrdersPage() {
                             ⚠ PERKIRAAN SEMENTARA — BELUM DIKUNCI SEBAGAI ACUAN. Angka di bawah dihitung LIVE dari data saat ini, bukan rencana permanen.
                             {canViewFinancialData(role) ? (
                               <div className="mt-1">
-                                <Button size="sm" variant="outline" disabled={feasibilityLockStatus === 'locking'} onClick={() => handleLockFeasibility(feasibilityLineId!, false)}>
+                                <Button kind="tertiary" size="sm" disabled={feasibilityLockStatus === 'locking'} onClick={() => handleLockFeasibility(feasibilityLineId!, false)}>
                                   {feasibilityLockStatus === 'locking' ? 'Mengunci...' : 'Kunci sebagai Acuan Pembanding'}
                                 </Button>
                               </div>
@@ -863,7 +959,7 @@ export default function SalesOrdersPage() {
                         ) : null}
                         {feasibilityLockMessage ? <p className={feasibilityLockStatus === 'error' ? 'text-xs text-destructive' : 'text-xs text-success'}>{feasibilityLockMessage}</p> : null}
                         <div className="flex flex-wrap items-center gap-3">
-                          <Badge variant={feasibilityResult.feasible ? 'success' : 'critical'}>{feasibilityResult.feasible ? 'FEASIBLE' : 'TIDAK FEASIBLE'}</Badge>
+                          <Tag type={feasibilityResult.feasible ? 'green' : 'red'}>{feasibilityResult.feasible ? 'Layak dijadwalkan' : 'Belum layak dijadwalkan'}</Tag>
                           <span>
                             Butuh <span className="font-medium text-foreground">{formatNumberId(feasibilityResult.batches_needed, 2)}</span> batch ({formatNumberId(feasibilityResult.days_needed, 2)} hari produksi) — kapasitas{' '}
                             {formatNumberId(feasibilityResult.batches_per_day, 2)} batch/hari
@@ -1086,7 +1182,7 @@ export default function SalesOrdersPage() {
                           <tr key={shipment.shipment_id} className="border-b last:border-0">
                             <td className="px-3 py-1.5">{shipment.shipment_number}</td>
                             <td className="px-3 py-1.5">
-                              <Badge variant={shipmentStatusBadgeVariant[shipment.status] ?? 'secondary'}>{shipmentStatusLabels[shipment.status] ?? shipment.status}</Badge>
+                              <Tag type={shipmentStatusWarnaTag[shipment.status] ?? 'gray'}>{shipmentStatusLabels[shipment.status] ?? shipment.status}</Tag>
                             </td>
                             <td className="px-3 py-1.5 text-xs">{shipment.delivery_address}</td>
                             <td className="px-3 py-1.5">{new Date(shipment.created_at).toLocaleDateString('id-ID')}</td>
@@ -1097,10 +1193,37 @@ export default function SalesOrdersPage() {
                   </div>
                 )}
               </div>
-            </CardContent>
-          </Card>
-        ) : null}
-      </div>
-    </main>
+                                </div>
+                              ) : null}
+                            </TableExpandedRow>
+                          </React.Fragment>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </DataTable>
+
+          <Pagination
+            page={halaman}
+            pageSize={perHalaman}
+            pageSizes={[15, 30, 50]}
+            totalItems={soTersaring.length}
+            onChange={({ page, pageSize }: { page: number; pageSize: number }) => {
+              setHalaman(page);
+              setPerHalaman(pageSize);
+            }}
+            backwardText="Halaman sebelumnya"
+            forwardText="Halaman berikutnya"
+            itemsPerPageText="Baris per halaman"
+            itemRangeText={(mulai: number, akhir: number, total: number) => `${mulai}–${akhir} dari ${total} Sales Order`}
+            pageRangeText={(_kini: number, total: number) => `dari ${total} halaman`}
+            pageNumberText="Nomor halaman"
+          />
+        </>
+      )}
+    </div>
   );
 }

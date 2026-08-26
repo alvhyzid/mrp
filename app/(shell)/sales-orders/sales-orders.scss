@@ -1,0 +1,35 @@
+@use '@carbon/react/scss/spacing' as *;
+@use '@carbon/react/scss/theme' as *;
+@use '@carbon/react/scss/type' as *;
+
+// Gaya khas halaman Sales Order. Nol angka px, nol warna heksadesimal.
+
+.so-tombol-masuk {
+  align-self: flex-start;
+}
+
+.so-sel-nomor {
+  display: flex;
+  flex-direction: column;
+}
+
+.so-sel-nomor__utama {
+  @include type-style('body-compact-01');
+  color: $text-primary;
+}
+
+.so-sel-nomor__asal {
+  @include type-style('label-01');
+  color: $text-secondary;
+}
+
+.so-detail {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+  padding-block: $spacing-03;
+}
+
+.so-ambang {
+  max-inline-size: 14rem;
+}

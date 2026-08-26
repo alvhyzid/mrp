@@ -1,0 +1,85 @@
+// Gaya khas halaman Data Perusahaan. KERANGKA memakai kelas bersama `halaman-*`.
+@use '@carbon/react/scss/spacing';
+@use '@carbon/react/scss/theme';
+@use '@carbon/react/scss/type';
+
+.perusahaan-kartu {
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-06;
+}
+
+@media (min-width: 42rem) {
+  .perusahaan-kartu {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: spacing.$spacing-07;
+  }
+}
+
+.perusahaan-logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: spacing.$spacing-03;
+  flex-shrink: 0;
+}
+
+// Tombol Carbon di-nolkan padding-nya supaya yang terlihat HANYA kotak logonya. Komponennya
+// tetap FileUploaderButton Carbon — yang mengurus input tersembunyi, aksesibilitas, dan
+// penyaringan format; hanya kulitnya yang diganti.
+.perusahaan-logo .cds--btn {
+  padding: 0;
+  min-block-size: 0;
+  border: 0;
+  background: transparent;
+}
+
+.perusahaan-logo .cds--btn:hover,
+.perusahaan-logo .cds--btn:focus {
+  background: transparent;
+}
+
+// KOTAK, bukan lingkaran: logo perusahaan hampir tidak pernah bulat, dan memotongnya jadi
+// lingkaran akan memotong bagian dari logo itu sendiri. Gambarnya ditampilkan UTUH (contain).
+.perusahaan-logo__kotak {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 8rem;
+  block-size: 8rem;
+  overflow: hidden;
+  border: 1px solid theme.$border-subtle-01;
+  background-color: theme.$layer-02;
+  color: theme.$icon-secondary;
+  transition: box-shadow 70ms cubic-bezier(0.2, 0, 0.38, 0.9);
+}
+
+.perusahaan-logo .cds--btn:hover .perusahaan-logo__kotak {
+  box-shadow: 0 0 0 2px theme.$border-interactive;
+}
+
+.perusahaan-logo .cds--btn:focus-visible .perusahaan-logo__kotak {
+  box-shadow: 0 0 0 2px theme.$focus;
+}
+
+.perusahaan-logo__gambar {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: contain;
+}
+
+// Keterangan MENETAP, bukan yang muncul saat kursor lewat — di HP petunjuk hover tidak
+// pernah terbaca sama sekali.
+.perusahaan-logo__keterangan {
+  text-align: center;
+  max-inline-size: 8rem;
+}
+
+.perusahaan-isian {
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-05;
+  inline-size: 100%;
+  max-inline-size: 28rem;
+}

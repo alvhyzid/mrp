@@ -1,7 +1,6 @@
 'use client';
 
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Tag, Tile } from '@carbon/react';
 import { ProvenanceInfoButton, type DefinitionTabData, type KpiTabData } from '@/components/ui/provenance-info-button';
 import type { ProvenanceEnvelope } from '@/lib/provenance';
 
@@ -52,44 +51,57 @@ export function KpiCard({
   kpiTab: KpiTabData;
 }) {
   const points = sparkline.filter((s) => s.value !== null) as { period_start: string; value: number }[];
-  const deltaColor = delta === null || higherIsBetter === null ? 'text-muted-foreground' : (delta >= 0) === higherIsBetter ? 'text-success' : 'text-destructive';
+  // Warna selisih mengikuti ARTI, bukan tanda plus/minus: untuk sebagian KPI turun itu BAIK
+  // (mis. biaya per unit). higherIsBetter null berarti arahnya memang belum ditetapkan --
+  // dan angka yang arahnya tidak diketahui TIDAK boleh diwarnai seolah sudah dinilai.
+  const deltaClass =
+    delta === null || higherIsBetter === null
+      ? 'kartu-kpi__selisih'
+      : (delta >= 0) === higherIsBetter
+        ? 'kartu-kpi__selisih kartu-kpi__selisih--baik'
+        : 'kartu-kpi__selisih kartu-kpi__selisih--buruk';
 
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-2 pt-6">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-1">
-            <span className="text-xs uppercase tracking-wide text-muted-foreground">{title}</span>
-            <ProvenanceInfoButton label={title} envelope={provenanceEnvelope} definition={definition} kpi={kpiTab} />
-          </div>
-          <Badge variant="secondary">{pillarLabels[pillar] ?? pillar}</Badge>
-        </div>
+    <Tile className="kartu-kpi">
+      <div className="kartu-kpi__kepala">
+        <span className="metrik__label kartu-kpi__judul">
+          {title}
+          <ProvenanceInfoButton label={title} envelope={provenanceEnvelope} definition={definition} kpi={kpiTab} />
+        </span>
+        <Tag type="cool-gray">{pillarLabels[pillar] ?? pillar}</Tag>
+      </div>
 
-        <span className="text-2xl font-semibold text-foreground">{value !== null ? formatValue(value) : 'Belum bisa dihitung'}</span>
-        {!complete ? <span className="text-xs text-warning-subtle-foreground">Data belum lengkap -- angka ini dihitung dari yang tersedia, bukan final.</span> : null}
+      <span className="metrik__angka">{value !== null ? formatValue(value) : 'Belum bisa dihitung'}</span>
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+      {/* "Data belum lengkap" WAJIB terlihat sebagai peringatan, bukan keterangan biasa:
+          angka yang dihitung dari data separuh terlihat sama meyakinkannya dengan yang utuh. */}
+      {!complete ? (
+        <span className="kartu-kpi__belum-lengkap">
+          Data belum lengkap — angka ini dihitung dari yang tersedia, bukan final.
+        </span>
+      ) : null}
+
+      <div className="kartu-kpi__banding">
+        <span>
+          Target: <strong>{targetValue !== null ? formatValue(targetValue) : 'belum ditetapkan, baseline berjalan'}</strong>
+        </span>
+        {benchmarkValue !== null ? (
           <span>
-            Target: <span className="font-medium text-foreground">{targetValue !== null ? formatValue(targetValue) : 'belum ditetapkan, baseline berjalan'}</span>
+            Pembanding industri: <strong>{formatValue(benchmarkValue)}</strong> ({benchmarkLabel ?? 'arah, bukan kontrak'})
           </span>
-          {benchmarkValue !== null ? (
-            <span>
-              Benchmark: <span className="font-medium text-foreground">{formatValue(benchmarkValue)}</span> ({benchmarkLabel ?? 'arah, bukan kontrak'})
-            </span>
-          ) : null}
-          {delta !== null ? (
-            <span className={deltaColor}>
-              Delta: {delta >= 0 ? '+' : ''}
-              {formatValue(delta)} vs periode lalu
-            </span>
-          ) : null}
-        </div>
+        ) : null}
+        {delta !== null ? (
+          <span className={deltaClass}>
+            Selisih: {delta >= 0 ? '+' : ''}
+            {formatValue(delta)} dibanding periode lalu
+          </span>
+        ) : null}
+      </div>
 
-        {points.length >= 2 ? <Sparkline points={points.map((p) => p.value)} /> : null}
+      {points.length >= 2 ? <Sparkline points={points.map((p) => p.value)} /> : null}
 
-        <span className="text-xs text-muted-foreground">Frekuensi: {frequency.charAt(0) + frequency.slice(1).toLowerCase()}</span>
-      </CardContent>
-    </Card>
+      <span className="halaman__redup">Frekuensi: {frequency.charAt(0) + frequency.slice(1).toLowerCase()}</span>
+    </Tile>
   );
 }
 
@@ -103,7 +115,7 @@ function Sparkline({ points }: { points: number[] }) {
   const coords = points.map((v, i) => `${i * step},${height - ((v - min) / range) * height}`).join(' ');
 
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="text-primary" aria-hidden="true">
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="kartu-kpi__grafik" aria-hidden="true">
       <polyline points={coords} fill="none" stroke="currentColor" strokeWidth={1.5} />
     </svg>
   );

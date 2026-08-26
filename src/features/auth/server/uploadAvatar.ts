@@ -1,8 +1,8 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
 import { ALLOWED_IMAGE_MIME_TO_EXT, EXT_TO_IMAGE_MIME, detectImageExtFromBytes, isContentLengthTooLarge } from '@/lib/imageUpload';
-import { appUserUntukClient, ambilPathStorage } from '@/lib/storageSignedUrl';
-import { hapusBerkasStorage } from '@/lib/storageCleanup';
+import { appUserUntukClient } from '@/lib/storageSignedUrl';
+import { randomBytes } from 'node:crypto';
 
 interface ApiResult {
   status: number;
@@ -11,8 +11,18 @@ interface ApiResult {
 
 const MAX_SIZE_BYTES = 2 * 1024 * 1024;
 
-// Sama seperti uploadCompanyLogo: nama file tetap ("avatar.<ext>", upsert) di
-// folder milik auth_uid user itu sendiri, cache-busting lewat query string.
+// NAMA BERKAS UNIK — DIUBAH 25 Agu 2026 (MM.1c), dan ini bukan perapian.
+//
+// Versi lama memakai nama TETAP `avatar.<ext>` dengan upsert. Akibatnya mengganti foto PNG
+// dengan PNG lain MENIMPA yang lama TANPA JEJAK — dan begitulah foto pemilik produk hilang
+// permanen. Komentar lama di berkas ini hanya menyadari kasus PNG -> JPG (yang meninggalkan
+// berkas yatim), dan DIAM soal PNG -> PNG yang justru menghapus. Setengah sadar lebih
+// berbahaya daripada tidak sadar: pembaca berikutnya mengira masalahnya sudah dipikirkan.
+//
+// Sekarang tiap unggahan lahir dengan nama sendiri, jadi TIDAK ADA berkas yang pernah
+// tertimpa. Konsekuensinya disebut terbuka: berkas lama TIDAK dihapus di sini dan akan
+// menumpuk. Itu DISENGAJA — pembersihannya menyusul lewat INF-23, yang mengumpulkan daftar
+// berkas dari baris induknya SELAGI masih ada, bukan menyapu yang "tidak dirujuk siapa pun".
 export async function uploadAvatar(request: NextRequest): Promise<ApiResult> {
   try {
     const { appUser, authUser } = await getCurrentUser(request);
@@ -45,11 +55,16 @@ export async function uploadAvatar(request: NextRequest): Promise<ApiResult> {
     }
 
     const adminClient = getAdminClient();
-    const path = `${authUser.id}/avatar.${sniffedExt}`;
+    // Waktu + acak. Waktu saja tidak cukup: dua unggahan dalam milidetik yang sama akan
+    // bertabrakan, dan tabrakan itu persis hal yang nama unik ini dimaksudkan mencegah.
+    const penanda = `${Date.now()}-${randomBytes(4).toString('hex')}`;
+    const path = `${authUser.id}/avatar-${penanda}.${sniffedExt}`;
 
     const { error: uploadError } = await adminClient.storage
       .from('user-avatars')
-      .upload(path, fileBuffer, { contentType: EXT_TO_IMAGE_MIME[sniffedExt], upsert: true });
+      // upsert: false DISENGAJA. Nama sudah unik, jadi menimpa TIDAK PERNAH benar di sini —
+      // bila namanya kebetulan sudah ada, itu tanda ada yang salah dan wajib berbunyi.
+      .upload(path, fileBuffer, { contentType: EXT_TO_IMAGE_MIME[sniffedExt], upsert: false });
 
     if (uploadError) {
       return { status: 500, body: { error: uploadError.message } };
@@ -64,15 +79,11 @@ export async function uploadAvatar(request: NextRequest): Promise<ApiResult> {
       return { status: 500, body: { error: updateError.message } };
     }
 
-    // Nama berkas ikut EKSTENSI (avatar.png / avatar.jpg), dan upsert hanya menimpa nama
-    // yang sama persis. Jadi mengganti foto PNG dengan JPG meninggalkan avatar.png yatim
-    // selamanya. Berkas lama dengan ekstensi berbeda dibereskan di sini (INF-22 / JJ.1.3).
-    if (appUser.avatar_url) {
-      const pathLama = ambilPathStorage(appUser.avatar_url, 'user-avatars');
-      if (pathLama && pathLama !== path) {
-        await hapusBerkasStorage(adminClient, 'user-avatars', [appUser.avatar_url]);
-      }
-    }
+    // FOTO LAMA SENGAJA TIDAK DIHAPUS DI SINI (keputusan pemilik produk, MM.1c).
+    // Penghapusan langsung adalah persis mekanisme yang menghilangkan foto sebelumnya secara
+    // permanen. Pembersihan menyusul lewat INF-23, yang bertolak dari baris induk yang
+    // diketahui — bukan dari menyapu berkas yang "tidak dirujuk siapa pun", karena ketiadaan
+    // rujukan hanya membuktikan tidak ada yang menunjuknya SAAT DIPERIKSA.
 
     return {
       status: 200,

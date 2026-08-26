@@ -23,6 +23,7 @@ import {
   ToggletipContent,
   Tile
 } from '@carbon/react';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
 import { Information, WarningAlt } from '@carbon/icons-react';
 
 // LAYAR PILOT CARBON PERTAMA (DS-1 pilot (b), 25 Agu 2026) — lahir Carbon-first, nol
@@ -176,11 +177,11 @@ export default function SetelanPerhitunganPage() {
 
   return (
     <div className="setelan-halaman">
-      <h1 className="setelan-judul">Setelan perhitungan</h1>
-      <p className="setelan-pengantar">
-        Angka-angka di halaman ini dipakai menghitung biaya tenaga kerja, harga pokok produksi, dan margin.
-        Mengubahnya mengubah arti seluruh angka biaya di sistem.
-      </p>
+      <KepalaHalaman
+        remah={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Settings' }, { label: 'Calculation Settings' }]}
+        judul="Setelan perhitungan"
+        pengantar="Angka di halaman ini dipakai menghitung biaya tenaga kerja, harga pokok produksi, dan margin. Mengubahnya mengubah arti seluruh angka biaya di sistem."
+      />
 
       {galat && (
         <InlineNotification

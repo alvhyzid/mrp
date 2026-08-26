@@ -1,36 +1,63 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import type { ColumnDef } from '@tanstack/react-table';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { DataTable } from '@/components/ui/data-table';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import {
+  Button,
+  Checkbox,
+  ComposedModal,
+  DataTable,
+  DataTableSkeleton,
+  Dropdown,
+  InlineNotification,
+  ModalBody,
+  ModalFooter,
+  ModalHeader,
+  NumberInput,
+  Pagination,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableExpandHeader,
+  TableExpandRow,
+  TableExpandedRow,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableToolbar,
+  TableToolbarContent,
+  TableToolbarSearch,
+  Tag,
+  TextInput
+} from '@carbon/react';
+import { Add } from '@carbon/icons-react';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
 import { canManageWorkOrder } from '@/lib/roles';
 import { workOrderPriorities } from '../server/workOrderValidation';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 import { formatNumberId } from '@/lib/currency';
 
 const priorityLabels: Record<string, string> = { low: 'Rendah', normal: 'Normal', high: 'Tinggi', urgent: 'Mendesak' };
-const priorityBadgeVariant: Record<string, 'secondary' | 'info' | 'warning' | 'critical'> = { low: 'secondary', normal: 'info', high: 'warning', urgent: 'critical' };
+/// Warna Tag mengikuti ARTI. Hanya "mendesak" yang merah — kalau semua prioritas berwarna
+/// mencolok, tidak ada yang benar-benar menonjol.
+const priorityWarnaTag: Record<string, 'gray' | 'blue' | 'magenta' | 'red'> = { low: 'gray', normal: 'blue', high: 'magenta', urgent: 'red' };
 
 const statusLabels: Record<string, string> = { planned: 'Direncanakan', in_progress: 'Berjalan', paused: 'Dijeda', completed: 'Selesai', cancelled: 'Batal' };
 const bomStatusLabels: Record<string, string> = { draft: 'Draf', active: 'Aktif', archived: 'Diarsipkan' };
-const statusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical' | 'secondary'> = {
-  planned: 'info',
-  in_progress: 'warning',
-  paused: 'secondary',
-  completed: 'success',
-  cancelled: 'critical'
+/// Warna Tag mengikuti ARTI. "Berjalan" ungu, bukan kuning: pekerjaan yang sedang jalan
+/// bukan peringatan.
+const statusWarnaTag: Record<string, 'blue' | 'purple' | 'gray' | 'green' | 'red'> = {
+  planned: 'blue',
+  in_progress: 'purple',
+  paused: 'gray',
+  completed: 'green',
+  cancelled: 'red'
 };
 
 const readinessLabels: Record<string, string> = { ready: 'Siap Mulai', blocked: 'Terhambat' };
-const readinessBadgeVariant: Record<string, 'success' | 'critical'> = { ready: 'success', blocked: 'critical' };
+const readinessWarnaTag: Record<string, 'green' | 'red'> = { ready: 'green', blocked: 'red' };
 
 type WorkOrder = {
   work_order_id: number;
@@ -49,7 +76,7 @@ type WorkOrder = {
   status: string;
   priority: string;
   readiness: string;
-  open_alert_count: number;
+  open_alert_count: number; kekurangan_bahan?: boolean;
 };
 
 type SoLine = {
@@ -98,7 +125,7 @@ function todayDateString(): string {
 }
 
 const batchStatusLabels: Record<string, string> = { planned: 'Direncanakan', in_progress: 'Berjalan', completed: 'Selesai', cancelled: 'Batal' };
-const batchStatusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical'> = { planned: 'info', in_progress: 'warning', completed: 'success', cancelled: 'critical' };
+const batchStatusWarnaTag: Record<string, 'blue' | 'purple' | 'green' | 'red'> = { planned: 'blue', in_progress: 'purple', completed: 'green', cancelled: 'red' };
 
 type Lot = {
   lot_id: number;
@@ -171,6 +198,13 @@ export default function WorkOrdersPage() {
   // Card inline di bawah tabel ke modal, dipicu tombol di toolbar DataTable. Field,
   // validasi, dan handleSubmit di bawah TIDAK diubah sama sekali, cuma wadahnya.
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  // Pencarian, saringan, dan pembagian halaman: Carbon DataTable tidak membawanya.
+  const [cari, setCari] = useState('');
+  const [saringStatus, setSaringStatus] = useState<string>('semua');
+  const [halaman, setHalaman] = useState(1);
+  const [perHalaman, setPerHalaman] = useState(15);
+  const adaSaringan = cari.trim() !== '' || saringStatus !== 'semua';
 
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
@@ -308,8 +342,8 @@ export default function WorkOrdersPage() {
     }));
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  // Dipanggil dari ModalFooter Carbon, bukan dari <form onSubmit>.
+  const handleSubmit = async () => {
     setFormStatus('pending');
     setFormMessage('');
 
@@ -463,603 +497,692 @@ export default function WorkOrdersPage() {
     setLaborForm((prev) => ({ ...prev, employee_id: '', routing_step_id: '', hours: '' }));
   };
 
-  const columns = useMemo<ColumnDef<WorkOrder>[]>(
-    () => [
-      {
-        id: 'item',
-        header: 'Item Diproduksi',
-        cell: ({ row }) => (
-          <div className="flex flex-col">
-            <span className="font-medium text-foreground">{row.original.item_code}</span>
-            <span className="text-xs text-muted-foreground">{row.original.so_number ? `SO ${row.original.so_number}` : '-'}</span>
-          </div>
-        )
-      },
-      { id: 'plant', header: 'Lokasi', cell: ({ row }) => row.original.production_plant_name },
-      {
-        id: 'planned_qty',
-        header: 'Planned Qty',
-        cell: ({ row }) => (
-          <span className="text-data">
-            {formatNumberId(row.original.planned_qty, 2)} {row.original.item_base_uom}
-          </span>
-        )
-      },
-      {
-        accessorKey: 'priority',
-        header: 'Prioritas',
-        cell: ({ row }) => <Badge variant={priorityBadgeVariant[row.original.priority] ?? 'secondary'}>{priorityLabels[row.original.priority] ?? row.original.priority}</Badge>
-      },
-      {
-        accessorKey: 'status',
-        header: 'Status',
-        cell: ({ row }) => <Badge variant={statusBadgeVariant[row.original.status] ?? 'secondary'}>{statusLabels[row.original.status] ?? row.original.status}</Badge>
-      },
-      {
-        id: 'readiness',
-        header: 'Kesiapan',
-        cell: ({ row }) =>
-          readinessLabels[row.original.readiness] ? (
-            <Badge variant={readinessBadgeVariant[row.original.readiness]}>
-              {readinessLabels[row.original.readiness]}
-              {row.original.open_alert_count > 0 ? ` (${formatNumberId(row.original.open_alert_count, 0)})` : ''}
-            </Badge>
-          ) : (
-            <span className="text-xs text-muted-foreground">-</span>
-          )
-      },
-      {
-        id: 'actions',
-        header: 'Aksi',
-        cell: ({ row }) => (
-          <Button size="sm" variant="outline" onClick={() => toggleExpand(row.original)}>
-            {expandedWoId === row.original.work_order_id ? 'Tutup' : 'Detail'}
-          </Button>
-        )
-      }
-    ],
-    // boms WAJIB ada di sini — tombol "Detail" ini menutup (closure) atas
-    // toggleExpand, yang membaca `boms` untuk cari komponen BOM & fetch lot-nya.
-    // Tanpa `boms` di deps, useMemo cuma menghitung ulang saat expandedWoId
-    // berubah — closure "Detail" yang pertama kali dirender KE-STUCK dengan
-    // boms=[] dari render pertama (sebelum /api/boms selesai), jadi klik
-    // "Detail" pertama kali SELALU gagal menemukan lot walau datanya ada di DB
-    // (baru "sembuh sendiri" di klik kedua, setelah expandedWoId berubah memicu
-    // recompute). Bug nyata ini ketemu & diperbaiki saat verifikasi FASE
-    // Purchasing/Goods Receipt/Lot Genealogy, 16 Agu 2026.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [expandedWoId, boms]
+
+  // ==========================================================================
+  // TABEL WORK ORDER — cetakan Master Item
+  // ==========================================================================
+  const kolom = [
+    { key: 'item', header: 'Item diproduksi' },
+    { key: 'plant', header: 'Lokasi' },
+    { key: 'planned_qty', header: 'Qty rencana' },
+    { key: 'priority', header: 'Prioritas' },
+    { key: 'status', header: 'Status' },
+    { key: 'readiness', header: 'Kesiapan' }
+  ];
+
+  const woTersaring = useMemo(() => {
+    const kata = cari.trim().toLowerCase();
+    return workOrders.filter((wo) => {
+      if (saringStatus !== 'semua' && wo.status !== saringStatus) return false;
+      if (!kata) return true;
+      return `${wo.item_code ?? ''} ${wo.item_name ?? ''} ${wo.so_number ?? ''}`.toLowerCase().includes(kata);
+    });
+  }, [workOrders, cari, saringStatus]);
+
+  const woHalamanIni = useMemo(() => woTersaring.slice((halaman - 1) * perHalaman, halaman * perHalaman), [woTersaring, halaman, perHalaman]);
+  const woById = useMemo(() => new Map(workOrders.map((wo) => [String(wo.work_order_id), wo])), [workOrders]);
+
+  const baris = useMemo(
+    () =>
+      woHalamanIni.map((wo) => ({
+        id: String(wo.work_order_id),
+        item: wo.item_code ?? '',
+        plant: wo.production_plant_name ?? '',
+        planned_qty: wo.planned_qty,
+        priority: priorityLabels[wo.priority] ?? wo.priority,
+        status: statusLabels[wo.status] ?? wo.status,
+        readiness: readinessLabels[wo.readiness] ?? ''
+      })),
+    [woHalamanIni]
   );
+
+  const isiSel = (wo: WorkOrder, kunci: string) => {
+    switch (kunci) {
+      case 'item':
+        return (
+          <div className="wo-sel-item">
+            <span className="wo-sel-item__kode">{wo.item_code}</span>
+            <span className="wo-sel-item__so">{wo.so_number ? `SO ${wo.so_number}` : 'Tanpa SO'}</span>
+          </div>
+        );
+      case 'plant':
+        return wo.production_plant_name;
+      case 'planned_qty':
+        return `${formatNumberId(wo.planned_qty, 2)} ${wo.item_base_uom}`;
+      case 'priority':
+        return <Tag type={priorityWarnaTag[wo.priority] ?? 'gray'}>{priorityLabels[wo.priority] ?? wo.priority}</Tag>;
+      case 'status':
+        return <Tag type={statusWarnaTag[wo.status] ?? 'gray'}>{statusLabels[wo.status] ?? wo.status}</Tag>;
+      case 'readiness':
+        return readinessLabels[wo.readiness] ? (
+          <Tag type={readinessWarnaTag[wo.readiness] ?? 'gray'}>
+            {readinessLabels[wo.readiness]}
+            {wo.open_alert_count > 0 ? ` (${formatNumberId(wo.open_alert_count, 0)})` : ''}
+          </Tag>
+        ) : (
+          <span className="halaman__redup">—</span>
+        );
+      default:
+        return null;
+    }
+  };
 
   const expandedWo = workOrders.find((wo) => wo.work_order_id === expandedWoId) ?? null;
   const expandedBom = expandedWo ? boms.find((b) => b.bom_id === expandedWo.bom_id) : null;
   const expandedRouting = expandedWo?.routing_id ? routings.find((r) => r.routing_id === expandedWo.routing_id) : null;
 
+  // ==========================================================================
+  // PANEL DETAIL (isi baris yang dimekarkan) — pemakaian bahan, jam kerja, batch
+  // ==========================================================================
+  const renderDetailWo = (wo: WorkOrder) => {
+    const selectedBatch = batchesForExpanded.find((b) => String(b.production_batch_id) === consumptionBatchId);
+    const batchQty = selectedBatch?.planned_qty ?? 0;
+    // Batch yang SUDAH DIMULAI memakai baris BOM BEKU miliknya sendiri — BUKAN BOM hidup —
+    // supaya "kebutuhan" tidak diam-diam berubah kalau BOM diedit setelah batch ini jalan.
+    const consumptionBom = batchBomSnapshot?.has_snapshot
+      ? { lines: batchBomSnapshot.lines, buffer_percentage: batchBomSnapshot.buffer_percentage }
+      : expandedBom;
+
+    return (
+      <div className="wo-detail">
+        {wo.readiness === 'blocked' ? (
+          <InlineNotification
+            kind="error"
+            lowContrast
+            hideCloseButton
+            title="Work Order ini masih terhambat"
+            subtitle={
+              wo.kekurangan_bahan
+                ? 'Bahannya belum cukup di pabrik ini. Rinciannya ada di peringatan bahan yang bersangkutan.'
+                : `Ada ${formatNumberId(wo.open_alert_count, 0)} peringatan sistem terbuka yang harus diselesaikan dulu.`
+            }
+          />
+        ) : null}
+
+        <h4 className="halaman__subjudul halaman__subjudul--rapat">Catat pemakaian bahan — per batch</h4>
+        <Dropdown
+          id={`wo-batch-${wo.work_order_id}`}
+          size="lg"
+          className="halaman__saring"
+          titleText="Batch produksi"
+          label="Pilih batch..."
+          items={batchesForExpanded}
+          itemToString={(b: any) => (b ? `${b.batch_number} (${b.planned_qty} ${b.uom})` : '')}
+          selectedItem={batchesForExpanded.find((b) => String(b.production_batch_id) === consumptionBatchId) ?? null}
+          onChange={({ selectedItem }: { selectedItem: any }) => setConsumptionBatchId(selectedItem ? String(selectedItem.production_batch_id) : '')}
+        />
+
+        {batchesForExpanded.length === 0 ? (
+          <p className="halaman__redup">Belum ada batch — buat batch dulu di bagian &quot;Batch produksi&quot; di bawah sebelum mencatat pemakaian bahan.</p>
+        ) : !consumptionBatchId ? (
+          <p className="halaman__redup">Pilih batch produksi dulu di atas untuk mencatat pemakaian bahan batch itu.</p>
+        ) : !consumptionBom || consumptionBom.lines.length === 0 ? (
+          <p className="halaman__redup">BOM untuk item ini belum punya komponen.</p>
+        ) : (
+          <>
+            {batchBomSnapshot?.has_snapshot ? (
+              <InlineNotification
+                kind="info"
+                lowContrast
+                hideCloseButton
+                title="Kebutuhan sudah dibekukan"
+                subtitle="Angka di bawah dibekukan sejak batch ini dimulai — tidak ikut berubah walau BOM diedit sesudahnya."
+              />
+            ) : null}
+            {consumptionBom.lines.map((line) => {
+              const lotsForComponent = lotsForExpanded.filter((lot) => lot.item_id === line.component_item_id);
+              const entry = consumptionForm[line.component_item_id] ?? { lot_id: '', qty: '' };
+              const selectedLot = lotsForComponent.find((lot) => String(lot.lot_id) === entry.lot_id);
+              const bedaKlien = selectedLot && selectedLot.source_type === 'customer_supplied' && wo.customer_id && selectedLot.source_customer_id !== wo.customer_id;
+              const bufferedQty = line.qty_per_unit_output * batchQty * (1 + (consumptionBom.buffer_percentage ?? 0) / 100);
+
+              return (
+                <div key={line.component_item_id} className="wo-komponen">
+                  <p className="wo-komponen__nama">
+                    {line.component_item_code} — {line.component_item_name}
+                  </p>
+                  <p className="halaman__redup">
+                    Kebutuhan: {bufferedQty.toLocaleString('id-ID', { maximumFractionDigits: 4 })} {line.uom} untuk batch {selectedBatch?.batch_number} ({batchQty}{' '}
+                    {selectedBatch?.uom})
+                    {consumptionBom.buffer_percentage ? ` — sudah + buffer ${formatNumberId(consumptionBom.buffer_percentage, 2)}%` : ''}
+                    <ProvenanceInfoButton
+                      label="Kebutuhan bahan per batch"
+                      envelope={{
+                        formula:
+                          'Kebutuhan = qty_per_unit_output (BOM) × qty batch × (1 + buffer_percentage BOM ÷ 100). Buffer mengantisipasi susut/reject saat proses — dikonfigurasi per BOM, bukan nilai tetap sistem.',
+                        inputs: [
+                          { label: 'Rasio bahan per unit hasil (BOM)', value: line.qty_per_unit_output.toLocaleString('id-ID', { maximumFractionDigits: 6 }) },
+                          { label: 'Kuantitas batch', value: `${batchQty} ${selectedBatch?.uom ?? ''}` },
+                          { label: 'Buffer BOM', value: `${consumptionBom.buffer_percentage ?? 0}%` },
+                          { label: 'Kebutuhan (dengan buffer)', value: `${bufferedQty.toLocaleString('id-ID', { maximumFractionDigits: 4 })} ${line.uom}` }
+                        ]
+                      }}
+                    />
+                  </p>
+                  {lotsForComponent.length === 0 ? (
+                    <InlineNotification kind="error" lowContrast hideCloseButton title="Belum ada stok" subtitle="Tidak ada lot tersedia untuk item ini." />
+                  ) : (
+                    <div className="wo-komponen__isi">
+                      <Dropdown
+                        id={`wo-lot-${line.component_item_id}`}
+                        size="lg"
+                        titleText="Pilih lot"
+                        label="Pilih lot..."
+                        items={lotsForComponent}
+                        itemToString={(lot: any) =>
+                          lot ? `${lot.lot_number} — ${formatNumberId(lot.quantity_on_hand, 2)} tersedia${lot.source_type === 'customer_supplied' ? ' (kiriman klien)' : ''}` : ''
+                        }
+                        selectedItem={lotsForComponent.find((l) => String(l.lot_id) === entry.lot_id) ?? null}
+                        onChange={({ selectedItem }: { selectedItem: any }) =>
+                          setConsumptionForm((prev) => ({ ...prev, [line.component_item_id]: { ...entry, lot_id: selectedItem ? String(selectedItem.lot_id) : '' } }))
+                        }
+                      />
+                      <NumberInput
+                        id={`wo-qty-${line.component_item_id}`}
+                        label="Jumlah dipakai"
+                        min={0}
+                        allowEmpty
+                        hideSteppers
+                        value={entry.qty === '' ? '' : Number(entry.qty)}
+                        onChange={(_e: unknown, { value }: { value: number | string }) =>
+                          setConsumptionForm((prev) => ({ ...prev, [line.component_item_id]: { ...entry, qty: String(value ?? '') } }))
+                        }
+                      />
+                      <Button size="md" onClick={() => handleRecordConsumption(wo, line.component_item_id)}>
+                        Catat pemakaian
+                      </Button>
+                    </div>
+                  )}
+                  {bedaKlien ? (
+                    <InlineNotification
+                      kind="warning"
+                      lowContrast
+                      hideCloseButton
+                      title="Lot ini kiriman klien lain"
+                      subtitle="Bukan klien pada SO Work Order ini — pastikan tidak salah pakai bahan milik klien berbeda."
+                    />
+                  ) : null}
+                  {consumptionMessage[line.component_item_id] ? (
+                    <InlineNotification kind="info" lowContrast hideCloseButton title="Hasil" subtitle={consumptionMessage[line.component_item_id]} />
+                  ) : null}
+                </div>
+              );
+            })}
+          </>
+        )}
+
+        <h4 className="halaman__subjudul halaman__subjudul--rapat">Catat jam kerja — per batch</h4>
+        <p className="halaman__redup">
+          Tim produksi berpindah tahap sepanjang hari — satu orang wajar dicatat berkali-kali di tahap atau batch berbeda pada hari yang sama.
+        </p>
+        {!consumptionBatchId ? (
+          <p className="halaman__redup">Pilih batch produksi dulu di bagian pemakaian bahan di atas.</p>
+        ) : (
+          <div className="wo-jam">
+            <div className="wo-jam__kisi">
+              <Dropdown
+                id="wo-karyawan"
+                size="lg"
+                titleText="Karyawan"
+                label="Pilih karyawan..."
+                items={employees}
+                itemToString={(e: any) => (e ? `${e.name}${e.position ? ` — ${e.position}` : ''}` : '')}
+                selectedItem={employees.find((e) => String(e.employee_id) === laborForm.employee_id) ?? null}
+                onChange={({ selectedItem }: { selectedItem: any }) => setLaborForm((prev) => ({ ...prev, employee_id: selectedItem ? String(selectedItem.employee_id) : '' }))}
+              />
+              <Dropdown
+                id="wo-tahap"
+                size="lg"
+                titleText="Tahap"
+                label="Pilih tahap..."
+                items={expandedRouting?.steps ?? []}
+                itemToString={(s: any) => (s ? `${s.sequence_no}. ${s.step_name}` : '')}
+                selectedItem={(expandedRouting?.steps ?? []).find((s: any) => String(s.routing_step_id) === laborForm.routing_step_id) ?? null}
+                onChange={({ selectedItem }: { selectedItem: any }) => setLaborForm((prev) => ({ ...prev, routing_step_id: selectedItem ? String(selectedItem.routing_step_id) : '' }))}
+              />
+              <NumberInput
+                id="wo-jam-kerja"
+                label="Jam kerja"
+                min={0}
+                allowEmpty
+                hideSteppers
+                value={laborForm.hours === '' ? '' : Number(laborForm.hours)}
+                onChange={(_e: unknown, { value }: { value: number | string }) => setLaborForm((prev) => ({ ...prev, hours: String(value ?? '') }))}
+              />
+              <TextInput
+                id="wo-tanggal-kerja"
+                size="lg"
+                type="date"
+                labelText="Tanggal"
+                value={laborForm.work_date}
+                onChange={(event) => setLaborForm((prev) => ({ ...prev, work_date: event.target.value }))}
+              />
+            </div>
+            <Checkbox
+              id="wo-lembur"
+              labelText="Ini jam lembur — orang yang seharusnya sudah pulang lanjut bekerja. Tarif normal tetap dipakai, cuma ditandai untuk dikoreksi nanti."
+              checked={laborForm.is_overtime}
+              onChange={(_e: unknown, { checked }: { checked: boolean }) => setLaborForm((prev) => ({ ...prev, is_overtime: checked }))}
+            />
+            {laborMessage ? (
+              <InlineNotification
+                kind={laborStatus === 'error' ? 'error' : laborStatus === 'warning' ? 'warning' : 'success'}
+                lowContrast
+                hideCloseButton
+                title={laborStatus === 'error' ? 'Gagal' : laborStatus === 'warning' ? 'Perlu diperhatikan' : 'Berhasil'}
+                subtitle={laborMessage}
+              />
+            ) : null}
+            <Button size="md" disabled={laborStatus === 'pending'} onClick={() => handleRecordLabor(wo)}>
+              {laborStatus === 'pending' ? 'Menyimpan...' : 'Catat jam kerja'}
+            </Button>
+          </div>
+        )}
+
+        <h4 className="halaman__subjudul halaman__subjudul--rapat">Batch produksi</h4>
+        {batchesForExpanded.length === 0 ? (
+          <p className="halaman__redup">Belum ada batch untuk Work Order ini.</p>
+        ) : (
+          <Table size="lg" className="tabel-responsif">
+            <TableHead>
+              <TableRow>
+                <TableHeader>Batch</TableHeader>
+                <TableHeader>Qty</TableHeader>
+                <TableHeader>Rencana</TableHeader>
+                <TableHeader>Status</TableHeader>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {batchesForExpanded.map((batch) => (
+                <TableRow key={batch.production_batch_id}>
+                  <TableCell data-label="Batch">{batch.batch_number}</TableCell>
+                  <TableCell data-label="Qty">
+                    {batch.planned_qty} {batch.uom}
+                  </TableCell>
+                  <TableCell data-label="Rencana">{batch.planned_date ?? '—'}</TableCell>
+                  <TableCell data-label="Status">
+                    <Tag type={batchStatusWarnaTag[batch.status] ?? 'gray'}>{batchStatusLabels[batch.status] ?? batch.status}</Tag>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+
+        <div className="wo-batch-baru">
+          <h4 className="halaman__subjudul halaman__subjudul--rapat">Buat batch baru</h4>
+          <div className="wo-batch-baru__kisi">
+            <NumberInput
+              id="wo-batch-qty"
+              label="Qty rencana batch ini"
+              min={0}
+              allowEmpty
+              hideSteppers
+              helperText="Bebas ditentukan — tidak harus sama dengan hasil standar di BOM."
+              value={batchPlannedQty === '' ? '' : Number(batchPlannedQty)}
+              onChange={(_e: unknown, { value }: { value: number | string }) => setBatchPlannedQty(String(value ?? ''))}
+            />
+            <TextInput
+              id="wo-batch-tanggal"
+              size="lg"
+              type="date"
+              labelText="Tanggal rencana"
+              helperText="Kapan batch ini SEHARUSNYA dikerjakan — jadi acuan dashboard kapasitas."
+              value={batchPlannedDate}
+              onChange={(event) => setBatchPlannedDate(event.target.value)}
+            />
+            <TextInput
+              id="wo-batch-nomor"
+              size="lg"
+              labelText="Nomor batch (opsional)"
+              placeholder="mis. 3TM13082601"
+              helperText="Kosongkan untuk nomor otomatis, atau isi format pabrik sendiri — harus unik se-perusahaan."
+              value={batchNumberOverride}
+              onChange={(event) => setBatchNumberOverride(event.target.value)}
+            />
+          </div>
+
+          {expandedBom && Number(batchPlannedQty) > 0 ? (
+            <>
+              <p className="halaman__redup">
+                Kalkulasi kebutuhan bahan
+                {expandedBom.buffer_percentage ? ` (sudah + buffer ${formatNumberId(expandedBom.buffer_percentage, 2)}%)` : ' (BOM ini belum punya buffer)'}
+                <ProvenanceInfoButton
+                  label="Kebutuhan bahan per batch"
+                  envelope={{
+                    formula:
+                      'Tanpa Buffer = qty_per_unit_output (BOM) × qty batch direncanakan. Dibutuhkan (+buffer) = Tanpa Buffer × (1 + buffer_percentage BOM ÷ 100). Buffer mengantisipasi susut/reject saat proses — dikonfigurasi per BOM.',
+                    inputs: [
+                      { label: 'Kuantitas batch direncanakan', value: String(batchPlannedQty) },
+                      { label: 'Buffer BOM', value: `${expandedBom.buffer_percentage ?? 0}%` }
+                    ]
+                  }}
+                />
+              </p>
+              {expandedBom.lines.length === 0 ? (
+                <p className="halaman__redup">BOM untuk item ini belum punya komponen.</p>
+              ) : (
+                <Table size="lg" className="tabel-responsif">
+                  <TableHead>
+                    <TableRow>
+                      <TableHeader>Komponen</TableHeader>
+                      <TableHeader>Tanpa buffer</TableHeader>
+                      <TableHeader>Dibutuhkan (+buffer)</TableHeader>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {expandedBom.lines.map((line) => {
+                      const baseQty = line.qty_per_unit_output * Number(batchPlannedQty);
+                      const bufferedQty = baseQty * (1 + (expandedBom.buffer_percentage ?? 0) / 100);
+                      return (
+                        <TableRow key={line.component_item_id}>
+                          <TableCell data-label="Komponen">
+                            {line.component_item_code} — {line.component_item_name}
+                          </TableCell>
+                          <TableCell data-label="Tanpa buffer">
+                            {baseQty.toLocaleString('id-ID', { maximumFractionDigits: 4 })} {line.uom}
+                          </TableCell>
+                          <TableCell data-label="Dibutuhkan (+buffer)">
+                            {bufferedQty.toLocaleString('id-ID', { maximumFractionDigits: 4 })} {line.uom}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </>
+          ) : null}
+
+          {batchFormMessage ? (
+            <InlineNotification
+              kind={batchFormStatus === 'success' ? 'success' : 'error'}
+              lowContrast
+              hideCloseButton
+              title={batchFormStatus === 'success' ? 'Berhasil' : 'Gagal'}
+              subtitle={batchFormMessage}
+            />
+          ) : null}
+          <Button size="md" disabled={batchFormStatus === 'pending'} onClick={() => handleCreateBatch(wo)}>
+            {batchFormStatus === 'pending' ? 'Menyimpan...' : 'Buat batch'}
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
   if (checkingAccess) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="px-6 text-center text-sm text-muted-foreground">Memuat...</div>
-      </main>
+      <div className="halaman">
+        <DataTableSkeleton columnCount={6} rowCount={6} showHeader showToolbar />
+      </div>
     );
   }
 
   if (accessDenied) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="max-w-3xl px-6">
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em] text-destructive">Akses Ditolak</CardDescription>
-              <CardTitle className="text-2xl">Sesi tidak valid</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <p className="text-sm text-muted-foreground">Silakan login ulang untuk mengakses Work Order.</p>
-              <Button onClick={() => router.push('/login?redirectTo=/work-orders')} className="w-fit">
-                Ke Halaman Login
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+      <div className="halaman">
+        <KepalaHalaman remah={[]} judul="Work Order" />
+        <InlineNotification kind="error" lowContrast hideCloseButton title="Sesi tidak valid" subtitle="Silakan masuk ulang untuk membuka Work Order." />
+        <Button className="wo-tombol-masuk" onClick={() => router.push('/login?redirectTo=/work-orders')}>
+          Ke halaman masuk
+        </Button>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-muted/30 py-10">
-      <div className="flex w-full flex-col gap-6 px-6">
-        <Card>
-          <CardHeader>
-            <CardDescription className="uppercase tracking-[0.2em]">Produksi</CardDescription>
-            <CardTitle className="text-2xl">Work Order</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {woError ? <p className="text-sm text-destructive">{woError}</p> : null}
-            {woLoading ? (
-              <p className="text-sm text-muted-foreground">Memuat Work Order...</p>
-            ) : (
-              <DataTable
-                columns={columns}
-                data={workOrders}
-                emptyMessage="Belum ada Work Order."
-                searchPlaceholder="Cari item atau No. SO..."
-                getSearchText={(wo) => `${wo.item_code ?? ''} ${wo.item_name ?? ''} ${wo.so_number ?? ''}`}
-                paginated
-                pageSize={15}
-                primaryAction={canManage ? { label: 'Buat Work Order', onClick: () => setIsCreateModalOpen(true) } : undefined}
-              />
-            )}
-          </CardContent>
-        </Card>
+    <div className="halaman">
+      <KepalaHalaman
+        remah={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Manufacturing' }, { label: 'Work Orders' }]}
+        judul="Work Order"
+        pengantar={`${woTersaring.length} Work Order${adaSaringan ? ` dari ${workOrders.length} yang tercatat` : ' tercatat'} — perintah produksi per item, tempat batch, pemakaian bahan, dan jam kerja dicatat.`}
+      />
 
-        {expandedWo ? (
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em]">Detail Work Order</CardDescription>
-              <CardTitle className="text-xl">
-                {expandedWo.item_code} — {formatNumberId(expandedWo.planned_qty, 2)} {expandedWo.item_base_uom}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              {expandedWo.readiness === 'blocked' ? (
-                <p className="rounded-md border border-destructive/40 bg-destructive-subtle p-2 text-sm text-destructive-subtle-foreground">
-                  WO ini masih terhambat — ada {formatNumberId(expandedWo.open_alert_count, 0)} peringatan sistem terbuka yang harus diselesaikan dulu.
-                </p>
-              ) : null}
+      {woError ? <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal memuat Work Order" subtitle={woError} /> : null}
 
-              <div>
-                <p className="mb-2 text-sm font-medium text-foreground">Catat Pemakaian Bahan (komponen BOM) — per Batch</p>
-                <label className="mb-3 flex max-w-xs flex-col gap-1.5">
-                  <span className="text-xs font-medium text-muted-foreground">Batch Produksi</span>
-                  <Select value={consumptionBatchId} onValueChange={setConsumptionBatchId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Pilih batch..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {batchesForExpanded.map((batch) => (
-                        <SelectItem key={batch.production_batch_id} value={String(batch.production_batch_id)}>
-                          {batch.batch_number} ({batch.planned_qty} {batch.uom})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
-
-                {batchesForExpanded.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Belum ada batch — buat batch dulu di bagian &quot;Batch Produksi&quot; di bawah sebelum mencatat pemakaian bahan.</p>
-                ) : !consumptionBatchId ? (
-                  <p className="text-sm text-muted-foreground">Pilih batch produksi dulu di atas untuk mencatat pemakaian bahan batch itu.</p>
-                ) : (() => {
-                    // Sesi 6A: batch yang SUDAH DIMULAI (batchBomSnapshot.has_snapshot)
-                    // memakai baris BOM BEKU miliknya sendiri -- BUKAN expandedBom hidup
-                    // -- supaya "Kebutuhan" di bawah tidak diam-diam berubah kalau BOM
-                    // diedit setelah batch ini jalan. Batch yang belum dimulai (belum
-                    // ada snapshot) tetap jatuh balik ke expandedBom hidup seperti biasa.
-                    const consumptionBom = batchBomSnapshot?.has_snapshot
-                      ? { lines: batchBomSnapshot.lines, buffer_percentage: batchBomSnapshot.buffer_percentage }
-                      : expandedBom;
-                    if (!consumptionBom || consumptionBom.lines.length === 0) {
-                      return <p className="text-sm text-muted-foreground">BOM untuk item ini belum punya komponen.</p>;
-                    }
-                    const selectedBatch = batchesForExpanded.find((b) => String(b.production_batch_id) === consumptionBatchId);
-                    const batchQty = selectedBatch?.planned_qty ?? 0;
-                    return (
-                      <div className="flex flex-col gap-3">
-                        {batchBomSnapshot?.has_snapshot ? (
-                          <p className="rounded-md border border-info/40 bg-info-subtle p-2 text-xs text-info-subtle-foreground">
-                            Kebutuhan di bawah dibekukan sejak batch ini dimulai — tidak ikut berubah walau BOM diedit sesudahnya.
-                          </p>
-                        ) : null}
-                        {consumptionBom.lines.map((line) => {
-                          const lotsForComponent = lotsForExpanded.filter((lot) => lot.item_id === line.component_item_id);
-                          const entry = consumptionForm[line.component_item_id] ?? { lot_id: '', qty: '' };
-                          const selectedLot = lotsForComponent.find((lot) => String(lot.lot_id) === entry.lot_id);
-                          const crossCustomerWarning =
-                            selectedLot && selectedLot.source_type === 'customer_supplied' && expandedWo.customer_id && selectedLot.source_customer_id !== expandedWo.customer_id;
-                          const bufferedQty = line.qty_per_unit_output * batchQty * (1 + (consumptionBom.buffer_percentage ?? 0) / 100);
-
-                          return (
-                            <div key={line.component_item_id} className="rounded-md border p-2">
-                              <p className="text-sm font-medium text-foreground">
-                                {line.component_item_code} — {line.component_item_name}
-                              </p>
-                              <p className="mb-2 flex items-center gap-1 text-xs text-muted-foreground">
-                                Kebutuhan: {bufferedQty.toLocaleString('id-ID', { maximumFractionDigits: 4 })} {line.uom} untuk batch {selectedBatch?.batch_number} ({batchQty} {selectedBatch?.uom})
-                                {consumptionBom.buffer_percentage ? ` — sudah + buffer ${formatNumberId(consumptionBom.buffer_percentage, 2)}%` : ''}
-                                <ProvenanceInfoButton
-                                  label="Kebutuhan Bahan per Batch"
-                                  envelope={{
-                                    formula: 'Kebutuhan = qty_per_unit_output (BOM) × qty batch × (1 + buffer_percentage BOM ÷ 100). Buffer mengantisipasi susut/reject saat proses — dikonfigurasi per BOM, bukan nilai tetap sistem.',
-                                    inputs: [
-                                      { label: 'Rasio Bahan per Unit Hasil (BOM)', value: line.qty_per_unit_output.toLocaleString('id-ID', { maximumFractionDigits: 6 }) },
-                                      { label: 'Kuantitas Batch', value: `${batchQty} ${selectedBatch?.uom ?? ''}` },
-                                      { label: 'Buffer BOM', value: `${consumptionBom.buffer_percentage ?? 0}%` },
-                                      { label: 'Kebutuhan (dengan buffer)', value: `${bufferedQty.toLocaleString('id-ID', { maximumFractionDigits: 4 })} ${line.uom}` }
-                                    ]
-                                  }}
-                                />
-                              </p>
-                              {lotsForComponent.length === 0 ? (
-                                <p className="text-sm text-destructive">Belum ada stok lot tersedia untuk item ini.</p>
-                              ) : (
-                                <div className="grid grid-cols-[1fr_120px_auto] items-end gap-2">
-                                  <label className="flex flex-col gap-1">
-                                    <span className="text-xs font-medium text-muted-foreground">Pilih Lot</span>
-                                    <Select value={entry.lot_id} onValueChange={(value) => setConsumptionForm((prev) => ({ ...prev, [line.component_item_id]: { ...entry, lot_id: value } }))}>
-                                      <SelectTrigger>
-                                        <SelectValue placeholder="Pilih lot..." />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {lotsForComponent.map((lot) => (
-                                          <SelectItem key={lot.lot_id} value={String(lot.lot_id)}>
-                                            {lot.lot_number} — {formatNumberId(lot.quantity_on_hand, 2)} tersedia {lot.source_type === 'customer_supplied' ? '(kiriman client)' : ''}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </label>
-                                  <label className="flex flex-col gap-1">
-                                    <span className="text-xs font-medium text-muted-foreground">Jumlah Dipakai</span>
-                                    <Input
-                                      type="number"
-                                      min="0"
-                                      step="any"
-                                      value={entry.qty}
-                                      onChange={(event) => setConsumptionForm((prev) => ({ ...prev, [line.component_item_id]: { ...entry, qty: event.target.value } }))}
-                                    />
-                                  </label>
-                                  <Button size="sm" onClick={() => handleRecordConsumption(expandedWo, line.component_item_id)}>
-                                    Catat
-                                  </Button>
-                                </div>
-                              )}
-                              {crossCustomerWarning ? (
-                                <p className="mt-2 rounded-md border border-warning/40 bg-warning-subtle p-2 text-xs text-warning-subtle-foreground">
-                                  Peringatan: lot ini kiriman client lain (bukan client pada SO Work Order ini) — pastikan tidak salah pakai bahan milik client berbeda.
-                                </p>
-                              ) : null}
-                              {consumptionMessage[line.component_item_id] ? <p className="mt-1 text-xs text-muted-foreground">{consumptionMessage[line.component_item_id]}</p> : null}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })()}
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {expandedWo ? (
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em]">Biaya SDM</CardDescription>
-              <CardTitle className="text-xl">Catat Jam Kerja (Labor Log) — per Batch</CardTitle>
-              <CardDescription>
-                Tim produksi berpindah tahap sepanjang hari — 1 orang wajar dicatat berkali-kali di tahap/batch berbeda hari yang sama. Pilih batch di bagian &quot;Catat Pemakaian
-                Bahan&quot; di atas dulu.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {!consumptionBatchId ? (
-                <p className="text-sm text-muted-foreground">Pilih batch produksi dulu di bagian &quot;Catat Pemakaian Bahan&quot; di atas.</p>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-sm font-medium text-foreground">Karyawan</span>
-                      <Select value={laborForm.employee_id} onValueChange={(value) => setLaborForm((prev) => ({ ...prev, employee_id: value }))}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Pilih karyawan..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {employees.map((emp) => (
-                            <SelectItem key={emp.employee_id} value={String(emp.employee_id)}>
-                              {emp.name} {emp.position ? `— ${emp.position}` : ''}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </label>
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-sm font-medium text-foreground">Tahap (opsional)</span>
-                      <Select value={laborForm.routing_step_id} onValueChange={(value) => setLaborForm((prev) => ({ ...prev, routing_step_id: value }))}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Pilih tahap..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {(expandedRouting?.steps ?? []).map((step) => (
-                            <SelectItem key={step.routing_step_id} value={String(step.routing_step_id)}>
-                              {step.sequence_no}. {step.step_name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </label>
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-sm font-medium text-foreground">Jam Kerja</span>
-                      <Input type="number" step="any" min="0" placeholder="mis. 4" value={laborForm.hours} onChange={(event) => setLaborForm((prev) => ({ ...prev, hours: event.target.value }))} />
-                    </label>
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-sm font-medium text-foreground">Tanggal</span>
-                      <Input type="date" value={laborForm.work_date} onChange={(event) => setLaborForm((prev) => ({ ...prev, work_date: event.target.value }))} />
-                    </label>
-                  </div>
-                  <label className="flex w-fit items-center gap-2 text-sm text-foreground">
-                    <input
-                      type="checkbox"
-                      checked={laborForm.is_overtime}
-                      onChange={(event) => setLaborForm((prev) => ({ ...prev, is_overtime: event.target.checked }))}
+      {woLoading ? (
+        <DataTableSkeleton columnCount={6} rowCount={6} showHeader showToolbar />
+      ) : (
+        <>
+          <DataTable rows={baris} headers={kolom} isSortable size="lg">
+            {(rp: any) => (
+              <TableContainer {...rp.getTableContainerProps()}>
+                <TableToolbar>
+                  <TableToolbarContent>
+                    {/* MELIPAT, bukan selalu terbuka — bawaan Carbon, `persistent` tidak dipakai. */}
+                    <TableToolbarSearch
+                      placeholder="Cari item atau nomor SO…"
+                      labelText="Cari Work Order"
+                      onChange={(e: React.ChangeEvent<HTMLInputElement> | '') => {
+                        setCari(typeof e === 'string' ? '' : e.target.value);
+                        setHalaman(1);
+                      }}
                     />
-                    Ini jam lembur (orang yang seharusnya sudah pulang, lanjut bekerja) — tarif normal tetap dipakai, cuma ditandai untuk dikoreksi nanti
-                  </label>
-                  <Button className="w-fit" size="sm" disabled={laborStatus === 'pending'} onClick={() => handleRecordLabor(expandedWo)}>
-                    {laborStatus === 'pending' ? 'Menyimpan...' : 'Catat Jam Kerja'}
-                  </Button>
-                  {laborMessage ? (
-                    <p className={`text-sm ${laborStatus === 'error' ? 'text-destructive' : laborStatus === 'warning' ? 'text-warning-subtle-foreground' : 'text-success-subtle-foreground'}`}>
-                      {laborMessage}
-                    </p>
-                  ) : null}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {expandedWo ? (
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em]">Eksekusi</CardDescription>
-              <CardTitle className="text-xl">Batch Produksi</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <div>
-                <p className="mb-2 text-sm font-medium text-foreground">Batch yang sudah dibuat</p>
-                {batchesForExpanded.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Belum ada batch untuk Work Order ini.</p>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {batchesForExpanded.map((batch) => (
-                      <div key={batch.production_batch_id} className="flex items-center justify-between rounded-md border p-2 text-sm">
-                        <span className="font-medium text-foreground">{batch.batch_number}</span>
-                        <span className="text-data text-muted-foreground">
-                          {batch.planned_qty} {batch.uom}
-                        </span>
-                        <span className="text-data text-muted-foreground">Rencana: {batch.planned_date ?? '-'}</span>
-                        <Badge variant={batchStatusBadgeVariant[batch.status] ?? 'secondary'}>{batchStatusLabels[batch.status] ?? batch.status}</Badge>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="rounded-md border p-3">
-                <p className="mb-2 text-sm font-medium text-foreground">Buat Batch Baru</p>
-                <div className="flex flex-wrap gap-4">
-                  <label className="flex max-w-xs flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">Planned Qty Batch Ini</span>
-                    <Input type="number" min="0" step="any" value={batchPlannedQty} onChange={(event) => setBatchPlannedQty(event.target.value)} placeholder={`mis. 500 ${expandedWo.item_base_uom ?? ''}`} />
-                    <span className="text-xs text-muted-foreground">Bebas ditentukan — tidak harus sama dengan standard_yield_qty di BOM.</span>
-                  </label>
-                  <label className="flex max-w-xs flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">Tanggal Rencana</span>
-                    <Input type="date" value={batchPlannedDate} onChange={(event) => setBatchPlannedDate(event.target.value)} />
-                    <span className="text-xs text-muted-foreground">Kapan batch ini SEHARUSNYA dikerjakan — default hari ini, jadi acuan Dashboard Kapasitas.</span>
-                  </label>
-                  <label className="flex max-w-xs flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">Nomor Batch (opsional)</span>
-                    <Input
-                      value={batchNumberOverride}
-                      onChange={(event) => setBatchNumberOverride(event.target.value)}
-                      placeholder="kosongkan utk nomor otomatis, atau isi mis. 3TM13082601"
+                    <Dropdown
+                      id="wo-saring-status"
+                      size="lg"
+                      className="halaman__saring"
+                      label="Status"
+                      titleText="Status"
+                      hideLabel
+                      items={['semua', ...Object.keys(statusLabels)]}
+                      itemToString={(v: string) => (v === 'semua' ? 'Semua status' : statusLabels[v] ?? v)}
+                      selectedItem={saringStatus}
+                      onChange={({ selectedItem }: { selectedItem: string | null }) => {
+                        setSaringStatus(selectedItem ?? 'semua');
+                        setHalaman(1);
+                      }}
                     />
-                    <span className="text-xs text-muted-foreground">Kosongkan untuk nomor otomatis (WO-xxxx-Bxxx), atau isi format pabrik sendiri — harus unik se-perusahaan.</span>
-                  </label>
-                </div>
-
-                {expandedBom && Number(batchPlannedQty) > 0 ? (
-                  <div className="mt-3">
-                    <p className="mb-1 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Kalkulasi Kebutuhan Bahan{expandedBom.buffer_percentage ? ` (sudah + buffer ${formatNumberId(expandedBom.buffer_percentage, 2)}%)` : ' (BOM ini belum punya buffer_percentage)'}
-                      <ProvenanceInfoButton
-                        label="Kebutuhan Bahan per Batch"
-                        envelope={{
-                          formula:
-                            'Tanpa Buffer = qty_per_unit_output (BOM) × qty batch direncanakan. Dibutuhkan (+buffer) = Tanpa Buffer × (1 + buffer_percentage BOM ÷ 100). Buffer mengantisipasi susut/reject saat proses — dikonfigurasi per BOM.',
-                          inputs: [
-                            { label: 'Kuantitas Batch Direncanakan', value: String(batchPlannedQty) },
-                            { label: 'Buffer BOM', value: `${expandedBom.buffer_percentage ?? 0}%` }
-                          ]
-                        }}
-                      />
-                    </p>
-                    {expandedBom.lines.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">BOM untuk item ini belum punya komponen.</p>
-                    ) : (
-                      <div className="overflow-hidden rounded-md border">
-                        <table className="w-full text-data">
-                          <thead>
-                            <tr className="border-b">
-                              <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Komponen</th>
-                              <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Tanpa Buffer</th>
-                              <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Dibutuhkan (+buffer)</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {expandedBom.lines.map((line) => {
-                              const baseQty = line.qty_per_unit_output * Number(batchPlannedQty);
-                              const bufferedQty = baseQty * (1 + (expandedBom.buffer_percentage ?? 0) / 100);
-                              return (
-                                <tr key={line.component_item_id} className="border-b last:border-0">
-                                  <td className="px-3 py-1.5">
-                                    {line.component_item_code} — {line.component_item_name}
-                                  </td>
-                                  <td className="px-3 py-1.5 text-muted-foreground">
-                                    {baseQty.toLocaleString('id-ID', { maximumFractionDigits: 4 })} {line.uom}
-                                  </td>
-                                  <td className="px-3 py-1.5 font-medium text-foreground">
-                                    {bufferedQty.toLocaleString('id-ID', { maximumFractionDigits: 4 })} {line.uom}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                ) : null}
-
-                <Button className="mt-3 w-fit" disabled={batchFormStatus === 'pending'} onClick={() => handleCreateBatch(expandedWo)}>
-                  {batchFormStatus === 'pending' ? 'Menyimpan...' : 'Buat Batch'}
-                </Button>
-                {batchFormMessage ? <p className={`mt-2 text-sm ${batchFormStatus === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>{batchFormMessage}</p> : null}
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {canManage ? (
-          <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-            <DialogContent className="max-w-3xl">
-              <DialogHeader>
-                <DialogTitle>Buat Work Order</DialogTitle>
-                <DialogDescription>SO opsional — kosongkan untuk WO produksi WIP di muka yang belum terikat pesanan customer (mis. Base Gelatin).</DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">Sales Order (opsional)</span>
-                    <Select value={form.sales_order_id} onValueChange={handleSelectSo}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="(Tanpa SO — WO WIP di muka)" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {salesOrders.map((so) => (
-                          <SelectItem key={so.sales_order_id} value={String(so.sales_order_id)}>
-                            {so.so_number} — {so.customer_name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
-
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">SO Line (item)</span>
-                    <Select
-                      value={form.sales_order_line_id}
-                      onValueChange={(value) => setForm((prev) => ({ ...prev, sales_order_line_id: value, bom_id: '', routing_id: '' }))}
-                      disabled={!selectedSo}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pilih baris SO..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(selectedSo?.lines ?? []).map((line) => (
-                          <SelectItem key={line.sales_order_line_id} value={String(line.sales_order_line_id)}>
-                            {line.item_code} — {formatNumberId(line.qty_ordered, 2)} {line.item_base_uom} (sudah direncanakan: {formatNumberId(line.qty_already_planned_in_wo, 2)})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">BOM</span>
-                    <Select value={form.bom_id} onValueChange={(value) => setForm((prev) => ({ ...prev, bom_id: value, routing_id: '' }))}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pilih BOM..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableBoms.map((bom) => (
-                          <SelectItem key={bom.bom_id} value={String(bom.bom_id)}>
-                            {selectedSoLine ? '' : `${bom.parent_item_code} — `}v{bom.version} ({bomStatusLabels[bom.status] ?? bom.status}) — yield {formatNumberId(bom.standard_yield_qty, 2)} {bom.standard_yield_uom}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {selectedSoLine && availableBoms.length === 0 ? <span className="text-xs text-destructive">Belum ada BOM untuk item ini — buat dulu di halaman BOM.</span> : null}
-                  </label>
-
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">Routing (opsional)</span>
-                    <Select value={form.routing_id} onValueChange={(value) => setForm((prev) => ({ ...prev, routing_id: value }))} disabled={!effectiveItemId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder={effectiveItemId ? '(Tidak ada)' : 'Pilih BOM dulu'} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableRoutingsForItem.map((r) => (
-                          <SelectItem key={r.routing_id} value={String(r.routing_id)}>
-                            v{r.version} — {r.steps.length} tahap
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {effectiveItemId && availableRoutingsForItem.length === 0 ? (
-                      <span className="text-xs text-muted-foreground">Belum ada Routing untuk item ini — WO tetap bisa dibuat, tapi tidak akan muncul di Gantt Produksi.</span>
+                    {canManage ? (
+                      <Button size="lg" renderIcon={Add} onClick={() => setIsCreateModalOpen(true)}>
+                        Buat Work Order
+                      </Button>
                     ) : null}
-                  </label>
+                  </TableToolbarContent>
+                </TableToolbar>
+                <Table {...rp.getTableProps()} className="tabel-responsif">
+                  <TableHead>
+                    <TableRow>
+                      <TableExpandHeader aria-label="Buka rincian Work Order" />
+                      {rp.headers.map((h: any) => {
+                        const { key, ...sisa } = rp.getHeaderProps({ header: h }) as { key?: string };
+                        void key;
+                        return (
+                          <TableHeader key={h.key} {...sisa} isSortable>
+                            {h.header}
+                          </TableHeader>
+                        );
+                      })}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {rp.rows.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={kolom.length + 1}>
+                          {adaSaringan ? 'Tidak ada Work Order yang cocok dengan pencarian atau saringan.' : 'Belum ada Work Order.'}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      rp.rows.map((row: any) => {
+                        const wo = woById.get(row.id);
+                        if (!wo) return null;
+                        const { key, ...sisaBaris } = rp.getRowProps({ row }) as { key?: string };
+                        void key;
+                        return (
+                          <React.Fragment key={row.id}>
+                            <TableExpandRow
+                              {...sisaBaris}
+                              isExpanded={expandedWoId === wo.work_order_id}
+                              onExpand={() => toggleExpand(wo)}
+                              aria-label={`Rincian ${wo.item_code}`}
+                            >
+                              {kolom.map((h) => (
+                                <TableCell key={h.key} data-label={h.header}>
+                                  {isiSel(wo, h.key)}
+                                </TableCell>
+                              ))}
+                            </TableExpandRow>
+                            <TableExpandedRow colSpan={kolom.length + 1}>
+                              {expandedWoId === wo.work_order_id && expandedWo ? renderDetailWo(expandedWo) : null}
+                            </TableExpandedRow>
+                          </React.Fragment>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </DataTable>
 
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">Lokasi Pabrik</span>
-                    <Select value={form.production_plant_id} onValueChange={(value) => setForm((prev) => ({ ...prev, production_plant_id: value }))}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pilih plant..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {plants.map((plant) => (
-                          <SelectItem key={plant.production_plant_id} value={String(plant.production_plant_id)}>
-                            {plant.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
+          <Pagination
+            page={halaman}
+            pageSize={perHalaman}
+            pageSizes={[15, 30, 50]}
+            totalItems={woTersaring.length}
+            onChange={({ page, pageSize }: { page: number; pageSize: number }) => {
+              setHalaman(page);
+              setPerHalaman(pageSize);
+            }}
+            backwardText="Halaman sebelumnya"
+            forwardText="Halaman berikutnya"
+            itemsPerPageText="Baris per halaman"
+            itemRangeText={(mulai: number, akhir: number, total: number) => `${mulai}–${akhir} dari ${total} Work Order`}
+            pageRangeText={(_kini: number, total: number) => `dari ${total} halaman`}
+            pageNumberText="Nomor halaman"
+          />
+        </>
+      )}
+
+      {canManage ? (
+        // MODAL TRANSAKSIONAL: field-nya beberapa, tapi keputusannya SATU — buat Work Order.
+        <ComposedModal open={isCreateModalOpen} size="lg" onClose={() => { setIsCreateModalOpen(false); return true; }}>
+          <ModalHeader label="Produksi" title="Buat Work Order" closeModal={() => setIsCreateModalOpen(false)} />
+          <ModalBody hasForm>
+            <p className="halaman__pengantar">
+              SO opsional — kosongkan untuk Work Order produksi setengah jadi di muka yang belum terikat pesanan pelanggan.
+            </p>
+            <div className="wo-form">
+              <Dropdown
+                id="wo-so"
+                size="lg"
+                titleText="Sales Order"
+                label="(Tanpa SO — produksi di muka)"
+                items={['', ...salesOrders.map((so) => String(so.sales_order_id))]}
+                itemToString={(v: string) => {
+                  if (!v) return '(Tanpa SO — produksi di muka)';
+                  const so = salesOrders.find((s) => String(s.sales_order_id) === v);
+                  return so ? `${so.so_number} — ${so.customer_name ?? ''}` : v;
+                }}
+                selectedItem={form.sales_order_id || ''}
+                onChange={({ selectedItem }: { selectedItem: string | null }) => handleSelectSo(selectedItem ?? '')}
+              />
+              <Dropdown
+                id="wo-baris-so"
+                size="lg"
+                titleText="Baris SO"
+                label="Pilih baris SO..."
+                disabled={!form.sales_order_id}
+                items={(selectedSo?.lines ?? []).map((l) => String(l.sales_order_line_id))}
+                itemToString={(v: string) => {
+                  const line = (selectedSo?.lines ?? []).find((l) => String(l.sales_order_line_id) === v);
+                  return line ? `${line.item_code} — ${formatNumberId(line.qty_ordered, 2)} ${line.item_base_uom}` : v;
+                }}
+                selectedItem={form.sales_order_line_id || ''}
+                onChange={({ selectedItem }: { selectedItem: string | null }) =>
+                  setForm((prev) => ({ ...prev, sales_order_line_id: selectedItem ?? '', bom_id: '', routing_id: '' }))
+                }
+              />
+              <Dropdown
+                id="wo-bom"
+                size="lg"
+                titleText="BOM"
+                label="Pilih BOM..."
+                items={availableBoms}
+                itemToString={(b: any) => (b ? `${b.parent_item_code} v${b.version}` : '')}
+                selectedItem={boms.find((b) => String(b.bom_id) === form.bom_id) ?? null}
+                onChange={({ selectedItem }: { selectedItem: any }) => setForm((prev) => ({ ...prev, bom_id: selectedItem ? String(selectedItem.bom_id) : '', routing_id: '' }))}
+              />
+              <Dropdown
+                id="wo-routing"
+                size="lg"
+                titleText="Routing"
+                label={effectiveItemId ? '(Tidak ada)' : 'Pilih BOM dulu'}
+                disabled={!effectiveItemId}
+                items={availableRoutingsForItem}
+                itemToString={(r: any) => (r ? `v${r.version} — ${r.steps.length} tahap` : '')}
+                selectedItem={availableRoutingsForItem.find((r: any) => String(r.routing_id) === form.routing_id) ?? null}
+                onChange={({ selectedItem }: { selectedItem: any }) => setForm((prev) => ({ ...prev, routing_id: selectedItem ? String(selectedItem.routing_id) : '' }))}
+                helperText={
+                  effectiveItemId && availableRoutingsForItem.length === 0
+                    ? 'Belum ada Routing untuk item ini — Work Order tetap bisa dibuat, tapi tidak akan muncul di Gantt produksi.'
+                    : undefined
+                }
+              />
+              <Dropdown
+                id="wo-lokasi"
+                size="lg"
+                titleText="Lokasi pabrik"
+                label="Pilih lokasi..."
+                items={plants}
+                itemToString={(p: any) => p?.name ?? ''}
+                selectedItem={plants.find((p) => String(p.production_plant_id) === form.production_plant_id) ?? null}
+                onChange={({ selectedItem }: { selectedItem: any }) =>
+                  setForm((prev) => ({ ...prev, production_plant_id: selectedItem ? String(selectedItem.production_plant_id) : '' }))
+                }
+              />
+              <NumberInput
+                id="wo-planned-qty"
+                label="Qty rencana"
+                min={0}
+                allowEmpty
+                hideSteppers
+                value={form.planned_qty === '' ? '' : Number(form.planned_qty)}
+                onChange={(_e: unknown, { value }: { value: number | string }) => setForm((prev) => ({ ...prev, planned_qty: String(value ?? '') }))}
+              />
+              <Dropdown
+                id="wo-prioritas"
+                size="lg"
+                titleText="Prioritas"
+                label="Pilih prioritas"
+                items={workOrderPriorities as unknown as string[]}
+                itemToString={(p: string) => priorityLabels[p] ?? p}
+                selectedItem={form.priority}
+                onChange={({ selectedItem }: { selectedItem: string | null }) => setForm((prev) => ({ ...prev, priority: selectedItem ?? 'normal' }))}
+              />
+              <TextInput
+                id="wo-jadwal"
+                size="lg"
+                type="date"
+                labelText="Jadwal mulai"
+                value={form.scheduled_start}
+                onChange={(event) => setForm((prev) => ({ ...prev, scheduled_start: event.target.value }))}
+              />
+              {formMessage ? (
+                <div className="wo-form__lebar-penuh">
+                  <InlineNotification
+                    kind={formStatus === 'success' ? 'success' : 'error'}
+                    lowContrast
+                    hideCloseButton
+                    title={formStatus === 'success' ? 'Berhasil' : 'Gagal menyimpan'}
+                    subtitle={formMessage}
+                  />
                 </div>
-
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">Planned Qty</span>
-                    <Input type="number" min="0" step="any" value={form.planned_qty} onChange={(event) => setForm((prev) => ({ ...prev, planned_qty: event.target.value }))} required />
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">Prioritas</span>
-                    <Select value={form.priority} onValueChange={(value) => setForm((prev) => ({ ...prev, priority: value }))}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {workOrderPriorities.map((p) => (
-                          <SelectItem key={p} value={p}>
-                            {priorityLabels[p]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-foreground">Jadwal Mulai</span>
-                    <Input type="date" value={form.scheduled_start} onChange={(event) => setForm((prev) => ({ ...prev, scheduled_start: event.target.value }))} />
-                  </label>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <Button type="submit" disabled={formStatus === 'pending'} className="w-fit">
-                    {formStatus === 'pending' ? 'Menyimpan...' : 'Buat Work Order'}
-                  </Button>
-                  <Button type="button" variant="outline" onClick={() => setIsCreateModalOpen(false)}>
-                    Batal
-                  </Button>
-                </div>
-
-                {formMessage ? <p className={`text-sm ${formStatus === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>{formMessage}</p> : null}
-              </form>
-            </DialogContent>
-          </Dialog>
-        ) : null}
-      </div>
-    </main>
+              ) : null}
+            </div>
+          </ModalBody>
+          {/* `children` WAJIB pada ModalFooter di @carbon/react 1.114. */}
+          <ModalFooter>
+            <Button kind="secondary" onClick={() => setIsCreateModalOpen(false)}>
+              Batal
+            </Button>
+            <Button kind="primary" disabled={formStatus === 'pending'} onClick={handleSubmit}>
+              {formStatus === 'pending' ? 'Menyimpan...' : 'Buat Work Order'}
+            </Button>
+          </ModalFooter>
+        </ComposedModal>
+      ) : null}
+    </div>
   );
 }

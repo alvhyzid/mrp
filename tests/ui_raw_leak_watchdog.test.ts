@@ -67,33 +67,64 @@ const SAFE_MARKERS = [
 // mentah (6.4: Detail Teknis khusus company_admin), atau sudah terverifikasi
 // nyata bahwa nilainya dihumanisasi di tempat lain (mis. lewat prop ke
 // komponen anak yang punya peta labelnya sendiri).
-type Exception = { file: string; from: number; to: number; reason: string };
-const EXCEPTIONS: Exception[] = [
+// ============================================================================
+// PENGECUALIAN DIKUNCI KE PENANDA DI DALAM BERKASNYA, BUKAN KE NOMOR BARIS
+// ============================================================================
+// Sampai 26 Agu 2026 pengecualian ditulis sebagai rentang NOMOR BARIS, dan itu menggigit
+// TIGA KALI dalam satu hari: tiap kali berkasnya disunting, rentangnya menunjuk baris lain.
+// Akibatnya DUA ARAH, dan keduanya buruk:
+//   1. baris yang memang dikecualikan jadi DITUDUH bocor -- penjaga yang salah tuduh, dan
+//      penjaga yang salah tuduh melatih orang mengabaikan hasilnya;
+//   2. baris lain yang benar-benar bocor jadi DIAMPUNI diam-diam -- lubang tanpa bunyi,
+//      karena hasil testnya tetap hijau.
+//
+// Sekarang pengecualiannya IKUT BERPINDAH bersama kodenya: bagian yang sengaja menampilkan
+// identifier mentah diapit dua komentar penanda di berkasnya sendiri —
+//     // penjaga-kebocoran:mulai <alasan singkat>
+//     ...
+//     // penjaga-kebocoran:selesai
+// Daftar di bawah hanya menyebut BERKAS MANA yang boleh punya penanda itu, supaya penanda
+// tidak bisa ditaburkan sembarangan untuk membungkam pengawas ini.
+const BERKAS_BOLEH_DIKECUALIKAN: { file: string; reason: string }[] = [
   {
     file: 'src/components/ui/provenance-info-button.tsx',
-    from: 211,
-    to: 239,
-    reason: 'Panel "Detail Teknis" (Sesi 6, 6.4) -- sengaja tetap menampilkan identifier mentah, HANYA dirender kalau useIsCompanyAdmin() true.'
+    reason: 'Panel "Detail Teknis" (Sesi 6, 6.4) -- sengaja menampilkan identifier mentah, HANYA dirender kalau useIsCompanyAdmin() true.'
   },
   {
     file: 'src/features/kamus/pages/KamusPage.tsx',
-    from: 363,
-    to: 379,
-    reason: 'Toggle "Detail Teknis" per kartu Kamus (Sesi 6, 6.4) -- sengaja tetap menampilkan term_key/ai_draft mentah, HANYA dirender kalau useIsCompanyAdmin() true.'
+    reason: 'Toggle "Detail teknis" per kartu Kamus (Sesi 6, 6.4) -- sengaja menampilkan term_key/ai_draft mentah, HANYA dirender kalau useIsCompanyAdmin() true.'
   },
   {
     file: 'src/features/mrp/pages/ShipmentsPage.tsx',
-    from: 839,
-    to: 839,
-    reason: 'signerRole diteruskan sebagai prop ke <SuratJalanPreview>, yang punya peta roleLabels sendiri di dalam komponennya. Dibuktikan lewat verifikasi visual (bukti c, penutupan Sesi 6): surat jalan tercetak sungguhan tidak mengandung slug peran mentah di mana pun.'
+    reason: 'signerRole diteruskan sebagai prop ke <SuratJalanPreview>, yang punya peta roleLabels sendiri. Dibuktikan lewat verifikasi visual: surat jalan tercetak tidak mengandung slug peran mentah.'
   }
 ];
 
-type Finding = { file: string; line: number; field: string; text: string };
+const PENANDA_MULAI = 'penjaga-kebocoran:mulai';
+const PENANDA_SELESAI = 'penjaga-kebocoran:selesai';
 
-function isExcepted(exceptions: Exception[], relFile: string, lineNo: number): boolean {
-  return exceptions.some((e) => e.file === relFile && lineNo >= e.from && lineNo <= e.to);
+/// Baca penanda pengecualian dari isi berkas. Mengembalikan himpunan nomor baris yang
+/// dikecualikan. Penanda di berkas yang TIDAK terdaftar di atas sengaja diabaikan — kalau
+/// tidak, siapa pun bisa membungkam pengawas ini dengan menempelkan satu komentar.
+function barisDikecualikan(relFile: string, lines: string[]): Set<number> {
+  const hasil = new Set<number>();
+  if (!BERKAS_BOLEH_DIKECUALIKAN.some((e) => e.file === relFile)) return hasil;
+  let didalam = false;
+  lines.forEach((line, idx) => {
+    if (line.includes(PENANDA_MULAI)) {
+      didalam = true;
+      return;
+    }
+    if (line.includes(PENANDA_SELESAI)) {
+      didalam = false;
+      return;
+    }
+    if (didalam) hasil.add(idx + 1);
+  });
+  return hasil;
 }
+
+type Finding = { file: string; line: number; field: string; text: string };
 
 // Kumpulkan seluruh file .tsx langsung di dalam folder bernama "pages" di
 // bawah root yang diberikan (rekursif) -- ini yang jadi layar sungguhan yang
@@ -111,14 +142,15 @@ function listPageFiles(root: string): string[] {
   return results;
 }
 
-function scanFileForRawLeaks(absFile: string, repoRoot: string, exceptions: Exception[]): Finding[] {
+function scanFileForRawLeaks(absFile: string, repoRoot: string): Finding[] {
   const relFile = relative(repoRoot, absFile);
   const lines = readFileSync(absFile, 'utf8').split('\n');
+  const dikecualikan = barisDikecualikan(relFile, lines);
   const findings: Finding[] = [];
 
   lines.forEach((line, idx) => {
     const lineNo = idx + 1;
-    if (isExcepted(exceptions, relFile, lineNo)) return;
+    if (dikecualikan.has(lineNo)) return;
 
     const trimmed = line.trim();
     if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return;
@@ -140,8 +172,67 @@ function scanFileForRawLeaks(absFile: string, repoRoot: string, exceptions: Exce
 
       // <Select value={...}> -- value cuma state kontrol; teks yang tampil datang dari
       // SelectItem/children (biasanya sudah lewat label map), sering di baris terpisah.
-      const narrowWindow = lines.slice(Math.max(0, idx - 3), idx + 1).join(' ').toLowerCase();
-      if (narrowWindow.includes('<select')) continue;
+      //
+      // DIPERBAIKI 25 Agu 2026 setelah pengawas ini MENUDUH SALAH untuk ketiga kalinya.
+      // Versi lama mencari teks "<select" di dalam jendela TIGA BARIS ke atas. Dua hal
+      // membuatnya meleset sekaligus, dan keduanya lahir dari migrasi Carbon:
+      //   1. komponennya kini diimpor dengan nama lain (`<CarbonSelect>`), yang TIDAK
+      //      mengandung substring "<select";
+      //   2. `labelText` sekarang berisi JSX berbaris-baris (LabelBantuan), jadi pembuka
+      //      elemennya jauh lebih dari tiga baris di atas `value={...}`.
+      // Yang benar bukan memperlebar jendelanya (itu justru menutupi kebocoran sungguhan),
+      // melainkan mencari PEMBUKA ELEMEN TERDEKAT ke atas, lalu menilai elemen ITU.
+      if (/\bvalue=\{/.test(line)) {
+        // Elemen pemilik sebuah atribut selalu ditulis pada lekukan yang LEBIH DANGKAL
+        // daripada atributnya. Syarat itulah yang membedakan `<CarbonSelect` (pemilik) dari
+        // `<LabelBantuan` yang kebetulan lewat di antaranya sebagai isi prop `labelText`.
+        const lekukan = (t: string) => t.length - t.trimStart().length;
+        const lekukanAtribut = lekukan(line);
+        // Bentuk sebaris: <Select value={...}> -- pemiliknya ada di baris yang sama.
+        let pembuka: string | null = /<([A-Za-z][A-Za-z0-9_]*)\b[^<>]*\bvalue=\{/.exec(line)?.[1]?.toLowerCase() ?? null;
+        let j = idx - 1;
+        while (!pembuka && j >= 0 && idx - j <= 40) {
+          const m = /<([A-Za-z][A-Za-z0-9_]*)\b/.exec(lines[j]);
+          if (m && lekukan(lines[j]) < lekukanAtribut) { pembuka = m[1].toLowerCase(); break; }
+          j -= 1;
+        }
+        // Kontrol yang teks tampilnya datang dari daftar pilihan, BUKAN dari `value`.
+        const PILIHAN = ['select', 'carbonselect', 'dropdown', 'combobox', 'multiselect', 'radiobuttongroup'];
+        if (pembuka && PILIHAN.includes(pembuka)) continue;
+      }
+
+      // `selectedItem={...}` pada Dropdown/ComboBox/MultiSelect Carbon — nama prop yang
+      // berbeda untuk hal yang sama dengan `value` pada <Select>.
+      //
+      // DITAMBAHKAN 25 Agu 2026 setelah pengawas ini menuduh salah untuk KELIMA kalinya,
+      // dan syaratnya SENGAJA lebih ketat daripada sekadar mengecualikan nama komponen:
+      // ia hanya dianggap aman bila elemen yang sama juga menyediakan `itemToString`.
+      //
+      // Alasannya bisa gagal, dan itu yang membuatnya bernilai: TANPA `itemToString`,
+      // Carbon merender isi `selectedItem` APA ADANYA — dan kecurigaan pengawas ini justru
+      // BENAR. Mengecualikan berdasarkan nama komponen saja akan menutupi kasus itu.
+      if (/\bselectedItem=\{|\binitialSelectedItem=\{/.test(line)) {
+        const lekukan = (t: string) => t.length - t.trimStart().length;
+        const lekukanAtribut = lekukan(line);
+        let awalElemen = -1;
+        for (let j = idx - 1; j >= 0 && idx - j <= 40; j -= 1) {
+          if (/<([A-Za-z][A-Za-z0-9_]*)\b/.test(lines[j]) && lekukan(lines[j]) < lekukanAtribut) {
+            awalElemen = j;
+            break;
+          }
+        }
+        if (awalElemen >= 0) {
+          // Blok prop elemen itu: dari pembukanya sampai penutup `/>` atau `>` pertama pada
+          // lekukan yang sama atau lebih dangkal.
+          let akhirElemen = awalElemen;
+          for (let j = awalElemen; j < lines.length && j - awalElemen <= 60; j += 1) {
+            akhirElemen = j;
+            if (/\/>|^\s*>/.test(lines[j]) && j > awalElemen) break;
+          }
+          const blok = lines.slice(awalElemen, akhirElemen + 1).join(' ');
+          if (blok.includes('itemToString')) continue;
+        }
+      }
 
       // Payload yang dikirim ke server (JSON.stringify(...)) -- bukan JSX, sering multi-baris.
       const wideWindow = lines.slice(Math.max(0, idx - 8), idx + 1).join(' ').toLowerCase();
@@ -154,17 +245,17 @@ function scanFileForRawLeaks(absFile: string, repoRoot: string, exceptions: Exce
   return findings;
 }
 
-function scanRepo(repoRoot: string, exceptions: Exception[]): Finding[] {
+function scanRepo(repoRoot: string): Finding[] {
   const files = [
     ...listPageFiles(join(repoRoot, 'src/features')),
     join(repoRoot, 'src/components/ui/provenance-info-button.tsx')
   ];
-  return files.flatMap((f) => scanFileForRawLeaks(f, repoRoot, exceptions));
+  return files.flatMap((f) => scanFileForRawLeaks(f, repoRoot));
 }
 
 describe('Pengawas kebocoran identifier mentah di UI (penutupan Sesi 6, 21 Agu 2026)', () => {
   it('seluruh halaman aplikasi (src/features/**/pages + ProvenanceInfoButton) NOL kebocoran field berisiko di luar pengecualian eksplisit', () => {
-    const findings = scanRepo(ROOT, EXCEPTIONS);
+    const findings = scanRepo(ROOT);
     if (findings.length > 0) {
       const message = findings.map((f) => `${f.file}:${f.line} [field: ${f.field}] -> ${f.text}`).join('\n');
       throw new Error(`Ditemukan ${findings.length} kebocoran identifier mentah:\n${message}`);
@@ -196,7 +287,7 @@ describe('Pengawas kebocoran identifier mentah di UI (penutupan Sesi 6, 21 Agu 2
       ].join('\n');
       writeFileSync(fixtureFile, leakyContent, 'utf8');
 
-      const findings = scanFileForRawLeaks(fixtureFile, ROOT, []);
+      const findings = scanFileForRawLeaks(fixtureFile, ROOT);
       expect(findings.length).toBeGreaterThan(0);
       const hit = findings.find((f) => f.field === 'status');
       expect(hit).toBeDefined();
@@ -224,7 +315,7 @@ describe('Pengawas kebocoran identifier mentah di UI (penutupan Sesi 6, 21 Agu 2
       ].join('\n');
       writeFileSync(fixtureFile, safeContent, 'utf8');
 
-      const findings = scanFileForRawLeaks(fixtureFile, ROOT, []);
+      const findings = scanFileForRawLeaks(fixtureFile, ROOT);
       expect(findings).toHaveLength(0);
     });
   });

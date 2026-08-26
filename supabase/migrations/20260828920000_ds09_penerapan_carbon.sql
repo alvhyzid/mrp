@@ -1,0 +1,65 @@
+-- DS-09 — penerapan Carbon ke seluruh halaman. Dimulai 25 Agu 2026.
+do $mig$
+declare v_company_id integer;
+begin
+  select company_id into v_company_id from companies where name = 'PT ITM' limit 1;
+  if v_company_id is null then return; end if;
+
+  perform pastikan_kode_task_kosong('DS-09');
+
+  insert into build_tasks (company_id, task_code, name, module_code, module_name, description,
+    effect_description, urgency, status, origin, pic, detail_pekerjaan, notes)
+  values (v_company_id, 'DS-09',
+    'Penerapan Carbon ke SELURUH Halaman — 39 Halaman, Berurutan',
+    'DS', 'Design System',
+    'Memigrasikan seluruh halaman aplikasi ke Carbon memakai cetakan dan kerangka bersama.',
+    'Menentukan apakah sistem terasa dibuat satu orang atau dibuat orang berbeda-beda.',
+    'penting', 'sedang_dikerjakan', 'pemilik_produk', 'Claude Code',
+    concat_ws(chr(10),
+      '=== SENSUS AWAL (diukur 25 Agu 2026, bukan diperkirakan) ===',
+      'TOTAL 39 halaman di src/features/**/pages:',
+      '   7 SUDAH Carbon penuh  : 6 layar publik + Setelan Perhitungan',
+      '   3 SEBAGIAN            : Profil, Master Item, POD',
+      '  29 BELUM tersentuh',
+      '',
+      '=== KERANGKA HALAMAN BERSAMA DIBUAT LEBIH DULU ===',
+      'Sebelum menyentuh 29 halaman, kelas kerangka diangkat ke src/styles/carbon.scss:',
+      '  .halaman, .halaman__remah, .halaman__remah-mati, .halaman__judul,',
+      '  .halaman__pengantar, .halaman__saring, .halaman__redup,',
+      '  .kisi-metrik, .metrik__label, .metrik__angka',
+      '',
+      'ALASANNYA BUKAN KERAPIAN: bila tiap halaman menyalin kerangkanya sendiri dengan awalan',
+      'nama sendiri, cetakannya tersalin 29 kali dan perbaikan berikutnya harus menemukan 29',
+      'tempat. Itu persis kelas "dua jalur hidup" yang sudah menggigit lewat 88 warna dan 36',
+      'pengambil token.',
+      'ATURAN untuk halaman berikutnya: kelas `halaman-*` untuk KERANGKA; kelas sendiri HANYA',
+      'untuk yang khas halaman itu.',
+      '',
+      '=== SELESAI SEJAUH INI ===',
+      '  1. Ringkasan (/dashboard)  -- Tile + SkeletonText + InlineNotification. Remah roti',
+      '     SENGAJA tidak ada: halaman akar, remah satu butir hanya menunjukkan yang sudah jelas.',
+      '  2. Team & Invitations (/team) -- DataTable + toolbar + ComposedModal undangan,',
+      '     Dropdown peran, Tag status.',
+      '  3. Pelanggan (/customers) -- DataTable + pencarian + Pagination + ComposedModal,',
+      '     PIC jadi SATU kelompok berlabel satu, aksi merusak didorong ke kanan.',
+      '',
+      'DIUKUR DI PERAMBAN untuk ketiganya: nol elemen mentah, kerangka bersama terpakai,',
+      'nol galat. Toolbar Pelanggan diukur ulang setelah perbaikan: ketiga kontrolnya sejajar',
+      'di y=208 dengan tinggi 48px.',
+      '',
+      '=== SISA 26 HALAMAN, urutan yang diusulkan ===',
+      'Paling sering dibuka lebih dulu, lalu yang paling dekat dengan cetakan:',
+      '  Daftar Tugas, Master BOM, Routing, Work Order, Gudang, Produksi, PPIC,',
+      '  Sales Order, Customer PO, Purchasing, Pengiriman, HR, Absensi, Dokumen, Kamus,',
+      '  KPI, KPI Saya, Laba Operasional, Process Mining, Kesiapan AI, Dashboard Proyek AI,',
+      '  Setelan Perusahaan, What is New, Debug, Test Tenant, Surat Jalan (cetak).'),
+    concat_ws(chr(10),
+      'CACAT KECIL YANG DITEMUKAN & DITUTUP saat migrasi Pelanggan: Carbon merancang Checkbox',
+      'untuk berdiri di dalam FORM, bukan berjajar di toolbar tabel -- pembungkusnya membawa',
+      'margin atas dan tidak menyejajarkan diri. Bukan menimpa gaya Carbon, melainkan',
+      'menempatkan komponennya di konteks yang memang tidak diatur Carbon. Sama seperti area',
+      'notifikasi yang posisinya juga tidak ditetapkan Carbon.',
+      '',
+      'TERKAIT: AR-01, NAV-02, dan SEC-18 semuanya berpemicu "setelah Carbon selesai" --',
+      'jadi kemajuan task ini yang membuka ketiganya.'));
+end $mig$;

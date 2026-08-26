@@ -3,13 +3,26 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
+import { Breadcrumb, BreadcrumbItem, Button, FileUploaderButton, InlineNotification, Modal, SkeletonText, TextInput, Tile } from '@carbon/react';
+import { Image as IkonGambar } from '@carbon/icons-react';
+import { AreaNotifikasi, type Notifikasi } from '@/components/ui/notifikasi';
 
 export default function CompanySettingsPage() {
   const router = useRouter();
   const [checkingAccess, setCheckingAccess] = useState(true);
+  // POLA UNGGAH GAMBAR (CLAUDE.md): logo dipratinjau dulu, satu tombol simpan di luar kartu,
+  // konfirmasi lewat modal, hasilnya lewat notifikasi. Sama persis dengan foto profil.
+  const [pratinjauLogo, setPratinjauLogo] = useState<string | null>(null);
+  const [logoGagalDimuat, setLogoGagalDimuat] = useState(false);
+  const [namaAwal, setNamaAwal] = useState('');
+  const [industriAwal, setIndustriAwal] = useState('');
+  const [konfirmasi, setKonfirmasi] = useState(false);
+  const [menyimpan, setMenyimpan] = useState(false);
+  const [notifikasi, setNotifikasi] = useState<Notifikasi[]>([]);
+  const beriTahu = useCallback((jenis: Notifikasi['jenis'], judul: string, rincian?: string) => {
+    setNotifikasi((lama) => [...lama, { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, jenis, judul, rincian }]);
+  }, []);
+  const tutupNotifikasi = useCallback((id: string) => setNotifikasi((lama) => lama.filter((n) => n.id !== id)), []);
   const [accessDenied, setAccessDenied] = useState(false);
 
   const [name, setName] = useState('');
@@ -68,7 +81,9 @@ export default function CompanySettingsPage() {
       }
 
       setName(companyData.company.name || '');
+      setNamaAwal(companyData.company.name || '');
       setIndustryType(companyData.company.industry_type || '');
+      setIndustriAwal(companyData.company.industry_type || '');
       setStatus(companyData.company.status || '');
       setLogoUrl(companyData.company.logo_url || null);
       setCheckingAccess(false);
@@ -77,170 +92,199 @@ export default function CompanySettingsPage() {
     load();
   }, [router]);
 
-  const handleLogoUpload = async () => {
-    if (!logoFile) return;
-    setLogoStatus('pending');
-    setLogoMessage('');
+  const adaPerubahan = name.trim() !== namaAwal.trim() || industryType.trim() !== industriAwal.trim() || logoFile !== null;
 
-    const accessToken = await getAccessToken();
-    if (!accessToken) {
-      setLogoStatus('error');
-      setLogoMessage('Sesi Anda sudah tidak valid, silakan login ulang.');
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append('logo', logoFile);
-
-    const response = await fetch('/api/company/logo', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}` },
-      body: formData
+  const pilihLogo = (berkas: File | null) => {
+    setPratinjauLogo((lama) => {
+      if (lama) URL.revokeObjectURL(lama);
+      return berkas ? URL.createObjectURL(berkas) : null;
     });
-    const data = await response.json();
-
-    if (!response.ok) {
-      setLogoStatus('error');
-      setLogoMessage(data.error || 'Gagal mengunggah logo.');
-      return;
-    }
-
-    setLogoUrl(data.logo_url);
-    setLogoFile(null);
-    setLogoStatus('success');
-    setLogoMessage('Logo berhasil diperbarui.');
+    setLogoFile(berkas);
   };
 
-  const handleSave = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setSaveStatus('pending');
-    setMessage('');
-
+  const simpanPerusahaan = async () => {
+    setMenyimpan(true);
     const accessToken = await getAccessToken();
     if (!accessToken) {
-      setSaveStatus('error');
-      setMessage('Sesi Anda sudah tidak valid, silakan login ulang.');
+      setMenyimpan(false);
+      setKonfirmasi(false);
+      beriTahu('error', 'Sesi Anda sudah tidak valid', 'Silakan masuk lagi.');
       return;
     }
 
-    const response = await fetch('/api/company', {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`
-      },
-      body: JSON.stringify({ name, industry_type: industryType })
-    });
-    const data = await response.json();
-
-    if (!response.ok) {
-      setSaveStatus('error');
-      setMessage(data.error || 'Gagal menyimpan data perusahaan.');
-      return;
+    // URUTAN DISENGAJA: DATA DULU, LOGO KEMUDIAN — sama seperti halaman Profil. Bila datanya
+    // ditolak, tidak ada berkas logo yang terlanjur lahir di penyimpanan.
+    let dataTersimpan = false;
+    if (name.trim() !== namaAwal.trim() || industryType.trim() !== industriAwal.trim()) {
+      const res = await fetch('/api/company', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ name, industry_type: industryType })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMenyimpan(false);
+        setKonfirmasi(false);
+        beriTahu('error', 'Gagal menyimpan data perusahaan', data.error || undefined);
+        return;
+      }
+      dataTersimpan = true;
     }
 
-    setSaveStatus('success');
-    setMessage('Data perusahaan berhasil diperbarui.');
+    if (logoFile) {
+      const formData = new FormData();
+      formData.append('logo', logoFile);
+      const res = await fetch('/api/company/logo', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: formData
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMenyimpan(false);
+        setKonfirmasi(false);
+        beriTahu('error', dataTersimpan ? 'Data tersimpan, logo gagal diunggah' : 'Gagal mengunggah logo', data.error || undefined);
+        return;
+      }
+      setLogoUrl(data.logo_url);
+      setLogoGagalDimuat(false);
+    }
+
+    setNamaAwal(name.trim());
+    setIndustriAwal(industryType.trim());
+    pilihLogo(null);
+    setMenyimpan(false);
+    setKonfirmasi(false);
+    beriTahu('success', 'Data perusahaan berhasil diubah', 'Perubahan Anda sudah tersimpan.');
   };
 
   if (checkingAccess) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="px-6 text-center text-sm text-muted-foreground">Memuat...</div>
-      </main>
+      <div className="halaman">
+        <SkeletonText heading width="18rem" />
+        <SkeletonText paragraph lineCount={3} />
+      </div>
     );
   }
 
   if (accessDenied) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="max-w-2xl px-6">
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em] text-destructive">Akses Ditolak</CardDescription>
-              <CardTitle className="text-2xl">Halaman ini khusus company_admin</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <p className="text-sm text-muted-foreground">Akun Anda tidak memiliki izin untuk mengubah data perusahaan.</p>
-              <Button onClick={() => router.push('/dashboard')} className="w-fit">
-                Kembali ke Dashboard
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+      <div className="halaman">
+        <h1 className="halaman__judul">Data perusahaan</h1>
+        <InlineNotification
+          kind="error"
+          lowContrast
+          hideCloseButton
+          title="Halaman ini khusus Admin Perusahaan"
+          subtitle="Akun Anda tidak punya izin mengubah data perusahaan."
+        />
+        <Button kind="tertiary" className="w-fit" onClick={() => router.push('/dashboard')}>
+          Kembali ke Ringkasan
+        </Button>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-muted/30 py-16">
-      <div className="flex w-full flex-col gap-6 px-6">
-        <Card>
-          <CardHeader>
-            <CardDescription className="uppercase tracking-[0.2em]">Pengaturan Perusahaan</CardDescription>
-            <CardTitle className="text-2xl">Logo perusahaan</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <div className="flex items-center gap-4">
-              <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-none border border-[#e0e0e0] bg-muted">
-                {logoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={logoUrl} alt="Logo perusahaan" className="h-full w-full object-contain" />
-                ) : (
-                  <span className="text-center text-xs text-muted-foreground">Belum ada logo</span>
-                )}
-              </div>
-              <div className="flex flex-col gap-2">
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  onChange={(event) => setLogoFile(event.target.files?.[0] ?? null)}
-                  className="text-sm text-foreground file:mr-3 file:h-8 file:rounded-none file:border-0 file:bg-[#0f62fe] file:px-3 file:text-xs file:font-medium file:text-white hover:file:bg-[#0043ce]"
-                />
-                <span className="text-xs text-muted-foreground">PNG, JPG, atau WEBP, maksimal 2MB.</span>
-                <Button type="button" onClick={handleLogoUpload} disabled={!logoFile || logoStatus === 'pending'} className="w-fit">
-                  {logoStatus === 'pending' ? 'Mengunggah...' : 'Upload Logo'}
-                </Button>
-              </div>
-            </div>
-            {logoMessage ? (
-              <p className={`text-sm ${logoStatus === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>{logoMessage}</p>
-            ) : null}
-          </CardContent>
-        </Card>
+    <div className="halaman">
+      <Breadcrumb noTrailingSlash className="halaman__remah">
+        <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
+        <BreadcrumbItem isCurrentPage>
+          <span className="cds--link halaman__remah-mati">Administration</span>
+        </BreadcrumbItem>
+        <BreadcrumbItem isCurrentPage>Company Data</BreadcrumbItem>
+      </Breadcrumb>
 
-        <Card>
-          <CardHeader>
-            <CardDescription className="uppercase tracking-[0.2em]">Pengaturan Perusahaan</CardDescription>
-            <CardTitle className="text-2xl">Data perusahaan</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSave} className="grid gap-4">
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium text-foreground">Nama Perusahaan</span>
-                <Input type="text" value={name} onChange={(event) => setName(event.target.value)} required />
-              </label>
-
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium text-foreground">Jenis Industri</span>
-                <Input type="text" value={industryType} onChange={(event) => setIndustryType(event.target.value)} required />
-              </label>
-
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium text-foreground">Status Langganan</span>
-                <Input type="text" value={status} disabled />
-                <span className="text-xs text-muted-foreground">Status langganan dikelola lewat billing, tidak bisa diubah manual di sini.</span>
-              </label>
-
-              {message ? <p className={`text-sm ${saveStatus === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>{message}</p> : null}
-
-              <Button type="submit" disabled={saveStatus === 'pending'} className="w-fit">
-                {saveStatus === 'pending' ? 'Menyimpan...' : 'Simpan Perubahan'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+      <div>
+        <h1 className="halaman__judul">Data perusahaan</h1>
+        <p className="halaman__pengantar">
+          Nama dan logo di sini muncul di dokumen yang tercetak — surat jalan, faktur, dan lampiran lain.
+        </p>
       </div>
-    </main>
+
+      <Tile className="perusahaan-kartu">
+        {/* POLA UNGGAH GAMBAR: logonya sendiri yang diklik, dipratinjau dulu, dan baru
+            terkirim saat tombol simpan di luar kartu ditekan. */}
+        <div className="perusahaan-logo">
+          <FileUploaderButton
+            accept={['image/png', 'image/jpeg', 'image/webp']}
+            buttonKind="ghost"
+            disableLabelChanges
+            size="lg"
+            multiple={false}
+            onChange={(event) => {
+              const berkas = (event.target as HTMLInputElement).files?.[0] ?? null;
+              if (berkas) pilihLogo(berkas);
+            }}
+            labelText={
+              <span className="perusahaan-logo__kotak">
+                {pratinjauLogo ? (
+                  <img src={pratinjauLogo} alt="Pratinjau logo yang baru dipilih" className="perusahaan-logo__gambar" />
+                ) : logoUrl && !logoGagalDimuat ? (
+                  <img src={logoUrl} alt="Logo perusahaan" className="perusahaan-logo__gambar" onError={() => setLogoGagalDimuat(true)} />
+                ) : (
+                  <IkonGambar size={40} aria-label="Belum ada logo" />
+                )}
+              </span>
+            }
+          />
+          <span className="halaman__redup perusahaan-logo__keterangan">
+            {pratinjauLogo ? 'Logo baru — belum tersimpan' : 'Klik untuk mengganti logo'}
+          </span>
+        </div>
+
+        <div className="perusahaan-isian">
+          <TextInput
+            id="perusahaan-nama"
+            size="lg"
+            labelText="Nama perusahaan"
+            helperText="Muncul di dokumen yang tercetak."
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            invalid={name.trim() === ''}
+            invalidText="Nama perusahaan tidak boleh kosong."
+          />
+          <TextInput
+            id="perusahaan-industri"
+            size="lg"
+            labelText="Jenis industri"
+            value={industryType}
+            onChange={(event) => setIndustryType(event.target.value)}
+          />
+          {/* readOnly, BUKAN disabled: status langganan memang bukan untuk diisi di sini,
+              bukan "sedang tidak bisa dipakai". */}
+          <TextInput
+            id="perusahaan-status"
+            size="lg"
+            labelText="Status langganan"
+            readOnly
+            value={status}
+            helperText="Dikelola lewat penagihan, tidak bisa diubah dari sini."
+          />
+        </div>
+      </Tile>
+
+      <div>
+        <Button className="w-fit" disabled={!adaPerubahan || menyimpan} onClick={() => setKonfirmasi(true)}>
+          {menyimpan ? 'Menyimpan…' : 'Simpan perubahan'}
+        </Button>
+      </div>
+
+      <Modal
+        open={konfirmasi}
+        size="sm"
+        modalHeading="Simpan perubahan data perusahaan?"
+        primaryButtonText={menyimpan ? 'Menyimpan…' : 'Simpan'}
+        secondaryButtonText="Batal"
+        primaryButtonDisabled={menyimpan}
+        onRequestClose={() => (menyimpan ? null : setKonfirmasi(false))}
+        onRequestSubmit={simpanPerusahaan}
+        onSecondarySubmit={() => setKonfirmasi(false)}
+      >
+        <p>Nama dan logo ini akan dipakai di dokumen yang tercetak berikutnya. Dokumen yang sudah terbit TIDAK berubah.</p>
+      </Modal>
+
+      <AreaNotifikasi daftar={notifikasi} onTutup={tutupNotifikasi} />
+    </div>
   );
 }

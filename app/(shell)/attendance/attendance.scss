@@ -1,0 +1,75 @@
+// Gaya khas halaman Absensi. KERANGKA memakai kelas bersama `halaman-*`.
+@use '@carbon/react/scss/spacing';
+@use '@carbon/react/scss/theme';
+@use '@carbon/react/scss/type';
+
+.absensi-kartu {
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-04;
+  align-items: flex-start;
+}
+
+// Form catat manual: menumpuk di layar sempit, sejajar di layar lebar. Tombolnya sejajar
+// dengan DASAR isian, bukan dengan labelnya — kalau tidak, ia melayang di tengah.
+.absensi-form {
+  display: grid;
+  gap: spacing.$spacing-05;
+  grid-template-columns: 1fr;
+  inline-size: 100%;
+}
+
+@media (min-width: 42rem) {
+  .absensi-form {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+    align-items: end;
+  }
+}
+
+.absensi-daftar {
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-03;
+  inline-size: 100%;
+}
+
+// Satu karyawan = satu baris. Menumpuk di layar sempit supaya status tidak terjepit di
+// sebelah rincian jam yang panjang.
+.absensi-baris {
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-03;
+  padding: spacing.$spacing-04;
+  border: 1px solid theme.$border-subtle-01;
+}
+
+@media (min-width: 42rem) {
+  .absensi-baris {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.absensi-baris__nama {
+  @include type.type-style('body-compact-01');
+  font-weight: 600;
+}
+
+.absensi-baris__rincian {
+  @include type.type-style('label-01');
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: spacing.$spacing-02;
+  color: theme.$text-secondary;
+}
+
+// Setujui & Tolak berdampingan DISENGAJA di sini: keduanya keputusan setara atas satu
+// pengajuan, dan keduanya bisa diulang. Ini BUKAN kasus "aksi merusak berjauhan" —
+// menolak koreksi absensi tidak menghapus apa pun.
+.absensi-putusan {
+  display: flex;
+  gap: spacing.$spacing-03;
+  flex-shrink: 0;
+}

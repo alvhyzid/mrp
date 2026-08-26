@@ -1,0 +1,60 @@
+// Gaya khas halaman Process Mining. KERANGKA memakai kelas bersama `halaman-*`.
+@use '@carbon/react/scss/spacing';
+@use '@carbon/react/scss/theme';
+@use '@carbon/react/scss/type';
+
+.proses-kartu {
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-04;
+  align-items: flex-start;
+}
+
+// Judul kartu memuat tombol Asal-Usul, jadi harus sebaris dengan teksnya.
+.proses-judul {
+  display: flex;
+  align-items: center;
+  gap: spacing.$spacing-02;
+  margin-block-end: 0;
+}
+
+.proses-dasar {
+  @include type.type-style('body-01');
+}
+
+// Catatan METODE dicetak miring: ia menjelaskan angkanya, bukan bagian dari angkanya.
+.proses-catatan {
+  @include type.type-style('label-01');
+  color: theme.$text-helper;
+  font-style: italic;
+}
+
+.proses-daftar {
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-03;
+  inline-size: 100%;
+}
+
+// Satu perpindahan = satu baris. Menumpuk di layar sempit supaya jumlahnya tidak terjepit di
+// sebelah nama status yang panjang.
+.proses-baris {
+  @include type.type-style('body-compact-01');
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-02;
+  padding-block: spacing.$spacing-03;
+  border-block-end: 1px solid theme.$border-subtle-01;
+}
+
+.proses-baris:last-child {
+  border-block-end: 0;
+}
+
+@media (min-width: 42rem) {
+  .proses-baris {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}

@@ -1,0 +1,134 @@
+@use '@carbon/react/scss/spacing' as *;
+@use '@carbon/react/scss/theme' as *;
+@use '@carbon/react/scss/type' as *;
+@use '@carbon/react/scss/breakpoint' as *;
+
+// Gaya khas halaman Pengiriman. Nol angka px, nol warna heksadesimal.
+
+.kirim-tombol-masuk {
+  align-self: flex-start;
+}
+
+.kirim-sel-nomor {
+  display: flex;
+  flex-direction: column;
+}
+
+.kirim-sel-nomor__utama {
+  @include type-style('body-compact-01');
+  color: $text-primary;
+}
+
+.kirim-sel-nomor__so {
+  @include type-style('label-01');
+  color: $text-secondary;
+}
+
+.kirim-sisa {
+  display: flex;
+  flex-direction: column;
+  @include type-style('label-01');
+}
+
+.kirim-detail {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+  padding-block: $spacing-03;
+}
+
+.kirim-detail__aksi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-05;
+}
+
+.kirim-foto {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-03;
+}
+
+.kirim-foto__gambar {
+  max-block-size: 10rem;
+  inline-size: auto;
+  object-fit: contain;
+  border: 1px solid $border-subtle-01;
+}
+
+.kirim-form {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+}
+
+.kirim-form__kisi {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: $spacing-05;
+
+  @include breakpoint('md') {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.kirim-baris {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-04;
+  padding: $spacing-05;
+  background-color: $layer-01;
+  border: 1px solid $border-subtle-01;
+}
+
+.kirim-baris__judul {
+  @include type-style('body-compact-01');
+  color: $text-primary;
+}
+
+.kirim-baris__isi {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: $spacing-05;
+
+  @include breakpoint('md') {
+    grid-template-columns: 3fr 1fr;
+  }
+}
+
+// GAMBARNYA SENDIRI ADALAH TOMBOLNYA — pola unggah yang berlaku untuk seluruh unggahan.
+.kirim-unggah {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: $spacing-03;
+
+  .cds--btn {
+    padding: 0;
+    block-size: auto;
+    max-inline-size: none;
+  }
+}
+
+.kirim-unggah__kotak {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 10rem;
+  block-size: 7rem;
+  background-color: $layer-02;
+  border: 1px dashed $border-strong-01;
+  color: $icon-secondary;
+  overflow: hidden;
+}
+
+.kirim-unggah__gambar {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: contain;
+}
+
+.kirim-catatan-draf {
+  margin-block-start: $spacing-05;
+}

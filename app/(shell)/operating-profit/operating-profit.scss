@@ -1,0 +1,33 @@
+// Gaya khas halaman Laba Operasional. KERANGKA memakai kelas bersama `halaman-*`.
+@use '@carbon/react/scss/spacing';
+@use '@carbon/react/scss/type';
+
+// Pemilih periode berdiri sendiri di atas kartu angka, bukan di dalam kartu: ia MENGUBAH
+// seluruh angka di bawahnya, jadi menaruhnya di dalam salah satu kartu akan menyesatkan.
+.laba-periode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: spacing.$spacing-05;
+}
+
+.laba-periode > * {
+  inline-size: min(100%, 12rem);
+}
+
+// Tiga kartu, bukan empat -- kisi bersama menyusun empat kolom di layar lebar.
+@media (min-width: 66rem) {
+  .laba-kisi {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+// Label kartu memuat tombol Asal-Usul, jadi ia harus sebaris dengan teksnya.
+.laba-label {
+  display: flex;
+  align-items: center;
+  gap: spacing.$spacing-02;
+}
+
+.laba-keterangan {
+  margin-block-start: spacing.$spacing-03;
+}

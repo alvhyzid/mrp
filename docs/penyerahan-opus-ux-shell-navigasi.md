@@ -1,16 +1,3 @@
-<!--
-  DISALIN KE REPO 25 Agu 2026 atas perintah pemilik produk.
-  Berkas asal : ~/Downloads/penyerahan-opus-ux-shell-navigasi.md
-  Penulis     : Fable 5 (sesi perancangan UX di luar repo ini)
-  Status      : DOKUMEN RUJUKAN, bukan keputusan yang sudah berlaku.
-
-  CARA MEMBACANYA, supaya sesi berikutnya tidak salah pakai:
-  Isi dokumen ini adalah USULAN. Yang MENGIKAT adalah keputusan pemilik produk yang
-  tercatat di CLAUDE.md dan di Daftar Tugas. Beberapa bagian dokumen ini SUDAH DIBATALKAN
-  pemilik produk pada 25 Agu 2026 -- terutama aturan 'item parkir tidak muncul di navigasi'.
-  Jangan menerapkan isi dokumen ini tanpa memeriksa keputusan yang lebih baru.
--->
-
 # Penyerahan ke Opus — UX Application Shell & Navigation Architecture
 
 **Dari:** Fable 5 (review §42–§43 dokumen sumber dijalankan — hasil & amandemen di sini)

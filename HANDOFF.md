@@ -2,6 +2,534 @@
 
 Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`). Tiap sesi Claude Code WAJIB baca ini dulu sebelum mulai, dan memperbarui bagian relevan begitu sesi selesai. Klaim di sini harus tetap diverifikasi ulang, bukan otomatis dipercaya — HANDOFF ini rangkuman, bukan pengganti bukti.
 
+## OO — MIGRASI YANG DITULIS TAPI TIDAK PERNAH DITERAPKAN (26 Agu 2026)
+
+### Yang terjadi
+
+Lima berkas migrasi ditulis di repo lalu **tidak pernah diterapkan ke project mana pun**.
+Isinya penutupan `DS-11` dan `DS-12` serta perubahan status `DS-09` jadi menunggu
+persetujuan. **Penutupan itu ada di repo dan tidak ada di database** — jadi selama beberapa
+giliran, laporan menyebut task tertutup sementara Daftar Tugas yang dibaca pemilik produk
+menampilkan sebaliknya.
+
+Terukur saat ditemukan: **project data nyata 284/289, project uji 284/289.** Keduanya
+tertinggal lima, dan tertinggal **migrasi yang sama**.
+
+**Yang menangkapnya adalah `tests/setup/assertMigrationsUpToDate.ts` — secara KEBETULAN.**
+Penjaga itu dipasang untuk mencegah test berjalan di atas struktur usang, bukan untuk
+menangkap migrasi yang lupa diterapkan. Ia hanya berbunyi karena kebetulan ada yang
+menjalankan test. Dicatat sebagai `AUD-45`; pengawas yang benar-benar mencarinya dicatat
+sebagai `AUD-46`.
+
+### Cara menerapkan migrasi dari komputer lokal — supaya tidak dicari lagi
+
+Tidak ada `psql`, tidak ada Supabase CLI, dan tidak ada paket `pg` di repo ini. Jalannya:
+
+1. Token pribadi Supabase ada di **Keychain macOS**, entri service `Supabase CLI`, akun
+   `supabase` — ambil dengan `security find-generic-password -s "Supabase CLI" -a supabase -w`.
+2. Kirim SQL ke `POST https://api.supabase.com/v1/projects/{ref}/database/query`.
+3. **Catat versinya sendiri** ke `supabase_migrations.schema_migrations` (kolomnya `version`,
+   `name`, `statements`) — Management API tidak melakukannya untuk Anda, dan tanpa langkah
+   itu penjaga migrasi tetap menganggapnya tertinggal.
+4. Ref project: data nyata `kfvtrwuuqcjfkkuqizxt`, uji `nclkepwlsgmfbslgsajq`.
+
+**Test lokal memakai `.env.staging.local`, bukan `.env.local`.** `.env.local` menunjuk project
+data nyata, dan `guardAgainstRealProject` akan menolak menjalankan test di sana — benar,
+memang begitu maunya.
+
+### Bukti bahwa penerapannya tidak menyentuh apa pun selain Daftar Tugas
+
+Potret jumlah baris **EKSAK** (bukan `n_live_tup`) untuk **seluruh 91 tabel** `public`,
+diambil sebelum dan sesudah di kedua project:
+
+| Project | Tabel berubah | Perubahannya |
+|---|---|---|
+| Data nyata | **1 dari 91** | `build_tasks` 304 → 308 |
+| Uji | **1 dari 91** | `build_tasks` 164 → 168 |
+
+Empat baris baru di masing-masing project adalah task yang memang dibuat oleh migrasi itu.
+**Nol perubahan di 90 tabel lain.**
+
+### Sapuan OO.4 — apakah ini pernah terjadi sebelumnya?
+
+Seluruh 302 task di database disilangkan dengan setiap kalimat di `HANDOFF.md` dan 25 pesan
+commit terakhir yang menyebut kode task bersama kata penutup. **Sepuluh kandidat muncul;
+kesepuluhnya bukan kasus** — `SEC-15` memang sengaja dibuka kembali (KK.8), empat berstatus
+menunggu persetujuan dan itu memang maunya, lima sisanya hanya disebut "sebagian" atau ikut
+tersebut di kalimat tentang task lain.
+
+**Batas sapuan itu**: ia mencocokkan kode dan kata penutup **di baris yang sama**. Yang
+benar-benar membuktikan kelasnya tertutup hari ini bukan sapuan itu, melainkan bahwa **kedua
+project kini 289 dari 289**.
+
+## OO.5 — VERIFIKASI DS-09 SEBELUM COMMIT: YANG TERUKUR, DAN YANG TIDAK (26 Agu 2026)
+
+**Keadaan pemeriksaan otomatis saat DS-09 diserahkan**: `npx tsc --noEmit` **bersih**;
+`npx vitest run` **62 berkas, 369 test lulus, 7 dilewati, nol gagal** (851 detik). Sesudah
+perbaikan `flex-wrap` dan migrasi catatan task ditambahkan, tujuh penjaga yang menyisir berkas
+dijalankan ulang — **23 test, seluruhnya hijau** — dan typecheck diulang, tetap bersih.
+
+### Berapa halaman yang benar-benar berubah
+
+**32 dari 39 halaman berubah.** Tujuh yang tidak berubah adalah **tepat** ketujuh layar publik
+(`login`, `register`, `lupa sandi`, `reset sandi`, `terima undangan`, `beranda`, `konfirmasi
+POD`) — mereka sudah dimigrasikan lebih dulu di gelombang layar publik dan berada di luar
+kerangka aplikasi, jadi memang tidak punya remah roti. **Nol halaman dilewati karena gagal.**
+
+### Yang TIDAK sesuai klaim "nol halaman tersisa" — tiga hal, semuanya terukur
+
+DS-09 melaporkan nol halaman tersisa. Diukur ulang, klaim itu lebih luas daripada kenyataannya:
+
+1. **`KepalaHalaman` dipakai 19 dari 39 halaman.** Delapan sisanya memang dikecualikan dengan
+   alasan tercatat. **Sebelas halaman masih menulis `<Breadcrumb>` sendiri** — kesebelasnya
+   sudah Carbon lebih dulu, sebelum `KepalaHalaman` lahir, jadi mereka tidak pernah masuk
+   daftar sapuan DS-09. Dicatat `DS-13`.
+2. **`SalesOrdersPage` masih memuat tiga `<table>` mentah** (baris 631, 1130, 1171) —
+   tabel rincian di dalam baris yang dimekarkan, ber-`rounded-md` yang bertentangan dengan
+   sudut tajam Carbon. **Tidak tercatat sebagai pengecualian di mana pun.** Dicatat `DS-13`.
+3. **Tidak ada pengawas yang menolak elemen mentah di halaman INTERNAL.**
+   `layar_publik_carbon.test.ts` hanya menjaga layar publik, dan `ui_raw_leak_watchdog.test.ts`
+   menjaga hal lain (kebocoran identifier). Karena itu butir 2 lolos tanpa satu pun tanda.
+
+### Bukti visual di lima lebar — dan dua cacat yang hanya terlihat di sana
+
+Lima lebar: **360 / 672 / 768 / 1280 / 1920**. Empat pertama diwajibkan aturan responsive
+proyek; **672 ditambahkan** karena di situlah `.tabel-responsif` membalik baris jadi kartu,
+dan tidak satu pun dari empat lebar wajib menyentuh batas itu.
+
+Lima halaman yang mewakili, beserta alasan dipilihnya: **`/items`** (acuan yang sudah
+disetujui), **`/work-orders`** (tabel paling banyak kolomnya di antara 12 halaman baru),
+**`/ppic`** (memuat pengecualian papan Gantt), **`/sales-orders`** (memuat tiga tabel mentah
+di atas), **`/build-tasks`** (pengecualian "tanpa toolbar tabel").
+
+**Cacat 1 — gulir menyamping di `/ppic` pada 360px, DIPERBAIKI di giliran ini.** Terukur
+`scrollWidth 624` vs `clientWidth 360`. Penyebabnya tiga tombol periode Gantt dalam satu baris
+tanpa `flex-wrap`; tombolnya berubah dari `Button variant="outline"` (shadcn) ke Carbon
+`Button kind="tertiary"` **di giliran ini juga**, dan Carbon lebih lebar. Jadi ia **rusak oleh
+pekerjaan ini sendiri** — pengecualian ke-3 aturan FOKUS SATU TASK. Sesudah `flex-wrap`
+ditambahkan di tiga baris: **25 dari 25 tangkapan layar nol gulir menyamping.**
+
+**Cacat 2 — saringan tabel HILANG SELURUHNYA di 360px, DICATAT sebagai `DS-14`.**
+Terukur di `/items`: `<span class="cds--list-box__label">` "Tipe" berada di **kiri −47,
+kanan −19** — seluruhnya di luar tepi kiri layar.
+
+> **Kenapa ini lolos dari semua pengukuran yang ada, dan ini yang layak diingat**: pemeriksaan
+> gulir menyamping membandingkan `scrollWidth` dengan `clientWidth`. Keduanya 360 di sini —
+> halamannya memang **tidak menggulir**. Yang meluber ke **kanan** berbunyi; yang terpotong ke
+> **kiri** dipotong diam-diam oleh induknya. Toolbar Carbon meratakan isinya ke kanan lalu
+> memotong kelebihannya, jadi yang hilang **selalu yang paling kiri**.
+
+**Cacat 3 — nama merek dan nama perusahaan bertumpuk di header 360px, DICATAT sebagai
+`NAV-04`.** `.cds--header__name` bertinggi 47px di dalam header 48px (sudah dua baris).
+Diperiksa lewat `git`: `<HeaderName prefix="FABRIX">` **tidak tersentuh giliran ini** — ia
+lahir di DS-04, jadi dicatat, bukan dikerjakan.
+
+### Tabel KOSONG tidak membuktikan apa pun tentang tabel — jadi tabelnya diisi
+
+Ronde pertama tangkapan layar memakai tenant uji yang datanya kosong; seluruh tabel berbunyi
+"Belum ada …". Itu membuktikan **kerangka halaman** dan **tidak** membuktikan hal yang justru
+diklaim DS-09: bagaimana tabel banyak kolom berperilaku di layar sempit.
+
+Skrip seed **tidak bisa** dipakai — semuanya memanggil `guard-real-project` dan menolak keras
+berjalan di project data nyata, sedangkan tenant uji hidup di project itu. Jalan yang sah:
+**membuat barisnya LEWAT LAYAR** sebagai `company.b@debug.mrp`, persis seperti manusia.
+
+Empat item uji dibuat lewat modal Tambah item, difoto, lalu **dihapus lewat layar juga**.
+
+**Yang terbukti dengan tabel berisi, di `/items` 360px**: baris tabel **benar-benar berubah
+jadi kartu bertumpuk** — satu baris = satu kartu, nama kolom di kiri dan nilainya di kanan,
+lewat `data-label`. Bukan tabel yang diperkecil. Di 1280px ia kembali jadi tabel biasa dengan
+kolom lengkap. **Nol gulir menyamping di ketiga lebar.**
+
+**Dan tabel berisi menegaskan `DS-14`**: saringan "Tipe" yang terlihat jelas di 1280px
+**hilang sama sekali** di 360px — bukan mengecil, bukan pindah, hilang.
+
+**PEMBERSIHAN, dilaporkan sesuai aturan**: `UJI-OO-01` … `UJI-OO-04` dihapus lewat layar;
+tenant uji kembali ke **0 item tercatat**. Dibuktikan dengan **POLA**, bukan jumlah total
+(sesuai aturan bukti CLAUDE.md): nol baris `items` ber-kode `UJI-OO-%`, nol ber-nama
+`Bahan uji tampilan%`, nol company `%TestCorp`.
+
+### Pelajaran alat ukur: skrip verifikasi saya sendiri melapor GAGAL untuk hal yang BERHASIL
+
+Skrip pembuat item melaporkan **"GAGAL"** untuk keempat item — padahal keempatnya **berhasil
+dibuat**. Sebabnya: ia menyimpulkan "modal masih terbuka" dari `#item_code` yang masih ada di
+DOM. **`<Modal>` Carbon tetap ter-render saat tertutup**, jadi elemen itu selalu ada.
+
+Kekeliruannya baru ketahuan karena tangkapan layar berikutnya memperlihatkan empat baris di
+tabel di belakang modal. **Kalau saya percaya laporan skrip saya sendiri, kesimpulannya akan
+terbalik 180 derajat** — "modal tidak bisa menyimpan" padahal ia menyimpan dengan benar.
+
+Ini kelas yang sudah tercatat ("menguji komponen Carbon wajib dengan klik nyata", "test yang
+lulus tanpa menguji apa pun"), dengan **tanda kehadiran yang benar** untuk lain kali: jangan
+menyimpulkan modal Carbon tertutup dari keberadaan elemennya di DOM — periksa kelas
+`.cds--modal.is-visible`, atau periksa **akibatnya** (barisnya bertambah).
+
+## DDD — PENERAPAN CARBON (DS-09): 17 DARI 39, DAN RESEPNYA (25 Agu 2026)
+
+### Keadaan terukur
+
+| | Jumlah |
+|---|---|
+| **Sudah Carbon penuh** | **17** dari 39 |
+| Terhitung "sebagian" | 4 — dan **keempatnya sebenarnya selesai** (lihat catatan di bawah) |
+| **Benar-benar tersisa** | **18** |
+
+**Sudah selesai**: 6 layar publik · Setelan perhitungan · Ringkasan · Team & Invitations · Pelanggan · Master dokumen · KPI · KPI saya · Apa yang baru · Laba operasional · Data perusahaan · Process mining · Kesiapan AI. Plus komponen bersama **kartu KPI**.
+
+### Skrip sensus saya sendiri terkena kelas cacat yang sedang saya perbaiki
+
+Empat halaman terhitung "sebagian" karena skrip sensusnya menghitung `<button`/`<input`/`<table` **termasuk yang disebut di dalam KOMENTAR**. Yang sebenarnya:
+
+- **Profil** dan **Master Item** — nol elemen mentah; yang terhitung adalah kalimat penjelasan yang menyebut `<input type="file"> mentah`.
+- **Master dokumen** — tiga `<input type="hidden">` yang **disengaja**: jembatan `FormData` karena kontrol Carbon tidak menaruh nilainya di sana.
+
+**Ini kejadian keenam dari kelas yang sama dalam satu hari** — mencocokkan teks tanpa membedakan kode dari penjelasan — dan kali ini korbannya alat ukur saya sendiri, bukan penjaga. Memperkuat `AUD-42`: yang perlu diperbaiki **caranya**, bukan penjaganya satu per satu.
+
+### Resep yang sudah terbukti, supaya sisanya tidak mengulang penyelidikan
+
+1. **Kerangka pakai kelas bersama** `halaman-*` di `src/styles/carbon.scss`. Kelas sendiri **hanya** untuk yang khas halaman itu.
+2. **Gaya per halaman lewat `layout.tsx` rutenya**, bukan diimpor dari dalam komponen — CSS Carbon bersamanya sudah dimuat sekali di `app/(shell)/layout.tsx`.
+3. **Struktur halaman**: Breadcrumb (`Dashboard / Workspace / Halaman`) → judul → pengantar yang **menyebut jumlah** → notifikasi → isi.
+4. **Halaman akar tidak pakai breadcrumb** — satu butir hanya menunjukkan yang sudah jelas.
+5. **`DataTableSkeleton`/`SkeletonText`** menggantikan tulisan "Memuat…" — bentuk rangka menunjukkan **apa** yang datang.
+6. **`InlineNotification`** menggantikan `<p className="text-destructive">`.
+7. **`Tag`** menggantikan `Badge`, warnanya mengikuti **arti**: hijau berjalan, merah dicabut, biru menunggu, abu netral.
+8. **`readOnly`, bukan `disabled`**, untuk nilai yang memang bukan untuk diisi.
+
+### Tiga jebakan yang sudah menggigit, dan akan menggigit lagi
+
+1. **Kontrol Carbon tidak menaruh nilainya di `FormData`** — simpan di state, teruskan lewat input tersembunyi. Lapisan server tidak berubah.
+2. **Komponen Carbon di konteks yang tidak diatur Carbon perlu ditempatkan sendiri** — checkbox di toolbar, posisi toast. Ini mengisi yang tidak diatur, bukan menimpa.
+3. **`InlineNotification` tidak punya prop `actions`** — tombolnya berdiri di bawah pesannya.
+
+### DS-09 SELESAI — seluruh halaman mengikuti cetakan Master Item (26 Agu 2026)
+
+**Nol halaman tersisa.** Diukur dengan menyisir berkas, bukan dengan mencoret daftar.
+
+**DUA PINTU BERSAMA dibuat lebih dulu — pakai keduanya, jangan menyalin cetakannya lagi:**
+
+1. **`KepalaHalaman`** (`src/components/ui/kepala-halaman.tsx`) — remah roti + judul + baris jumlah. Tingkat tengah remah roti adalah nama workspace dan **tidak boleh bisa diklik** (ia kelompok menu, bukan halaman); komponennya sudah mengurus itu.
+2. **`.tabel-responsif`** (`src/styles/carbon.scss`) — baris tabel jadi kartu bertumpuk di bawah 672px. **Wajib disertai `data-label={judulKolom}` pada TIAP `<TableCell>`**; tanpa itu kartunya kehilangan nama kolom.
+
+**Cetakan yang berlaku di semua layar bertabel**: pencarian **melipat** (`persistent` tidak dipakai di mana pun), saringan **Dropdown** ber-`titleText`+`hideLabel` (bukan kotak centang), `DataTable` `size="lg"` **`isSortable`** dengan baris berisi **nilai yang ditampilkan** (baris ber-id saja = tombol urut yang tidak mengurut apa pun), baris yang bisa dimekarkan untuk rincian, dan `Pagination` dengan teks Bahasa Indonesia.
+
+**Pelajaran paket yang akan terulang**: `ModalFooter` mewajibkan `children` di @carbon/react 1.114 meski prop teks tombolnya ada; `NumberInput` kosong dianggap melanggar `min` dan tampil merah sebelum diketik — pakai `allowEmpty`.
+
+**PENGECUALIAN YANG SUDAH DIPUTUSKAN — jangan "diperbaiki" jadi seragam:**
+- **Papan Gantt PPIC** tetap `<table>` biasa: kisi waktu ber-`table-fixed` dengan sel yang bisa dijatuhi. Carbon tidak punya komponen Gantt.
+- **Build Tasks** tanpa toolbar tabel: saringannya satu untuk semua modul, sedangkan tiap modul punya tabelnya sendiri.
+- **Halaman cetak surat jalan** tanpa remah roti dan baris jumlah: cetakan itu untuk layar, bukan kertas.
+- **Halaman publik** tanpa remah roti: mereka di luar kerangka aplikasi.
+
+## CCC — ATURAN TENANT UJI DILANGGAR, LALU DIPERIKSA (25 Agu 2026)
+
+Saat memverifikasi halaman Process Mining, verifikasinya dijalankan memakai **akun PT ITM** (`company.a@debug.mrp`), bukan tenant uji. Itu **melanggar aturan verifikasi manual** yang sudah tertulis di CLAUDE.md.
+
+**Diperiksa sesudahnya, dua arah, dan keduanya bersih:**
+- **Kode**: nol pemanggilan `insert`/`update`/`upsert`/`delete`/`rpc` di `computeProcessMiningInsights.ts` dan `getProcessMiningDashboard.ts`.
+- **Data**: nol baris baru di `status_transition_log` dan `data_change_audit_log` dalam tiga jam terakhir.
+
+**Tapi pemeriksaan itu terjadi SESUDAHNYA, dan justru itulah yang dilarang aturannya.** Aturan itu lahir dari kejadian nyata di mana tombol yang tampak murni menampilkan ternyata mengunci baseline finansial secara permanen begitu diklik — dan yang membuatnya berbahaya bukan penulisannya, melainkan **keyakinan bahwa halaman itu hanya membaca**.
+
+Di sini keyakinan itu kebetulan benar. Lain kali belum tentu, dan **"kebetulan benar" sudah punya bagiannya sendiri di berkas ini**.
+
+**Yang berubah dalam cara kerja**: verifikasi visual halaman mana pun memakai `company.b@debug.mrp`, tanpa menilai lebih dulu apakah halamannya "cuma membaca" — penilaian itu sendiri yang tidak boleh dipercaya.
+
+## BBB — TIGA DOKUMEN ARSITEKTUR MENUNGGU GILIRAN (25 Agu 2026)
+
+Aturan fokus bekerja — tapi **tumpukan yang menunggu itu sendiri perlu diketahui**, supaya tidak ada yang mengira ia hilang.
+
+| Task | Dokumen | Lingkup setelah diperiksa | Pemicu |
+|---|---|---|---|
+| `AR-01` | Rekonsiliasi arsitektur AS-IS vs TO-BE | **8 bagian**, bukan 34 — tiga sudah tercakup penuh, empat sebagian | Carbon selesai (potret jadi usang bila diambil sekarang) |
+| `NAV-02` | UX Shell & navigasi | **7 butir**, bukan 16 — enam sudah selesai, enam butir aturan naik jadi aturan CLAUDE.md | Carbon selesai (sebagian besar butir menyentuh layar) |
+| `SEC-18` | Peran, akses & persetujuan | **12 fase, PEROMBAKAN** — menyentuh 51 dari 142 aturan RLS | Ada akun karyawan **sungguhan** pertama, ATAU Carbon selesai — mana yang lebih dulu |
+
+**Yang layak diperhatikan dari tabel ini**: dua dari tiga **mengecil** setelah diperiksa, dan yang ketiga justru **membesar** — dokumennya menyebut 122 aturan RLS di 73 tabel, pengukuran menemukan **142 di 81 tabel**, dengan **51** yang menyebut peran.
+
+### Kenapa SEC-18 ditunda, dan kenapa alasannya bukan "sibuk"
+
+Diukur: PT ITM punya **8 akun, seluruhnya `@debug.mrp`**. Nol akun karyawan sungguhan.
+
+Membangun arsitektur peran 12 fase untuk 8 akun uji berarti merancang untuk keadaan yang belum ada. **Ini kelas yang sama dengan Reorder Point** — field yang dirancang sebelum ada yang memakainya ternyata tidak dipakai sama sekali. Bedanya: di sini ongkos salah rancang jauh lebih mahal, karena menyentuh 51 aturan RLS.
+
+### Tiga hal DI DALAM SEC-18 yang TIDAK ikut menunggu
+
+Dipisah supaya tidak tenggelam bersama 12 fase, dan ketiganya sudah punya task sendiri:
+
+1. **Pemeriksa dan pelapor QC orang yang sama** (`QMS-01`) — menyentuh audit BPOM.
+2. **Jejak audit tidak menyebut siapa** (`AUD-07`) — diukur: **543 dari 554 baris** punya pelaku kosong dan peran `authenticator`, yaitu peran database, bukan orang. Ini **prasyarat** §29, bukan sekadar terkait.
+3. **Akun `@debug.mrp` tidak bisa dikirimi email** (`SEC-17`, `INF-26`).
+
+## AAA — PENJAGA SALAH TUDUH, KEEMPAT KALINYA, DENGAN POLA YANG SAMA PERSIS (25 Agu 2026)
+
+`tests/layar_publik_carbon.test.ts` menuduh `src/components/ui/notifikasi.tsx` **mengimpor CSS Carbon per halaman**. Berkas itu tidak mengimpor apa pun — ia cuma **menyebut** nama `carbon.scss` di dalam komentar, untuk menjelaskan di mana gayanya tinggal.
+
+**Empat kali, bentuknya sama persis: penjaga mencocokkan TEKS tanpa membedakan KODE dari PENJELASAN.**
+
+| # | Yang dituduh | Kenyataannya |
+|---|---|---|
+| 1 | Halaman POD menulis `<input>` mentah | kata "input" di dalam kalimat penjelasan |
+| 2 | Tiga berkas menulis ke basis data | `visiting.delete(...)` — Set JavaScript biasa |
+| 3 | `value={docForm.doc_type}` membocorkan enum | nilai kontrol `<CarbonSelect>`; teksnya dari `text={t.label}` |
+| 4 | `notifikasi.tsx` mengimpor CSS Carbon | nama berkas disebut di komentar |
+| 5 | `selectedItem={member.role}` pada `<Dropdown>` | nilai kontrol; teks tampil dari `itemToString` |
+
+Diperketat di giliran yang sama: komentar dibuang lebih dulu, dan bentuk `import '…carbon.scss'` yang sungguhan diwajibkan. **Dibuktikan dua arah** — impor ketiga yang benar-benar disisipkan tetap tertangkap.
+
+**Batasnya ditulis di berkasnya**, karena aturan proyek mewajibkannya: ini masih pencocokan teks, **bukan parser**. Ia sekarang membedakan komentar dari kode; ia tetap tidak memahami struktur JSX.
+
+**ATURAN**: penjaga yang salah tuduh **melatih orang mengabaikan hasilnya**. Lima kali dalam sehari sudah melewati titik itu.
+
+**Kejadian kelima layak disebut tersendiri, karena ia membuktikan tesisnya sendiri**: ia muncul **sesudah** `AUD-42` dicatat, **di giliran yang sama**, pada halaman yang **baru saja dimigrasikan** ke Carbon. Bukan ramalan — bukti. Dan masih ada **26 halaman** yang akan disentuh.
+
+Perbaikannya sengaja **lebih ketat daripada mengecualikan nama komponen**: `selectedItem` hanya aman bila elemen yang sama juga menyediakan `itemToString`. Syarat itu **bisa gagal**, dan itulah yang membuatnya bernilai — tanpa `itemToString`, Carbon merender isinya apa adanya dan kecurigaan penjaga justru benar. Dibuktikan dua arah.
+
+Dan **memperketat kasusnya menambal CONTOHNYA, bukan BENTUKNYA** — bila sebuah kelas kesalahan berulang di beberapa penjaga, yang diperbaiki harus **caranya**, bukan penjaganya satu per satu.
+
+### Sensus penjaga — ini yang membuat AUD-42 bisa diukur, bukan ditakuti
+
+Diukur 25 Agu 2026: dari **62 berkas test**, hanya **delapan** yang menyisir berkas sumber dan mencocokkan teks. **54 sisanya** menguji lewat database atau logika murni dan **tidak perlu disentuh sama sekali**.
+
+Dari delapan itu, **tiga** sudah membuang komentar sebelum menyisir (masing-masing dengan caranya sendiri), **lima** belum. Jadi lingkup AUD-42 adalah **lima berkas yang perlu diarahkan ke pembantu bersama, plus tiga yang caranya disatukan** — bukan "seluruh test suite".
+
+**Pembantu bersamanya wajib menuliskan batasnya sendiri**, dan alasannya bukan kerapian: tanpa batas tertulis, penjaga baru akan terasa **lebih dipercaya** daripada yang lama — dan kejadian kelima jadi lebih mengejutkan justru karena orang sudah berhenti curiga.
+
+**Kriteria selesainya dua uji, bukan satu**: keempat kasus salah tuduh harus hijau, **DAN** pelanggaran sungguhan yang disisipkan untuk masing-masing penjaga harus merah. Tanpa uji kedua, *"tidak lagi salah tuduh"* bisa berarti *"tidak lagi menuduh apa pun"*.
+
+### Jumlah pengecualian penjaga layak jadi ANGKA KEMAJUAN
+
+Dua penjaga merah malam ini keduanya rusak oleh pekerjaan ini sendiri — pengecualian yang memang boleh dikerjakan saat itu juga. Tapi yang pertama **justru MENGETAT**: daftar pengecualian bentuk bulat **menyusut dari dua berkas jadi satu**, karena halaman Profil berhenti menulis `rounded-full` sendiri dan lingkarannya pindah ke kelas bersama.
+
+**Usulan yang layak diadopsi**: jadikan **jumlah pengecualian penjaga** angka yang dilaporkan berkala. Daftar pengecualian yang **menyusut** berarti sistem makin seragam; yang **membengkak** berarti sebaliknya. Ia mengukur arah, bukan cuma keadaan — dan tidak bisa dipalsukan tanpa terlihat.
+
+## ZZ — MODAL UNTUK MEMUTUSKAN, NOTIFIKASI UNTUK MEMBERI TAHU (25 Agu 2026)
+
+### Cara kerja yang dituju, terjadi utuh sekali ini
+
+Pemilik produk meminta **modal** untuk pesan berhasil. Claude Code **membangunnya seperti diminta**, lalu menyebutkan bahwa Carbon menganjurkan sebaliknya dan mencatatnya sebagai deviasi atas keputusan pemilik produk. Pemilik produk membacanya dan mencabut permintaannya sendiri:
+
+> *"ikuti saran carbon, saya yg salah"*
+
+**Yang membuat itu mungkin bukan Claude Code menolak, melainkan Claude Code mengerjakan sambil menyebut harganya.** Menolak akan menghasilkan perdebatan; mengerjakan diam-diam akan menghasilkan layar yang salah selamanya. Menyebut harganya menghasilkan keputusan yang lebih baik dalam satu putaran.
+
+Aturannya sekarang ada di CLAUDE.md, dan berlaku untuk **seluruh unggahan berikutnya** — bukan hanya foto profil: **modal untuk MEMUTUSKAN, notifikasi untuk MEMBERI TAHU.**
+
+`InlineNotification` dipilih, bukan `ToastNotification`, karena pesannya terikat pada tindakan yang baru saja dilakukan di halaman itu. Toast disediakan Carbon untuk kejadian latar belakang yang jauh dari perhatian pengguna.
+
+### Skrip ujinya berbohong, bukan produknya
+
+Percobaan bukti pertama melaporkan alur foto **gagal**: nol notifikasi, modal tidak terbuka, pratinjau masih menggantung. Setelah diinstrumentasi, modalnya ternyata **terbuka normal** dan tombolnya **hidup di koordinat yang jelas**.
+
+Penyebabnya skrip ujinya: `scrollIntoView` di dalam lapisan melayang plus **jeda tetap** sementara server dev sedang meng-compile. Setelah diganti **menunggu keadaan** dan mengklik koordinat tombol modal secara langsung, alurnya lulus.
+
+**Ini kelas yang sama dengan `element.click()` yang tidak memicu Carbon**, dan sudah muncul **dua kali dalam satu hari**. Bentuknya selalu: laporan yang terlihat meyakinkan, menuduh produk, padahal alat ujinya yang tidak bekerja. Yang membedakan keduanya hanya satu langkah — **menginstrumentasi sebelum menyimpulkan.**
+
+## YY — DUA PETA LABEL PERAN YANG SUDAH MENYIMPANG (25 Agu 2026)
+
+Ditemukan saat membangun field **Jabatan** di halaman Profil — dan itu justru yang membuatnya ketahuan: field baru harus memilih salah satu dari dua peta, jadi keberadaan dua peta jadi mustahil diabaikan.
+
+`AppShellCarbon.tsx` punya `LABEL_PERAN` sendiri, sementara `src/lib/glossary.ts` sudah punya `getRoleLabel` yang dipakai tiga halaman lain. **Lima dari enam belas label sudah berbeda:**
+
+| Peran | Header berkata | Halaman Tim berkata |
+|---|---|---|
+| `warehouse_manager` | Manager Warehouse | **Manajer Gudang** |
+| `production_manager` | Manager Produksi | **Manajer Produksi** |
+| `ppic_manager` | Manager PPIC | **Manajer PPIC** |
+| `finance_manager` | Manager Finance | **Manajer Finance** |
+| `viewer` | Viewer | **Pengamat (Lihat Saja)** |
+
+Orang yang sama disebut **dua nama berbeda di dua layar** — persis yang dilarang aturan *"satu istilah di layar untuk semua departemen"*, dan alasannya di aturan itu terbukti nyata: begitu mereka rapat bersama, tidak ada yang tahu apakah sedang membicarakan hal yang sama.
+
+**Dikerjakan saat itu juga**, bukan dicatat, karena field Jabatan yang baru **harus** memilih salah satunya — pengecualian *"menghalangi task berjalan"*. Salinan kedua dicabut; keduanya kini memakai `getRoleLabel`.
+
+**Yang membuat ini layak dicatat sebagai kelas**: dua peta itu **tidak pernah berbunyi**. Tidak ada test yang gagal, tidak ada typecheck yang merah, dan tidak ada layar yang rusak. Ia hanya ketahuan karena ada pekerjaan baru yang kebetulan harus memilih. Itu bentuk yang sama dengan **88 warna heksadesimal** dan **36 pengambil tanda pengenal**: benar di masing-masing tempat, salah sebagai sistem.
+
+## XX — FOTO PROFIL: NAMA BERKAS UNIK, DAN HEADER YANG BERUBAH TANPA MUAT ULANG (25 Agu 2026)
+
+### Sebab foto pemilik produk hilang permanen, ditulis lengkap
+
+Unggahan lama memakai nama **tetap** `avatar.<ext>` dengan `upsert: true`. Mengganti PNG dengan PNG lain **menimpa yang lama tanpa jejak**.
+
+Komentar di kode saat itu menyadari kasus **PNG → JPG** (yang meninggalkan berkas yatim) dan **diam** soal PNG → PNG yang justru menghapus. Itu contoh paling bersih dari aturan *"komentar yang menyebut risiko wajib menyebut batasnya"*: **setengah sadar lebih berbahaya daripada tidak sadar**, karena pembaca berikutnya mengira masalahnya sudah dipikirkan.
+
+Sekarang tiap unggahan lahir dengan nama sendiri (`avatar-<waktu>-<acak>.<ext>`, `upsert: false`), dan **foto lama tidak dihapus sama sekali** — pembersihannya menyusul lewat INF-23, yang bertolak dari baris induk yang diketahui.
+
+### Header punya salinan datanya sendiri — dan itu kelas, bukan kasus
+
+Kerangka aplikasi memanggil `/api/me` sekali saat dibuka; halaman Profil memanggilnya sendiri juga. **Keduanya tidak saling tahu.**
+
+Pilihan pemilik produk: halaman Profil **mengumumkan**, header **mendengarkan**. Nama kabarnya hidup di **satu berkas** (`src/lib/profilEvents.ts`), bukan sebagai teks lepas di dua tempat — teks lepas adalah *"dua jalur hidup"* dalam bentuk paling halus: bila satu diubah tanpa yang lain, **kabarnya berhenti sampai tanpa satu pun galat**.
+
+Jalan yang lebih benar untuk jangka panjang — satu sumber data pengguna — **ditolak untuk task ini** karena menyentuh 36 halaman, dan dicatat sebagai `PLT-06` dengan pemicu "setelah Carbon selesai".
+
+### Yang hanya ketahuan karena dijalankan
+
+Percobaan bukti pertama melaporkan unggahan **gagal**: nol pesan, nol foto, header masih ikon. Tangkapan layarnya menunjukkan sebab sebenarnya — tombolnya masih berbunyi **"Mengunggah…"** dan server dev masih **meng-compile**. **Jeda tetap 3,5 detik menghasilkan laporan yang salah**, bukan sistem yang salah.
+
+Diperbaiki dengan **menunggu keadaan**, bukan menunggu waktu. Ini kelas yang sama dengan `element.click()` yang tidak memicu Carbon: **cara mengujinya yang tidak bekerja, dan hasilnya terlihat seperti cacat produk.**
+
+## WW — ATURAN FOKUS SATU TASK, DAN BUKTI PERTAMANYA (25 Agu 2026)
+
+### Pengamatan yang layak dicatat
+
+**Giliran pertama setelah aturan fokus ditetapkan menghasilkan 11 temuan/dokumen yang DICATAT dan TIDAK dikerjakan, dan satu yang dikerjakan karena masuk pengecualian "menghalangi".**
+
+**Sebelumnya, sebelas itu akan menjadi sebelas belokan.**
+
+Yang dicatat: `PMB-12` permintaan pembelian · `OVR-01` Tasks & Approvals · `GDG-11` peringatan yang bisa ditindaklanjuti · `AUD-41` sapu "fungsi kebetulan" · `AUD-42` penjaga yang salah tuduh tiga kali · `AUD-43` test yang menulis tanpa memeriksa · `INF-27` dua penjaga saling menghalangi · `AR-01` rekonsiliasi arsitektur · `AR-02` register ADR · `NAV-02` sisa dokumen UX Shell · `PLT-06` satu sumber data pengguna.
+
+Yang **dikerjakan** karena masuk pengecualian: menyusulkan **37 migrasi ke project CI**. Tanpa itu CI merah untuk semua orang — pengecualian "menghalangi task berjalan", bukan "sekalian saja".
+
+### Yang membuat pencatatan ini BUKAN sekadar menunda
+
+Dua di antaranya justru **mengecil** karena diperiksa dulu, bukan langsung dikerjakan:
+
+- **`AR-01`** terlihat seperti 34 bagian. Setelah tumpang tindihnya diperiksa: **tiga bagian sudah tercakup penuh** (audit AR-0, design debt, audit keamanan), **empat sebagian**, dan yang **benar-benar belum** hanya delapan. Lingkupnya menyusut dari 34 jadi 8 — **tanpa menulis satu baris kode**.
+- **`NAV-02`** terlihat seperti 16 butir. Enam sudah selesai, tiga ditunda sadar dengan pemicu, dan enam butir aturan **dinaikkan jadi aturan di CLAUDE.md** — bukan task sama sekali. Sisanya tujuh butir "bisa menunggu".
+
+**Ini yang tidak terjadi bila temuannya langsung dikerjakan**: pekerjaan yang dikerjakan langsung tidak pernah sempat diperiksa apakah ia sudah ada.
+
+### Fakta yang mengubah urutan tiga task sekaligus
+
+**PT ITM saat ini punya nol item, nol BOM, nol supplier, nol lot, nol Work Order** — hanya 30 karyawan dan 288 task.
+
+Artinya `PMB-12`, `OVR-01`, dan `GDG-11` **belum bisa dipakai siapa pun**: peringatan bahan tidak akan menyala, permintaan pembelian tidak akan ada isinya. Ketiganya diturunkan jadi **Bisa Menunggu** dengan pemicu ganda: Carbon selesai **dan** master data terisi.
+
+**Bukan alasan membatalkan — alasan mengurutkan.** Setiap halaman yang lahir sebelum Carbon selesai akan disentuh dua kali.
+
+## VV — KELAS CACAT BARU: FUNGSI KEBETULAN (25 Agu 2026)
+
+### Kerusakan yang DIAM
+
+Baris peringatan stok per Work Order ternyata **satu-satunya hal yang membuat Work Order tampil "Terhambat"**. Mencabutnya akan membuat WO yang bahannya kurang tampil **"Siap Mulai"** — dan **tidak ada satu pun hal yang gagal atau berwarna merah** saat itu terjadi.
+
+Ini bukan kerusakan yang berteriak, melainkan **kerusakan yang DIAM**.
+
+> **ATURAN: sebelum mencabut sesuatu, cari tahu apa lagi yang bergantung padanya SECARA TIDAK SENGAJA.**
+>
+> Sebuah baris data bisa punya **dua fungsi**: yang **dimaksudkan**, dan yang **kebetulan**. Yang kebetulan **tidak tercatat di mana pun**, dan hilangnya **tidak menghasilkan galat**.
+
+### Urutan yang benar, sebagai contohnya
+
+1. **Pengganti dibangun dulu** — `work_orders_readiness` diubah menghitung kekurangan bahan langsung dari `bom_lines` dan `lots`, dengan kolom baru `kekurangan_bahan`.
+2. **Dibuktikan lewat test** — `tests/kesiapan_wo_dari_data.test.ts` menghapus SELURUH baris peringatan lebih dulu, lalu memastikan kesiapannya tetap terbaca `blocked`; dan tetap `ready` untuk yang bahannya cukup, jadi penggantinya tidak memblokir semua orang.
+3. **Baru yang lama dicabut** — dan yang masih terbuka ditutup sekali lewat migrasi.
+
+**Yang membuat urutan ini bukan sekadar kehati-hatian**: langkah 2 adalah satu-satunya hal yang membedakan "penggantinya sudah ditulis" dari "penggantinya bekerja". Tanpa itu, langkah 3 menghasilkan lubang yang baru ketahuan berbulan-bulan kemudian, saat seseorang memulai produksi yang bahannya tidak ada.
+
+### Versi migrasi yang TERCATAT tanpa PERNAH TERPASANG
+
+Ditemukan saat memeriksa apakah CI bisa ikut tertinggal migrasi. Project CI mencatat versi `20260828710000` di `supabase_migrations.schema_migrations`, padahal isinya **tidak pernah berhasil dijalankan** — migrasinya gagal parse, lalu baris versinya tetap ditulis.
+
+Akibatnya persis kebalikan dari gunanya: **pengawas migrasi akan berkata "sudah lengkap" untuk struktur yang tidak ada.**
+
+**ATURAN**: baris versi ditulis **HANYA setelah migrasinya benar-benar terpasang**, tidak pernah sebelum atau berbarengan. Skrip penerap yang dipakai sesi ini sudah begitu (`apply → bila berhasil → catat`); yang salah adalah pencatatan manual di luar skrip itu.
+
+## UU — BLOK KK: SETELAN KE-18, PENJAGA YANG MENUDUH SALAH, DAN BASIS UJI YANG KETINGGALAN 92 MIGRASI (25 Agu 2026)
+
+### MST-27 — ambang stok minimum kini TIGA LAPIS
+
+Setelan ke-18 lahir: **`default_min_stock_percent`** — persen ambang stok yang berlaku untuk seluruh item perusahaan, bisa ditimpa per item.
+
+Urutan ambang efektif, ditulis di SATU tempat (`tentukanAmbang` di `src/features/mrp/stockThreshold.ts`):
+
+1. `items.min_stock_percent` — persen khusus item itu
+2. `default_min_stock_percent` — persen bawaan perusahaan (BARU)
+3. `items.min_stock_level` — angka mutlak, warisan
+
+**Alasan lapis tengah ditambahkan** (keputusan pemilik produk, KK.3): kolom persen per item sudah lama ada dan **tidak pernah sekali pun diisi**. Isian yang harus diisi ratusan kali tidak akan diisi — dan itu bukan ramalan, itu yang sudah terjadi.
+
+`memengaruhiHistoris: true`, jadi ia bertanggal berlaku seperti 17 setelan lain. Alasannya bukan kehati-hatian umum: angka ini mengubah **arti peringatan**, bukan tampilannya.
+
+**Urutan tiga lapis itu TERLIHAT DI LAYAR, bukan cuma di kode** — syarat yang diminta aturan "field yang saling membatalkan":
+- kolom persen: *"Dikosongkan berarti memakai persen bawaan perusahaan, yaitu 20%."*
+- kolom angka mutlak: *"Diabaikan — persen bawaan perusahaan 20% yang dipakai."*
+- panel detail item: *"20% dari total yang pernah masuk (persen bawaan perusahaan)"*
+
+**Perusahaan yang belum mengisinya berperilaku PERSIS seperti sebelumnya** — nol peringatan baru menyala diam-diam. Ada test khusus untuk itu.
+
+### Penjaga kebocoran identifier MENUDUH SALAH untuk ketiga kalinya — dan sebabnya migrasi Carbon
+
+`tests/ui_raw_leak_watchdog.test.ts` menuduh `value={docForm.doc_type}` di Master Item sebagai kebocoran enum mentah ke pengguna. Bukan kebocoran: itu nilai kontrol `<CarbonSelect>`, sedangkan teks yang tampil datang dari `text={t.label}` pada pilihannya.
+
+Penjaga itu SUDAH punya pengecualian untuk `<Select value={...}>`. Yang membuatnya meleset dua hal, keduanya lahir dari migrasi Carbon:
+
+1. komponennya kini diimpor bernama lain — `<CarbonSelect>` tidak mengandung substring `<select`;
+2. `labelText` sekarang berisi JSX berbaris-baris, jadi pembuka elemennya jauh lebih dari **tiga baris** di atas `value={...}` — dan jendela pencariannya cuma tiga baris.
+
+**Yang diperbaiki bukan memperlebar jendelanya** — itu justru akan menutupi kebocoran sungguhan. Yang benar: cari **pembuka elemen terdekat ke atas dengan lekukan LEBIH DANGKAL** daripada barisnya (atribut selalu lebih menjorok daripada elemen pemiliknya), lalu nilai elemen itu.
+
+Dibuktikan DUA ARAH: `<TextInput value={item.status}>` palsu yang disisipkan sengaja **tetap tertangkap**, lalu hijau lagi setelah dicabut.
+
+### Test yang menulis `user_id: 1` — angka milik perusahaan lain
+
+`tests/ai_project_dashboard.test.ts` menulis `answered_by: 1, confirmed_by: 1` saat mengonfirmasi satu istilah Kamus. Angka 1 itu ditulis langsung dan menunjuk pengguna milik **perusahaan lain**.
+
+Di database yang kebetulan punya `user_id` 1, tulisannya lolos dan test hijau. Di database yang tidak, tulisannya **ditolak kunci asing** — dan karena test tidak memeriksa galatnya, yang terlihat adalah *"progres 0%"*, yang terbaca seperti cacat perhitungan progres. **Yang gagal sebenarnya tulisan test-nya sendiri.**
+
+Diperbaiki dua hal sekaligus, dan yang kedua yang penting: memakai id pengguna milik company fixture-nya, **DAN memeriksa galatnya**. Tulisan yang tidak diperiksa adalah tulisan yang belum tentu terjadi.
+
+### Basis data uji lokal ternyata KETINGGALAN 92 MIGRASI
+
+Menjalankan seluruh test lokal memberi **11 kegagalan**, dan sembilan di antaranya **sama sekali bukan soal kode**: project Supabase yang dipakai `.env.staging.local` (`nclkepwlsgmfbslgsajq`) berhenti di 171 migrasi, sementara repo sudah 263. Tabel `company_settings_history` bahkan belum ada di sana, jadi halaman Setelan menjawab 500 dan empat test lot kedaluwarsa gagal karena strukturnya memang belum ada.
+
+Ke-92 migrasi diterapkan berurutan lewat Management API; **nol gagal**.
+
+**PELAJARAN untuk sesi berikutnya**: sebelum menyimpulkan "ada kemunduran" dari test lokal yang merah, **periksa dulu berapa migrasi yang tertinggal di project uji**. Kegagalan yang berasal dari struktur yang belum ada terlihat persis seperti kegagalan yang berasal dari kode yang salah.
+
+### GDG-10 — satu peringatan per bahan, dan cacat yang hanya muncul saat DIJALANKAN
+
+Peringatan stok dan kekurangan bahan untuk produksi kini menjadi **satu peringatan per bahan** yang menyebut **seluruh** sebab yang menyala. Bila kedua sebab BERTENTANGAN — stok menipis menurut persen tapi masih cukup untuk produksi yang berjalan, atau sebaliknya — kepalanya berbunyi **"PERIKSA DULU"**, bukan "perlu dipesan".
+
+Bentuk kalimatnya, diambil dari test yang benar-benar berjalan:
+
+> `GBG-GULA — perlu dipesan. Sisa 80 kg, di bawah ambang 200 kg, DAN kurang 40 kg untuk 1 perintah produksi yang sedang berjalan.`
+
+**DUA cacat yang lolos typecheck, lolos pembacaan, dan hanya muncul saat test-nya dijalankan sungguhan:**
+
+1. **Bahan tanpa ambang tersaring keluar sebelum sempat dinilai.** Penyaringan kandidat lama hanya meloloskan item yang punya ambang, jadi bahan yang kurang untuk produksi tapi tidak punya angka minimum tidak pernah berbunyi di mana pun. Kedua sebab berdiri sendiri; tidak adanya ambang tidak boleh membungkam sebab yang lain.
+
+2. **Peringatan yang sudah terbuka TIDAK PERNAH BISA DITUTUP.** Begitu sebabnya hilang, itemnya keluar dari daftar yang diperiksa — sehingga tidak ada satu pun jalur yang sempat menyimpulkan "sudah aman". Peringatannya menggantung selamanya di layar orang gudang. Ditemukan oleh test yang MEMBATALKAN Work Order lalu memeriksa apakah peringatannya benar-benar tutup, bukan oleh membaca kodenya.
+
+Cacat kedua bentuknya persis kelas yang sudah dicatat: **yang salah bukan perhitungannya, melainkan siapa yang sempat dihitung.**
+
+**SUDAH DIPUTUSKAN di sesi yang sama** — lihat bagian berikutnya: peringatan per Work Order dicabut, dan peringatan gabungan menyebut perintah produksinya.
+
+### Keputusan pemilik produk: gabungkan, DAN sebut perintah produksinya
+
+Ditanyakan dan dijawab di sesi yang sama. Peringatan `material_shortage` **per Work Order** **DICABUT**; peringatan gabungan per bahan kini menyebut sendiri perintah produksi mana yang tertahan.
+
+Work Order **tidak punya nomor** di sistem ini, jadi yang dipakai menyebutnya: **nomor batch produksinya** bila sudah ada, kalau belum **kode produk + kuantitas rencana**. Menyebut `work_order_id` mentah bukan pilihan — itu identifier internal, bukan sesuatu yang pernah diucapkan orang di lantai produksi. Disebut maksimal tiga, sisanya dihitung: `(B1, B2, B3, dan 2 lagi)`.
+
+**LUBANG YANG NYARIS TIDAK BERBUNYI, dan inilah bagian terpentingnya.** Baris peringatan itu ternyata **bukan cuma pemberitahuan**: selama ini ia satu-satunya hal yang membuat sebuah Work Order tampil **"Terhambat"** — `work_orders_readiness` menyatakan `blocked` bila ada peringatan terbuka yang menunjuk `work_order_id`. Mencabutnya lebih dulu akan membuat Work Order yang bahannya kurang tampil **"Siap Mulai"**, dan **tidak ada satu pun yang gagal atau berwarna merah** saat itu terjadi.
+
+Urutan yang dipakai, persis seperti aturan "pengaman lama dicabut hanya setelah penggantinya terbukti":
+
+1. View diubah lebih dulu supaya menghitung kekurangan bahan **langsung dari `bom_lines` dan `lots`** (kolom baru `kekurangan_bahan`).
+2. `tests/kesiapan_wo_dari_data.test.ts` membuktikan kesiapan tetap terbaca `blocked` **dengan nol baris peringatan di tabel** — dan tetap `ready` untuk yang bahannya cukup, jadi penggantinya tidak memblokir semua orang.
+3. **Baru setelah itu** peringatannya dicabut, dan yang masih terbuka ditutup sekali lewat migrasi.
+
+Efek samping yang ikut ditutup: layar Work Order dulu berkata *"terhambat — ada N peringatan terbuka"*. Dengan sumber kedua ini, N bisa **nol** sementara WO-nya memang terhambat — kalimat yang benar secara angka dan kosong secara arti. Sekarang ia berkata bahannya belum cukup.
+
+**Beda stok yang DISENGAJA**: kesiapan Work Order memakai stok **per pabrik** (satu WO hanya bisa memakai bahan di pabriknya sendiri); peringatan bahan memakai stok **lintas pabrik** (yang dinilai bahannya, dan bahan di gudang sebelah tetap milik perusahaan). Dua pertanyaan berbeda, bukan ketidakkonsistenan.
+
+### Pengawasnya sendiri hampir jadi pengaman yang tidak berbunyi
+
+Pengawas migrasi tertinggal ditulis membaca `supabase_migrations.schema_migrations` langsung. Skema itu **tidak diekspos PostgREST**, jadi pembacaannya gagal, dan versi pertama pengawas ini memilih **memberi peringatan lalu lanjut** — artinya ia LOLOS tanpa memeriksa apa pun.
+
+Yang menemukannya bukan membaca kodenya, melainkan **mengujinya sengaja**: satu berkas migrasi palsu ditaruh di repo supaya pengawasnya HARUS merah. Ia tetap hijau.
+
+Diperbaiki dengan `public.daftar_migrasi_terpasang()` (SECURITY DEFINER, hanya baca, hanya `service_role`), dan pengawasnya kini **gagal keras** bila fungsi itu sendiri tidak ada — sebab fungsi itu lahir dari sebuah migrasi, jadi ketiadaannya sudah membuktikan project uji tertinggal.
+
+**Ini contoh kelima dari kelas "berhasil tanpa berlaku"**, dan yang pertama di mana korbannya adalah pengawas — bukan tampilan.
+
+### Migrasi gagal tiga kali karena kurang SATU kurung penutup
+
+`values ( ... concat_ws(...) ');` — yang ditutup cuma `concat_ws`, sedangkan `values (` dibiarkan terbuka. Postgres menjawab **"unexpected end of function definition at end of input"** sambil menunjuk baris `end $mig$;`, yaitu **tempat yang benar-benar salah**: blok DO-nya utuh, kurungnya yang tidak.
+
+Pesan galatnya menunjuk ujung berkas, jadi tiga tebakan pertama semuanya salah alamat (dikira dollar-quote, dikira pemisah statement CLI, dikira karakter aneh di teks). **Yang menemukannya adalah membelah blok itu jadi potongan-potongan kecil dan menjalankan tiap potongan** — bukan membacanya lebih teliti.
+
 ## TT — PERBAIKAN YANG MENYISIR SEBAGIAN (25 Agu 2026)
 
 ### Apa yang terjadi

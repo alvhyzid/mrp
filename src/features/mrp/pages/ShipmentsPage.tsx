@@ -1,17 +1,44 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import type { ColumnDef } from '@tanstack/react-table';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { DataTable } from '@/components/ui/data-table';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import {
+  Button,
+  ComposedModal,
+  DataTable,
+  DataTableSkeleton,
+  Dropdown,
+  FileUploaderButton,
+  InlineNotification,
+  ModalBody,
+  ModalFooter,
+  ModalHeader,
+  NumberInput,
+  Pagination,
+  StructuredListBody,
+  StructuredListCell,
+  StructuredListRow,
+  StructuredListWrapper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableExpandHeader,
+  TableExpandRow,
+  TableExpandedRow,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableToolbar,
+  TableToolbarContent,
+  TableToolbarSearch,
+  Tag,
+  TextInput
+} from '@carbon/react';
+import { Camera } from '@carbon/icons-react';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
 import { canManageShipments } from '@/lib/roles';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 import { ConfirmAndSignModal } from '@/features/signatures';
@@ -26,11 +53,13 @@ const SHIPMENT_SIGN_CONFIRMATION_TEXT = 'Sudah di cek dan tambahkan tanda tangan
 // untuk delivered ("barang sudah sampai ke penerima"), lebih sesuai arti kata
 // sehari-hari yang diminta user (17 Agu 2026).
 const statusLabels: Record<string, string> = { draft: 'Draft', shipped: 'Di Proses', delivered: 'Terkirim', cancelled: 'Batal' };
-const statusBadgeVariant: Record<string, 'secondary' | 'warning' | 'success' | 'critical'> = {
-  draft: 'secondary',
-  shipped: 'warning',
-  delivered: 'success',
-  cancelled: 'critical'
+/// Warna Tag mengikuti ARTI. "Terkirim" ungu, bukan kuning: barang sudah jalan — itu
+/// kemajuan, bukan peringatan. Hanya "dibatalkan" yang merah.
+const statusWarnaTag: Record<string, 'gray' | 'purple' | 'green' | 'red'> = {
+  draft: 'gray',
+  shipped: 'purple',
+  delivered: 'green',
+  cancelled: 'red'
 };
 
 type SoLine = {
@@ -133,6 +162,13 @@ export default function ShipmentsPage() {
   const [createMessage, setCreateMessage] = useState('');
 
   const [detailShipmentId, setDetailShipmentId] = useState<number | null>(null);
+
+  // Pencarian, saringan, dan pembagian halaman: Carbon DataTable tidak membawanya.
+  const [cari, setCari] = useState('');
+  const [saringStatus, setSaringStatus] = useState<string>('semua');
+  const [halaman, setHalaman] = useState(1);
+  const [perHalaman, setPerHalaman] = useState(15);
+  const adaSaringan = cari.trim() !== '' || saringStatus !== 'semua';
   const [statusActionState, setStatusActionState] = useState<Record<number, 'idle' | 'saving'>>({});
   const [statusMessage, setStatusMessage] = useState<Record<number, { text: string; error: boolean }>>({});
 
@@ -416,183 +452,170 @@ export default function ShipmentsPage() {
     await Promise.all([loadSalesOrders(), loadShipments()]);
   };
 
-  const soColumns = useMemo<ColumnDef<SalesOrder>[]>(
-    () => [
-      { id: 'so_number', header: 'No. SO', cell: ({ row }) => <span className="font-medium text-foreground">{row.original.so_number}</span> },
-      { id: 'customer', header: 'Client', cell: ({ row }) => row.original.customer_name ?? '-' },
-      { id: 'plant', header: 'Lokasi', cell: ({ row }) => row.original.production_plant_name ?? '-' },
-      {
-        id: 'remaining',
-        header: () => (
-          <span className="flex items-center gap-1">
-            Sisa Qty Belum Terkirim
-            <ProvenanceInfoButton
-              label="Sisa Qty Belum Terkirim"
-              envelope={{
-                formula: 'qty_ordered (baris Sales Order) − qty_shipped (total sudah dikirim lewat surat jalan berstatus terkirim/diterima). Dihitung server-side per baris SO, bukan diperkirakan.',
-                inputs: [{ label: 'Sumber', value: 'listSalesOrders / listShipments' }]
-              }}
-            />
-          </span>
-        ),
-        cell: ({ row }) => (
-          <div className="flex flex-col gap-0.5 text-xs">
-            {row.original.lines
-              .filter((line) => line.qty_remaining_to_ship > 0)
-              .map((line) => (
-                <span key={line.sales_order_line_id}>
-                  {line.item_code}: <span className="font-medium text-foreground">{formatNumberId(line.qty_remaining_to_ship, 2)}</span> {line.item_base_uom} (dari {formatNumberId(line.qty_ordered, 2)})
-                </span>
-              ))}
-          </div>
-        )
-      },
-      {
-        id: 'actions',
-        header: 'Aksi',
-        cell: ({ row }) => (
-          <Button size="sm" onClick={() => (creatingForSoId === row.original.sales_order_id ? closeCreateForm() : openCreateForm(row.original))}>
-            {creatingForSoId === row.original.sales_order_id ? 'Tutup Form' : 'Buat Pengiriman'}
-          </Button>
-        )
-      }
-    ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [creatingForSoId, openCreateForm]
+
+  // ==========================================================================
+  // TABEL — cetakan Master Item
+  // ==========================================================================
+  const kolomSo = [
+    { key: 'so_number', header: 'No. SO' },
+    { key: 'customer', header: 'Klien' },
+    { key: 'plant', header: 'Lokasi' },
+    { key: 'remaining', header: 'Sisa qty belum terkirim' },
+    { key: 'aksi', header: 'Aksi' }
+  ];
+
+  const kolomKirim = [
+    { key: 'shipment_number', header: 'No. surat jalan' },
+    { key: 'customer', header: 'Klien' },
+    { key: 'status', header: 'Status' },
+    { key: 'delivery_address', header: 'Alamat tujuan' },
+    { key: 'created_at', header: 'Dibuat' }
+  ];
+
+  const kirimTersaring = useMemo(() => {
+    const kata = cari.trim().toLowerCase();
+    return shipments.filter((s) => {
+      if (saringStatus !== 'semua' && s.status !== saringStatus) return false;
+      if (!kata) return true;
+      return `${s.shipment_number} ${s.customer_name ?? ''} ${s.so_number ?? ''}`.toLowerCase().includes(kata);
+    });
+  }, [shipments, cari, saringStatus]);
+
+  const kirimHalamanIni = useMemo(() => kirimTersaring.slice((halaman - 1) * perHalaman, halaman * perHalaman), [kirimTersaring, halaman, perHalaman]);
+  const kirimById = useMemo(() => new Map(shipments.map((s) => [String(s.shipment_id), s])), [shipments]);
+
+  const barisKirim = useMemo(
+    () =>
+      kirimHalamanIni.map((s) => ({
+        id: String(s.shipment_id),
+        shipment_number: s.shipment_number,
+        customer: s.customer_name ?? '',
+        status: statusLabels[s.status] ?? s.status,
+        delivery_address: s.delivery_address,
+        created_at: s.created_at
+      })),
+    [kirimHalamanIni]
   );
 
-  const shipmentColumns = useMemo<ColumnDef<Shipment>[]>(
-    () => [
-      {
-        id: 'shipment_number',
-        header: 'No. Surat Jalan',
-        cell: ({ row }) => (
-          <div className="flex flex-col">
-            <span className="font-medium text-foreground">{row.original.shipment_number}</span>
-            <span className="text-xs text-muted-foreground">{row.original.so_number}</span>
+  const isiSelKirim = (s: Shipment, kunci: string) => {
+    switch (kunci) {
+      case 'shipment_number':
+        return (
+          <div className="kirim-sel-nomor">
+            <span className="kirim-sel-nomor__utama">{s.shipment_number}</span>
+            <span className="kirim-sel-nomor__so">{s.so_number}</span>
           </div>
-        )
-      },
-      { id: 'customer', header: 'Client', cell: ({ row }) => row.original.customer_name ?? '-' },
-      { accessorKey: 'status', header: 'Status', cell: ({ row }) => <Badge variant={statusBadgeVariant[row.original.status] ?? 'secondary'}>{statusLabels[row.original.status] ?? row.original.status}</Badge> },
-      { id: 'delivery_address', header: 'Alamat Tujuan', cell: ({ row }) => <span className="text-xs">{row.original.delivery_address}</span> },
-      { id: 'created_at', header: 'Dibuat', cell: ({ row }) => new Date(row.original.created_at).toLocaleDateString('id-ID') },
-      {
-        id: 'actions',
-        header: 'Aksi',
-        cell: ({ row }) => {
-          const shipment = row.original;
-          return (
-            <Button size="sm" variant="outline" onClick={() => setDetailShipmentId((current) => (current === shipment.shipment_id ? null : shipment.shipment_id))}>
-              {detailShipmentId === shipment.shipment_id ? 'Tutup' : 'Detail'}
-            </Button>
-          );
-        }
-      }
-    ],
-    [detailShipmentId]
-  );
+        );
+      case 'customer':
+        return s.customer_name ?? <span className="halaman__redup">—</span>;
+      case 'status':
+        return <Tag type={statusWarnaTag[s.status] ?? 'gray'}>{statusLabels[s.status] ?? s.status}</Tag>;
+      case 'delivery_address':
+        return s.delivery_address;
+      case 'created_at':
+        return new Date(s.created_at).toLocaleDateString('id-ID');
+      default:
+        return null;
+    }
+  };
 
-  // Panel detail per baris (pola Carbon "Expandable Data Table") — tampil LANGSUNG di
-  // bawah baris terkait di "Daftar Pengiriman" saat tombol "Detail" diklik, berisi semua
-  // informasi hasil "Buat Pengiriman" + aksi lanjutan (lihat/cetak Surat Jalan, proses
-  // pengiriman/tandai diterima) di 1 tempat, bukan modal terpisah.
   const renderShipmentDetail = (shipment: Shipment) => {
     const saving = statusActionState[shipment.shipment_id] === 'saving';
     return (
-      <div className="flex flex-col gap-4 text-sm">
-        <div className="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-3">
-          <div>
-            <span className="text-muted-foreground">No. Sales Order:</span> <span className="font-medium text-foreground">{shipment.so_number}</span>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Client:</span> <span className="font-medium text-foreground">{shipment.customer_name}</span>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Tanggal:</span> <span className="font-medium text-foreground">{new Date(shipment.shipment_date).toLocaleDateString('id-ID')}</span>
-          </div>
-          <div className="col-span-2 sm:col-span-3">
-            <span className="text-muted-foreground">Alamat Tujuan:</span> <span className="font-medium text-foreground">{shipment.delivery_address}</span>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Penerima:</span> {shipment.recipient_name || '-'} {shipment.recipient_phone ? `(${shipment.recipient_phone})` : ''}
-          </div>
-          <div>
-            <span className="text-muted-foreground">Kendaraan:</span> {shipment.vehicle_number || '-'}
-          </div>
-          <div>
-            <span className="text-muted-foreground">Sopir:</span> {shipment.driver_name || '-'}
-          </div>
-        </div>
+      <div className="kirim-detail">
+        <StructuredListWrapper isCondensed aria-label={`Rincian ${shipment.shipment_number}`}>
+          <StructuredListBody>
+            {[
+              ['No. Sales Order', shipment.so_number],
+              ['Klien', shipment.customer_name],
+              ['Tanggal', new Date(shipment.shipment_date).toLocaleDateString('id-ID')],
+              ['Alamat tujuan', shipment.delivery_address],
+              ['Penerima', `${shipment.recipient_name || '—'}${shipment.recipient_phone ? ` (${shipment.recipient_phone})` : ''}`],
+              ['Kendaraan', shipment.vehicle_number || '—'],
+              ['Sopir', shipment.driver_name || '—']
+            ].map(([label, nilai]) => (
+              <StructuredListRow key={String(label)}>
+                <StructuredListCell noWrap>{label}</StructuredListCell>
+                <StructuredListCell>{nilai}</StructuredListCell>
+              </StructuredListRow>
+            ))}
+          </StructuredListBody>
+        </StructuredListWrapper>
 
-        <div className="overflow-hidden rounded-md border bg-background">
-          <table className="w-full text-data">
-            <thead>
-              <tr className="border-b">
-                <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Item</th>
-                <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Qty Dikirim</th>
-                <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Lot</th>
+        <Table size="lg">
+          <TableHead>
+            <TableRow>
+              <TableHeader>Item</TableHeader>
+              <TableHeader>Qty dikirim</TableHeader>
+              <TableHeader>Lot</TableHeader>
+              {/* Dua kolom terakhir hanya ada setelah pengiriman diproses — sebelum itu
+                  angkanya belum berarti apa-apa. Kepala dan isi memakai kondisi yang SAMA
+                  supaya jumlah kolomnya tidak pernah berbeda. */}
+              {shipment.status !== 'draft' ? <TableHeader>Stok lot saat ini</TableHeader> : null}
+              {shipment.status !== 'draft' ? <TableHeader>Total sudah dikirim (SO ini)</TableHeader> : null}
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {shipment.lines.map((line) => (
+              <TableRow key={line.shipment_line_id}>
+                <TableCell>
+                  {line.item_code} — {line.item_name}
+                </TableCell>
+                <TableCell>
+                  {formatNumberId(line.qty_shipped, 2)} {line.item_base_uom}
+                </TableCell>
+                <TableCell>
+                  {line.lot_number}
+                  {line.lot_expiry_date ? ` (kedaluwarsa ${new Date(line.lot_expiry_date).toLocaleDateString('id-ID')})` : ''}
+                </TableCell>
                 {shipment.status !== 'draft' ? (
-                  <>
-                    <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Stok Lot Saat Ini</th>
-                    <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Total Sudah Dikirim (SO ini)</th>
-                  </>
+                  <TableCell>
+                    {line.lot_quantity_on_hand ?? '—'} {line.item_base_uom}
+                  </TableCell>
                 ) : null}
-              </tr>
-            </thead>
-            <tbody>
-              {shipment.lines.map((line) => (
-                <tr key={line.shipment_line_id} className="border-b last:border-0">
-                  <td className="px-3 py-1.5">
-                    {line.item_code} — {line.item_name}
-                  </td>
-                  <td className="px-3 py-1.5">
-                    {formatNumberId(line.qty_shipped, 2)} {line.item_base_uom}
-                  </td>
-                  <td className="px-3 py-1.5">
-                    {line.lot_number}
-                    {line.lot_expiry_date ? ` (kadaluarsa ${new Date(line.lot_expiry_date).toLocaleDateString('id-ID')})` : ''}
-                  </td>
-                  {shipment.status !== 'draft' ? (
-                    <>
-                      <td className="px-3 py-1.5">
-                        {line.lot_quantity_on_hand ?? '-'} {line.item_base_uom}
-                      </td>
-                      <td className="px-3 py-1.5">
-                        {line.so_line_qty_shipped ?? '-'} / {line.so_line_qty_ordered ?? '-'} {line.item_base_uom}
-                      </td>
-                    </>
-                  ) : null}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                {shipment.status !== 'draft' ? (
+                  <TableCell>
+                    {line.so_line_qty_shipped ?? '—'} / {line.so_line_qty_ordered ?? '—'} {line.item_base_uom}
+                  </TableCell>
+                ) : null}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
 
         {shipment.status !== 'draft' && shipment.dispatch_photo_url ? (
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Foto Bukti Pengiriman</span>
+          <div className="kirim-foto">
+            <span className="cds--label">Foto bukti pengiriman</span>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={shipment.dispatch_photo_url} alt="Foto bukti pengiriman" className="h-40 w-fit rounded-md border object-contain" />
+            <img src={shipment.dispatch_photo_url} alt="Foto bukti pengiriman" className="kirim-foto__gambar" />
           </div>
         ) : null}
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant="outline" asChild>
-            <Link href={`/shipments/${shipment.shipment_id}/surat-jalan`} target="_blank" rel="noopener noreferrer">
-              Lihat / Cetak Surat Jalan
-            </Link>
-          </Button>
-          {shipment.status === 'draft' ? <Button size="sm" onClick={() => openDispatchModal(shipment.shipment_id)}>Proses Pengiriman</Button> : null}
+        {statusMessage[shipment.shipment_id]?.text ? (
+          <InlineNotification
+            kind={statusMessage[shipment.shipment_id].error ? 'error' : 'success'}
+            lowContrast
+            hideCloseButton
+            title={statusMessage[shipment.shipment_id].error ? 'Gagal' : 'Berhasil'}
+            subtitle={statusMessage[shipment.shipment_id].text}
+          />
+        ) : null}
+
+        <div className="kirim-detail__aksi">
+          <Link href={`/shipments/${shipment.shipment_id}/surat-jalan`} target="_blank" rel="noopener noreferrer" className="cds--link">
+            Lihat / cetak surat jalan
+          </Link>
+          {shipment.status === 'draft' ? (
+            <Button size="sm" onClick={() => openDispatchModal(shipment.shipment_id)}>
+              Proses pengiriman
+            </Button>
+          ) : null}
           {shipment.status === 'shipped' ? (
             <Button size="sm" disabled={saving} onClick={() => handleTransition(shipment, 'delivered')}>
-              {saving ? 'Memproses...' : 'Tandai Diterima'}
+              {saving ? 'Memproses...' : 'Tandai diterima'}
             </Button>
           ) : null}
         </div>
-        {statusMessage[shipment.shipment_id]?.text ? (
-          <span className={`text-xs ${statusMessage[shipment.shipment_id].error ? 'text-destructive' : 'text-success-subtle-foreground'}`}>{statusMessage[shipment.shipment_id].text}</span>
-        ) : null}
       </div>
     );
   };
@@ -602,226 +625,372 @@ export default function ShipmentsPage() {
 
   if (checkingAccess) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="px-6 text-center text-sm text-muted-foreground">Memuat...</div>
-      </main>
+      <div className="halaman">
+        <DataTableSkeleton columnCount={5} rowCount={6} showHeader showToolbar />
+      </div>
     );
   }
 
   if (accessDenied) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="max-w-3xl px-6">
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em] text-destructive">Akses Ditolak</CardDescription>
-              <CardTitle className="text-2xl">Sesi tidak valid atau role Anda tidak berwenang</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <p className="text-sm text-muted-foreground">Halaman Pengiriman hanya untuk Warehouse Manager/Staff, PPIC Manager, dan leadership.</p>
-              <Button onClick={() => router.push('/login?redirectTo=/shipments')} className="w-fit">
-                Ke Halaman Login
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+      <div className="halaman">
+        <KepalaHalaman remah={[]} judul="Pengiriman" />
+        <InlineNotification
+          kind="error"
+          lowContrast
+          hideCloseButton
+          title="Akses ditolak"
+          subtitle="Halaman Pengiriman hanya untuk Manajer/Staf Gudang, Manajer PPIC, dan pimpinan."
+        />
+        <Button className="kirim-tombol-masuk" onClick={() => router.push('/login?redirectTo=/shipments')}>
+          Ke halaman masuk
+        </Button>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-muted/30 py-10">
-      <div className="flex w-full flex-col gap-6 px-6">
-        <Card>
-          <CardHeader>
-            <CardDescription className="uppercase tracking-[0.2em]">Warehouse / PPIC</CardDescription>
-            <CardTitle className="text-2xl">Pengiriman</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <p className="text-sm text-muted-foreground">Sales Order dengan sisa qty yang belum terkirim penuh. Pilih "Buat Pengiriman" untuk membuat surat jalan baru (boleh parsial).</p>
-            {soError ? <p className="text-sm text-destructive">{soError}</p> : null}
-            {soLoading ? <p className="text-sm text-muted-foreground">Memuat Sales Order...</p> : <DataTable columns={soColumns} data={soWithRemaining} emptyMessage="Tidak ada Sales Order dengan sisa qty belum terkirim." />}
+    <div className="halaman">
+      <KepalaHalaman
+        remah={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Supply Chain' }, { label: 'Shipments' }]}
+        judul="Pengiriman"
+        pengantar={`${kirimTersaring.length} surat jalan${adaSaringan ? ` dari ${shipments.length} yang tercatat` : ' tercatat'} — ${soWithRemaining.length} Sales Order masih punya sisa yang belum terkirim.`}
+      />
 
-            {creatingForSo ? (
-              <Dialog open={createStep === 'form'} onOpenChange={(open) => (!open ? closeCreateForm() : undefined)}>
-                <DialogContent className="max-w-3xl">
-                <DialogHeader>
-                  <DialogTitle>
-                    Buat Pengiriman — {creatingForSo.so_number} ({creatingForSo.customer_name})
-                  </DialogTitle>
-                  <DialogDescription>Langkah 1 dari 2 — isi baris item &amp; detail pengiriman, lalu lanjut ke preview Surat Jalan.</DialogDescription>
-                </DialogHeader>
-                <div className="flex max-h-[65vh] flex-col gap-6 overflow-y-auto pr-1">
-                  <section className="flex flex-col gap-2">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Detail Sales Order</h3>
-                    <div className="rounded-md border p-3 text-sm">
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                        <div>
-                          <span className="text-muted-foreground">No. SO:</span> <span className="font-medium text-foreground">{creatingForSo.so_number}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Client:</span> <span className="font-medium text-foreground">{creatingForSo.customer_name}</span>
-                        </div>
-                        <div className="col-span-2">
-                          <span className="text-muted-foreground">Lokasi Produksi:</span> <span className="font-medium text-foreground">{creatingForSo.production_plant_name}</span>
-                        </div>
-                      </div>
-                      <div className="mt-2 flex flex-col gap-1 border-t pt-2">
-                        {creatingForSo.lines.map((line) => (
-                          <div key={line.sales_order_line_id} className="flex flex-wrap items-baseline justify-between gap-x-3 text-xs">
-                            <span className="text-muted-foreground">
-                              {line.item_code} — {line.item_name}
-                            </span>
-                            <span>
-                              Sudah dikirim <span className="font-medium text-foreground">{formatNumberId(line.qty_shipped, 2)}</span> / {formatNumberId(line.qty_ordered, 2)} {line.item_base_uom}
-                              {line.qty_remaining_to_ship > 0 ? (
-                                <span className="text-muted-foreground"> (sisa {formatNumberId(line.qty_remaining_to_ship, 2)})</span>
-                              ) : (
-                                <span className="text-success-subtle-foreground"> (selesai)</span>
-                              )}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </section>
-
-                  <section className="flex flex-col gap-2">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Produk</h3>
-                    <div className="flex flex-col gap-4">
-                      {creatingForSo.lines
+      <h2 className="halaman__subjudul">Sales Order dengan sisa belum terkirim</h2>
+      {soError ? <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal memuat Sales Order" subtitle={soError} /> : null}
+      {soLoading ? (
+        <DataTableSkeleton columnCount={5} rowCount={4} showHeader={false} showToolbar={false} />
+      ) : (
+        <Table size="lg" className="tabel-responsif">
+          <TableHead>
+            <TableRow>
+              {kolomSo.map((k) => (
+                <TableHeader key={k.key}>
+                  {k.header}
+                  {k.key === 'remaining' ? (
+                    <ProvenanceInfoButton
+                      label="Sisa qty belum terkirim"
+                      envelope={{
+                        formula:
+                          'qty_ordered (baris Sales Order) − qty_shipped (total sudah dikirim lewat surat jalan berstatus terkirim/diterima). Dihitung server-side per baris SO, bukan diperkirakan.',
+                        inputs: [{ label: 'Sumber', value: 'listSalesOrders / listShipments' }]
+                      }}
+                    />
+                  ) : null}
+                </TableHeader>
+              ))}
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {soWithRemaining.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={kolomSo.length}>Tidak ada Sales Order dengan sisa qty belum terkirim.</TableCell>
+              </TableRow>
+            ) : (
+              soWithRemaining.map((so) => (
+                <TableRow key={so.sales_order_id}>
+                  <TableCell data-label="No. SO">{so.so_number}</TableCell>
+                  <TableCell data-label="Klien">{so.customer_name ?? '—'}</TableCell>
+                  <TableCell data-label="Lokasi">{so.production_plant_name ?? '—'}</TableCell>
+                  <TableCell data-label="Sisa qty belum terkirim">
+                    <div className="kirim-sisa">
+                      {so.lines
                         .filter((line) => line.qty_remaining_to_ship > 0)
                         .map((line) => (
-                          <div key={line.sales_order_line_id} className="flex flex-col gap-2 rounded-md border p-3">
-                            <div className="text-sm">
-                              <span className="font-medium text-foreground">{line.item_code}</span> <span className="text-muted-foreground">{line.item_name}</span>
-                              <span className="ml-2 text-xs text-muted-foreground">
-                                (Sisa: <span className="font-medium text-foreground">{formatNumberId(line.qty_remaining_to_ship, 2)}</span> {line.item_base_uom})
-                              </span>
-                            </div>
-                            <div className="grid grid-cols-[3fr_1fr] gap-3">
-                              <div>
-                                <label className="mb-1 block text-xs text-muted-foreground">Lot (saran FEFO — bisa diganti)</label>
-                                {lotsLoaded && (lotsByItemId[line.item_id] ?? []).length === 0 ? (
-                                  <p className="text-xs text-destructive">
-                                    Sisa {formatNumberId(line.qty_remaining_to_ship, 2)} {line.item_base_uom} ini masih BELUM DIKIRIM dari pesanan, TAPI stok fisiknya kosong (0 lot tersedia) — tidak bisa dikirim sampai ada barang masuk untuk item ini di lokasi pabrik SO ini.
-                                  </p>
-                                ) : (
-                                <Select
-                                  disabled={!lotsLoaded}
-                                  value={lineInputs[line.sales_order_line_id]?.lot_id ?? ''}
-                                  onValueChange={(value) => setLineInputs((prev) => ({ ...prev, [line.sales_order_line_id]: { ...prev[line.sales_order_line_id], lot_id: value } }))}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder={lotsLoaded ? 'Pilih lot...' : 'Memuat lot...'} />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {(lotsByItemId[line.item_id] ?? []).map((lot) => (
-                                      <SelectItem key={lot.lot_id} value={String(lot.lot_id)}>
-                                        {lot.lot_number} — stok {formatNumberId(lot.quantity_on_hand, 2)} {line.item_base_uom}
-                                        {lot.expiry_date ? ` — kadaluarsa ${new Date(lot.expiry_date).toLocaleDateString('id-ID')}` : ''}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                )}
-                              </div>
-                              <div>
-                                <label className="mb-1 block text-xs text-muted-foreground">Jumlah Kirim</label>
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  step="any"
-                                  disabled={lotsLoaded && (lotsByItemId[line.item_id] ?? []).length === 0}
-                                  value={lineInputs[line.sales_order_line_id]?.qty_shipped ?? ''}
-                                  onChange={(e) => setLineInputs((prev) => ({ ...prev, [line.sales_order_line_id]: { ...prev[line.sales_order_line_id], qty_shipped: e.target.value } }))}
-                                />
-                              </div>
-                            </div>
-                          </div>
+                          <span key={line.sales_order_line_id}>
+                            {line.item_code}: {formatNumberId(line.qty_remaining_to_ship, 2)} {line.item_base_uom} (dari {formatNumberId(line.qty_ordered, 2)})
+                          </span>
                         ))}
                     </div>
-                  </section>
-
-                  <section className="flex flex-col gap-2">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Detail Pengiriman</h3>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <label className="flex flex-col gap-1.5">
-                        <span className="text-sm font-medium text-foreground">Alamat Tujuan (wajib)</span>
-                        <Input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Alamat lengkap tujuan pengiriman" />
-                      </label>
-                      <label className="flex flex-col gap-1.5">
-                        <span className="text-sm font-medium text-foreground">Nama Penerima (opsional)</span>
-                        <Input value={recipientName} onChange={(e) => setRecipientName(e.target.value)} />
-                      </label>
-                      <label className="flex flex-col gap-1.5">
-                        <span className="text-sm font-medium text-foreground">No. HP Penerima (opsional)</span>
-                        <Input value={recipientPhone} onChange={(e) => setRecipientPhone(e.target.value)} />
-                      </label>
-                      <label className="flex flex-col gap-1.5">
-                        <span className="text-sm font-medium text-foreground">Nomor Kendaraan (opsional)</span>
-                        <Input value={vehicleNumber} onChange={(e) => setVehicleNumber(e.target.value)} placeholder="mis. B 1234 XYZ" />
-                      </label>
-                      <label className="flex flex-col gap-1.5">
-                        <span className="text-sm font-medium text-foreground">Nama Sopir (opsional)</span>
-                        <Input value={driverName} onChange={(e) => setDriverName(e.target.value)} />
-                      </label>
-                    </div>
-                  </section>
-                </div>
-
-                <div className="mt-3 flex items-center gap-3">
-                  <Button onClick={() => handleGoToPreview(creatingForSo)}>Lanjut</Button>
-                  <Button variant="outline" onClick={closeCreateForm}>
-                    Batal
-                  </Button>
-                </div>
-                {createMessage ? <p className={`mt-2 text-sm ${createStatus === 'error' ? 'text-destructive' : 'text-success-subtle-foreground'}`}>{createMessage}</p> : null}
-                </DialogContent>
-              </Dialog>
-            ) : null}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardDescription className="uppercase tracking-[0.2em]">Riwayat</CardDescription>
-            <CardTitle className="text-2xl">Daftar Pengiriman</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {shipmentsError ? <p className="text-sm text-destructive">{shipmentsError}</p> : null}
-            {shipmentsLoading ? (
-              <p className="text-sm text-muted-foreground">Memuat pengiriman...</p>
-            ) : (
-              <DataTable
-                columns={shipmentColumns}
-                data={shipments}
-                emptyMessage="Belum ada pengiriman tercatat."
-                getRowId={(s) => String(s.shipment_id)}
-                expandedRowId={detailShipmentId !== null ? String(detailShipmentId) : null}
-                renderExpandedRow={renderShipmentDetail}
-                searchPlaceholder="Cari No. Surat Jalan atau client..."
-                getSearchText={(s) => `${s.shipment_number} ${s.customer_name ?? ''} ${s.so_number ?? ''}`}
-                paginated
-                pageSize={15}
-              />
+                  </TableCell>
+                  <TableCell data-label="Aksi">
+                    <Button size="sm" onClick={() => (creatingForSoId === so.sales_order_id ? closeCreateForm() : openCreateForm(so))}>
+                      {creatingForSoId === so.sales_order_id ? 'Tutup formulir' : 'Buat pengiriman'}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
             )}
-          </CardContent>
-        </Card>
-      </div>
+          </TableBody>
+        </Table>
+      )}
 
-      {/* Langkah 2 wizard — preview Surat Jalan draft + tanda tangan. Dibangun MURNI dari
-          state form lokal (belum ada shipment nyata sampai submit final berhasil). */}
+      <h2 className="halaman__subjudul">Daftar pengiriman</h2>
+      {shipmentsError ? <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal memuat pengiriman" subtitle={shipmentsError} /> : null}
+      {shipmentsLoading ? (
+        <DataTableSkeleton columnCount={5} rowCount={6} showHeader showToolbar />
+      ) : (
+        <>
+          <DataTable rows={barisKirim} headers={kolomKirim} isSortable size="lg">
+            {(rp: any) => (
+              <TableContainer {...rp.getTableContainerProps()}>
+                <TableToolbar>
+                  <TableToolbarContent>
+                    {/* MELIPAT, bukan selalu terbuka — bawaan Carbon, `persistent` tidak dipakai. */}
+                    <TableToolbarSearch
+                      placeholder="Cari nomor surat jalan, klien, atau SO…"
+                      labelText="Cari pengiriman"
+                      onChange={(e: React.ChangeEvent<HTMLInputElement> | '') => {
+                        setCari(typeof e === 'string' ? '' : e.target.value);
+                        setHalaman(1);
+                      }}
+                    />
+                    <Dropdown
+                      id="kirim-saring-status"
+                      size="lg"
+                      className="halaman__saring"
+                      label="Status"
+                      titleText="Status"
+                      hideLabel
+                      items={['semua', ...Object.keys(statusLabels)]}
+                      itemToString={(v: string) => (v === 'semua' ? 'Semua status' : statusLabels[v] ?? v)}
+                      selectedItem={saringStatus}
+                      onChange={({ selectedItem }: { selectedItem: string | null }) => {
+                        setSaringStatus(selectedItem ?? 'semua');
+                        setHalaman(1);
+                      }}
+                    />
+                  </TableToolbarContent>
+                </TableToolbar>
+                <Table {...rp.getTableProps()} className="tabel-responsif">
+                  <TableHead>
+                    <TableRow>
+                      <TableExpandHeader aria-label="Buka rincian pengiriman" />
+                      {rp.headers.map((h: any) => {
+                        const { key, ...sisa } = rp.getHeaderProps({ header: h }) as { key?: string };
+                        void key;
+                        return (
+                          <TableHeader key={h.key} {...sisa} isSortable>
+                            {h.header}
+                          </TableHeader>
+                        );
+                      })}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {rp.rows.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={kolomKirim.length + 1}>
+                          {adaSaringan ? 'Tidak ada pengiriman yang cocok dengan pencarian atau saringan.' : 'Belum ada pengiriman tercatat.'}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      rp.rows.map((row: any) => {
+                        const s = kirimById.get(row.id);
+                        if (!s) return null;
+                        const { key, ...sisaBaris } = rp.getRowProps({ row }) as { key?: string };
+                        void key;
+                        return (
+                          <React.Fragment key={row.id}>
+                            <TableExpandRow
+                              {...sisaBaris}
+                              isExpanded={detailShipmentId === s.shipment_id}
+                              onExpand={() => setDetailShipmentId((kini) => (kini === s.shipment_id ? null : s.shipment_id))}
+                              aria-label={`Rincian ${s.shipment_number}`}
+                            >
+                              {kolomKirim.map((h) => (
+                                <TableCell key={h.key} data-label={h.header}>
+                                  {isiSelKirim(s, h.key)}
+                                </TableCell>
+                              ))}
+                            </TableExpandRow>
+                            <TableExpandedRow colSpan={kolomKirim.length + 1}>
+                              {detailShipmentId === s.shipment_id ? renderShipmentDetail(s) : null}
+                            </TableExpandedRow>
+                          </React.Fragment>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </DataTable>
+
+          <Pagination
+            page={halaman}
+            pageSize={perHalaman}
+            pageSizes={[15, 30, 50]}
+            totalItems={kirimTersaring.length}
+            onChange={({ page, pageSize }: { page: number; pageSize: number }) => {
+              setHalaman(page);
+              setPerHalaman(pageSize);
+            }}
+            backwardText="Halaman sebelumnya"
+            forwardText="Halaman berikutnya"
+            itemsPerPageText="Baris per halaman"
+            itemRangeText={(mulai: number, akhir: number, total: number) => `${mulai}–${akhir} dari ${total} pengiriman`}
+            pageRangeText={(_kini: number, total: number) => `dari ${total} halaman`}
+            pageNumberText="Nomor halaman"
+          />
+        </>
+      )}
+
+      {/* LANGKAH 1 dari 2 — modal BERTAHAP: baris item dan detail pengiriman diisi dulu,
+          konfirmasinya di langkah berikutnya. */}
+      {creatingForSo ? (
+        <ComposedModal open={createStep === 'form'} size="lg" onClose={() => { closeCreateForm(); return true; }}>
+          <ModalHeader
+            label="Langkah 1 dari 2"
+            title={`Buat pengiriman — ${creatingForSo.so_number} (${creatingForSo.customer_name})`}
+            closeModal={closeCreateForm}
+          />
+          <ModalBody hasForm>
+            <div className="kirim-form">
+              <h3 className="halaman__subjudul halaman__subjudul--rapat">Rincian Sales Order</h3>
+              <StructuredListWrapper isCondensed aria-label="Rincian Sales Order">
+                <StructuredListBody>
+                  <StructuredListRow>
+                    <StructuredListCell noWrap>No. SO</StructuredListCell>
+                    <StructuredListCell>{creatingForSo.so_number}</StructuredListCell>
+                  </StructuredListRow>
+                  <StructuredListRow>
+                    <StructuredListCell noWrap>Klien</StructuredListCell>
+                    <StructuredListCell>{creatingForSo.customer_name}</StructuredListCell>
+                  </StructuredListRow>
+                  <StructuredListRow>
+                    <StructuredListCell noWrap>Lokasi produksi</StructuredListCell>
+                    <StructuredListCell>{creatingForSo.production_plant_name}</StructuredListCell>
+                  </StructuredListRow>
+                  {creatingForSo.lines.map((line) => (
+                    <StructuredListRow key={line.sales_order_line_id}>
+                      <StructuredListCell noWrap>
+                        {line.item_code} — {line.item_name}
+                      </StructuredListCell>
+                      <StructuredListCell>
+                        Sudah dikirim {formatNumberId(line.qty_shipped, 2)} / {formatNumberId(line.qty_ordered, 2)} {line.item_base_uom}
+                        {line.qty_remaining_to_ship > 0 ? ` (sisa ${formatNumberId(line.qty_remaining_to_ship, 2)})` : ' (selesai)'}
+                      </StructuredListCell>
+                    </StructuredListRow>
+                  ))}
+                </StructuredListBody>
+              </StructuredListWrapper>
+
+              <h3 className="halaman__subjudul halaman__subjudul--rapat">Produk yang dikirim</h3>
+              {creatingForSo.lines
+                .filter((line) => line.qty_remaining_to_ship > 0)
+                .map((line) => {
+                  const lotKosong = lotsLoaded && (lotsByItemId[line.item_id] ?? []).length === 0;
+                  return (
+                    <div key={line.sales_order_line_id} className="kirim-baris">
+                      <p className="kirim-baris__judul">
+                        {line.item_code} — {line.item_name} · sisa {formatNumberId(line.qty_remaining_to_ship, 2)} {line.item_base_uom}
+                      </p>
+                      {lotKosong ? (
+                        <InlineNotification
+                          kind="error"
+                          lowContrast
+                          hideCloseButton
+                          title="Stok fisiknya kosong"
+                          subtitle={`Sisa ${formatNumberId(line.qty_remaining_to_ship, 2)} ${line.item_base_uom} ini masih BELUM DIKIRIM dari pesanan, tapi tidak ada satu pun lot tersedia — tidak bisa dikirim sampai ada barang masuk untuk item ini di lokasi pabrik SO ini.`}
+                        />
+                      ) : (
+                        <div className="kirim-baris__isi">
+                          <Dropdown
+                            id={`kirim-lot-${line.sales_order_line_id}`}
+                            size="lg"
+                            titleText="Lot"
+                            helperText="Saran FEFO — boleh diganti."
+                            label={lotsLoaded ? 'Pilih lot...' : 'Memuat lot...'}
+                            disabled={!lotsLoaded}
+                            items={lotsByItemId[line.item_id] ?? []}
+                            itemToString={(lot: any) =>
+                              lot
+                                ? `${lot.lot_number} — stok ${formatNumberId(lot.quantity_on_hand, 2)} ${line.item_base_uom}${
+                                    lot.expiry_date ? ` — kedaluwarsa ${new Date(lot.expiry_date).toLocaleDateString('id-ID')}` : ''
+                                  }`
+                                : ''
+                            }
+                            selectedItem={(lotsByItemId[line.item_id] ?? []).find((l: any) => String(l.lot_id) === (lineInputs[line.sales_order_line_id]?.lot_id ?? '')) ?? null}
+                            onChange={({ selectedItem }: { selectedItem: any }) =>
+                              setLineInputs((prev) => ({
+                                ...prev,
+                                [line.sales_order_line_id]: { ...prev[line.sales_order_line_id], lot_id: selectedItem ? String(selectedItem.lot_id) : '' }
+                              }))
+                            }
+                          />
+                          <NumberInput
+                            id={`kirim-qty-${line.sales_order_line_id}`}
+                            label="Jumlah kirim"
+                            min={0}
+                            allowEmpty
+                            hideSteppers
+                            value={
+                              lineInputs[line.sales_order_line_id]?.qty_shipped === undefined || lineInputs[line.sales_order_line_id]?.qty_shipped === ''
+                                ? ''
+                                : Number(lineInputs[line.sales_order_line_id]?.qty_shipped)
+                            }
+                            onChange={(_e: unknown, { value }: { value: number | string }) =>
+                              setLineInputs((prev) => ({ ...prev, [line.sales_order_line_id]: { ...prev[line.sales_order_line_id], qty_shipped: String(value ?? '') } }))
+                            }
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+              <h3 className="halaman__subjudul halaman__subjudul--rapat">Detail pengiriman</h3>
+              <div className="kirim-form__kisi">
+                <TextInput
+                  id="kirim-alamat"
+                  size="lg"
+                  labelText="Alamat tujuan"
+                  placeholder="Alamat lengkap tujuan pengiriman"
+                  value={deliveryAddress}
+                  onChange={(e) => setDeliveryAddress(e.target.value)}
+                  invalid={deliveryAddress.trim() === ''}
+                  invalidText="Alamat tujuan wajib diisi — ia tercetak di surat jalan."
+                />
+                <TextInput id="kirim-penerima" size="lg" labelText="Nama penerima (opsional)" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} />
+                <TextInput id="kirim-hp" size="lg" labelText="No. HP penerima (opsional)" value={recipientPhone} onChange={(e) => setRecipientPhone(e.target.value)} />
+                <TextInput
+                  id="kirim-kendaraan"
+                  size="lg"
+                  labelText="Nomor kendaraan (opsional)"
+                  placeholder="mis. B 1234 XYZ"
+                  value={vehicleNumber}
+                  onChange={(e) => setVehicleNumber(e.target.value)}
+                />
+                <TextInput id="kirim-sopir" size="lg" labelText="Nama sopir (opsional)" value={driverName} onChange={(e) => setDriverName(e.target.value)} />
+              </div>
+
+              {createMessage ? (
+                <InlineNotification
+                  kind={createStatus === 'error' ? 'error' : 'success'}
+                  lowContrast
+                  hideCloseButton
+                  title={createStatus === 'error' ? 'Gagal' : 'Berhasil'}
+                  subtitle={createMessage}
+                />
+              ) : null}
+            </div>
+          </ModalBody>
+          {/* `children` WAJIB pada ModalFooter di @carbon/react 1.114. */}
+          <ModalFooter>
+            <Button kind="secondary" onClick={closeCreateForm}>
+              Batal
+            </Button>
+            <Button kind="primary" onClick={() => handleGoToPreview(creatingForSo)}>
+              Lanjut ke pratinjau
+            </Button>
+          </ModalFooter>
+        </ComposedModal>
+      ) : null}
+
+      {/* LANGKAH 2 — pratinjau surat jalan + tanda tangan. Dibangun MURNI dari state
+          formulir lokal (belum ada pengiriman nyata sampai penyimpanan akhir berhasil). */}
       {creatingForSo ? (
         <ConfirmAndSignModal
           open={createStep === 'preview'}
           onOpenChange={(open) => {
             if (!open) setCreateStep('form');
           }}
-          title="Preview Surat Jalan & Tanda Tangan"
+          title="Pratinjau surat jalan & tanda tangan"
           confirmationText={SHIPMENT_SIGN_CONFIRMATION_TEXT}
           cancelLabel="Kembali"
-          confirmLabel="Buat Pengiriman"
+          confirmLabel="Buat pengiriman"
           onConfirm={() => handleFinalSubmit(creatingForSo)}
         >
           <SuratJalanPreview
@@ -836,7 +1005,10 @@ export default function ShipmentsPage() {
             vehicleNumber={vehicleNumber || null}
             driverName={driverName || null}
             signerName={currentUser?.name ?? null}
+            // penjaga-kebocoran:mulai signerRole diteruskan sebagai PROP; SuratJalanPreview
+            // punya peta roleLabels sendiri di dalam komponennya.
             signerRole={currentUser?.role ?? null}
+            // penjaga-kebocoran:selesai
             lines={computeValidLines(creatingForSo).map((line) => {
               const soLine = creatingForSo.lines.find((l) => l.sales_order_line_id === line.sales_order_line_id);
               const lot = (lotsByItemId[line.item_id] ?? []).find((l) => l.lot_id === line.lot_id);
@@ -849,48 +1021,56 @@ export default function ShipmentsPage() {
               };
             })}
           />
-          <p className="mt-3 text-xs text-muted-foreground">Status pengiriman ini akan tetap &quot;Draft&quot; setelah dibuat — stok baru berkurang saat &quot;Proses Pengiriman&quot; dilakukan (di Daftar Pengiriman) secara terpisah.</p>
+          <p className="halaman__redup kirim-catatan-draf">
+            Status pengiriman ini tetap &quot;Draf&quot; setelah dibuat — stok baru berkurang saat &quot;Proses pengiriman&quot; dilakukan di daftar pengiriman, terpisah.
+          </p>
         </ConfirmAndSignModal>
       ) : null}
 
-      {/* "Proses Pengiriman" (draft->shipped) — WAJIB upload foto bukti pengiriman
-          (migration 20260817190000) sebelum stok berkurang. Terpisah dari panel detail
-          (renderShipmentDetail) karena ini aksi entri data, bukan sekadar tampilan. */}
+      {/* "Proses pengiriman" (draf → terkirim) WAJIB berfoto bukti sebelum stok berkurang. */}
       {dispatchingShipment ? (
-        <Dialog open onOpenChange={(open) => (!open ? closeDispatchModal() : undefined)}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Proses Pengiriman — {dispatchingShipment.shipment_number}</DialogTitle>
-              <DialogDescription>Upload foto bukti barang dimuat/dikirim. Stok akan berkurang setelah diproses.</DialogDescription>
-            </DialogHeader>
-            <div className="flex flex-col gap-3">
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium text-foreground">Foto Pengiriman (wajib)</span>
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  onChange={(event) => setDispatchPhotoFile(event.target.files?.[0] ?? null)}
-                  className="text-sm text-foreground file:mr-3 file:h-8 file:rounded-none file:border-0 file:bg-[#0f62fe] file:px-3 file:text-xs file:font-medium file:text-white hover:file:bg-[#0043ce]"
-                />
-                <span className="text-xs text-muted-foreground">PNG, JPG, atau WEBP, maksimal 5MB.</span>
-              </label>
-              {dispatchPhotoPreviewUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={dispatchPhotoPreviewUrl} alt="Preview foto pengiriman" className="h-40 w-fit rounded-md border object-contain" />
-              ) : null}
-              {dispatchError ? <p className="text-sm text-destructive">{dispatchError}</p> : null}
+        <ComposedModal open size="sm" onClose={() => { closeDispatchModal(); return true; }}>
+          <ModalHeader label="Kurangi stok" title={`Proses pengiriman — ${dispatchingShipment.shipment_number}`} closeModal={closeDispatchModal} />
+          <ModalBody>
+            <p className="halaman__pengantar">Unggah foto bukti barang dimuat atau dikirim. Stok berkurang setelah diproses.</p>
+            {/* GAMBARNYA SENDIRI ADALAH TOMBOLNYA, mengikuti pola unggah yang berlaku untuk
+                seluruh unggahan: diklik → jendela pilih berkas, lalu langsung jadi pratinjau
+                dengan keterangan "belum tersimpan". */}
+            <div className="kirim-unggah">
+              <FileUploaderButton
+                accept={['image/png', 'image/jpeg', 'image/webp']}
+                buttonKind="ghost"
+                disableLabelChanges
+                size="lg"
+                multiple={false}
+                onChange={(event: React.ChangeEvent<HTMLInputElement>) => setDispatchPhotoFile(event.target.files?.[0] ?? null)}
+                labelText={
+                  <span className="kirim-unggah__kotak">
+                    {dispatchPhotoPreviewUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={dispatchPhotoPreviewUrl} alt="Pratinjau foto pengiriman" className="kirim-unggah__gambar" />
+                    ) : (
+                      <Camera size={40} aria-label="Belum ada foto" />
+                    )}
+                  </span>
+                }
+              />
+              <span className="halaman__redup">
+                {dispatchPhotoPreviewUrl ? 'Foto dipilih — belum tersimpan' : 'Klik untuk memilih foto. PNG, JPG, atau WEBP, maksimal 5MB.'}
+              </span>
             </div>
-            <div className="mt-3 flex items-center gap-3">
-              <Button disabled={!dispatchPhotoFile || dispatchStatus === 'uploading'} onClick={handleDispatchSubmit}>
-                {dispatchStatus === 'uploading' ? 'Memproses...' : 'Proses (Kurangi Stok)'}
-              </Button>
-              <Button variant="outline" onClick={closeDispatchModal}>
-                Batal
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            {dispatchError ? <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal" subtitle={dispatchError} /> : null}
+          </ModalBody>
+          <ModalFooter>
+            <Button kind="secondary" onClick={closeDispatchModal}>
+              Batal
+            </Button>
+            <Button kind="primary" disabled={!dispatchPhotoFile || dispatchStatus === 'uploading'} onClick={handleDispatchSubmit}>
+              {dispatchStatus === 'uploading' ? 'Memproses...' : 'Proses & kurangi stok'}
+            </Button>
+          </ModalFooter>
+        </ComposedModal>
       ) : null}
-    </main>
+    </div>
   );
 }

@@ -5,8 +5,6 @@ import { useRouter } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import { authedFetch as panggilApi, SesiTidakValid } from '@/lib/authedFetch';
 import {
-  Breadcrumb,
-  BreadcrumbItem,
   Button,
   Checkbox,
   Dropdown,
@@ -43,6 +41,7 @@ import {
   ToggletipButton,
   ToggletipContent
 } from '@carbon/react';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
 import { Add, Information } from '@carbon/icons-react';
 import {
   SHELF_LIFE_UNITS,
@@ -175,6 +174,8 @@ export default function ItemsPage() {
   const [canViewCost, setCanViewCost] = useState(false);
 
   const [items, setItems] = useState<Item[]>([]);
+  // Setelan ke-18 (MST-27). Null bila perusahaan belum menetapkannya.
+  const [persenBawaanPerusahaan, setPersenBawaanPerusahaan] = useState<number | null>(null);
   const [itemsError, setItemsError] = useState('');
   const [itemsLoading, setItemsLoading] = useState(true);
 
@@ -292,6 +293,9 @@ export default function ItemsPage() {
         return;
       }
       setItems(data.items || []);
+      setPersenBawaanPerusahaan(
+        typeof data.persen_bawaan_perusahaan === 'number' ? data.persen_bawaan_perusahaan : null
+      );
       setItemsError('');
     } catch (e) {
       setItemsError(e instanceof SesiTidakValid ? 'Sesi Anda sudah berakhir. Silakan masuk lagi.' : String(e));
@@ -639,10 +643,16 @@ export default function ItemsPage() {
       { label: 'Shelf life', nilai: formatShelfLife(item.shelf_life_days) },
       {
         label: 'Stok minimum',
+        // TIGA LAPIS, dan yang ditampilkan adalah yang SEDANG MENANG -- bukan ketiganya
+        // berjajar. Urutannya sama persis dengan tentukanAmbang() di stockThreshold.ts.
         nilai:
           item.min_stock_percent !== null && item.min_stock_percent !== undefined
-            ? `${formatNumberId(item.min_stock_percent, 2)}% dari total yang pernah masuk`
-            : formatNumberId(item.min_stock_level ?? 0, 2)
+            ? `${formatNumberId(item.min_stock_percent, 2)}% dari total yang pernah masuk (khusus item ini)`
+            : persenBawaanPerusahaan !== null && persenBawaanPerusahaan > 0
+              ? `${formatNumberId(persenBawaanPerusahaan, 2)}% dari total yang pernah masuk (persen bawaan perusahaan)`
+              : Number(item.min_stock_level ?? 0) > 0
+                ? `${formatNumberId(item.min_stock_level ?? 0, 2)} (angka tetap)`
+                : 'Belum ada ambang — item ini tidak akan pernah memicu peringatan stok.'
       }
       // Reorder Point & Qty DICABUT dari tampilan (MST-21, keputusan pemilik produk
       // 25 Agu 2026). Kolomnya tetap ada di basis data supaya angka lama tidak hilang, tapi
@@ -925,7 +935,7 @@ export default function ItemsPage() {
   if (accessDenied) {
     return (
       <div className="item-halaman">
-        <h1 className="item-judul">Daftar item</h1>
+        <KepalaHalaman remah={[]} judul="Daftar item" />
         <InlineNotification
           kind="error"
           title="Sesi tidak valid"
@@ -962,18 +972,15 @@ export default function ItemsPage() {
         halaman. Breadcrumb yang menunjuk halaman tidak ada lebih buruk daripada breadcrumb
         yang jujur bahwa tingkat itu memang bukan halaman.
       */}
-      <Breadcrumb noTrailingSlash className="item-remah">
-        <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
-        <BreadcrumbItem>
-          <span className="item-remah__bukan-tautan">Product &amp; Engineering</span>
-        </BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>Items</BreadcrumbItem>
-      </Breadcrumb>
-
-      <h1 className="item-judul">Daftar item</h1>
-      <p className="item-pengantar">
-        {itemTersaring.length} item{adaSaringan ? ` dari ${items.length} yang tercatat` : ' tercatat'}
-      </p>
+      {/* Kepala halaman lewat PINTU BERSAMA `KepalaHalaman`.
+          Sebelum 26 Agu 2026 halaman ini menuliskannya sendiri — dan karena itulah halaman
+          lain menyalinnya, lalu satu per satu meleset. Cetakannya sekarang hidup di satu
+          komponen; halaman berikutnya memanggilnya, bukan menyalinnya. */}
+      <KepalaHalaman
+        remah={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Product & Engineering' }, { label: 'Items' }]}
+        judul="Daftar item"
+        pengantar={`${itemTersaring.length} item${adaSaringan ? ` dari ${items.length} yang tercatat` : ' tercatat'}`}
+      />
 
       {itemsError ? (
         <InlineNotification kind="error" title="Gagal memuat" subtitle={itemsError} lowContrast onCloseButtonClick={() => setItemsError('')} />
@@ -1072,7 +1079,7 @@ export default function ItemsPage() {
                   </TableToolbarContent>
                 </TableToolbar>
 
-                <Table {...rp.getTableProps()} className="item-tabel">
+                <Table {...rp.getTableProps()} className="tabel-responsif">
                   <TableHead>
                     <TableRow>
                       <TableExpandHeader aria-label="Buka detail" />
@@ -1356,7 +1363,11 @@ export default function ItemsPage() {
                         justru menghilang ketika stok menipis.
                       </LabelBantuan>
                     }
-                    helperText="Contoh: 10 berarti diperingatkan saat sisa kurang dari 10% dari total yang pernah masuk."
+                    helperText={
+                      persenBawaanPerusahaan !== null && persenBawaanPerusahaan > 0
+                        ? `Dikosongkan berarti memakai persen bawaan perusahaan, yaitu ${formatNumberId(persenBawaanPerusahaan, 2)}%.`
+                        : 'Contoh: 10 berarti diperingatkan saat sisa kurang dari 10% dari total yang pernah masuk.'
+                    }
                     value={form.min_stock_percent}
                     onChange={(e) => setForm((prev) => ({ ...prev, min_stock_percent: e.target.value }))}
                   />
@@ -1372,7 +1383,12 @@ export default function ItemsPage() {
                     }
                     {...(form.min_stock_percent.trim() && Number(form.min_stock_percent) > 0
                       ? { warn: true, warnText: 'Diabaikan — kolom persen di sebelah sedang terisi, dan persen yang menang.' }
-                      : { helperText: 'Dipakai bila kolom persen dikosongkan.' })}
+                      : persenBawaanPerusahaan !== null && persenBawaanPerusahaan > 0
+                        ? {
+                            warn: true,
+                            warnText: `Diabaikan — persen bawaan perusahaan ${formatNumberId(persenBawaanPerusahaan, 2)}% yang dipakai.`
+                          }
+                        : { helperText: 'Dipakai bila kolom persen dikosongkan.' })}
                     value={form.min_stock_level}
                     onChange={(e) => setForm((prev) => ({ ...prev, min_stock_level: e.target.value }))}
                   />

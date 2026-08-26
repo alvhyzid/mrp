@@ -1,0 +1,47 @@
+@use '@carbon/react/scss/spacing' as *;
+@use '@carbon/react/scss/breakpoint' as *;
+
+// Gaya khas Dashboard PPIC. Nol angka px yang tidak disebut alasannya.
+
+.ppic-tombol-kembali {
+  align-self: flex-start;
+}
+
+// AKSI: "Setujui" dan "Tolak" dipisahkan jarak — di layar sentuh, aksi yang menghentikan
+// sebuah PO tidak boleh berjarak satu jari dari aksi yang meneruskannya.
+.ppic-aksi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.ppic-aksi__pemisah {
+  inline-size: $spacing-07;
+}
+
+.ppic-pemilih-tampilan {
+  max-inline-size: 24rem;
+}
+
+// Kapasitas: jam per unit × jumlah unit adalah SATU isian bermakna.
+.ppic-kapasitas-jam {
+  max-inline-size: 7rem;
+}
+
+.ppic-kapasitas-unit {
+  max-inline-size: 6rem;
+}
+
+.ppic-form {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: $spacing-05;
+
+  @include breakpoint('md') {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.ppic-form__lebar-penuh {
+  grid-column: 1 / -1;
+}

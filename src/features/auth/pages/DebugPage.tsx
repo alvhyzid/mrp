@@ -3,6 +3,17 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  InlineNotification,
+  SkeletonText,
+  StructuredListBody,
+  StructuredListCell,
+  StructuredListHead,
+  StructuredListRow,
+  StructuredListWrapper
+} from '@carbon/react';
 import { getFieldLabel, getRoleLabel, getEntityLabel, COMMON_STATUS_LABELS } from '@/lib/glossary';
 
 function parseJwt(token: string) {
@@ -66,103 +77,100 @@ export default function DebugPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-slate-50 py-16">
-        <div className="mx-auto max-w-4xl px-6">
-          <div className="rounded-3xl bg-white p-10 shadow-lg ring-1 ring-slate-200 text-center text-slate-600">Memuat debug...</div>
-        </div>
-      </main>
+      <div className="halaman">
+        <SkeletonText heading width="16rem" />
+        <SkeletonText paragraph lineCount={4} />
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 py-12">
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6">
-        <div className="rounded-3xl bg-white p-10 shadow-lg ring-1 ring-slate-200">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm uppercase tracking-[0.2em] text-slate-500">Debug</p>
-              <h1 className="text-3xl font-semibold text-slate-900">Debug Auth & RLS</h1>
-              <p className="mt-2 text-slate-600">
-                {getFieldLabel('company_id')} dari sesi login Anda: <span className="font-semibold text-slate-900">{companyId === null ? '-' : companyId}</span>
-              </p>
-            </div>
-          </div>
-        </div>
+    <div className="halaman">
+      <Breadcrumb noTrailingSlash className="halaman__remah">
+        <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
+        <BreadcrumbItem isCurrentPage>
+          <span className="cds--link halaman__remah-mati">Internal</span>
+        </BreadcrumbItem>
+        <BreadcrumbItem isCurrentPage>Debug Auth &amp; RLS</BreadcrumbItem>
+      </Breadcrumb>
 
-        {error ? (
-          <div className="rounded-3xl bg-rose-50 p-6 text-sm text-rose-700 ring-1 ring-rose-200">{error}</div>
-        ) : null}
-
-        <div className="rounded-3xl bg-white p-10 shadow-lg ring-1 ring-slate-200">
-          <h2 className="text-2xl font-semibold text-slate-900">{getEntityLabel('companies')} yang berhasil diambil</h2>
-          <p className="mt-2 text-sm text-slate-600">Hanya baris yang terbatas oleh RLS sesuai sesi login Anda.</p>
-          <div className="mt-6 overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 text-left text-sm text-slate-700">
-              <thead>
-                <tr>
-                  <th className="px-4 py-3 font-medium text-slate-900">{getFieldLabel('company_id')}</th>
-                  <th className="px-4 py-3 font-medium text-slate-900">{getFieldLabel('name')}</th>
-                  <th className="px-4 py-3 font-medium text-slate-900">{getFieldLabel('industry_type')}</th>
-                  <th className="px-4 py-3 font-medium text-slate-900">{getFieldLabel('status')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {companyRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="px-4 py-5 text-slate-500">Tidak ada baris perusahaan yang bisa dibaca.</td>
-                  </tr>
-                ) : (
-                  companyRows.map((row) => (
-                    <tr key={row.company_id}>
-                      <td className="px-4 py-4 font-medium text-slate-900">{row.company_id}</td>
-                      <td className="px-4 py-4">{row.name}</td>
-                      <td className="px-4 py-4">{row.industry_type}</td>
-                      <td className="px-4 py-4">{COMMON_STATUS_LABELS[row.status] ?? row.status}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="rounded-3xl bg-white p-10 shadow-lg ring-1 ring-slate-200">
-          <h2 className="text-2xl font-semibold text-slate-900">{getEntityLabel('users')} yang berhasil diambil</h2>
-          <p className="mt-2 text-sm text-slate-600">Hanya baris yang terbatas oleh RLS sesuai sesi login Anda.</p>
-          <div className="mt-6 overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 text-left text-sm text-slate-700">
-              <thead>
-                <tr>
-                  <th className="px-4 py-3 font-medium text-slate-900">{getFieldLabel('user_id')}</th>
-                  <th className="px-4 py-3 font-medium text-slate-900">{getFieldLabel('company_id')}</th>
-                  <th className="px-4 py-3 font-medium text-slate-900">{getFieldLabel('name')}</th>
-                  <th className="px-4 py-3 font-medium text-slate-900">{getFieldLabel('email')}</th>
-                  <th className="px-4 py-3 font-medium text-slate-900">{getFieldLabel('role')}</th>
-                  <th className="px-4 py-3 font-medium text-slate-900">{getFieldLabel('status')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {userRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-5 text-slate-500">Tidak ada baris pengguna yang bisa dibaca.</td>
-                  </tr>
-                ) : (
-                  userRows.map((row) => (
-                    <tr key={row.user_id}>
-                      <td className="px-4 py-4 font-medium text-slate-900">{row.user_id}</td>
-                      <td className="px-4 py-4">{row.company_id === null ? '-' : row.company_id}</td>
-                      <td className="px-4 py-4">{row.name}</td>
-                      <td className="px-4 py-4">{row.email}</td>
-                      <td className="px-4 py-4">{getRoleLabel(row.role)}</td>
-                      <td className="px-4 py-4">{COMMON_STATUS_LABELS[row.status] ?? row.status}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      <div>
+        <h1 className="halaman__judul">Debug auth &amp; RLS</h1>
+        <p className="halaman__pengantar">
+          Halaman ini memperlihatkan APA YANG BENAR-BENAR BISA DIBACA sesi login Anda setelah
+          disaring Row-Level Security — bukan apa yang seharusnya bisa dibaca menurut peran.{' '}
+          {getFieldLabel('company_id')} sesi ini: <strong>{companyId === null ? '—' : companyId}</strong>.
+        </p>
       </div>
-    </main>
+
+      {error ? <InlineNotification kind="error" lowContrast title="Gagal membaca" subtitle={error} hideCloseButton /> : null}
+
+      {/* StructuredList, BUKAN DataTable: ini daftar BUKTI yang dibaca sekali, bukan data
+          yang diurutkan, disaring, atau ditindaklanjuti. Memakai DataTable akan membawa
+          toolbar, pengurutan, dan pembagian halaman yang tidak satu pun berguna di sini. */}
+      <section>
+        <h2 className="halaman__subjudul">{getEntityLabel('companies')} yang berhasil dibaca</h2>
+        <StructuredListWrapper isCondensed>
+          <StructuredListHead>
+            <StructuredListRow head>
+              <StructuredListCell head>{getFieldLabel('company_id')}</StructuredListCell>
+              <StructuredListCell head>{getFieldLabel('name')}</StructuredListCell>
+              <StructuredListCell head>{getFieldLabel('industry_type')}</StructuredListCell>
+              <StructuredListCell head>{getFieldLabel('status')}</StructuredListCell>
+            </StructuredListRow>
+          </StructuredListHead>
+          <StructuredListBody>
+            {companyRows.length === 0 ? (
+              <StructuredListRow>
+                <StructuredListCell>Tidak ada baris perusahaan yang bisa dibaca.</StructuredListCell>
+              </StructuredListRow>
+            ) : (
+              companyRows.map((row) => (
+                <StructuredListRow key={row.company_id}>
+                  <StructuredListCell>{row.company_id}</StructuredListCell>
+                  <StructuredListCell>{row.name}</StructuredListCell>
+                  <StructuredListCell>{row.industry_type}</StructuredListCell>
+                  <StructuredListCell>{COMMON_STATUS_LABELS[row.status] ?? row.status}</StructuredListCell>
+                </StructuredListRow>
+              ))
+            )}
+          </StructuredListBody>
+        </StructuredListWrapper>
+      </section>
+
+      <section>
+        <h2 className="halaman__subjudul">{getEntityLabel('users')} yang berhasil dibaca</h2>
+        <StructuredListWrapper isCondensed>
+          <StructuredListHead>
+            <StructuredListRow head>
+              <StructuredListCell head>{getFieldLabel('user_id')}</StructuredListCell>
+              <StructuredListCell head>{getFieldLabel('company_id')}</StructuredListCell>
+              <StructuredListCell head>{getFieldLabel('name')}</StructuredListCell>
+              <StructuredListCell head>{getFieldLabel('email')}</StructuredListCell>
+              <StructuredListCell head>{getFieldLabel('role')}</StructuredListCell>
+              <StructuredListCell head>{getFieldLabel('status')}</StructuredListCell>
+            </StructuredListRow>
+          </StructuredListHead>
+          <StructuredListBody>
+            {userRows.length === 0 ? (
+              <StructuredListRow>
+                <StructuredListCell>Tidak ada baris pengguna yang bisa dibaca.</StructuredListCell>
+              </StructuredListRow>
+            ) : (
+              userRows.map((row) => (
+                <StructuredListRow key={row.user_id}>
+                  <StructuredListCell>{row.user_id}</StructuredListCell>
+                  <StructuredListCell>{row.company_id === null ? '—' : row.company_id}</StructuredListCell>
+                  <StructuredListCell>{row.name}</StructuredListCell>
+                  <StructuredListCell>{row.email}</StructuredListCell>
+                  <StructuredListCell>{getRoleLabel(row.role)}</StructuredListCell>
+                  <StructuredListCell>{COMMON_STATUS_LABELS[row.status] ?? row.status}</StructuredListCell>
+                </StructuredListRow>
+              ))
+            )}
+          </StructuredListBody>
+        </StructuredListWrapper>
+      </section>
+    </div>
   );
 }

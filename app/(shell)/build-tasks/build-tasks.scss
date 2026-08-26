@@ -1,0 +1,128 @@
+@use '@carbon/react/scss/spacing' as *;
+@use '@carbon/react/scss/theme' as *;
+@use '@carbon/react/scss/type' as *;
+@use '@carbon/react/scss/breakpoint' as *;
+
+// Gaya khas Daftar Tugas Pembangunan. Nol angka px, nol warna heksadesimal.
+
+.tugas-tombol-kembali {
+  align-self: flex-start;
+}
+
+.tugas-kode {
+  font-family: font-family('mono');
+  @include type-style('body-compact-01');
+  color: $text-primary;
+}
+
+.tugas-persetujuan {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+  // Garis tepi menandai "ini butuh keputusan Anda" — bukan hiasan.
+  border-inline-start: $spacing-02 solid $support-info;
+}
+
+.tugas-persetujuan__kepala {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-04;
+}
+
+.tugas-hitung-tag {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.tugas-saringan {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: $spacing-05;
+  align-items: end;
+
+  @include breakpoint('md') {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @include breakpoint('lg') {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.tugas-alat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-04;
+}
+
+.tugas-alat__urutan,
+.tugas-alat__buka-tutup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-03;
+}
+
+.tugas-modul-daftar {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+}
+
+.tugas-modul {
+  background-color: $layer-01;
+  border: 1px solid $border-subtle-01;
+}
+
+// Modul yang memuat SUPER URGENT belum selesai ditandai tegas — dan modul itu juga
+// TERBUKA OTOMATIS (keputusan D.2). Menyembunyikan hal paling genting di balik baris yang
+// harus diklik dulu melawan tujuan penandaannya sendiri.
+.tugas-modul--genting {
+  border-inline-start: $spacing-02 solid $support-error;
+}
+
+.tugas-modul--selesai {
+  border-inline-start: $spacing-02 solid $support-success;
+}
+
+.tugas-modul__tombol {
+  inline-size: 100%;
+  max-inline-size: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-04;
+  justify-content: flex-start;
+}
+
+.tugas-modul__nama {
+  @include type-style('heading-compact-01');
+  color: $text-primary;
+}
+
+.tugas-modul__angka {
+  @include type-style('label-01');
+  color: $text-secondary;
+  margin-inline-start: auto;
+}
+
+// Garis tepi urgensi pada baris tabel. Hanya DUA tingkat teratas yang mendapatkannya —
+// bila semua baris bergaris, tidak ada baris yang menonjol.
+.tugas-baris--super_urgent td:first-child {
+  box-shadow: inset $spacing-02 0 0 0 $support-error;
+}
+
+.tugas-baris--mendesak td:first-child {
+  box-shadow: inset $spacing-02 0 0 0 $support-warning;
+}
+
+.tugas-tag-sel,
+.tugas-aksi-sel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-03;
+}

@@ -1,3 +1,20 @@
+<!-- CATATAN KEPALA — ditambahkan Claude Code, 25 Agu 2026 -->
+> **Penulis dokumen**: Claude Opus 5, diserahkan lewat pemilik produk.
+> **Diterima & dicatat**: 25 Agustus 2026.
+> **Status di proyek ini**: **SEBAGIAN SUDAH DIKERJAKAN**, sisanya dicatat sebagai task `NAV-02`.
+>
+> Yang **SUDAH** dikerjakan dari dokumen ini: audit AR-0 + NAV (§25, §42), UI Shell (DS-04),
+> breadcrumb & page header standar (cetakan Items), status navigasi data-driven (§5),
+> keputusan D-1..D-6 pemilik produk, dan Global Task Center (§19) yang tercatat sebagai `OVR-01`.
+>
+> Yang **BELUM** dicatat di task `NAV-02` beserta status dan pemicunya masing-masing.
+>
+> **Dependensi yang dokumen ini sebut hilang — `FABRIX_UX_Information_Architecture_v1.0.md` —
+> SUDAH ADA di `docs/`.** Jangan memakainya lagi sebagai alasan menunda.
+>
+> **§5, §27, §32, §33–§36, dan §45 TIDAK dicatat sebagai task melainkan sudah diangkat jadi
+> ATURAN MENGIKAT** di `CLAUDE.md` bagian "Aturan Navigasi & Route".
+
 <!--
   DISALIN KE REPO 25 Agu 2026 atas perintah pemilik produk.
   Berkas asal : ~/Downloads/FABRIX_UX_Application_Shell_Navigation_Architecture_v1.0.md

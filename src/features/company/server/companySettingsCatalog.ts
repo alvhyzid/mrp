@@ -1,10 +1,10 @@
-// KATALOG SETELAN PERUSAHAAN (MST-26, 25 Agu 2026).
+// KATALOG SETELAN PERUSAHAAN (MST-26, 25 Agu 2026; setelan ke-18 ditambahkan MST-27).
 //
 // Satu tempat yang menentukan: setelan apa saja yang ada, apa artinya dalam bahasa orang
 // pabrik, bagaimana memvalidasinya, dan — yang paling menentukan — APAKAH IA MEMENGARUHI
 // PERHITUNGAN YANG SUDAH LEWAT.
 //
-// KENAPA KATALOGNYA DI SATU BERKAS, bukan tersebar di layar: sebelum ini, ketujuh belas
+// KENAPA KATALOGNYA DI SATU BERKAS, bukan tersebar di layar: sebelum ini, seluruh
 // setelan hanya hidup sebagai baris di database tanpa nama yang bisa dibaca manusia.
 // Menyebarkan labelnya ke JSX berarti label yang sama ditulis ulang setiap kali ada layar
 // yang menampilkannya, dan mulai menyimpang seperti 88 warna yang ditulis tangan.
@@ -31,6 +31,7 @@ export const KELOMPOK_SETELAN = [
   'Periode & kalender kerja',
   'BPJS ditanggung perusahaan',
   'Metode perhitungan biaya',
+  'Peringatan stok',
   'Umum'
 ] as const;
 
@@ -188,6 +189,24 @@ export const KATALOG_SETELAN: DefinisiSetelan[] = [
       { nilai: 'zero', label: 'Dianggap nol' },
       { nilai: 'material_value', label: 'Senilai bahannya' }
     ],
+    memengaruhiHistoris: true
+  },
+
+  // SETELAN KE-18 (MST-27 / KK.3, 25 Agu 2026).
+  //
+  // memengaruhiHistoris = TRUE, dan alasannya bukan kehati-hatian umum: angka ini mengubah
+  // ARTI PERINGATAN, bukan tampilannya. Bila ia berubah tanpa tanggal berlaku, peringatan
+  // bulan lalu tidak bisa dijelaskan lagi — orang melihatnya dan tidak tahu ambang mana yang
+  // dipakai saat itu.
+  {
+    kunci: 'default_min_stock_percent',
+    label: 'Sisa stok yang memicu peringatan',
+    bantuan:
+      'Peringatan menyala saat sisa stok turun di bawah persen ini dari jumlah yang pernah masuk. Berlaku untuk SEMUA item yang tidak punya angkanya sendiri. Contoh: 20 berarti bahan yang pernah masuk 1.000 kg diperingatkan begitu sisanya kurang dari 200 kg.',
+    kelompok: 'Peringatan stok',
+    jenis: 'persen',
+    min: 0,
+    max: 100,
     memengaruhiHistoris: true
   },
 

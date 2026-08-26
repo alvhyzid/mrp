@@ -1,0 +1,160 @@
+@use '@carbon/react/scss/spacing' as *;
+@use '@carbon/react/scss/theme' as *;
+@use '@carbon/react/scss/type' as *;
+@use '@carbon/react/scss/breakpoint' as *;
+
+// Gaya khas halaman PO klien. Nol angka px ditulis langsung.
+
+.po-tombol-masuk {
+  align-self: flex-start;
+}
+
+.po-sel-nomor {
+  display: flex;
+  flex-direction: column;
+}
+
+.po-sel-nomor__utama {
+  @include type-style('body-compact-01');
+  color: $text-primary;
+}
+
+.po-sel-nomor__klien {
+  @include type-style('label-01');
+  color: $text-secondary;
+}
+
+.po-sel-approval {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.po-detail {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+  padding-block: $spacing-03;
+}
+
+.po-approval {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-03;
+}
+
+.po-approval__baris {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-04;
+  padding: $spacing-03 $spacing-05;
+  background-color: $layer-01;
+  border: 1px solid $border-subtle-01;
+}
+
+.po-approval__label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-03;
+}
+
+.po-approval__aksi {
+  display: flex;
+  align-items: center;
+}
+
+// Jarak yang memisahkan "Tolak" dari "Setujui". Bukan hiasan: di layar sentuh, aksi yang
+// menghentikan sebuah PO tidak boleh berjarak satu jari dari aksi yang meneruskannya.
+.po-approval__pemisah {
+  inline-size: $spacing-07;
+}
+
+.po-proses {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: $spacing-05;
+  padding: $spacing-05;
+  background-color: $layer-01;
+  border: 1px solid $border-subtle-01;
+}
+
+.po-form {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-06;
+}
+
+.po-form__kisi {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: $spacing-05;
+
+  @include breakpoint('md') {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.po-form__lebar-penuh {
+  grid-column: 1 / -1;
+}
+
+// Dropdown klien + tombol "Klien baru" adalah SATU isian: memilih klien. Karena itu mereka
+// berdampingan, bukan berjauhan dengan label masing-masing.
+.po-form__klien {
+  display: flex;
+  align-items: flex-end;
+  gap: $spacing-03;
+
+  > :first-child {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+  }
+}
+
+.po-klien-baru {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: $spacing-05;
+  padding: $spacing-05;
+  background-color: $layer-01;
+  border: 1px solid $border-subtle-01;
+
+  @include breakpoint('lg') {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.po-baris {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+}
+
+.po-baris__kepala {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-04;
+}
+
+.po-baris__isi {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: $spacing-05;
+  padding: $spacing-05;
+  background-color: $layer-01;
+  border: 1px solid $border-subtle-01;
+
+  @include breakpoint('lg') {
+    grid-template-columns: 2fr 1fr 1fr;
+  }
+
+  .cds--btn--danger--tertiary {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+}

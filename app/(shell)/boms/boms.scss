@@ -1,0 +1,109 @@
+@use '@carbon/react/scss/spacing' as *;
+@use '@carbon/react/scss/theme' as *;
+@use '@carbon/react/scss/type' as *;
+@use '@carbon/react/scss/breakpoint' as *;
+
+// Gaya khas halaman BOM. Nol angka px ditulis langsung.
+
+.bom-tombol-masuk {
+  align-self: flex-start;
+}
+
+.bom-sel-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.bom-sel-item__kode {
+  @include type-style('body-compact-01');
+  color: $text-primary;
+}
+
+.bom-sel-item__nama {
+  @include type-style('label-01');
+  color: $text-secondary;
+}
+
+.bom-detail {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+  padding-block: $spacing-03;
+}
+
+.bom-detail__kepala {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-03;
+}
+
+.bom-form {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-06;
+}
+
+.bom-form__kisi {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: $spacing-05;
+
+  @include breakpoint('md') {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.bom-form__lebar-penuh {
+  grid-column: 1 / -1;
+}
+
+// HASIL STANDAR: angka dan satuannya adalah SATU isian, jadi SATU label di atas keduanya.
+// Dua label terpisah membuatnya terbaca sebagai dua hal yang tidak berhubungan.
+.bom-form__hasil {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-03;
+}
+
+.bom-form__hasil-isi {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: $spacing-03;
+}
+
+.bom-komponen {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+}
+
+.bom-komponen__kepala {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-04;
+}
+
+.bom-komponen__baris {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: $spacing-05;
+  padding: $spacing-05;
+  background-color: $layer-01;
+  border: 1px solid $border-subtle-01;
+
+  @include breakpoint('md') {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @include breakpoint('lg') {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .cds--btn--danger--tertiary {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+}

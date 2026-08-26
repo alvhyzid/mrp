@@ -1,0 +1,46 @@
+@use '@carbon/react/scss/spacing' as *;
+@use '@carbon/react/scss/theme' as *;
+
+// Halaman CETAK surat jalan. Ia dokumen, bukan layar aplikasi — tidak ada menu samping,
+// tidak ada remah roti. Yang dipakai dari Carbon hanya komponen dan tokennya.
+
+.surat-jalan-halaman {
+  max-inline-size: 52rem;
+  margin-inline: auto;
+  padding: $spacing-07 $spacing-05 $spacing-09;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-06;
+  background-color: $background;
+}
+
+// Tombol TIDAK ikut tercetak — yang keluar di kertas hanya dokumennya.
+.surat-jalan-alat {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: $spacing-04;
+}
+
+.surat-jalan-kertas {
+  padding: $spacing-07;
+  border: 1px solid $border-subtle-01;
+  background-color: $layer-01;
+}
+
+@media print {
+  .surat-jalan-alat {
+    display: none;
+  }
+
+  .surat-jalan-halaman {
+    max-inline-size: none;
+    padding: 0;
+    gap: 0;
+  }
+
+  .surat-jalan-kertas {
+    padding: 0;
+    border: 0;
+  }
+}

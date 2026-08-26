@@ -1,6 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { dengarkanProfilBerubah } from '@/lib/profilEvents';
+// SATU peta label peran untuk seluruh sistem. Berkas ini dulu punya petanya SENDIRI, dan
+// keduanya SUDAH menyimpang: header berkata "Manager Warehouse" sementara halaman Tim berkata
+// "Manajer Gudang" untuk orang yang sama. Lima label berbeda dari enam belas. Itu persis
+// aturan "satu istilah di layar untuk semua departemen" yang dilanggar oleh salinan kedua.
+import { getRoleLabel } from '@/lib/glossary';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -55,24 +61,6 @@ import { WORKSPACES, MENU_AKUN, ARTI_STATUS, bisaDibuka, type ItemNav } from './
 //   2. ARTI SETIAP PENANDA dijelaskan SEKALI di kaki panel, bukan 75 kali di tiap item.
 // Penjelasan yang sama diulang 75 kali bukan cuma boros — ia membuat orang berhenti membaca.
 
-const LABEL_PERAN: Record<string, string> = {
-  company_admin: 'Admin Perusahaan',
-  general_manager: 'General Manager',
-  admin_staff: 'Staf Admin',
-  production_manager: 'Manager Produksi',
-  production_staff: 'Staf Produksi',
-  ppic_manager: 'Manager PPIC',
-  ppic_staff: 'Staf PPIC',
-  finance_manager: 'Manager Finance',
-  finance_staff: 'Staf Finance',
-  purchasing_manager: 'Manager Purchasing',
-  purchasing_staff: 'Staf Purchasing',
-  warehouse_manager: 'Manager Warehouse',
-  warehouse_staff: 'Staf Warehouse',
-  hr_manager: 'Manager HRD',
-  hr_staff: 'Staf HRD',
-  viewer: 'Viewer'
-};
 
 /// Warna penanda mengikuti ARTI-nya, bukan selera:
 ///   merah = jangan menunggunya, keputusannya sudah ditolak
@@ -116,6 +104,10 @@ export default function AppShellCarbon({ children }: { children: React.ReactNode
   const router = useRouter();
   const pathname = usePathname();
   const [userName, setUserName] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  // Foto yang GAGAL DIMUAT diingat supaya tidak dicoba terus-menerus. Tanpa ini, alamat yang
+  // rusak menghasilkan ikon gambar patah -- lebih buruk daripada ikon bawaan yang rapi.
+  const [fotoGagal, setFotoGagal] = useState(false);
   const [role, setRole] = useState<string | null>(null);
   const [companyId, setCompanyId] = useState<number | null>(null);
   const [companyName, setCompanyName] = useState<string | null>(null);
@@ -159,6 +151,7 @@ export default function AppShellCarbon({ children }: { children: React.ReactNode
       if (!cancelled) {
         if (response.ok) {
           setUserName(data?.user?.name ?? null);
+          setAvatarUrl(data?.user?.avatar_url ?? null);
           setRole(data?.user?.role ?? null);
           setCompanyId(data?.company?.company_id ?? null);
           setCompanyName(data?.company?.name ?? null);
@@ -172,6 +165,17 @@ export default function AppShellCarbon({ children }: { children: React.ReactNode
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
+
+  // KABAR "PROFIL BERUBAH" (MM.1). Header punya salinan datanya sendiri, jadi tanpa ini foto
+  // baru tidak akan pernah sampai ke sini sampai halaman dimuat ulang -- dan muat ulang
+  // DILARANG oleh keputusan pemilik produk.
+  useEffect(() => {
+    return dengarkanProfilBerubah((detail) => {
+      setAvatarUrl(detail.avatarUrl);
+      setFotoGagal(false);
+      if (detail.nama !== undefined) setUserName(detail.nama);
+    });
+  }, []);
 
   const keluar = async () => {
     if (!supabase) return;
@@ -202,12 +206,6 @@ export default function AppShellCarbon({ children }: { children: React.ReactNode
       </SideNavMenuItem>
     );
   };
-
-  const inisial = (userName ?? '?')
-    .split(' ')
-    .slice(0, 2)
-    .map((k) => k.charAt(0).toUpperCase())
-    .join('');
 
   return (
     <>
@@ -251,12 +249,25 @@ export default function AppShellCarbon({ children }: { children: React.ReactNode
               aria-expanded={panelAkun}
               onClick={() => setPanelAkun((v) => !v)}
             >
+              {/* IKON CARBON SEBAGAI BAWAAN, BUKAN INISIAL (keputusan pemilik produk MM.1d).
+                  Inisial terlihat seperti data padahal cuma tebakan dari nama; ikon jujur
+                  berkata "belum ada foto". Foto yang gagal dimuat jatuh ke ikon yang sama --
+                  gambar patah lebih buruk daripada tidak ada gambar. */}
               <span className="shell-akun__avatar" aria-hidden="true">
-                {meLoaded && userName ? inisial : <UserAvatar size={20} />}
+                {avatarUrl && !fotoGagal ? (
+                  <img
+                    src={avatarUrl}
+                    alt=""
+                    className="shell-akun__foto"
+                    onError={() => setFotoGagal(true)}
+                  />
+                ) : (
+                  <UserAvatar size={20} />
+                )}
               </span>
               <span className="shell-akun__teks">
                 <span className="shell-akun__nama">{userName ?? '…'}</span>
-                {role && <span className="shell-akun__peran">{LABEL_PERAN[role] ?? role}</span>}
+                {role && <span className="shell-akun__peran">{getRoleLabel(role)}</span>}
               </span>
               <ChevronDown size={16} className="shell-akun__panah" />
             </button>

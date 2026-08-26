@@ -28,3 +28,6 @@ tsconfig.tsbuildinfo
 .env*
 test-results.json
 retry-audit.log
+
+# Claude Code — setelan lokal per komputer, bukan bagian proyek
+.claude/

@@ -1,0 +1,77 @@
+// Gaya khas halaman Pelanggan. KERANGKA halamannya memakai kelas bersama `halaman-*` di
+// src/styles/carbon.scss — di sini HANYA yang benar-benar khas halaman ini.
+@use '@carbon/react/scss/spacing';
+@use '@carbon/react/scss/theme';
+@use '@carbon/react/scss/type';
+
+.pelanggan-nama {
+  font-weight: 600;
+}
+
+// AKSI MERUSAK DIDORONG KE KANAN, berjauhan dari aksi sehari-hari (aturan modal butir 9).
+// Di layar sentuh jari jauh lebih besar daripada kursor tetikus, dan aksi yang tidak bisa
+// dibatalkan tidak boleh berjarak satu jari dari tombol "Ubah".
+.pelanggan-aksi {
+  display: flex;
+  align-items: center;
+  gap: spacing.$spacing-03;
+}
+
+.pelanggan-aksi__merusak {
+  margin-inline-start: auto;
+}
+
+.pelanggan-form {
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-05;
+}
+
+// KONTAK PERSON: satu hal dengan tiga bagian, jadi SATU label kelompok.
+// Tiga label terpisah terbaca sebagai tiga isian berbeda — aturan "isian yang satu hal wajib
+// punya satu label".
+.pelanggan-pic {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.pelanggan-pic__label {
+  @include type.type-style('label-01');
+  color: theme.$text-secondary;
+  margin-block-end: spacing.$spacing-03;
+}
+
+.pelanggan-pic__isi {
+  display: grid;
+  gap: spacing.$spacing-05;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 42rem) {
+  .pelanggan-pic__isi {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+// KOTAK CENTANG DI TOOLBAR.
+//
+// Carbon merancang Checkbox untuk berdiri di dalam form, bukan berjajar di toolbar tabel:
+// pembungkusnya membawa margin atas dan tidak menyejajarkan diri terhadap kontrol di
+// sebelahnya. Diukur sebelum diperbaiki: kotaknya melayang di atas garis dasar labelnya,
+// dan seluruh kelompoknya tidak sejajar dengan kotak pencarian.
+//
+// Ini BUKAN menimpa gaya Carbon, melainkan menempatkan komponennya di konteks yang tidak
+// diatur Carbon — hal yang sama sudah terjadi pada area notifikasi.
+.pelanggan-saring-arsip {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding-inline: spacing.$spacing-05;
+  block-size: 3rem;
+  flex-shrink: 0;
+}
+
+.pelanggan-saring-arsip .cds--checkbox-label {
+  margin: 0;
+}

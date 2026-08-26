@@ -1,42 +1,68 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import type { ColumnDef } from '@tanstack/react-table';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { DataTable } from '@/components/ui/data-table';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Button,
+  Checkbox,
+  ComposedModal,
+  DataTable,
+  DataTableSkeleton,
+  Dropdown,
+  InlineNotification,
+  ModalBody,
+  ModalFooter,
+  ModalHeader,
+  NumberInput,
+  Pagination,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableExpandHeader,
+  TableExpandRow,
+  TableExpandedRow,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableToolbar,
+  TableToolbarContent,
+  TableToolbarSearch,
+  Tag,
+  TextInput
+} from '@carbon/react';
+import { Add, TrashCan } from '@carbon/icons-react';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
 import { canAccessProductionDashboard, canManageProductionDisruptions, canRecordStepProgress } from '@/lib/roles';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 import { formatNumberId } from '@/lib/currency';
 
 const statusLabels: Record<string, string> = { planned: 'Direncanakan', in_progress: 'Berjalan', paused: 'Dijeda', completed: 'Selesai', cancelled: 'Batal' };
-const statusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical' | 'secondary'> = {
-  planned: 'info',
-  in_progress: 'warning',
-  paused: 'secondary',
-  completed: 'success',
-  cancelled: 'critical'
+/// Warna Tag mengikuti ARTI. "Berjalan" ungu, bukan kuning: pekerjaan yang sedang jalan
+/// bukan peringatan. Hanya "dibatalkan" dan "terhambat" yang merah.
+const statusWarnaTag: Record<string, 'blue' | 'purple' | 'gray' | 'green' | 'red'> = {
+  planned: 'blue',
+  in_progress: 'purple',
+  paused: 'gray',
+  completed: 'green',
+  cancelled: 'red'
 };
-const readinessLabels: Record<string, string> = { ready: 'Siap Mulai', blocked: 'Terhambat' };
-const readinessBadgeVariant: Record<string, 'success' | 'critical'> = { ready: 'success', blocked: 'critical' };
-const stepStatusLabels: Record<string, string> = { pending: 'Belum Mulai', in_progress: 'Berjalan', completed: 'Selesai' };
-const outputTypeLabels: Record<string, string> = { main_output: 'Produk Utama', reprocessable_waste: 'Sisa Bisa Diproses Ulang', disposed_waste: 'Sisa Dibuang' };
+const readinessLabels: Record<string, string> = { ready: 'Siap mulai', blocked: 'Terhambat' };
+const readinessWarnaTag: Record<string, 'green' | 'red'> = { ready: 'green', blocked: 'red' };
+const stepStatusWarnaTag: Record<string, 'gray' | 'purple' | 'green'> = { pending: 'gray', in_progress: 'purple', completed: 'green' };
+const stepStatusLabels: Record<string, string> = { pending: 'Belum mulai', in_progress: 'Berjalan', completed: 'Selesai' };
+const outputTypeLabels: Record<string, string> = { main_output: 'Produk utama', reprocessable_waste: 'Sisa bisa diproses ulang', disposed_waste: 'Sisa dibuang' };
 const stepStatuses = ['pending', 'in_progress', 'completed'];
 
-type WorkOrder = { work_order_id: number; item_code: string | null; item_name: string | null; item_base_uom: string | null; routing_id: number | null; planned_qty: number; status: string; readiness: string; open_alert_count: number; so_number: string | null; total_output_qty: number };
+type WorkOrder = { work_order_id: number; item_code: string | null; item_name: string | null; item_base_uom: string | null; routing_id: number | null; planned_qty: number; status: string; readiness: string; open_alert_count: number; kekurangan_bahan?: boolean; so_number: string | null; total_output_qty: number };
 type RoutingStep = { routing_step_id: number; sequence_no: number; step_name: string; active_duration_minutes: number; wait_duration_minutes: number };
 type StepProgress = { work_order_step_progress_id: number; production_batch_id: number | null; routing_step_id: number; status: string; qty_recorded: number | null; uom: string | null; started_at: string | null; completed_at: string | null };
 type ProductionBatch = { production_batch_id: number; batch_number: string; planned_qty: number; uom: string; status: string };
 
 const batchStatusLabels: Record<string, string> = { planned: 'Direncanakan', in_progress: 'Berjalan', completed: 'Selesai', cancelled: 'Batal' };
-const batchStatusBadgeVariant: Record<string, 'info' | 'warning' | 'success' | 'critical'> = { planned: 'info', in_progress: 'warning', completed: 'success', cancelled: 'critical' };
+const batchStatusWarnaTag: Record<string, 'blue' | 'purple' | 'green' | 'red'> = { planned: 'blue', in_progress: 'purple', completed: 'green', cancelled: 'red' };
 
 const disruptionTypeLabels: Record<string, string> = { equipment_breakdown: 'Mesin Rusak', utility_outage: 'Listrik/Utilitas Padam', external_factor: 'Faktor Eksternal', reprioritized: 'Dialihkan ke Pekerjaan Lain', changeover: 'Ganti Produk (Changeover)', other: 'Lainnya' };
 type ProductionPlant = { production_plant_id: number; name: string };
@@ -98,6 +124,13 @@ export default function ProductionDashboardPage() {
   // sejalan dengan konversi serupa di PurchasingPage. handleCreateDisruption TIDAK
   // diubah, cuma tambah penutupan modal saat sukses.
   const [isDisruptionModalOpen, setIsDisruptionModalOpen] = useState(false);
+
+  // Pencarian, saringan, dan pembagian halaman: Carbon DataTable tidak membawanya.
+  const [cari, setCari] = useState('');
+  const [saringStatus, setSaringStatus] = useState<string>('semua');
+  const [halaman, setHalaman] = useState(1);
+  const [perHalaman, setPerHalaman] = useState(15);
+  const adaSaringan = cari.trim() !== '' || saringStatus !== 'semua';
 
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [woError, setWoError] = useState('');
@@ -414,542 +447,648 @@ export default function ProductionDashboardPage() {
     if (progressRes.ok) setStepProgress(progressRes.body.stepProgress || []);
   };
 
-  const columns = useMemo<ColumnDef<WorkOrder>[]>(
-    () => [
-      { id: 'item', header: 'Item', cell: ({ row }) => <span className="font-medium text-foreground">{row.original.item_code}</span> },
-      { id: 'so', header: 'SO', cell: ({ row }) => row.original.so_number ?? '-' },
-      { id: 'qty', header: 'Planned Qty', cell: ({ row }) => `${formatNumberId(row.original.planned_qty, 2)} ${row.original.item_base_uom ?? ''}` },
-      { accessorKey: 'status', header: 'Status', cell: ({ row }) => <Badge variant={statusBadgeVariant[row.original.status] ?? 'secondary'}>{statusLabels[row.original.status] ?? row.original.status}</Badge> },
-      {
-        id: 'readiness',
-        header: 'Kesiapan',
-        cell: ({ row }) =>
-          readinessLabels[row.original.readiness] ? (
-            <Badge variant={readinessBadgeVariant[row.original.readiness]}>
-              {readinessLabels[row.original.readiness]}
-              {row.original.open_alert_count > 0 ? ` (${formatNumberId(row.original.open_alert_count, 0)})` : ''}
-            </Badge>
-          ) : (
-            '-'
-          )
-      },
-      {
-        id: 'actions',
-        header: 'Aksi',
-        cell: ({ row }) => (
-          <Button size="sm" variant="outline" onClick={() => toggleExpand(row.original)}>
-            {expandedWoId === row.original.work_order_id ? 'Tutup' : 'Catat Progres'}
-          </Button>
-        )
-      }
-    ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [expandedWoId]
+
+  // ==========================================================================
+  // TABEL WORK ORDER — cetakan Master Item
+  // ==========================================================================
+  const kolomWo = [
+    { key: 'item', header: 'Item' },
+    { key: 'so', header: 'SO' },
+    { key: 'qty', header: 'Qty rencana' },
+    { key: 'status', header: 'Status' },
+    { key: 'readiness', header: 'Kesiapan' }
+  ];
+
+  const woTersaring = useMemo(() => {
+    const kata = cari.trim().toLowerCase();
+    return workOrders.filter((wo) => {
+      if (saringStatus !== 'semua' && wo.status !== saringStatus) return false;
+      if (!kata) return true;
+      return `${wo.item_code ?? ''} ${wo.so_number ?? ''}`.toLowerCase().includes(kata);
+    });
+  }, [workOrders, cari, saringStatus]);
+
+  const woHalamanIni = useMemo(() => woTersaring.slice((halaman - 1) * perHalaman, halaman * perHalaman), [woTersaring, halaman, perHalaman]);
+  const woById = useMemo(() => new Map(workOrders.map((wo) => [String(wo.work_order_id), wo])), [workOrders]);
+
+  const barisWo = useMemo(
+    () =>
+      woHalamanIni.map((wo) => ({
+        id: String(wo.work_order_id),
+        item: wo.item_code ?? '',
+        so: wo.so_number ?? '',
+        qty: wo.planned_qty,
+        status: statusLabels[wo.status] ?? wo.status,
+        readiness: readinessLabels[wo.readiness] ?? ''
+      })),
+    [woHalamanIni]
   );
+
+  const isiSelWo = (wo: WorkOrder, kunci: string) => {
+    switch (kunci) {
+      case 'item':
+        return wo.item_code;
+      case 'so':
+        return wo.so_number ?? <span className="halaman__redup">—</span>;
+      case 'qty':
+        return `${formatNumberId(wo.planned_qty, 2)} ${wo.item_base_uom ?? ''}`;
+      case 'status':
+        return <Tag type={statusWarnaTag[wo.status] ?? 'gray'}>{statusLabels[wo.status] ?? wo.status}</Tag>;
+      case 'readiness':
+        return readinessLabels[wo.readiness] ? (
+          <Tag type={readinessWarnaTag[wo.readiness] ?? 'gray'}>
+            {readinessLabels[wo.readiness]}
+            {wo.open_alert_count > 0 ? ` (${formatNumberId(wo.open_alert_count, 0)})` : ''}
+          </Tag>
+        ) : (
+          <span className="halaman__redup">—</span>
+        );
+      default:
+        return null;
+    }
+  };
 
   const expandedWo = workOrders.find((wo) => wo.work_order_id === expandedWoId) ?? null;
 
-  const disruptionColumns = useMemo<ColumnDef<Disruption>[]>(
-    () => [
-      { id: 'type', header: 'Jenis', cell: ({ row }) => <span className="font-medium text-foreground">{disruptionTypeLabels[row.original.disruption_type] ?? row.original.disruption_type}</span> },
-      {
-        id: 'scope',
-        header: 'Cakupan',
-        cell: ({ row }) => (
-          <Badge variant={row.original.work_center_id ? 'warning' : 'critical'}>{row.original.work_center_id ? (row.original.work_center_name ?? 'Work Center') : 'Menyeluruh 1 Plant'}</Badge>
-        )
-      },
-      { id: 'plant', header: 'Lokasi', cell: ({ row }) => row.original.production_plant_name ?? '-' },
-      { id: 'started_at', header: 'Mulai', cell: ({ row }) => formatDateTimeShort(row.original.started_at) },
-      {
-        id: 'context',
-        header: 'Keterangan',
-        cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
-            {row.original.work_order_item_code ? `WO ${row.original.work_order_item_code}` : ''}
-            {row.original.work_order_item_code && row.original.description ? ' · ' : ''}
-            {row.original.description ?? ''}
-          </span>
-        )
-      },
-      {
-        id: 'actions',
-        header: 'Aksi',
-        cell: ({ row }) =>
-          canManageProductionDisruptions(role) ? (
-            <Button size="sm" variant="outline" disabled={resolvingId === row.original.production_disruption_id} onClick={() => handleResolveDisruption(row.original.production_disruption_id)}>
-              {resolvingId === row.original.production_disruption_id ? '...' : 'Tandai Selesai'}
+  // ==========================================================================
+  // PANEL PROGRES TAHAP (isi baris Work Order yang dimekarkan)
+  // ==========================================================================
+  const renderProgresWo = (wo: WorkOrder) => {
+    const selectedBatch = batchesForExpanded.find((b) => String(b.production_batch_id) === selectedBatchId);
+    return (
+      <div className="produksi-progres">
+        <p className="halaman__redup">
+          Yield aktual vs rencana: {formatNumberId(wo.total_output_qty, 2)} / {formatNumberId(wo.planned_qty, 2)} {wo.item_base_uom}
+          {wo.planned_qty > 0 ? ` (${Math.round((wo.total_output_qty / wo.planned_qty) * 10000) / 100}%)` : ''}
+          <ProvenanceInfoButton
+            label="Yield aktual vs rencana"
+            envelope={{
+              formula:
+                'Aktual = Σ qty di work_order_outputs untuk Work Order ini dengan output_type=main_output (SEMUA batch, akumulatif — belum tentu WO ini sudah selesai). Rencana = planned_qty Work Order. Persentase = aktual ÷ rencana × 100. Hasil produksi TIDAK PERNAH diasumsikan sama dengan rencana (prinsip inti sistem ini) — angka ini mencatat selisihnya apa adanya.',
+              inputs: [
+                { label: 'Rencana (planned_qty)', value: `${formatNumberId(wo.planned_qty, 2)} ${wo.item_base_uom ?? ''}` },
+                { label: 'Aktual (Σ work_order_outputs main_output)', value: `${formatNumberId(wo.total_output_qty, 2)} ${wo.item_base_uom ?? ''}` }
+              ]
+            }}
+          />
+        </p>
+
+        <Dropdown
+          id={`produksi-batch-${wo.work_order_id}`}
+          size="lg"
+          className="halaman__saring"
+          titleText="Batch produksi"
+          label="Pilih batch..."
+          items={batchesForExpanded}
+          itemToString={(b: any) => (b ? `${b.batch_number} (${formatNumberId(b.planned_qty, 2)} ${b.uom}) — ${batchStatusLabels[b.status] ?? b.status}` : '')}
+          selectedItem={batchesForExpanded.find((b) => String(b.production_batch_id) === selectedBatchId) ?? null}
+          onChange={({ selectedItem }: { selectedItem: any }) => handleSelectBatch(selectedItem ? String(selectedItem.production_batch_id) : '')}
+        />
+
+        {selectedBatch && canRecordStepProgress(role) ? (
+          <div className="produksi-batch-aksi">
+            <span className="halaman__redup">Status batch:</span>
+            <Tag type={batchStatusWarnaTag[selectedBatch.status] ?? 'gray'}>{batchStatusLabels[selectedBatch.status] ?? selectedBatch.status}</Tag>
+            {selectedBatch.status === 'planned' ? (
+              <Button size="sm" disabled={batchTransitionBusyId === selectedBatch.production_batch_id} onClick={() => handleStartBatch(selectedBatch.production_batch_id)}>
+                {batchTransitionBusyId === selectedBatch.production_batch_id ? 'Memproses...' : 'Mulai batch'}
+              </Button>
+            ) : null}
+            {selectedBatch.status === 'in_progress' ? (
+              <>
+                <Checkbox
+                  id={`produksi-rework-${selectedBatch.production_batch_id}`}
+                  labelText="Rework"
+                  checked={reworkBatchIds.has(selectedBatch.production_batch_id)}
+                  onChange={(_e: unknown, { checked }: { checked: boolean }) =>
+                    setReworkBatchIds((prev) => {
+                      const next = new Set(prev);
+                      if (checked) next.add(selectedBatch.production_batch_id);
+                      else next.delete(selectedBatch.production_batch_id);
+                      return next;
+                    })
+                  }
+                />
+                <Button size="sm" disabled={batchTransitionBusyId === selectedBatch.production_batch_id} onClick={() => handleCompleteBatch(selectedBatch.production_batch_id)}>
+                  {batchTransitionBusyId === selectedBatch.production_batch_id ? 'Memproses...' : 'Selesaikan batch'}
+                </Button>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+
+        {batchTransitionMessage ? <InlineNotification kind="info" lowContrast hideCloseButton title="Status batch" subtitle={batchTransitionMessage} /> : null}
+
+        {batchesForExpanded.length === 0 ? (
+          <p className="halaman__redup">Belum ada batch untuk Work Order ini — buat batch dulu di halaman Work Order sebelum mencatat progres tahap.</p>
+        ) : !selectedBatchId ? (
+          <p className="halaman__redup">Pilih batch produksi dulu di atas — tiap batch bisa berada di tahap berbeda, jadi progres dicatat per batch.</p>
+        ) : !wo.routing_id ? (
+          <p className="halaman__redup">Work Order ini belum punya routing (urutan tahap produksi), jadi progres tahap belum bisa dicatat.</p>
+        ) : routingSteps.length === 0 ? (
+          <p className="halaman__redup">Routing untuk item ini belum punya tahap.</p>
+        ) : (
+          <>
+            {selectedBatch ? (
+              <p className="halaman__redup">
+                Mencatat progres untuk batch {selectedBatch.batch_number} ({formatNumberId(selectedBatch.planned_qty, 2)} {selectedBatch.uom})
+              </p>
+            ) : null}
+            {routingSteps.map((step) => {
+              const existing = stepProgress.find((p) => p.routing_step_id === step.routing_step_id);
+              const entry = stepForm[step.routing_step_id] ?? {
+                status: existing?.status ?? 'pending',
+                qty_recorded: existing?.qty_recorded !== null && existing?.qty_recorded !== undefined ? String(existing.qty_recorded) : '',
+                record_date: new Date().toISOString().slice(0, 10),
+                qty_reject: ''
+              };
+              const warnaTahap = existing ? stepStatusWarnaTag[existing.status] ?? 'gray' : 'gray';
+              return (
+                <div key={step.routing_step_id} className="produksi-tahap">
+                  <div className="produksi-tahap__kepala">
+                    <span className="produksi-tahap__nama">
+                      {step.sequence_no}. {step.step_name}
+                    </span>
+                    {existing ? <Tag type={warnaTahap}>{stepStatusLabels[existing.status]}</Tag> : null}
+                  </div>
+                  <p className="halaman__redup">
+                    Durasi aktif {formatNumberId(step.active_duration_minutes, 2)} menit, tunggu {formatNumberId(step.wait_duration_minutes, 2)} menit
+                  </p>
+                  <div className="produksi-tahap__isi">
+                    <Dropdown
+                      id={`produksi-status-${step.routing_step_id}`}
+                      size="lg"
+                      titleText="Status"
+                      label="Pilih status"
+                      items={stepStatuses as unknown as string[]}
+                      itemToString={(v: string) => stepStatusLabels[v] ?? v}
+                      selectedItem={entry.status}
+                      onChange={({ selectedItem }: { selectedItem: string | null }) =>
+                        setStepForm((prev) => ({ ...prev, [step.routing_step_id]: { ...entry, status: selectedItem ?? 'pending' } }))
+                      }
+                    />
+                    <NumberInput
+                      id={`produksi-qty-${step.routing_step_id}`}
+                      label="Jumlah tercatat"
+                      min={0}
+                      allowEmpty
+                      hideSteppers
+                      value={entry.qty_recorded === '' ? '' : Number(entry.qty_recorded)}
+                      onChange={(_e: unknown, { value }: { value: number | string }) =>
+                        setStepForm((prev) => ({ ...prev, [step.routing_step_id]: { ...entry, qty_recorded: String(value ?? '') } }))
+                      }
+                    />
+                    <TextInput
+                      id={`produksi-tanggal-${step.routing_step_id}`}
+                      size="lg"
+                      type="date"
+                      labelText="Tanggal kejadian"
+                      value={entry.record_date}
+                      onChange={(event) => setStepForm((prev) => ({ ...prev, [step.routing_step_id]: { ...entry, record_date: event.target.value } }))}
+                    />
+                    <NumberInput
+                      id={`produksi-reject-${step.routing_step_id}`}
+                      label="Reject (opsional)"
+                      min={0}
+                      allowEmpty
+                      hideSteppers
+                      value={entry.qty_reject === '' ? '' : Number(entry.qty_reject)}
+                      onChange={(_e: unknown, { value }: { value: number | string }) =>
+                        setStepForm((prev) => ({ ...prev, [step.routing_step_id]: { ...entry, qty_reject: String(value ?? '') } }))
+                      }
+                    />
+                    <Button size="md" onClick={() => handleSaveStep(wo, step)}>
+                      Simpan tahap
+                    </Button>
+                  </div>
+                  {stepMessage[step.routing_step_id] ? (
+                    <InlineNotification kind="info" lowContrast hideCloseButton title="Hasil" subtitle={stepMessage[step.routing_step_id]} />
+                  ) : null}
+                </div>
+              );
+            })}
+          </>
+        )}
+
+        {selectedBatchId ? (
+          <div className="produksi-output">
+            <div className="produksi-output__kepala">
+              <h4 className="halaman__subjudul halaman__subjudul--rapat">Catat hasil produksi</h4>
+              <Button kind="tertiary" size="sm" renderIcon={Add} onClick={addOutputLine}>
+                Tambah baris hasil
+              </Button>
+            </div>
+            <p className="halaman__redup">
+              Bisa lebih dari satu baris sekaligus (mis. produk utama + sisa yang bisa diproses ulang) — semua baris dari batch yang sama mewarisi genealogy yang sama, dari lot
+              bahan yang tercatat dipakai.
+            </p>
+            {outputLines.map((line, index) => (
+              <div key={index} className="produksi-output__baris">
+                <NumberInput
+                  id={`produksi-hasil-qty-${index}`}
+                  label={`Jumlah hasil (${wo.item_base_uom})`}
+                  min={0}
+                  allowEmpty
+                  hideSteppers
+                  value={line.qty === '' ? '' : Number(line.qty)}
+                  onChange={(_e: unknown, { value }: { value: number | string }) => updateOutputLine(index, 'qty', String(value ?? ''))}
+                />
+                <Dropdown
+                  id={`produksi-hasil-jenis-${index}`}
+                  size="lg"
+                  titleText="Jenis hasil"
+                  label="Pilih jenis"
+                  items={Object.keys(outputTypeLabels)}
+                  itemToString={(v: string) => outputTypeLabels[v] ?? v}
+                  selectedItem={line.output_type}
+                  onChange={({ selectedItem }: { selectedItem: string | null }) => updateOutputLine(index, 'output_type', selectedItem ?? 'main_output')}
+                />
+                <TextInput
+                  id={`produksi-hasil-lot-${index}`}
+                  size="lg"
+                  labelText="Nomor lot (opsional)"
+                  placeholder="Kosongkan untuk dibuatkan otomatis"
+                  value={line.lot_number}
+                  onChange={(e) => updateOutputLine(index, 'lot_number', e.target.value)}
+                />
+                <TextInput
+                  id={`produksi-hasil-kadaluarsa-${index}`}
+                  size="lg"
+                  type="date"
+                  labelText="Tanggal kedaluwarsa (opsional)"
+                  value={line.expiry_date}
+                  onChange={(e) => updateOutputLine(index, 'expiry_date', e.target.value)}
+                />
+                <Button kind="danger--tertiary" size="sm" renderIcon={TrashCan} disabled={outputLines.length === 1} onClick={() => removeOutputLine(index)}>
+                  Hapus baris
+                </Button>
+              </div>
+            ))}
+            {outputMessage ? (
+              <InlineNotification
+                kind={outputStatus === 'error' ? 'error' : 'success'}
+                lowContrast
+                hideCloseButton
+                title={outputStatus === 'error' ? 'Gagal' : 'Berhasil'}
+                subtitle={outputMessage}
+              />
+            ) : null}
+            <Button size="md" disabled={outputStatus === 'saving'} onClick={() => handleRecordOutput(wo)}>
+              {outputStatus === 'saving' ? 'Menyimpan...' : 'Catat hasil produksi'}
             </Button>
-          ) : (
-            <span className="text-xs text-muted-foreground">-</span>
-          )
-      }
-    ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [role, resolvingId]
-  );
+          </div>
+        ) : null}
+
+        <Link href="/work-orders" className="cds--link">
+          Buka halaman Work Order lengkap (termasuk catat pemakaian bahan)
+        </Link>
+      </div>
+    );
+  };
 
   if (checkingAccess) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="px-6 text-center text-sm text-muted-foreground">Memuat...</div>
-      </main>
+      <div className="halaman">
+        <DataTableSkeleton columnCount={5} rowCount={6} showHeader showToolbar />
+      </div>
     );
   }
 
   if (accessDenied) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="max-w-3xl px-6">
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em] text-destructive">Akses Ditolak</CardDescription>
-              <CardTitle className="text-2xl">Dashboard Produksi</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <p className="text-sm text-muted-foreground">Halaman ini khusus company_admin, general_manager, production_manager, atau production_staff.</p>
-              <Button onClick={() => router.push('/dashboard')} className="w-fit">
-                Kembali ke Dashboard
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+      <div className="halaman">
+        <KepalaHalaman remah={[]} judul="Produksi" />
+        <InlineNotification kind="error" lowContrast hideCloseButton title="Akses ditolak" subtitle="Halaman ini khusus peran yang berwenang atas produksi." />
+        <Button className="produksi-tombol-kembali" onClick={() => router.push('/dashboard')}>
+          Kembali ke ringkasan
+        </Button>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-muted/30 py-10">
-      <div className="flex w-full flex-col gap-6 px-6">
-        <div>
-          <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Dashboard Department</p>
-          <h1 className="text-2xl font-semibold text-foreground">Production</h1>
-        </div>
+    <div className="halaman">
+      <KepalaHalaman
+        remah={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Manufacturing' }, { label: 'Production' }]}
+        judul="Produksi"
+        pengantar={`${todaysBatches.length} batch dijadwalkan hari ini${myPlantId === null ? '' : ' di lokasi Anda'}, ${disruptions.length} gangguan terbuka, ${woTersaring.length} Work Order${adaSaringan ? ' sesuai saringan' : ''}.`}
+      />
 
-        <Card>
-          <CardHeader>
-            <CardDescription className="uppercase tracking-[0.2em]">Produksi</CardDescription>
-            <CardTitle className="text-xl">Jadwal Hari Ini{myPlantId === null ? '' : ' — Plant Saya'}</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <p className="text-sm text-muted-foreground">Batch yang dijadwalkan hari ini atau sudah berjalan — bukan Gantt penuh, cukup daftar yang bisa langsung ditindaklanjuti.</p>
-            {todaysBatchesError ? <p className="text-sm text-destructive">{todaysBatchesError}</p> : null}
-            {todaysBatchesLoading ? (
-              <p className="text-sm text-muted-foreground">Memuat...</p>
-            ) : todaysBatches.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Tidak ada batch dijadwalkan hari ini{myPlantId !== null ? ' di plant Anda' : ''}.</p>
+      <h2 className="halaman__subjudul">Jadwal hari ini{myPlantId === null ? '' : ' — lokasi saya'}</h2>
+      <p className="halaman__redup">Batch yang dijadwalkan hari ini atau sudah berjalan — bukan Gantt penuh, cukup daftar yang bisa langsung ditindaklanjuti.</p>
+      {todaysBatchesError ? <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal memuat jadwal" subtitle={todaysBatchesError} /> : null}
+      {todaysBatchesLoading ? (
+        <DataTableSkeleton columnCount={6} rowCount={3} showHeader={false} showToolbar={false} />
+      ) : (
+        <Table size="lg" className="tabel-responsif">
+          <TableHead>
+            <TableRow>
+              <TableHeader>Batch</TableHeader>
+              <TableHeader>Item</TableHeader>
+              <TableHeader>Qty</TableHeader>
+              <TableHeader>Lokasi</TableHeader>
+              <TableHeader>Status</TableHeader>
+              <TableHeader>Aksi</TableHeader>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {todaysBatches.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6}>Tidak ada batch dijadwalkan hari ini{myPlantId !== null ? ' di lokasi Anda' : ''}.</TableCell>
+              </TableRow>
             ) : (
-              <div className="overflow-hidden rounded-md border">
-                <table className="w-full text-data">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Batch</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Item</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Qty</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Plant</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Status</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {todaysBatches.map((b) => (
-                      <tr key={b.production_batch_id} className="border-b last:border-0">
-                        <td className="px-3 py-1.5 font-medium text-foreground">{b.batch_number}</td>
-                        <td className="px-3 py-1.5">
-                          {b.item_code} — {b.item_name}
-                        </td>
-                        <td className="px-3 py-1.5">
-                          {formatNumberId(b.planned_qty, 2)} {b.uom}
-                        </td>
-                        <td className="px-3 py-1.5">{b.production_plant_name ?? '-'}</td>
-                        <td className="px-3 py-1.5">
-                          <Badge variant={batchStatusBadgeVariant[b.status] ?? 'secondary'}>{batchStatusLabels[b.status] ?? b.status}</Badge>
-                        </td>
-                        <td className="px-3 py-1.5">
-                          <div className="flex gap-2">
-                            {canRecordStepProgress(role) && b.status === 'planned' ? (
-                              <Button size="sm" disabled={batchTransitionBusyId === b.production_batch_id} onClick={() => handleStartBatch(b.production_batch_id)}>
-                                {batchTransitionBusyId === b.production_batch_id ? '...' : 'Mulai'}
-                              </Button>
-                            ) : null}
-                            {canRecordStepProgress(role) && b.status === 'in_progress' ? (
-                              <label className="flex items-center gap-1 text-xs text-muted-foreground">
-                                <input
-                                  type="checkbox"
-                                  checked={reworkBatchIds.has(b.production_batch_id)}
-                                  onChange={(e) =>
-                                    setReworkBatchIds((prev) => {
-                                      const next = new Set(prev);
-                                      if (e.target.checked) next.add(b.production_batch_id);
-                                      else next.delete(b.production_batch_id);
-                                      return next;
-                                    })
-                                  }
-                                />
-                                Rework
-                              </label>
-                            ) : null}
-                            {canRecordStepProgress(role) && b.status === 'in_progress' ? (
-                              <Button size="sm" disabled={batchTransitionBusyId === b.production_batch_id} onClick={() => handleCompleteBatch(b.production_batch_id)}>
-                                {batchTransitionBusyId === b.production_batch_id ? '...' : 'Selesaikan'}
-                              </Button>
-                            ) : null}
-                            <Button size="sm" variant="outline" onClick={() => handleOpenFromToday(b)}>
-                              Catat Tahap
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            {batchTransitionMessage ? <p className="text-sm text-muted-foreground">{batchTransitionMessage}</p> : null}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardDescription className="uppercase tracking-[0.2em]">Produksi</CardDescription>
-            <CardTitle className="text-xl">Gangguan Produksi</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <p className="text-sm text-muted-foreground">
-              Kosongkan &quot;Work Center&quot; untuk gangguan MENYELURUH 1 lokasi pabrik (mis. listrik padam se-pabrik) — semua Work Order aktif di lokasi itu otomatis ter-flag &quot;Terhambat&quot;, dan otomatis kembali &quot;Siap&quot;/&quot;Berjalan&quot; begitu ditandai selesai.
-            </p>
-
-            {disruptionsError ? <p className="text-sm text-destructive">{disruptionsError}</p> : null}
-            {disruptionsLoading ? (
-              <p className="text-sm text-muted-foreground">Memuat...</p>
-            ) : (
-              <DataTable
-                columns={disruptionColumns}
-                data={disruptions}
-                emptyMessage="Tidak ada gangguan produksi yang sedang terbuka."
-                primaryAction={canManageProductionDisruptions(role) ? { label: 'Catat Gangguan', onClick: () => setIsDisruptionModalOpen(true) } : undefined}
-              />
-            )}
-          </CardContent>
-        </Card>
-
-        <Dialog open={isDisruptionModalOpen} onOpenChange={setIsDisruptionModalOpen}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Catat Gangguan Produksi</DialogTitle>
-            </DialogHeader>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="mb-1 block text-xs text-muted-foreground">Jenis Gangguan</label>
-                <Select value={disruptionForm.disruption_type} onValueChange={(v) => setDisruptionForm((prev) => ({ ...prev, disruption_type: v }))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(disruptionTypeLabels).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs text-muted-foreground">Lokasi Pabrik</label>
-                <Select value={disruptionForm.production_plant_id} onValueChange={(v) => setDisruptionForm((prev) => ({ ...prev, production_plant_id: v, work_center_id: '' }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih lokasi..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {plants.map((p) => (
-                      <SelectItem key={p.production_plant_id} value={String(p.production_plant_id)}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs text-muted-foreground">Work Center (opsional)</label>
-                <Select value={disruptionForm.work_center_id || '__none__'} onValueChange={(v) => setDisruptionForm((prev) => ({ ...prev, work_center_id: v === '__none__' ? '' : v }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="(Menyeluruh)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">(Menyeluruh — semua Work Center)</SelectItem>
-                    {workCenterOptions
-                      .filter((wc) => !disruptionForm.production_plant_id || String(wc.production_plant_id) === disruptionForm.production_plant_id)
-                      .map((wc) => (
-                        <SelectItem key={wc.work_center_id} value={String(wc.work_center_id)}>
-                          {wc.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs text-muted-foreground">Keterangan (opsional)</label>
-                <Input value={disruptionForm.description} onChange={(e) => setDisruptionForm((prev) => ({ ...prev, description: e.target.value }))} />
-              </div>
-            </div>
-            {disruptionFormMessage ? <p className="text-sm text-destructive">{disruptionFormMessage}</p> : null}
-            <div className="flex items-center gap-3">
-              <Button disabled={disruptionFormStatus === 'saving'} onClick={handleCreateDisruption}>
-                {disruptionFormStatus === 'saving' ? 'Menyimpan...' : 'Catat Gangguan'}
-              </Button>
-              <Button variant="outline" onClick={() => setIsDisruptionModalOpen(false)}>
-                Batal
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        <Card>
-          <CardHeader>
-            <CardDescription className="uppercase tracking-[0.2em]">Produksi</CardDescription>
-            <CardTitle className="text-xl">Work Order</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {woError ? <p className="text-sm text-destructive">{woError}</p> : null}
-            {woLoading ? <p className="text-sm text-muted-foreground">Memuat...</p> : <DataTable columns={columns} data={workOrders} emptyMessage="Belum ada Work Order." />}
-          </CardContent>
-        </Card>
-
-        {expandedWo ? (
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em]">Progres Tahap</CardDescription>
-              <CardTitle className="text-xl">
-                {expandedWo.item_code} — {formatNumberId(expandedWo.planned_qty, 2)} {expandedWo.item_base_uom}
-              </CardTitle>
-              <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                Yield aktual vs rencana: <span className="font-medium text-foreground">{formatNumberId(expandedWo.total_output_qty, 2)}</span> / {formatNumberId(expandedWo.planned_qty, 2)} {expandedWo.item_base_uom}
-                {expandedWo.planned_qty > 0 ? ` (${Math.round((expandedWo.total_output_qty / expandedWo.planned_qty) * 10000) / 100}%)` : ''}
-                <ProvenanceInfoButton
-                  label="Yield Aktual vs Rencana"
-                  envelope={{
-                    formula:
-                      'Aktual = Σ qty di work_order_outputs untuk Work Order ini dengan output_type=main_output (SEMUA batch, akumulatif — belum tentu WO ini sudah selesai). Rencana = planned_qty Work Order. Persentase = aktual ÷ rencana × 100. Hasil produksi TIDAK PERNAH diasumsikan sama dengan rencana (prinsip inti sistem ini) — angka ini mencatat selisihnya apa adanya.',
-                    inputs: [
-                      { label: 'Rencana (planned_qty)', value: `${formatNumberId(expandedWo.planned_qty, 2)} ${expandedWo.item_base_uom ?? ''}` },
-                      { label: 'Aktual (Σ work_order_outputs main_output)', value: `${formatNumberId(expandedWo.total_output_qty, 2)} ${expandedWo.item_base_uom ?? ''}` }
-                    ]
-                  }}
-                />
-              </p>
-            </CardHeader>
-            <CardContent>
-              <label className="mb-3 flex max-w-xs flex-col gap-1.5">
-                <span className="text-xs font-medium text-muted-foreground">Batch Produksi</span>
-                <Select value={selectedBatchId} onValueChange={handleSelectBatch}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih batch..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {batchesForExpanded.map((batch) => (
-                      <SelectItem key={batch.production_batch_id} value={String(batch.production_batch_id)}>
-                        {batch.batch_number} ({formatNumberId(batch.planned_qty, 2)} {batch.uom}) — {batchStatusLabels[batch.status] ?? batch.status}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
-
-              {selectedBatchId && canRecordStepProgress(role)
-                ? (() => {
-                    const selectedBatch = batchesForExpanded.find((b) => String(b.production_batch_id) === selectedBatchId);
-                    if (!selectedBatch) return null;
-                    const batchId = selectedBatch.production_batch_id;
-                    return (
-                      <div className="mb-3 flex items-center gap-2 rounded-md border p-2">
-                        <span className="text-xs text-muted-foreground">Status batch:</span>
-                        <Badge variant={batchStatusBadgeVariant[selectedBatch.status] ?? 'secondary'}>{batchStatusLabels[selectedBatch.status] ?? selectedBatch.status}</Badge>
-                        {selectedBatch.status === 'planned' ? (
-                          <Button size="sm" disabled={batchTransitionBusyId === batchId} onClick={() => handleStartBatch(batchId)}>
-                            {batchTransitionBusyId === batchId ? 'Memproses...' : 'Mulai Batch'}
-                          </Button>
-                        ) : selectedBatch.status === 'in_progress' ? (
-                          <>
-                            <label className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <input
-                                type="checkbox"
-                                checked={reworkBatchIds.has(batchId)}
-                                onChange={(e) =>
-                                  setReworkBatchIds((prev) => {
-                                    const next = new Set(prev);
-                                    if (e.target.checked) next.add(batchId);
-                                    else next.delete(batchId);
-                                    return next;
-                                  })
-                                }
-                              />
-                              Rework
-                            </label>
-                            <Button size="sm" disabled={batchTransitionBusyId === batchId} onClick={() => handleCompleteBatch(batchId)}>
-                              {batchTransitionBusyId === batchId ? 'Memproses...' : 'Selesaikan Batch'}
-                            </Button>
-                          </>
-                        ) : null}
-                      </div>
-                    );
-                  })()
-                : null}
-              {batchTransitionMessage ? <p className="mb-3 text-sm text-muted-foreground">{batchTransitionMessage}</p> : null}
-
-              {batchesForExpanded.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Belum ada batch untuk Work Order ini — buat batch dulu di halaman Work Order sebelum mencatat progres tahap.</p>
-              ) : !selectedBatchId ? (
-                <p className="text-sm text-muted-foreground">Pilih batch produksi dulu di atas — tiap batch bisa berada di tahap berbeda, jadi progres dicatat per batch.</p>
-              ) : !expandedWo.routing_id ? (
-                <p className="text-sm text-muted-foreground">Work Order ini belum punya routing (urutan tahap produksi), jadi progres tahap belum bisa dicatat.</p>
-              ) : routingSteps.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Routing untuk item ini belum punya tahap.</p>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  {(() => {
-                    const selectedBatch = batchesForExpanded.find((b) => String(b.production_batch_id) === selectedBatchId);
-                    return selectedBatch ? (
-                      <p className="text-xs text-muted-foreground">
-                        Mencatat progres untuk batch <span className="font-medium text-foreground">{selectedBatch.batch_number}</span> ({formatNumberId(selectedBatch.planned_qty, 2)} {selectedBatch.uom})
-                      </p>
-                    ) : null;
-                  })()}
-                  {routingSteps.map((step) => {
-                    const existing = stepProgress.find((p) => p.routing_step_id === step.routing_step_id);
-                    const entry = stepForm[step.routing_step_id] ?? {
-                      status: existing?.status ?? 'pending',
-                      qty_recorded: existing?.qty_recorded !== null && existing?.qty_recorded !== undefined ? String(existing.qty_recorded) : '',
-                      record_date: new Date().toISOString().slice(0, 10),
-                      qty_reject: ''
-                    };
-                    return (
-                      <div key={step.routing_step_id} className="rounded-md border p-3">
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium text-foreground">
-                            {step.sequence_no}. {step.step_name}
-                          </p>
-                          {existing ? <Badge variant={existing.status === 'completed' ? 'success' : existing.status === 'in_progress' ? 'warning' : 'secondary'}>{stepStatusLabels[existing.status]}</Badge> : null}
-                        </div>
-                        <p className="mb-2 text-xs text-muted-foreground">
-                          Durasi aktif {formatNumberId(step.active_duration_minutes, 2)} menit, tunggu {formatNumberId(step.wait_duration_minutes, 2)} menit
-                        </p>
-                        <div className="grid grid-cols-[160px_140px_140px_140px_auto] items-end gap-2">
-                          <label className="flex flex-col gap-1">
-                            <span className="text-xs font-medium text-muted-foreground">Status</span>
-                            <Select value={entry.status} onValueChange={(value) => setStepForm((prev) => ({ ...prev, [step.routing_step_id]: { ...entry, status: value } }))}>
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {stepStatuses.map((s) => (
-                                  <SelectItem key={s} value={s}>
-                                    {stepStatusLabels[s]}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </label>
-                          <label className="flex flex-col gap-1">
-                            <span className="text-xs font-medium text-muted-foreground">Jumlah Tercatat</span>
-                            <Input
-                              type="number"
-                              min="0"
-                              step="any"
-                              value={entry.qty_recorded}
-                              onChange={(event) => setStepForm((prev) => ({ ...prev, [step.routing_step_id]: { ...entry, qty_recorded: event.target.value } }))}
-                            />
-                          </label>
-                          <label className="flex flex-col gap-1">
-                            <span className="text-xs font-medium text-muted-foreground">Tanggal Kejadian</span>
-                            <Input
-                              type="date"
-                              value={entry.record_date}
-                              onChange={(event) => setStepForm((prev) => ({ ...prev, [step.routing_step_id]: { ...entry, record_date: event.target.value } }))}
-                            />
-                          </label>
-                          <label className="flex flex-col gap-1">
-                            <span className="text-xs font-medium text-muted-foreground">Reject (opsional)</span>
-                            <Input
-                              type="number"
-                              min="0"
-                              step="any"
-                              value={entry.qty_reject}
-                              onChange={(event) => setStepForm((prev) => ({ ...prev, [step.routing_step_id]: { ...entry, qty_reject: event.target.value } }))}
-                            />
-                          </label>
-                          <Button size="sm" onClick={() => handleSaveStep(expandedWo, step)}>
-                            Simpan
-                          </Button>
-                        </div>
-                        {stepMessage[step.routing_step_id] ? <p className="mt-1 text-xs text-muted-foreground">{stepMessage[step.routing_step_id]}</p> : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              {selectedBatchId ? (
-                <div className="mt-4 border-t pt-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className="text-sm font-medium text-foreground">Catat Hasil Produksi (Output)</p>
-                    <Button size="sm" variant="outline" onClick={addOutputLine}>
-                      + Tambah Baris Output
-                    </Button>
-                  </div>
-                  <p className="mb-2 text-xs text-muted-foreground">
-                    Bisa lebih dari 1 baris sekaligus (mis. produk utama + sisa reprocessable) — semua baris dari batch yang sama mewarisi genealogy yang sama, dari lot bahan yang tercatat dipakai (Catat Pemakaian Bahan di halaman Work Order).
-                  </p>
-                  <div className="flex flex-col gap-2">
-                    {outputLines.map((line, index) => (
-                      <div key={index} className="grid grid-cols-2 gap-2 rounded-md border p-2 sm:grid-cols-[1fr_1fr_1fr_1fr_auto]">
-                        <label className="flex flex-col gap-1">
-                          <span className="text-xs font-medium text-muted-foreground">Jumlah Hasil ({expandedWo.item_base_uom})</span>
-                          <Input type="number" min="0" step="any" value={line.qty} onChange={(e) => updateOutputLine(index, 'qty', e.target.value)} />
-                        </label>
-                        <label className="flex flex-col gap-1">
-                          <span className="text-xs font-medium text-muted-foreground">Jenis Output</span>
-                          <Select value={line.output_type} onValueChange={(v) => updateOutputLine(index, 'output_type', v)}>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {Object.entries(outputTypeLabels).map(([value, label]) => (
-                                <SelectItem key={value} value={value}>
-                                  {label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </label>
-                        <label className="flex flex-col gap-1">
-                          <span className="text-xs font-medium text-muted-foreground">Nomor Lot (opsional)</span>
-                          <Input value={line.lot_number} onChange={(e) => updateOutputLine(index, 'lot_number', e.target.value)} placeholder="auto kalau kosong" />
-                        </label>
-                        <label className="flex flex-col gap-1">
-                          <span className="text-xs font-medium text-muted-foreground">Tanggal Kadaluarsa (opsional)</span>
-                          <Input type="date" value={line.expiry_date} onChange={(e) => updateOutputLine(index, 'expiry_date', e.target.value)} />
-                        </label>
-                        <Button size="sm" variant="destructive" disabled={outputLines.length === 1} onClick={() => removeOutputLine(index)}>
-                          Hapus
+              todaysBatches.map((b) => (
+                <TableRow key={b.production_batch_id}>
+                  <TableCell data-label="Batch">{b.batch_number}</TableCell>
+                  <TableCell data-label="Item">
+                    {b.item_code} — {b.item_name}
+                  </TableCell>
+                  <TableCell data-label="Qty">
+                    {formatNumberId(b.planned_qty, 2)} {b.uom}
+                  </TableCell>
+                  <TableCell data-label="Lokasi">{b.production_plant_name ?? '—'}</TableCell>
+                  <TableCell data-label="Status">
+                    <Tag type={batchStatusWarnaTag[b.status] ?? 'gray'}>{batchStatusLabels[b.status] ?? b.status}</Tag>
+                  </TableCell>
+                  <TableCell data-label="Aksi">
+                    <div className="produksi-aksi-sel">
+                      {canRecordStepProgress(role) && b.status === 'planned' ? (
+                        <Button size="sm" disabled={batchTransitionBusyId === b.production_batch_id} onClick={() => handleStartBatch(b.production_batch_id)}>
+                          {batchTransitionBusyId === b.production_batch_id ? '...' : 'Mulai'}
                         </Button>
-                      </div>
-                    ))}
-                  </div>
-                  {outputMessage ? <p className={`mt-2 text-sm ${outputStatus === 'error' ? 'text-destructive' : 'text-success'}`}>{outputMessage}</p> : null}
-                  <Button size="sm" className="mt-2" disabled={outputStatus === 'saving'} onClick={() => handleRecordOutput(expandedWo)}>
-                    {outputStatus === 'saving' ? 'Menyimpan...' : 'Catat Hasil Produksi'}
-                  </Button>
-                </div>
-              ) : null}
+                      ) : null}
+                      {canRecordStepProgress(role) && b.status === 'in_progress' ? (
+                        <Checkbox
+                          id={`produksi-rework-jadwal-${b.production_batch_id}`}
+                          labelText="Rework"
+                          checked={reworkBatchIds.has(b.production_batch_id)}
+                          onChange={(_e: unknown, { checked }: { checked: boolean }) =>
+                            setReworkBatchIds((prev) => {
+                              const next = new Set(prev);
+                              if (checked) next.add(b.production_batch_id);
+                              else next.delete(b.production_batch_id);
+                              return next;
+                            })
+                          }
+                        />
+                      ) : null}
+                      {canRecordStepProgress(role) && b.status === 'in_progress' ? (
+                        <Button size="sm" disabled={batchTransitionBusyId === b.production_batch_id} onClick={() => handleCompleteBatch(b.production_batch_id)}>
+                          {batchTransitionBusyId === b.production_batch_id ? '...' : 'Selesaikan'}
+                        </Button>
+                      ) : null}
+                      <Button kind="ghost" size="sm" onClick={() => handleOpenFromToday(b)}>
+                        Catat tahap
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      )}
 
-              <div className="mt-3">
-                <Link href="/work-orders" className="text-sm text-muted-foreground underline">
-                  Buka halaman Work Order lengkap (termasuk catat pemakaian bahan)
-                </Link>
+      <h2 className="halaman__subjudul">Gangguan produksi</h2>
+      <p className="halaman__redup">
+        Kosongkan &quot;work center&quot; untuk gangguan MENYELURUH satu lokasi pabrik (mis. listrik padam se-pabrik) — semua Work Order aktif di lokasi itu otomatis ditandai
+        &quot;terhambat&quot;, dan kembali normal begitu gangguannya ditandai selesai.
+      </p>
+      {disruptionsError ? <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal memuat gangguan" subtitle={disruptionsError} /> : null}
+      {disruptionsLoading ? (
+        <DataTableSkeleton columnCount={6} rowCount={3} showHeader={false} showToolbar />
+      ) : (
+        <Table size="lg" className="tabel-responsif">
+          <TableHead>
+            <TableRow>
+              <TableHeader>Jenis</TableHeader>
+              <TableHeader>Cakupan</TableHeader>
+              <TableHeader>Lokasi</TableHeader>
+              <TableHeader>Mulai</TableHeader>
+              <TableHeader>Keterangan</TableHeader>
+              <TableHeader>Aksi</TableHeader>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {disruptions.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6}>Tidak ada gangguan produksi yang sedang terbuka.</TableCell>
+              </TableRow>
+            ) : (
+              disruptions.map((d) => (
+                <TableRow key={d.production_disruption_id}>
+                  <TableCell data-label="Jenis">{disruptionTypeLabels[d.disruption_type] ?? d.disruption_type}</TableCell>
+                  <TableCell data-label="Cakupan">
+                    {/* Gangguan MENYELURUH merah karena ia menghentikan seluruh lokasi; gangguan
+                        satu work center magenta — mengganggu, tapi tidak menghentikan semuanya. */}
+                    <Tag type={d.work_center_id ? 'magenta' : 'red'}>{d.work_center_id ? d.work_center_name ?? 'Work center' : 'Menyeluruh satu lokasi'}</Tag>
+                  </TableCell>
+                  <TableCell data-label="Lokasi">{d.production_plant_name ?? '—'}</TableCell>
+                  <TableCell data-label="Mulai">{formatDateTimeShort(d.started_at)}</TableCell>
+                  <TableCell data-label="Keterangan">
+                    {d.work_order_item_code ? `WO ${d.work_order_item_code}` : ''}
+                    {d.work_order_item_code && d.description ? ' · ' : ''}
+                    {d.description ?? ''}
+                  </TableCell>
+                  <TableCell data-label="Aksi">
+                    {canManageProductionDisruptions(role) ? (
+                      <Button
+                        kind="ghost"
+                        size="sm"
+                        disabled={resolvingId === d.production_disruption_id}
+                        onClick={() => handleResolveDisruption(d.production_disruption_id)}
+                      >
+                        {resolvingId === d.production_disruption_id ? '...' : 'Tandai selesai'}
+                      </Button>
+                    ) : (
+                      <span className="halaman__redup">—</span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      )}
+      {canManageProductionDisruptions(role) ? (
+        <Button size="lg" renderIcon={Add} className="produksi-tombol-gangguan" onClick={() => setIsDisruptionModalOpen(true)}>
+          Catat gangguan
+        </Button>
+      ) : null}
+
+      <h2 className="halaman__subjudul">Work Order</h2>
+      {woError ? <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal memuat Work Order" subtitle={woError} /> : null}
+      {woLoading ? (
+        <DataTableSkeleton columnCount={5} rowCount={6} showHeader showToolbar />
+      ) : (
+        <>
+          <DataTable rows={barisWo} headers={kolomWo} isSortable size="lg">
+            {(rp: any) => (
+              <TableContainer {...rp.getTableContainerProps()}>
+                <TableToolbar>
+                  <TableToolbarContent>
+                    {/* MELIPAT, bukan selalu terbuka — bawaan Carbon, `persistent` tidak dipakai. */}
+                    <TableToolbarSearch
+                      placeholder="Cari kode item atau nomor SO…"
+                      labelText="Cari Work Order"
+                      onChange={(e: React.ChangeEvent<HTMLInputElement> | '') => {
+                        setCari(typeof e === 'string' ? '' : e.target.value);
+                        setHalaman(1);
+                      }}
+                    />
+                    <Dropdown
+                      id="produksi-saring-status"
+                      size="lg"
+                      className="halaman__saring"
+                      label="Status"
+                      titleText="Status"
+                      hideLabel
+                      items={['semua', ...Object.keys(statusLabels)]}
+                      itemToString={(v: string) => (v === 'semua' ? 'Semua status' : statusLabels[v] ?? v)}
+                      selectedItem={saringStatus}
+                      onChange={({ selectedItem }: { selectedItem: string | null }) => {
+                        setSaringStatus(selectedItem ?? 'semua');
+                        setHalaman(1);
+                      }}
+                    />
+                  </TableToolbarContent>
+                </TableToolbar>
+                <Table {...rp.getTableProps()} className="tabel-responsif">
+                  <TableHead>
+                    <TableRow>
+                      <TableExpandHeader aria-label="Buka pencatatan progres" />
+                      {rp.headers.map((h: any) => {
+                        const { key, ...sisa } = rp.getHeaderProps({ header: h }) as { key?: string };
+                        void key;
+                        return (
+                          <TableHeader key={h.key} {...sisa} isSortable>
+                            {h.header}
+                          </TableHeader>
+                        );
+                      })}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {rp.rows.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={kolomWo.length + 1}>
+                          {adaSaringan ? 'Tidak ada Work Order yang cocok dengan pencarian atau saringan.' : 'Belum ada Work Order.'}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      rp.rows.map((row: any) => {
+                        const wo = woById.get(row.id);
+                        if (!wo) return null;
+                        const { key, ...sisaBaris } = rp.getRowProps({ row }) as { key?: string };
+                        void key;
+                        return (
+                          <React.Fragment key={row.id}>
+                            <TableExpandRow
+                              {...sisaBaris}
+                              isExpanded={expandedWoId === wo.work_order_id}
+                              onExpand={() => toggleExpand(wo)}
+                              aria-label={`Progres ${wo.item_code}`}
+                            >
+                              {kolomWo.map((h) => (
+                                <TableCell key={h.key} data-label={h.header}>
+                                  {isiSelWo(wo, h.key)}
+                                </TableCell>
+                              ))}
+                            </TableExpandRow>
+                            <TableExpandedRow colSpan={kolomWo.length + 1}>
+                              {expandedWoId === wo.work_order_id && expandedWo ? renderProgresWo(expandedWo) : null}
+                            </TableExpandedRow>
+                          </React.Fragment>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </DataTable>
+
+          <Pagination
+            page={halaman}
+            pageSize={perHalaman}
+            pageSizes={[15, 30, 50]}
+            totalItems={woTersaring.length}
+            onChange={({ page, pageSize }: { page: number; pageSize: number }) => {
+              setHalaman(page);
+              setPerHalaman(pageSize);
+            }}
+            backwardText="Halaman sebelumnya"
+            forwardText="Halaman berikutnya"
+            itemsPerPageText="Baris per halaman"
+            itemRangeText={(mulai: number, akhir: number, total: number) => `${mulai}–${akhir} dari ${total} Work Order`}
+            pageRangeText={(_kini: number, total: number) => `dari ${total} halaman`}
+            pageNumberText="Nomor halaman"
+          />
+        </>
+      )}
+
+      {/* MODAL TRANSAKSIONAL: empat isian, satu keputusan — catat gangguan. */}
+      <ComposedModal open={isDisruptionModalOpen} size="md" onClose={() => { setIsDisruptionModalOpen(false); return true; }}>
+        <ModalHeader label="Produksi" title="Catat gangguan produksi" closeModal={() => setIsDisruptionModalOpen(false)} />
+        <ModalBody hasForm>
+          <div className="produksi-form">
+            <Dropdown
+              id="gangguan-jenis"
+              size="lg"
+              titleText="Jenis gangguan"
+              label="Pilih jenis"
+              items={Object.keys(disruptionTypeLabels)}
+              itemToString={(v: string) => disruptionTypeLabels[v] ?? v}
+              selectedItem={disruptionForm.disruption_type}
+              onChange={({ selectedItem }: { selectedItem: string | null }) => setDisruptionForm((prev) => ({ ...prev, disruption_type: selectedItem ?? '' }))}
+            />
+            <Dropdown
+              id="gangguan-lokasi"
+              size="lg"
+              titleText="Lokasi pabrik"
+              label="Pilih lokasi..."
+              items={plants}
+              itemToString={(p: any) => p?.name ?? ''}
+              selectedItem={plants.find((p) => String(p.production_plant_id) === disruptionForm.production_plant_id) ?? null}
+              onChange={({ selectedItem }: { selectedItem: any }) =>
+                setDisruptionForm((prev) => ({ ...prev, production_plant_id: selectedItem ? String(selectedItem.production_plant_id) : '', work_center_id: '' }))
+              }
+            />
+            <Dropdown
+              id="gangguan-work-center"
+              size="lg"
+              titleText="Work center"
+              label="(Menyeluruh — semua work center)"
+              helperText="Dikosongkan berarti seluruh lokasi pabrik terdampak."
+              items={['', ...workCenterOptions.filter((wc) => !disruptionForm.production_plant_id || String(wc.production_plant_id) === disruptionForm.production_plant_id).map((wc) => String(wc.work_center_id))]}
+              itemToString={(v: string) => (v === '' ? '(Menyeluruh — semua work center)' : workCenterOptions.find((wc) => String(wc.work_center_id) === v)?.name ?? v)}
+              selectedItem={disruptionForm.work_center_id || ''}
+              onChange={({ selectedItem }: { selectedItem: string | null }) => setDisruptionForm((prev) => ({ ...prev, work_center_id: selectedItem ?? '' }))}
+            />
+            <TextInput
+              id="gangguan-keterangan"
+              size="lg"
+              labelText="Keterangan (opsional)"
+              value={disruptionForm.description}
+              onChange={(e) => setDisruptionForm((prev) => ({ ...prev, description: e.target.value }))}
+            />
+            {disruptionFormMessage ? (
+              <div className="produksi-form__lebar-penuh">
+                <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal" subtitle={disruptionFormMessage} />
               </div>
-            </CardContent>
-          </Card>
-        ) : null}
-      </div>
-    </main>
+            ) : null}
+          </div>
+        </ModalBody>
+        {/* `children` WAJIB pada ModalFooter di @carbon/react 1.114. */}
+        <ModalFooter>
+          <Button kind="secondary" onClick={() => setIsDisruptionModalOpen(false)}>
+            Batal
+          </Button>
+          <Button kind="primary" disabled={disruptionFormStatus === 'saving'} onClick={handleCreateDisruption}>
+            {disruptionFormStatus === 'saving' ? 'Menyimpan...' : 'Catat gangguan'}
+          </Button>
+        </ModalFooter>
+      </ComposedModal>
+    </div>
   );
 }

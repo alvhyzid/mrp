@@ -1,18 +1,55 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import type { ColumnDef } from '@tanstack/react-table';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { DataTable } from '@/components/ui/data-table';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Button,
+  ComposedModal,
+  DataTable,
+  DataTableSkeleton,
+  Dropdown,
+  InlineNotification,
+  ModalBody,
+  ModalFooter,
+  ModalHeader,
+  NumberInput,
+  Pagination,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableExpandHeader,
+  TableExpandRow,
+  TableExpandedRow,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableToolbar,
+  TableToolbarContent,
+  TableToolbarSearch,
+  Tag,
+  TextInput,
+  Tile
+} from '@carbon/react';
+import { Add, TrashCan } from '@carbon/icons-react';
 import { canManageBom } from '@/lib/roles';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
 import { formatNumberId } from '@/lib/currency';
+
+// HALAMAN ROUTING — dimigrasikan ke Carbon 26 Agu 2026 (DS-09).
+//
+// POLA: Data table (https://carbondesignsystem.com/patterns/data-table-pattern) — daftar
+// master dengan pencarian, saringan, tombol tambah, dan aksi per baris. Cetakannya sama
+// dengan halaman Pelanggan supaya kedua layar tidak berbeda bentuk untuk hal yang sama.
+//
+// MODAL BERTAHAP, bukan transaksional: pengguna menambah dan menghapus baris tahap di
+// dalam modal sebelum menyimpan, jadi isinya berubah beberapa kali dalam satu kunjungan.
+//
+// AKSI MERUSAK DIPISAH: Hapus/Arsipkan sekarang berjarak dari Detail/Edit dan memakai
+// kind="danger--tertiary". Sebelumnya keempatnya berdempetan — di layar sentuh, jari jauh
+// lebih besar daripada kursor, dan Arsipkan tidak boleh berjarak satu jari dari Edit.
 
 type RoutingStep = {
   routing_step_id: number;
@@ -40,6 +77,8 @@ type Routing = {
   archived_at: string | null;
   archived_by_name: string | null;
 };
+
+type SaringStatus = 'aktif' | 'diarsipkan' | 'semua';
 
 type ItemOption = { item_id: number; item_code: string; name: string; base_uom: string };
 type WorkCenterOption = { work_center_id: number; name: string; code: string | null; is_active: boolean };
@@ -69,14 +108,17 @@ export default function RoutingsPage() {
   const [routings, setRoutings] = useState<Routing[]>([]);
   const [routingsError, setRoutingsError] = useState('');
   const [routingsLoading, setRoutingsLoading] = useState(true);
-  // Sesi 7 (7.4) — "Tampilkan yang diarsipkan", default TIDAK dicentang.
-  const [showArchived, setShowArchived] = useState(false);
+  // SARINGAN STATUS, bukan kotak centang — bentuknya sama dengan saringan di Master Item.
+  // Bawaannya "aktif": yang diarsipkan tidak muncul kecuali diminta.
+  const [saringStatus, setSaringStatus] = useState<SaringStatus>('aktif');
+  // Yang diarsipkan hanya perlu diambil dari server bila saringannya memintanya.
+  const showArchived = saringStatus !== 'aktif';
   const [archiveActionStatus, setArchiveActionStatus] = useState<{ routingId: number; message: string; kind: 'error' | 'success' } | null>(null);
 
   const [items, setItems] = useState<ItemOption[]>([]);
   const [workCenters, setWorkCenters] = useState<WorkCenterOption[]>([]);
 
-  const [viewingRoutingId, setViewingRoutingId] = useState<number | null>(null);
+  const [expandedRoutingId, setExpandedRoutingId] = useState<number | null>(null);
   const [editingRoutingId, setEditingRoutingId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [formStatus, setFormStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
@@ -86,6 +128,12 @@ export default function RoutingsPage() {
   // sengaja tidak memanggil resetForm() supaya pesan sukses tetap terlihat; modal
   // ditutup manual oleh user.
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+
+  // Pencarian & pembagian halaman dulu diurus komponen DataTable lama (shadcn). Carbon
+  // DataTable tidak membawa keduanya, jadi keadaannya hidup di sini.
+  const [cari, setCari] = useState('');
+  const [halaman, setHalaman] = useState(1);
+  const [perHalaman, setPerHalaman] = useState(15);
 
   const getAccessToken = useCallback(async () => {
     if (!supabase) return null;
@@ -174,7 +222,7 @@ export default function RoutingsPage() {
     }
     loadRoutings(showArchived);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showArchived]);
+  }, [saringStatus]);
 
   const itemsById = useMemo(() => new Map(items.map((item) => [item.item_id, item])), [items]);
 
@@ -186,7 +234,7 @@ export default function RoutingsPage() {
   };
 
   const startCreate = () => {
-    setViewingRoutingId(null);
+    setExpandedRoutingId(null);
     resetForm();
     setIsFormModalOpen(true);
   };
@@ -194,7 +242,7 @@ export default function RoutingsPage() {
   const startEdit = (routing: Routing) => {
     setIsFormModalOpen(true);
     setEditingRoutingId(routing.routing_id);
-    setViewingRoutingId(null);
+    setExpandedRoutingId(null);
     setForm({
       item_id: String(routing.item_id),
       steps: routing.steps.map((step) => ({
@@ -225,8 +273,8 @@ export default function RoutingsPage() {
     setForm((prev) => ({ ...prev, steps: prev.steps.filter((_, i) => i !== index) }));
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  // Dipanggil dari ModalFooter Carbon (onRequestSubmit), bukan dari <form onSubmit>.
+  const handleSubmit = async () => {
     setFormStatus('pending');
     setFormMessage('');
 
@@ -331,355 +379,500 @@ export default function RoutingsPage() {
     await loadRoutings(showArchived);
   };
 
-  const viewingRouting = routings.find((r) => r.routing_id === viewingRoutingId) ?? null;
 
-  const columns = useMemo<ColumnDef<Routing>[]>(
+  // ==========================================================================
+  // KOLOM & BARIS
+  // ==========================================================================
+  // Baris memuat NILAI ASLI, bukan hanya id. Carbon mengurutkan berdasarkan nilai di baris,
+  // jadi baris yang cuma berisi id akan menghasilkan tabel yang tombol urutnya ada tapi
+  // tidak mengurut apa pun — persis kelas "terlihat berfungsi padahal tidak pernah hidup".
+  const kolom = useMemo(
     () => [
-      {
-        id: 'item',
-        header: 'Item',
-        cell: ({ row }) => (
-          <div className="flex flex-col">
-            <span className="font-medium text-foreground">{row.original.item_code}</span>
-            <span className="text-xs text-muted-foreground">{row.original.item_name}</span>
-          </div>
-        )
-      },
-      { accessorKey: 'version', header: 'Versi', cell: ({ row }) => <span className="text-data">v{row.original.version}</span> },
-      {
-        id: 'status',
-        header: 'Status',
-        cell: ({ row }) =>
-          row.original.archived_at ? (
-            <span className="text-data text-xs text-muted-foreground">
-              Diarsipkan
-              {row.original.archived_by_name ? ` oleh ${row.original.archived_by_name}` : ''}
-              <br />
-              {new Date(row.original.archived_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
-            </span>
-          ) : (
-            <span className="text-data text-success-subtle-foreground">Aktif</span>
-          )
-      },
-      { id: 'step_count', header: 'Jumlah Tahap', cell: ({ row }) => <span className="text-data">{row.original.steps.length}</span> },
-      {
-        id: 'running_batch_count',
-        header: 'Batch Berjalan',
-        cell: ({ row }) =>
-          row.original.running_batch_count > 0 ? (
-            <span className="text-data font-medium text-warning-subtle-foreground">⚠ {row.original.running_batch_count}</span>
-          ) : (
-            <span className="text-data text-muted-foreground">0</span>
-          )
-      },
-      {
-        id: 'total_active',
-        header: () => (
-          <span className="flex items-center gap-1">
-            Total Durasi Aktif
-            <ProvenanceInfoButton
-              label="Total Durasi Aktif"
-              envelope={{
-                formula: 'Jumlah active_duration_minutes semua tahap SOP routing ini (tidak termasuk wait_duration_minutes/waktu tunggu antar tahap) — angka standar dipakai untuk hitung kapasitas & jadwal, bukan durasi aktual tercatat per batch.',
-                inputs: [{ label: 'Jumlah tahap dijumlah', value: 'Semua tahap di routing ini' }]
-              }}
-            />
-          </span>
-        ),
-        cell: ({ row }) => <span className="text-data">{row.original.steps.reduce((sum, s) => sum + s.active_duration_minutes, 0)} mnt</span>
-      },
-      {
-        id: 'actions',
-        header: 'Aksi',
-        cell: ({ row }) => (
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setViewingRoutingId((current) => (current === row.original.routing_id ? null : row.original.routing_id));
-                setEditingRoutingId(null);
-              }}
-            >
-              {viewingRoutingId === row.original.routing_id ? 'Tutup' : 'Detail'}
-            </Button>
-            {canManage && !row.original.archived_at ? (
-              <Button size="sm" variant="outline" onClick={() => startEdit(row.original)}>
-                Edit
-              </Button>
-            ) : null}
-            {canManage && row.original.archived_at ? (
-              <Button size="sm" variant="outline" onClick={() => handleRestoreRouting(row.original)}>
-                Pulihkan
-              </Button>
-            ) : null}
-            {canManage && !row.original.archived_at && row.original.can_delete ? (
-              <Button size="sm" variant="destructive" onClick={() => handleDeleteRouting(row.original)}>
-                Hapus
-              </Button>
-            ) : null}
-            {canManage && !row.original.archived_at && !row.original.can_delete ? (
-              <Button size="sm" variant="destructive" onClick={() => handleArchiveRouting(row.original)}>
-                Arsipkan
-              </Button>
-            ) : null}
-          </div>
-        )
-      }
+      { key: 'item', header: 'Item' },
+      { key: 'version', header: 'Versi' },
+      { key: 'status', header: 'Status' },
+      { key: 'step_count', header: 'Jumlah tahap' },
+      { key: 'running_batch_count', header: 'Batch berjalan' },
+      { key: 'total_active', header: 'Total durasi aktif' },
+      { key: 'aksi', header: 'Aksi' }
     ],
-    [canManage, viewingRoutingId]
+    []
+  );
+
+  const adaSaringan = cari.trim() !== '' || saringStatus !== 'aktif';
+
+  const routingTersaring = useMemo(() => {
+    const kata = cari.trim().toLowerCase();
+    return routings.filter((r) => {
+      if (saringStatus === 'aktif' && r.archived_at) return false;
+      if (saringStatus === 'diarsipkan' && !r.archived_at) return false;
+      if (!kata) return true;
+      return `${r.item_code ?? ''} ${r.item_name ?? ''}`.toLowerCase().includes(kata);
+    });
+  }, [routings, cari, saringStatus]);
+
+  const routingHalamanIni = useMemo(
+    () => routingTersaring.slice((halaman - 1) * perHalaman, halaman * perHalaman),
+    [routingTersaring, halaman, perHalaman]
+  );
+
+  const routingById = useMemo(() => new Map(routings.map((r) => [String(r.routing_id), r])), [routings]);
+
+  const baris = useMemo(
+    () =>
+      routingHalamanIni.map((r) => ({
+        id: String(r.routing_id),
+        item: r.item_code ?? '',
+        version: r.version,
+        status: r.archived_at ? 'Diarsipkan' : 'Aktif',
+        step_count: r.steps.length,
+        running_batch_count: r.running_batch_count,
+        total_active: r.steps.reduce((sum, s) => sum + s.active_duration_minutes, 0),
+        aksi: ''
+      })),
+    [routingHalamanIni]
+  );
+
+  const isiSel = (r: Routing, kunci: string) => {
+    switch (kunci) {
+      case 'item':
+        return (
+          <div className="routing-sel-item">
+            <span className="routing-sel-item__kode">{r.item_code}</span>
+            <span className="routing-sel-item__nama">{r.item_name}</span>
+          </div>
+        );
+      case 'version':
+        return `v${r.version}`;
+      case 'status':
+        // Tag dipakai untuk MENGGOLONGKAN baris — itu konteks pemakaian Tag menurut Carbon.
+        return r.archived_at ? (
+          <Tag type="cool-gray">
+            Diarsipkan{r.archived_by_name ? ` oleh ${r.archived_by_name}` : ''} —{' '}
+            {new Date(r.archived_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+          </Tag>
+        ) : (
+          <Tag type="green">Aktif</Tag>
+        );
+      case 'step_count':
+        return r.steps.length;
+      case 'running_batch_count':
+        return r.running_batch_count > 0 ? <Tag type="magenta">{r.running_batch_count} batch</Tag> : '0';
+      case 'total_active':
+        return `${r.steps.reduce((sum, s) => sum + s.active_duration_minutes, 0)} mnt`;
+      case 'aksi':
+        return (
+          <div className="routing-aksi">
+            <div className="routing-aksi__biasa">
+              {canManage && !r.archived_at ? (
+                <Button kind="ghost" size="sm" onClick={() => startEdit(r)}>
+                  Ubah
+                </Button>
+              ) : null}
+              {canManage && r.archived_at ? (
+                <Button kind="ghost" size="sm" onClick={() => handleRestoreRouting(r)}>
+                  Pulihkan
+                </Button>
+              ) : null}
+            </div>
+            {/* AKSI MERUSAK DIDORONG KE KANAN, terpisah dari aksi sehari-hari. */}
+            {canManage && !r.archived_at ? (
+              <div className="routing-aksi__merusak">
+                {r.can_delete ? (
+                  <Button kind="danger--tertiary" size="sm" onClick={() => handleDeleteRouting(r)}>
+                    Hapus
+                  </Button>
+                ) : (
+                  <Button kind="danger--tertiary" size="sm" onClick={() => handleArchiveRouting(r)}>
+                    Arsipkan
+                  </Button>
+                )}
+              </div>
+            ) : null}
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const detailTahap = (r: Routing) => (
+    <div className="routing-detail">
+      {r.running_batch_count > 0 ? (
+        <InlineNotification
+          kind="warning"
+          lowContrast
+          hideCloseButton
+          title={`Dipakai ${r.running_batch_count} batch berjalan`}
+          subtitle="Perubahan tidak akan mengubah batch tersebut — angkanya sudah dibekukan sejak batch itu dimulai."
+        />
+      ) : null}
+      <Table size="lg">
+        <TableHead>
+          <TableRow>
+            <TableHeader>Urutan</TableHeader>
+            <TableHeader>Nama tahap</TableHeader>
+            <TableHeader>Work center</TableHeader>
+            <TableHeader>Durasi aktif / laju</TableHeader>
+            <TableHeader>Durasi tunggu</TableHeader>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {r.steps.map((step) => (
+            <TableRow key={step.routing_step_id}>
+              <TableCell>{step.sequence_no}</TableCell>
+              <TableCell>{step.step_name}</TableCell>
+              <TableCell>{step.work_center_name ? `${step.work_center_name}${step.work_center_code ? ` (${step.work_center_code})` : ''}` : '—'}</TableCell>
+              <TableCell>
+                {step.duration_per_unit_minutes !== null
+                  ? `${formatNumberId(step.duration_per_unit_minutes, 6)} mnt/unit (laju)`
+                  : `${formatNumberId(step.active_duration_minutes, 2)} mnt`}
+              </TableCell>
+              <TableCell>{formatNumberId(step.wait_duration_minutes, 2)} mnt</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 
   if (checkingAccess) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="px-6 text-center text-sm text-muted-foreground">Memuat...</div>
-      </main>
+      <div className="halaman">
+        <DataTableSkeleton columnCount={7} rowCount={6} showHeader showToolbar />
+      </div>
     );
   }
 
   if (accessDenied) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="max-w-3xl px-6">
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em] text-destructive">Akses Ditolak</CardDescription>
-              <CardTitle className="text-2xl">Sesi tidak valid</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <p className="text-sm text-muted-foreground">Silakan login ulang untuk mengakses daftar Routing.</p>
-              <Button onClick={() => router.push('/login?redirectTo=/routing')} className="w-fit">
-                Ke Halaman Login
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+      <div className="halaman">
+        <KepalaHalaman remah={[]} judul="Daftar routing" />
+        <InlineNotification kind="error" lowContrast hideCloseButton title="Sesi tidak valid" subtitle="Silakan masuk ulang untuk membuka daftar Routing." />
+        <Button className="routing-tombol-masuk" onClick={() => router.push('/login?redirectTo=/routing')}>
+          Ke halaman masuk
+        </Button>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-muted/30 py-10">
-      <div className="flex w-full flex-col gap-6 px-6">
-        <Card>
-          <CardHeader>
-            <CardDescription className="uppercase tracking-[0.2em]">Master Data</CardDescription>
-            <CardTitle className="text-2xl">Routing (Alur Produksi)</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <p className="text-sm text-muted-foreground">
-              Routing = urutan tahap produksi per item. Ini yang jadi sumber data untuk Gantt Produksi & Dashboard Kapasitas di Dashboard PPIC — bukan sistem terpisah.
-            </p>
-            {routingsError ? <p className="text-sm text-destructive">{routingsError}</p> : null}
-            {archiveActionStatus ? (
-              <p className={`text-sm ${archiveActionStatus.kind === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>{archiveActionStatus.message}</p>
-            ) : null}
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              <input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} />
-              Tampilkan yang diarsipkan
-            </label>
-            {routingsLoading ? (
-              <p className="text-sm text-muted-foreground">Memuat Routing...</p>
-            ) : (
-              <DataTable
-                columns={columns}
-                data={routings}
-                emptyMessage="Belum ada Routing."
-                searchPlaceholder="Cari kode atau nama item..."
-                getSearchText={(routing) => `${routing.item_code ?? ''} ${routing.item_name ?? ''}`}
-                paginated
-                pageSize={15}
-                primaryAction={canManage ? { label: 'Tambah Routing', onClick: startCreate } : undefined}
-              />
+    <div className="halaman">
+      <KepalaHalaman
+        remah={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Product & Engineering' }, { label: 'Routing' }]}
+        judul="Daftar routing"
+        pengantar={`${routingTersaring.length} routing${adaSaringan ? ` dari ${routings.length} yang tercatat` : ' tercatat'} — urutan tahap produksi per item, sumber data Gantt produksi & dashboard kapasitas di PPIC.`}
+      />
+
+      {routingsError ? <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal memuat Routing" subtitle={routingsError} /> : null}
+      {archiveActionStatus ? (
+        <InlineNotification
+          kind={archiveActionStatus.kind === 'success' ? 'success' : 'error'}
+          lowContrast
+          title={archiveActionStatus.kind === 'success' ? 'Berhasil' : 'Gagal'}
+          subtitle={archiveActionStatus.message}
+          onClose={() => {
+            setArchiveActionStatus(null);
+            return true;
+          }}
+        />
+      ) : null}
+
+      {routingsLoading ? (
+        <DataTableSkeleton columnCount={7} rowCount={6} showHeader showToolbar />
+      ) : (
+        <>
+          {/* size="lg" — baris 48px. Target sentuh minimal 44px, dan tombol buka-detail di kiri
+              tiap baris mengikuti tinggi barisnya. Sama seperti Master Item. */}
+          <DataTable rows={baris} headers={kolom} isSortable size="lg">
+            {(rp: any) => (
+              // TableContainer SENGAJA tanpa title/description: judulnya sudah ada di kepala
+              // halaman, dan DataTable Carbon membawa judulnya sendiri kalau diberi.
+              <TableContainer {...rp.getTableContainerProps()}>
+                <TableToolbar>
+                  <TableToolbarContent>
+                    {/* MELIPAT, bukan selalu terbuka. `persistent` sengaja TIDAK dipakai:
+                        bawaan Carbon adalah ikon kaca pembesar yang melebar saat diklik. */}
+                    <TableToolbarSearch
+                      placeholder="Cari kode atau nama item…"
+                      labelText="Cari Routing"
+                      onChange={(e: React.ChangeEvent<HTMLInputElement> | '') => {
+                        setCari(typeof e === 'string' ? '' : e.target.value);
+                        setHalaman(1);
+                      }}
+                    />
+
+                    {/* SARINGAN, bukan kotak centang. Kotak centang hanya bisa menjawab
+                        "termasuk arsip atau tidak"; saringan bisa menjawab "khusus yang
+                        diarsipkan" juga — dan bentuknya sama dengan saringan di Master Item. */}
+                    <Dropdown
+                      id="routing-saring-status"
+                      size="lg"
+                      className="halaman__saring"
+                      label="Status"
+                      titleText="Status"
+                      hideLabel
+                      items={['aktif', 'diarsipkan', 'semua']}
+                      itemToString={(v: string) => (v === 'aktif' ? 'Aktif' : v === 'diarsipkan' ? 'Diarsipkan' : 'Semua status')}
+                      selectedItem={saringStatus}
+                      onChange={({ selectedItem }: { selectedItem: SaringStatus }) => {
+                        setSaringStatus(selectedItem ?? 'aktif');
+                        setHalaman(1);
+                      }}
+                    />
+
+                    {canManage ? (
+                      <Button size="lg" renderIcon={Add} onClick={startCreate}>
+                        Tambah Routing
+                      </Button>
+                    ) : null}
+                  </TableToolbarContent>
+                </TableToolbar>
+
+                <Table {...rp.getTableProps()} className="tabel-responsif">
+                  <TableHead>
+                    <TableRow>
+                      <TableExpandHeader aria-label="Buka detail tahap" />
+                      {rp.headers.map((h: any) => {
+                        const { key, ...sisa } = rp.getHeaderProps({ header: h }) as { key?: string };
+                        void key;
+                        return (
+                          // "Total durasi aktif" SENGAJA tidak bisa diurut: judulnya memuat
+                          // tombol Asal-Usul, dan TableHeader yang bisa diurut adalah <button>.
+                          // Tombol di dalam tombol adalah HTML tidak sah — pelajaran yang sudah
+                          // dibayar sekali di Master Item lewat galat hydration.
+                          <TableHeader key={h.key} {...sisa} isSortable={h.key !== 'total_active' && h.key !== 'aksi'}>
+                            {h.header}
+                            {h.key === 'total_active' ? (
+                              <ProvenanceInfoButton
+                                label="Total durasi aktif"
+                                envelope={{
+                                  formula:
+                                    'Jumlah active_duration_minutes semua tahap SOP routing ini (tidak termasuk wait_duration_minutes/waktu tunggu antar tahap) — angka standar dipakai untuk hitung kapasitas & jadwal, bukan durasi aktual tercatat per batch.',
+                                  inputs: [{ label: 'Jumlah tahap dijumlah', value: 'Semua tahap di routing ini' }]
+                                }}
+                              />
+                            ) : null}
+                          </TableHeader>
+                        );
+                      })}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {rp.rows.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={kolom.length + 1}>
+                          {adaSaringan ? 'Tidak ada Routing yang cocok dengan pencarian atau saringan.' : 'Belum ada Routing.'}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      rp.rows.map((row: any) => {
+                        const r = routingById.get(row.id);
+                        if (!r) return null;
+                        const { key, ...sisaBaris } = rp.getRowProps({ row }) as { key?: string };
+                        void key;
+                        return (
+                          <React.Fragment key={row.id}>
+                            {/* BARIS YANG BISA DIMEKARKAN, bukan tombol "Detail" yang membuka
+                                kartu terpisah di bawah tabel. Kemampuan ini sudah dibawa
+                                DataTable Carbon — aturan C.3 melarang menambal sendiri apa
+                                yang komponennya sudah punya. */}
+                            <TableExpandRow
+                              {...sisaBaris}
+                              isExpanded={expandedRoutingId === r.routing_id}
+                              onExpand={() => setExpandedRoutingId((kini) => (kini === r.routing_id ? null : r.routing_id))}
+                              aria-label={`Detail tahap ${r.item_code}`}
+                            >
+                              {kolom.map((h) => (
+                                <TableCell key={h.key} data-label={h.header}>
+                                  {isiSel(r, h.key)}
+                                </TableCell>
+                              ))}
+                            </TableExpandRow>
+                            <TableExpandedRow colSpan={kolom.length + 1}>
+                              {expandedRoutingId === r.routing_id ? detailTahap(r) : null}
+                            </TableExpandedRow>
+                          </React.Fragment>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             )}
-          </CardContent>
-        </Card>
+          </DataTable>
 
-        {viewingRouting ? (
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em]">Detail Tahap</CardDescription>
-              <CardTitle className="text-xl">
-                {viewingRouting.item_code} — v{viewingRouting.version}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {viewingRouting.running_batch_count > 0 ? (
-                <p className="mb-3 rounded-md border border-warning/40 bg-warning-subtle p-2 text-sm text-warning-subtle-foreground">
-                  ⚠ Dipakai {viewingRouting.running_batch_count} batch berjalan — perubahan tidak akan mengubah batch tersebut (angkanya sudah dibekukan sejak batch itu dimulai).
-                </p>
-              ) : null}
-              <div className="overflow-hidden rounded-md border">
-                <table className="w-full text-data">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Urutan</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Nama Tahap</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Work Center</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Durasi Aktif / Laju</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Durasi Tunggu</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {viewingRouting.steps.map((step) => (
-                      <tr key={step.routing_step_id} className="border-b last:border-0">
-                        <td className="px-3 py-1.5">{step.sequence_no}</td>
-                        <td className="px-3 py-1.5 font-medium text-foreground">{step.step_name}</td>
-                        <td className="px-3 py-1.5">
-                          {step.work_center_name ? (
-                            <>
-                              {step.work_center_name}
-                              {step.work_center_code ? <span className="text-xs text-muted-foreground"> ({step.work_center_code})</span> : null}
-                            </>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-1.5">
-                          {step.duration_per_unit_minutes !== null ? (
-                            <span>
-                              {formatNumberId(step.duration_per_unit_minutes, 6)} mnt/unit <span className="text-xs text-muted-foreground">(laju)</span>
-                            </span>
-                          ) : (
-                            `${formatNumberId(step.active_duration_minutes, 2)} mnt`
-                          )}
-                        </td>
-                        <td className="px-3 py-1.5">{formatNumberId(step.wait_duration_minutes, 2)} mnt</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {canManage ? (
-          <Dialog
-            open={isFormModalOpen}
-            onOpenChange={(open) => {
-              if (!open) {
-                resetForm();
-                setIsFormModalOpen(false);
-              }
+          <Pagination
+            page={halaman}
+            pageSize={perHalaman}
+            pageSizes={[15, 30, 50]}
+            totalItems={routingTersaring.length}
+            onChange={({ page, pageSize }: { page: number; pageSize: number }) => {
+              setHalaman(page);
+              setPerHalaman(pageSize);
             }}
-          >
-            <DialogContent className="max-w-3xl">
-              <DialogHeader>
-                <DialogTitle>{editingRoutingId ? `Edit: ${form.item_id ? itemsById.get(Number(form.item_id))?.item_code : ''}` : 'Buat Routing baru'}</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                <label className="flex max-w-sm flex-col gap-1.5">
-                  <span className="text-sm font-medium text-foreground">Item</span>
-                  <Select value={form.item_id} onValueChange={(value) => setForm((prev) => ({ ...prev, item_id: value }))} disabled={editingRoutingId !== null}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Pilih item..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {items.map((item) => (
-                        <SelectItem key={item.item_id} value={String(item.item_id)}>
-                          {item.item_code} — {item.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {editingRoutingId ? <span className="text-xs text-muted-foreground">Item tidak bisa diubah lewat edit — bikin Routing baru kalau perlu item lain.</span> : null}
-                </label>
+            backwardText="Halaman sebelumnya"
+            forwardText="Halaman berikutnya"
+            itemsPerPageText="Baris per halaman"
+            // Teks bawaan Carbon berbahasa Inggris. Aturan hanya membolehkan Inggris untuk
+            // LABEL NAVIGASI; ini isi halaman, jadi Bahasa Indonesia.
+            itemRangeText={(mulai: number, akhir: number, total: number) => `${mulai}–${akhir} dari ${total} routing`}
+            pageRangeText={(_kini: number, total: number) => `dari ${total} halaman`}
+            pageNumberText="Nomor halaman"
+          />
+        </>
+      )}
 
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-foreground">Tahap Produksi</span>
-                    <Button type="button" size="sm" variant="outline" onClick={addStep}>
-                      + Tambah Tahap
+      {canManage ? (
+        <ComposedModal
+          open={isFormModalOpen}
+          size="lg"
+          onClose={() => {
+            resetForm();
+            setIsFormModalOpen(false);
+            return true;
+          }}
+        >
+          <ModalHeader
+            label="Master data"
+            title={editingRoutingId ? `Ubah Routing: ${form.item_id ? itemsById.get(Number(form.item_id))?.item_code ?? '' : ''}` : 'Buat Routing baru'}
+            closeModal={() => {
+              resetForm();
+              setIsFormModalOpen(false);
+            }}
+          />
+          <ModalBody hasForm>
+            <div className="routing-form">
+              <Dropdown
+                id="routing-item"
+                titleText="Item"
+                label="Pilih item..."
+                size="lg"
+                disabled={editingRoutingId !== null}
+                items={items}
+                itemToString={(item: ItemOption | null) => (item ? `${item.item_code} — ${item.name}` : '')}
+                selectedItem={items.find((i) => String(i.item_id) === form.item_id) ?? null}
+                onChange={({ selectedItem }: { selectedItem: ItemOption | null }) =>
+                  setForm((prev) => ({ ...prev, item_id: selectedItem ? String(selectedItem.item_id) : '' }))
+                }
+                helperText={editingRoutingId ? 'Item tidak bisa diubah lewat ubah — buat Routing baru kalau perlu item lain.' : undefined}
+              />
+
+              <div className="routing-tahap">
+                <div className="routing-tahap__kepala">
+                  <h2 className="halaman__subjudul halaman__subjudul--rapat">Tahap produksi</h2>
+                  <Button kind="tertiary" size="sm" renderIcon={Add} onClick={addStep}>
+                    Tambah tahap
+                  </Button>
+                </div>
+
+                {form.steps.map((step, index) => (
+                  <div key={index} className="routing-tahap__baris">
+                    <NumberInput
+                      id={`routing-urutan-${index}`}
+                      label="Urutan"
+                      min={1}
+                      step={1}
+                      value={step.sequence_no === '' ? '' : Number(step.sequence_no)}
+                      onChange={(_e: unknown, { value }: { value: number | string }) => updateStep(index, { sequence_no: String(value ?? '') })}
+                      allowEmpty
+                      hideSteppers
+                    />
+                    <TextInput
+                      id={`routing-nama-${index}`}
+                      labelText="Nama tahap"
+                      size="lg"
+                      placeholder="mis. Mixing adonan"
+                      value={step.step_name}
+                      onChange={(event) => updateStep(index, { step_name: event.target.value })}
+                    />
+                    <Dropdown
+                      id={`routing-wc-${index}`}
+                      titleText="Work center"
+                      label="(Tidak ada)"
+                      size="lg"
+                      items={workCenters}
+                      itemToString={(wc: WorkCenterOption | null) => (wc ? `${wc.name}${wc.code ? ` (${wc.code})` : ''}` : '')}
+                      selectedItem={workCenters.find((wc) => String(wc.work_center_id) === step.work_center_id) ?? null}
+                      onChange={({ selectedItem }: { selectedItem: WorkCenterOption | null }) =>
+                        updateStep(index, { work_center_id: selectedItem ? String(selectedItem.work_center_id) : '' })
+                      }
+                    />
+                    <NumberInput
+                      id={`routing-aktif-${index}`}
+                      label="Durasi aktif (mnt)"
+                      min={0}
+                      step={1}
+                      value={step.active_duration_minutes === '' ? '' : Number(step.active_duration_minutes)}
+                      onChange={(_e: unknown, { value }: { value: number | string }) => updateStep(index, { active_duration_minutes: String(value ?? '') })}
+                      allowEmpty
+                      hideSteppers
+                      // HUBUNGAN ANTAR FIELD DIBUAT TERLIHAT, bukan hanya diketahui kode:
+                      // mengisi Laju membuat isian ini TIDAK DIPAKAI.
+                      helperText={step.duration_per_unit_minutes.trim() ? 'Diabaikan — laju di sebelah kanan yang dipakai.' : undefined}
+                    />
+                    <TextInput
+                      id={`routing-laju-${index}`}
+                      labelText="Laju (mnt/unit, opsional)"
+                      size="lg"
+                      placeholder="kosongkan kalau tetap"
+                      helperText="Kalau diisi, ini yang dipakai — durasi aktif diabaikan."
+                      value={step.duration_per_unit_minutes}
+                      onChange={(event) => updateStep(index, { duration_per_unit_minutes: event.target.value })}
+                    />
+                    <NumberInput
+                      id={`routing-tunggu-${index}`}
+                      label="Durasi tunggu (mnt)"
+                      min={0}
+                      step={1}
+                      value={step.wait_duration_minutes === '' ? '' : Number(step.wait_duration_minutes)}
+                      onChange={(_e: unknown, { value }: { value: number | string }) => updateStep(index, { wait_duration_minutes: String(value ?? '') })}
+                      allowEmpty
+                      hideSteppers
+                    />
+                    <Button kind="danger--tertiary" size="sm" renderIcon={TrashCan} disabled={form.steps.length <= 1} onClick={() => removeStep(index)}>
+                      Hapus tahap
                     </Button>
                   </div>
+                ))}
 
-                  {form.steps.map((step, index) => (
-                    <div key={index} className="grid grid-cols-[70px_1.3fr_1fr_100px_120px_100px_auto] items-end gap-2 rounded-md border p-2">
-                      <label className="flex flex-col gap-1">
-                        <span className="text-xs font-medium text-muted-foreground">Urutan</span>
-                        <Input type="number" min="1" step="1" value={step.sequence_no} onChange={(event) => updateStep(index, { sequence_no: event.target.value })} required />
-                      </label>
+                <p className="halaman__redup">
+                  Durasi aktif = waktu mesin/work center benar-benar sibuk (dipakai apa adanya kalau laju kosong). Laju = durasi PER UNIT qty batch (mis. tahap dengan mesin
+                  berkecepatan tetap) — kalau diisi, ini yang dipakai untuk Gantt/kapasitas/kelayakan, bukan durasi aktif. Durasi tunggu = waktu jeda (mis. curing) — tidak
+                  menyibukkan mesin, tapi menunda tahap berikutnya.
+                </p>
+              </div>
 
-                      <label className="flex flex-col gap-1">
-                        <span className="text-xs font-medium text-muted-foreground">Nama Tahap</span>
-                        <Input placeholder="mis. Mixing Adonan" value={step.step_name} onChange={(event) => updateStep(index, { step_name: event.target.value })} required />
-                      </label>
-
-                      <label className="flex flex-col gap-1">
-                        <span className="text-xs font-medium text-muted-foreground">Work Center</span>
-                        <Select value={step.work_center_id} onValueChange={(value) => updateStep(index, { work_center_id: value })}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="(Tidak ada)" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {workCenters.map((wc) => (
-                              <SelectItem key={wc.work_center_id} value={String(wc.work_center_id)}>
-                                {wc.name}
-                                {wc.code ? ` (${wc.code})` : ''}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </label>
-
-                      <label className="flex flex-col gap-1">
-                        <span className="text-xs font-medium text-muted-foreground">Durasi Aktif (mnt)</span>
-                        <Input type="number" min="0" step="1" value={step.active_duration_minutes} onChange={(event) => updateStep(index, { active_duration_minutes: event.target.value })} required />
-                      </label>
-
-                      <label className="flex flex-col gap-1">
-                        <span className="text-xs font-medium text-muted-foreground">Laju (mnt/unit, opsional)</span>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="any"
-                          placeholder="kosongkan kalau tetap"
-                          value={step.duration_per_unit_minutes}
-                          onChange={(event) => updateStep(index, { duration_per_unit_minutes: event.target.value })}
-                        />
-                      </label>
-
-                      <label className="flex flex-col gap-1">
-                        <span className="text-xs font-medium text-muted-foreground">Durasi Tunggu (mnt)</span>
-                        <Input type="number" min="0" step="1" value={step.wait_duration_minutes} onChange={(event) => updateStep(index, { wait_duration_minutes: event.target.value })} />
-                      </label>
-
-                      <Button type="button" size="sm" variant="destructive" disabled={form.steps.length <= 1} onClick={() => removeStep(index)}>
-                        Hapus
-                      </Button>
-                    </div>
-                  ))}
-                  <span className="text-xs text-muted-foreground">
-                    Durasi Aktif = waktu mesin/Work Center benar-benar sibuk (dipakai apa adanya kalau Laju kosong). Laju = durasi PER UNIT qty batch (mis. tahap dengan mesin
-                    berkecepatan tetap) — kalau diisi, ini yang dipakai untuk Gantt/Kapasitas/kelayakan, bukan Durasi Aktif. Durasi Tunggu = waktu jeda (mis. curing) — tidak
-                    menyibukkan mesin, tapi menunda tahap berikutnya.
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <Button type="submit" disabled={formStatus === 'pending'}>
-                    {formStatus === 'pending' ? 'Menyimpan...' : editingRoutingId ? 'Simpan Perubahan' : 'Buat Routing'}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      resetForm();
-                      setIsFormModalOpen(false);
-                    }}
-                  >
-                    {formStatus === 'success' ? 'Tutup' : 'Batal'}
-                  </Button>
-                </div>
-
-                {formMessage ? <p className={`text-sm ${formStatus === 'success' ? 'text-success-subtle-foreground' : 'text-destructive'}`}>{formMessage}</p> : null}
-              </form>
-            </DialogContent>
-          </Dialog>
-        ) : null}
-      </div>
-    </main>
+              {formMessage ? (
+                <InlineNotification
+                  kind={formStatus === 'success' ? 'success' : 'error'}
+                  lowContrast
+                  hideCloseButton
+                  title={formStatus === 'success' ? 'Berhasil' : 'Gagal menyimpan'}
+                  subtitle={formMessage}
+                />
+              ) : null}
+            </div>
+          </ModalBody>
+          {/* TOMBOL DITULIS SEBAGAI CHILDREN: di @carbon/react 1.114, `children` pada
+              ModalFooterProps bersifat WAJIB — prop teks tombolnya ada, tapi tidak cukup
+              sendirian. Carbon tetap yang mengatur lebar dan urutannya. */}
+          <ModalFooter>
+            <Button
+              kind="secondary"
+              onClick={() => {
+                resetForm();
+                setIsFormModalOpen(false);
+              }}
+            >
+              {formStatus === 'success' ? 'Tutup' : 'Batal'}
+            </Button>
+            <Button kind="primary" disabled={formStatus === 'pending'} onClick={handleSubmit}>
+              {formStatus === 'pending' ? 'Menyimpan...' : editingRoutingId ? 'Simpan perubahan' : 'Buat Routing'}
+            </Button>
+          </ModalFooter>
+        </ComposedModal>
+      ) : null}
+    </div>
   );
 }

@@ -1,0 +1,64 @@
+// Gaya khas halaman Master Dokumen. KERANGKA halamannya memakai kelas bersama `halaman-*`
+// di src/styles/carbon.scss — di sini HANYA yang khas halaman ini.
+@use '@carbon/react/scss/spacing';
+@use '@carbon/react/scss/theme';
+@use '@carbon/react/scss/type';
+
+.dokumen-belum-ada-jenis {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: spacing.$spacing-03;
+}
+
+.dokumen-form {
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-05;
+}
+
+// Dua isian sejajar di layar lebar, menumpuk di bawah 672px (breakpoint Carbon).
+.dokumen-sejajar {
+  display: grid;
+  gap: spacing.$spacing-05;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 42rem) {
+  .dokumen-sejajar {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+// Pemilih berkas: label DI ATAS tombol, keterangan DI BAWAHNYA — anatomi yang sama dengan
+// isian Carbon lain di sekitarnya, supaya ia tidak terlihat seperti benda asing.
+.dokumen-berkas {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: spacing.$spacing-03;
+}
+
+.dokumen-berkas__label {
+  @include type.type-style('label-01');
+  color: theme.$text-secondary;
+}
+
+.dokumen-berkas__bantuan {
+  @include type.type-style('helper-text-01');
+  color: theme.$text-helper;
+}
+
+// Pratinjau dokumen di dalam modal. Tinggi dibatasi supaya modalnya sendiri tidak melebihi
+// layar; PDF dan gambar memakai wadah yang sama.
+.dokumen-pratinjau {
+  inline-size: 100%;
+  block-size: 60vh;
+  border: 1px solid theme.$border-subtle-01;
+}
+
+.dokumen-pratinjau--gambar {
+  object-fit: contain;
+  block-size: auto;
+  max-block-size: 60vh;
+}

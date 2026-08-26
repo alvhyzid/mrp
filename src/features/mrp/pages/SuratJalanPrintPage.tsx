@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Button } from '@/components/ui/button';
+import { Button, InlineNotification, SkeletonText } from '@carbon/react';
+import { Printer, Close } from '@carbon/icons-react';
 import SuratJalanPreview, { type SuratJalanLine } from '../components/SuratJalanPreview';
 
 type ShipmentDetail = {
@@ -25,10 +26,20 @@ type CompanyInfo = { name: string; logo_url: string | null };
 
 type SignatureInfo = { signature_url_snapshot: string; signer_role_at_signing: string | null; signer_name: string | null } | null;
 
-// Halaman cetak Surat Jalan, diakses dari "Daftar Pengiriman" (ShipmentsPage) via
-// tombol "Lihat Surat Jalan". SENGAJA ditaruh DI LUAR grup route (shell) supaya TIDAK
-// ikut AppShell (sidebar/header) — halaman ini murni dokumen untuk dicetak/disimpan
-// sebagai PDF lewat print dialog browser, bukan bagian dari nav aplikasi.
+// Halaman cetak Surat Jalan, diakses dari "Daftar Pengiriman" lewat tautan
+// "Lihat / cetak surat jalan". SENGAJA ditaruh DI LUAR grup route (shell) supaya TIDAK
+// ikut kerangka aplikasi (menu samping/header) — halaman ini murni dokumen untuk dicetak
+// atau disimpan sebagai PDF lewat dialog cetak peramban, bukan bagian dari navigasi.
+//
+// KENAPA TIDAK MENGIKUTI CETAKAN HALAMAN (remah roti + judul + baris jumlah), 26 Agu 2026:
+// cetakan itu untuk LAYAR — remah roti menunjukkan posisi di dalam aplikasi, dan baris
+// jumlah menerangkan sebuah daftar. Di atas KERTAS keduanya tidak berarti apa-apa: yang
+// memegang surat jalan tidak sedang menjelajah aplikasi. Yang diambil dari Carbon di sini
+// hanya KOMPONENNYA (tombol, pemberitahuan, rangka pemuatan), bukan anatominya.
+//
+// Yang dicetak sendiri (SuratJalanPreview) TIDAK disentuh migrasi ini: ia dokumen resmi
+// yang bentuknya sudah disepakati, dan mengubah tata letaknya berarti mengubah dokumen
+// yang beredar di luar sistem.
 export default function SuratJalanPrintPage({ shipmentId }: { shipmentId: number }) {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -65,11 +76,20 @@ export default function SuratJalanPrintPage({ shipmentId }: { shipmentId: number
   }, [router, shipmentId]);
 
   if (loading) {
-    return <div className="p-10 text-center text-sm text-muted-foreground">Memuat Surat Jalan...</div>;
+    return (
+      <div className="surat-jalan-halaman">
+        <SkeletonText heading width="18rem" />
+        <SkeletonText paragraph lineCount={6} />
+      </div>
+    );
   }
 
   if (error || !shipment || !company) {
-    return <div className="p-10 text-center text-sm text-destructive">{error || 'Data tidak ditemukan.'}</div>;
+    return (
+      <div className="surat-jalan-halaman">
+        <InlineNotification kind="error" lowContrast hideCloseButton title="Surat jalan tidak bisa ditampilkan" subtitle={error || 'Data tidak ditemukan.'} />
+      </div>
+    );
   }
 
   const lines: SuratJalanLine[] = shipment.lines.map((line) => ({
@@ -81,14 +101,16 @@ export default function SuratJalanPrintPage({ shipmentId }: { shipmentId: number
   }));
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-8">
-      <div className="mb-6 flex justify-end gap-2 print:hidden">
-        <Button variant="outline" onClick={() => window.close()}>
+    <div className="surat-jalan-halaman">
+      <div className="surat-jalan-alat">
+        <Button kind="tertiary" renderIcon={Close} onClick={() => window.close()}>
           Tutup
         </Button>
-        <Button onClick={() => window.print()}>Cetak / Simpan sebagai PDF</Button>
+        <Button renderIcon={Printer} onClick={() => window.print()}>
+          Cetak / simpan sebagai PDF
+        </Button>
       </div>
-      <div className="rounded-md border p-6 shadow-sm print:border-0 print:p-0 print:shadow-none">
+      <div className="surat-jalan-kertas">
         <SuratJalanPreview
           companyName={company.name}
           companyLogoUrl={company.logo_url}

@@ -128,11 +128,16 @@ describe('DS-01 — sudut tajam Carbon dijaga dari CSS yang benar-benar dipancar
         'hitung notifikasi), tambahkan berkasnya ke daftar ini beserta alasannya.'
     // Daftarnya URUT ABJAD karena `pemakai` disortir -- bukan urut kepentingan.
     ).toEqual([
-      // Avatar berinisial di header + titik hitung notifikasi. Keduanya memang bulat, dan
-      // keduanya hidup di stylesheet kerangka aplikasi.
-      'app/(shell)/shell.scss (border-radius di SCSS)',
-      // Foto profil — bulat menurut konvensi avatar di mana pun.
-      'src/features/auth/pages/ProfilePage.tsx'
+      // Avatar di header, titik hitung notifikasi, DAN lingkaran foto profil di halaman
+      // Profil. Ketiganya memang bulat, dan ketiganya kini hidup di stylesheet kerangka
+      // aplikasi yang sama.
+      //
+      // DAFTARNYA MENYUSUT 25 Agu 2026, dan itu bukan pelonggaran melainkan sebaliknya:
+      // halaman Profil dulu menulis `rounded-full` sendiri di JSX-nya. Sejak lingkaran
+      // fotonya dipindah ke kelas bersama `.profil-foto__lingkaran`, satu-satunya tempat
+      // yang menyatakan "ini bulat" tinggal SATU berkas. Satu tempat lebih mudah dijaga
+      // daripada dua.
+      'app/(shell)/shell.scss (border-radius di SCSS)'
     ]);
   });
 });

@@ -4,10 +4,29 @@ import { Fragment, useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Button,
+  Checkbox,
+  DataTableSkeleton,
+  Dropdown,
+  InlineNotification,
+  RadioButton,
+  RadioButtonGroup,
+  StructuredListBody,
+  StructuredListCell,
+  StructuredListRow,
+  StructuredListWrapper,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Tag,
+  Tile
+} from '@carbon/react';
+import { ChevronDown, ChevronRight } from '@carbon/icons-react';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
 // Aturan urutan hidup di modul tersendiri supaya bisa diuji tanpa merender halaman --
 // lihat src/features/mrp/buildTaskSorting.ts dan tests/build_task_sorting.test.ts.
 import { sortBuildTasks, URGENCY_RANK, type SortKey } from '@/features/mrp/buildTaskSorting';
@@ -55,16 +74,10 @@ const URGENCY_LABELS: Record<string, string> = {
   bisa_menunggu: 'Bisa Menunggu',
   tidak_mendesak: 'Tidak Mendesak'
 };
-// Urgensi TIDAK dirender sebagai Badge sederajat status (lihat STATUS_BADGE) --
-// cuma dua tingkat teratas yang dapat garis tepi kiri kartu, supaya urgensi
-// terlihat tanpa bersaing visual dengan warna status.
-const URGENCY_BORDER: Record<string, string> = {
-  super_urgent: 'border-l-4 border-l-destructive',
-  mendesak: 'border-l-4 border-l-warning',
-  penting: '',
-  bisa_menunggu: '',
-  tidak_mendesak: ''
-};
+// Urgensi TIDAK dirender sebagai Tag sederajat status -- cuma dua tingkat teratas yang
+// dapat garis tepi kiri baris, supaya urgensi terlihat tanpa bersaing visual dengan warna
+// status. Garisnya kini hidup di build-tasks.scss lewat kelas `tugas-baris--<urgensi>`,
+// bukan sebagai kelas utilitas di dalam TSX.
 
 const STATUS_LABELS: Record<string, string> = {
   menunggu: 'Menunggu',
@@ -77,23 +90,15 @@ const STATUS_LABELS: Record<string, string> = {
 // Satu sumber warna status (Y.3-style -- satu tempat, bukan disebar). Hijau =
 // selesai, biru = menunggu persetujuan, kuning = sedang dikerjakan, abu-abu
 // netral = menunggu, abu-abu pudar = ditunda sadar, abu-abu dicoret = dibatalkan.
-const STATUS_BADGE: Record<string, 'success' | 'warning' | 'info' | 'secondary' | 'critical'> = {
-  menunggu: 'secondary',
-  sedang_dikerjakan: 'warning',
-  menunggu_persetujuan: 'info',
-  selesai: 'success',
-  ditunda_sadar: 'secondary',
-  dibatalkan: 'secondary'
-};
-// className tambahan di luar variant Badge, untuk status yang butuh nuansa
-// lebih (pudar/dicoret) yang tidak tersedia lewat variant warna biasa.
-const STATUS_EXTRA_CLASS: Record<string, string> = {
-  menunggu: '',
-  sedang_dikerjakan: '',
-  menunggu_persetujuan: '',
-  selesai: '',
-  ditunda_sadar: 'opacity-60',
-  dibatalkan: 'line-through opacity-70'
+/// Satu sumber warna status. "Ditunda sadar" dan "dibatalkan" SENGAJA abu-abu dingin, bukan
+/// merah: keduanya keputusan yang sah dan tercatat, bukan kegagalan.
+const STATUS_WARNA_TAG: Record<string, 'gray' | 'magenta' | 'blue' | 'green' | 'cool-gray'> = {
+  menunggu: 'gray',
+  sedang_dikerjakan: 'magenta',
+  menunggu_persetujuan: 'blue',
+  selesai: 'green',
+  ditunda_sadar: 'cool-gray',
+  dibatalkan: 'cool-gray'
 };
 
 const ORIGIN_LABELS: Record<string, string> = {
@@ -401,443 +406,317 @@ export default function BuildTasksPage() {
   const openAll = () => setOpenModules(new Set(modules.map((m) => m.module_code)));
   const closeAll = () => setOpenModules(new Set());
 
+
   if (checkingAccess) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="px-6 text-center text-sm text-muted-foreground">Memuat...</div>
-      </main>
+      <div className="halaman">
+        <DataTableSkeleton columnCount={8} rowCount={8} showHeader showToolbar />
+      </div>
     );
   }
+
   if (accessDenied) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="max-w-3xl px-6">
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em] text-destructive">Akses Ditolak</CardDescription>
-              <CardTitle className="text-2xl">Daftar Tugas Pembangunan</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <p className="text-sm text-muted-foreground">Sesi tidak valid — silakan login ulang.</p>
-              <Button onClick={() => router.push('/login')} className="w-fit">
-                Ke Halaman Login
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+      <div className="halaman">
+        <KepalaHalaman remah={[]} judul="Daftar tugas pembangunan" />
+        <InlineNotification kind="error" lowContrast hideCloseButton title="Akses ditolak" subtitle="Halaman ini khusus pemilik produk dan tim internal." />
+        <Button className="tugas-tombol-kembali" onClick={() => router.push('/dashboard')}>
+          Kembali ke ringkasan
+        </Button>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-muted/30 py-10">
-      <div className="flex w-full flex-col gap-6 px-6">
-        <div>
-          <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Apa yang Baru</p>
-          <h1 className="text-2xl font-semibold text-foreground">Daftar Tugas Pembangunan</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Halaman ini hanya menampilkan (baca) — task dibuat/ditutup oleh Claude Code lewat migrasi, bukan dari layar ini.</p>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Tiap task punya 3 jenis label yang berbeda dan bisa bernilai berbeda-beda: <span className="font-medium text-foreground">status</span> (badge warna solid — progres pekerjaan),{' '}
-            <span className="font-medium text-foreground">urgensi</span> (badge outline kecil + garis tepi kiri kartu untuk 2 tingkat teratas — seberapa mendesak), dan{' '}
-            <span className="font-medium text-foreground">penanda otomatis</span> (teks kecil turunan tag — bukan dicatat manusia). Ketiganya bisa berbeda nilai pada task yang sama; itu bukan kontradiksi.
-          </p>
-        </div>
+    <div className="halaman">
+      <KepalaHalaman
+        remah={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Internal' }, { label: 'Build Tasks' }]}
+        judul="Daftar tugas pembangunan"
+        pengantar={`${totalDone} dari ${filteredTasks.length} task selesai (${totalPercent}%)${filtersActive ? ' — hasil saringan' : ''}, tersebar di ${modules.length} modul.`}
+      />
 
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      <InlineNotification
+        kind="info"
+        lowContrast
+        hideCloseButton
+        title="Halaman ini hanya menampilkan"
+        subtitle="Task dibuat dan ditutup lewat migrasi, bukan dari layar ini. Tiap task punya tiga label berbeda yang bisa bernilai berbeda pada task yang sama: status (progres pekerjaan), urgensi (seberapa mendesak), dan tag (jenis pekerjaan). Itu bukan kontradiksi."
+      />
 
-        {loading ? (
-          <p className="text-sm text-muted-foreground">Memuat...</p>
-        ) : (
-          <>
-            {/* E.2: MENUNGGU PERSETUJUAN — menonjol, terpisah dari daftar modul */}
-            {pendingApproval.length > 0 ? (
-              <Card className="border-2 border-warning">
-                <CardHeader>
-                  <CardDescription className="uppercase tracking-[0.2em] text-warning-subtle-foreground">Perlu Perhatian Anda</CardDescription>
-                  <CardTitle className="text-xl">MENUNGGU PERSETUJUAN ({pendingApproval.length})</CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-4">
-                  {pendingApproval.map((t) => (
-                    <div key={t.build_task_id} className="rounded-md border bg-background p-4 text-sm">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono font-semibold text-foreground">{t.task_code}</span>
-                        <span className="font-medium text-foreground">{t.name}</span>
-                        <Badge variant="secondary">{t.module_name}</Badge>
-                      </div>
-                      <div className="mt-2 flex flex-col gap-1.5">
-                        <p><span className="font-medium text-foreground">Apa yang perlu diperiksa:</span> {t.approval_review_steps}</p>
-                        <p><span className="font-medium text-foreground">Di mana:</span> {t.approval_location}</p>
-                        <p><span className="font-medium text-foreground">Contoh kasus:</span> {t.approval_example_case}</p>
-                        <p><span className="font-medium text-foreground">Bila disetujui:</span> {t.approval_if_approved}</p>
-                        <p><span className="font-medium text-foreground">Bila ditolak:</span> {t.approval_if_rejected}</p>
-                        {t.approval_options ? (
-                          <p><span className="font-medium text-foreground">Pilihan & rekomendasi:</span> {t.approval_options}</p>
-                        ) : null}
-                        {t.link_url ? (
-                          <Link href={t.link_url} className="text-primary underline">
-                            Buka layar terkait
-                          </Link>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            ) : null}
+      {error ? <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal memuat" subtitle={error} /> : null}
 
-            {/* D.3: keterangan penjaga, HANYA keterangan, bukan blokir */}
-            {unresolvedSuperUrgentCount > AMBANG_SUPER_URGENT ? (
-              <p className="rounded-md border border-warning/40 bg-warning-subtle p-3 text-sm text-warning-subtle-foreground">
-                Ada {unresolvedSuperUrgentCount} task SUPER URGENT yang belum selesai — makin banyak yang paling mendesak, makin tidak ada yang benar-benar mendesak.
-              </p>
-            ) : null}
-
-            {/* Ringkasan atas */}
-            <Card>
-              <CardHeader>
-                <CardDescription className="uppercase tracking-[0.2em]">Ringkasan</CardDescription>
-                <CardTitle className="text-xl">
-                  {totalDone} dari {filteredTasks.length} task selesai ({totalPercent}%){filtersActive ? ' — hasil saringan' : ''}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-3">
-                <div className="flex flex-wrap gap-2">
-                  {ALL_TAGS.map((tag) => (
-                    <Badge key={tag} variant="secondary">
-                      {tag}: {tagCounts[tag]}
-                    </Badge>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Saringan */}
-            <Card>
-              <CardHeader>
-                <CardDescription className="uppercase tracking-[0.2em]">Saringan</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-3">
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <Select value={filterPic || '__all__'} onValueChange={(v) => setFilterPic(v === '__all__' ? '' : v)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="PIC" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all__">Semua PIC</SelectItem>
-                      {picOptions.map((p) => (
-                        <SelectItem key={p} value={p}>
-                          {p}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  <Select value={filterStatus || '__all__'} onValueChange={(v) => setFilterStatus(v === '__all__' ? '' : v)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all__">Semua Status</SelectItem>
-                      {Object.entries(STATUS_LABELS).map(([k, v]) => (
-                        <SelectItem key={k} value={k}>
-                          {v}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  <Select value={filterUrgency || '__all__'} onValueChange={(v) => setFilterUrgency(v === '__all__' ? '' : v)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Urgensi" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all__">Semua Urgensi</SelectItem>
-                      {URGENCY_ORDER.map((u) => (
-                        <SelectItem key={u} value={u}>
-                          {URGENCY_LABELS[u]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  <Select value={filterModule || '__all__'} onValueChange={(v) => setFilterModule(v === '__all__' ? '' : v)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Modul" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all__">Semua Modul</SelectItem>
-                      {Array.from(new Set(tasks.map((t) => t.module_code))).sort().map((mc) => (
-                        <SelectItem key={mc} value={mc}>
-                          {tasks.find((t) => t.module_code === mc)?.module_name ?? mc}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3">
-                  <Select value={filterTag || '__all__'} onValueChange={(v) => setFilterTag(v === '__all__' ? '' : v)}>
-                    <SelectTrigger className="w-48">
-                      <SelectValue placeholder="Tag" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all__">Semua Tag</SelectItem>
-                      {ALL_TAGS.map((tag) => (
-                        <SelectItem key={tag} value={tag}>
-                          {tag}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  {/* C.2: dua cara saring tag, dibedakan jelas */}
-                  <div className="flex items-center gap-2 text-sm">
-                    <label className="flex items-center gap-1.5">
-                      <input type="radio" name="tagMode" checked={tagMode === 'contains'} onChange={() => setTagMode('contains')} disabled={!filterTag} />
-                      Mengandung tag ini
-                    </label>
-                    <label className="flex items-center gap-1.5">
-                      <input type="radio" name="tagMode" checked={tagMode === 'only'} onChange={() => setTagMode('only')} disabled={!filterTag} />
-                      Hanya tag ini saja
-                    </label>
+      {loading ? (
+        <DataTableSkeleton columnCount={8} rowCount={8} showHeader showToolbar />
+      ) : (
+        <>
+          {/* MENUNGGU PERSETUJUAN — menonjol, terpisah dari daftar modul. */}
+          {pendingApproval.length > 0 ? (
+            <>
+              <h2 className="halaman__subjudul">Menunggu persetujuan Anda ({pendingApproval.length})</h2>
+              {pendingApproval.map((t) => (
+                <Tile key={t.build_task_id} className="tugas-persetujuan">
+                  <div className="tugas-persetujuan__kepala">
+                    <span className="tugas-kode">{t.task_code}</span>
+                    <span>{t.name}</span>
+                    <Tag type="cool-gray">{t.module_name}</Tag>
                   </div>
+                  <StructuredListWrapper isCondensed aria-label={`Persetujuan ${t.task_code}`}>
+                    <StructuredListBody>
+                      {[
+                        ['Apa yang perlu diperiksa', t.approval_review_steps],
+                        ['Di mana', t.approval_location],
+                        ['Contoh kasus', t.approval_example_case],
+                        ['Bila disetujui', t.approval_if_approved],
+                        ['Bila ditolak', t.approval_if_rejected],
+                        ...(t.approval_options ? [['Pilihan & rekomendasi', t.approval_options]] : [])
+                      ].map(([label, nilai]) => (
+                        <StructuredListRow key={String(label)}>
+                          <StructuredListCell noWrap>{label}</StructuredListCell>
+                          <StructuredListCell>{nilai}</StructuredListCell>
+                        </StructuredListRow>
+                      ))}
+                    </StructuredListBody>
+                  </StructuredListWrapper>
+                  {t.link_url ? (
+                    <Link href={t.link_url} className="cds--link">
+                      Buka layar terkait
+                    </Link>
+                  ) : null}
+                </Tile>
+              ))}
+            </>
+          ) : null}
 
-                  <label className="flex items-center gap-1.5 text-sm">
-                    <input type="checkbox" checked={onlyParallelSafe} onChange={(e) => setOnlyParallelSafe(e.target.checked)} />
-                    Tampilkan yang aman dikerjakan paralel saja
-                  </label>
+          {/* Keterangan penjaga, HANYA keterangan — bukan blokir. */}
+          {unresolvedSuperUrgentCount > AMBANG_SUPER_URGENT ? (
+            <InlineNotification
+              kind="warning"
+              lowContrast
+              hideCloseButton
+              title={`${unresolvedSuperUrgentCount} task SUPER URGENT belum selesai`}
+              subtitle="Makin banyak yang paling mendesak, makin tidak ada yang benar-benar mendesak."
+            />
+          ) : null}
 
-                  <Button size="sm" variant="outline" onClick={clearFilters}>
-                    Hapus Semua Saringan
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+          <div className="tugas-hitung-tag">
+            {ALL_TAGS.map((tag) => (
+              <Tag key={tag} type="cool-gray">
+                {tag}: {tagCounts[tag]}
+              </Tag>
+            ))}
+          </div>
 
-            {/* Buka/Tutup semua */}
-            <div className="flex items-center justify-between">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="text-sm text-muted-foreground">
-                  {modules.length} modul{filtersActive ? ' (mengikuti saringan)' : ''}
-                </span>
-                {/* II.3 — tombol ini HANYA muncul saat pengguna menyortir manual. Tanpa
-                    penanda ini, urutan yang tidak biasa terlihat seperti urutan biasa, dan
-                    SUPER URGENT yang tidak lagi di atas bisa terlewat. */}
-                {sortKey ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs text-warning">
-                      Urutan diubah manual ({KOLOM_TABEL.find((k) => k.key === sortKey)?.label}
-                      {sortDir === 'asc' ? ', naik' : ', turun'}) — SUPER URGENT tidak lagi otomatis di atas.
-                    </span>
-                    <Button size="sm" variant="outline" onClick={resetSort}>
-                      Kembali ke Urutan Default
-                    </Button>
-                  </div>
-                ) : null}
-              </div>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={openAll}>
-                  Buka Semua
-                </Button>
-                <Button size="sm" variant="outline" onClick={closeAll}>
-                  Tutup Semua
+          <h2 className="halaman__subjudul">Saringan</h2>
+          <div className="tugas-saringan">
+            <Dropdown
+              id="tugas-saring-pic"
+              size="lg"
+              titleText="PIC"
+              label="Semua PIC"
+              items={['', ...picOptions]}
+              itemToString={(v: string) => (v === '' ? 'Semua PIC' : v)}
+              selectedItem={filterPic}
+              onChange={({ selectedItem }: { selectedItem: string | null }) => setFilterPic(selectedItem ?? '')}
+            />
+            <Dropdown
+              id="tugas-saring-status"
+              size="lg"
+              titleText="Status"
+              label="Semua status"
+              items={['', ...Object.keys(STATUS_LABELS)]}
+              itemToString={(v: string) => (v === '' ? 'Semua status' : STATUS_LABELS[v] ?? v)}
+              selectedItem={filterStatus}
+              onChange={({ selectedItem }: { selectedItem: string | null }) => setFilterStatus(selectedItem ?? '')}
+            />
+            <Dropdown
+              id="tugas-saring-urgensi"
+              size="lg"
+              titleText="Urgensi"
+              label="Semua urgensi"
+              items={['', ...URGENCY_ORDER]}
+              itemToString={(v: string) => (v === '' ? 'Semua urgensi' : URGENCY_LABELS[v] ?? v)}
+              selectedItem={filterUrgency}
+              onChange={({ selectedItem }: { selectedItem: string | null }) => setFilterUrgency(selectedItem ?? '')}
+            />
+            <Dropdown
+              id="tugas-saring-modul"
+              size="lg"
+              titleText="Modul"
+              label="Semua modul"
+              items={['', ...Array.from(new Set(tasks.map((t) => t.module_code))).sort()]}
+              itemToString={(v: string) => (v === '' ? 'Semua modul' : tasks.find((t) => t.module_code === v)?.module_name ?? v)}
+              selectedItem={filterModule}
+              onChange={({ selectedItem }: { selectedItem: string | null }) => setFilterModule(selectedItem ?? '')}
+            />
+            <Dropdown
+              id="tugas-saring-tag"
+              size="lg"
+              titleText="Tag"
+              label="Semua tag"
+              items={['', ...ALL_TAGS]}
+              itemToString={(v: string) => (v === '' ? 'Semua tag' : v)}
+              selectedItem={filterTag}
+              onChange={({ selectedItem }: { selectedItem: string | null }) => setFilterTag(selectedItem ?? '')}
+            />
+            {/* DUA CARA MENYARING TAG dibedakan tegas. RadioButtonGroup Carbon menggantikan
+                dua <input type="radio"> mentah — perilakunya sama, tapi ia ikut berubah saat
+                komponen bersamanya diperbaiki. */}
+            <RadioButtonGroup
+              legendText="Cara menyaring tag"
+              name="tugas-mode-tag"
+              valueSelected={tagMode}
+              disabled={!filterTag}
+              onChange={(v: string | number | undefined) => setTagMode(v === 'only' ? 'only' : 'contains')}
+            >
+              <RadioButton labelText="Mengandung tag ini" value="contains" id="tugas-tag-contains" />
+              <RadioButton labelText="Hanya tag ini saja" value="only" id="tugas-tag-only" />
+            </RadioButtonGroup>
+            <Checkbox
+              id="tugas-paralel"
+              labelText="Hanya yang aman dikerjakan paralel"
+              checked={onlyParallelSafe}
+              onChange={(_e: unknown, { checked }: { checked: boolean }) => setOnlyParallelSafe(checked)}
+            />
+            <Button kind="tertiary" size="lg" onClick={clearFilters}>
+              Hapus semua saringan
+            </Button>
+          </div>
+
+          <div className="tugas-alat">
+            {/* Penanda urutan manual HANYA muncul saat pengguna menyortir sendiri. Tanpa
+                penanda ini, urutan yang tidak biasa terlihat seperti urutan biasa, dan
+                SUPER URGENT yang tidak lagi di atas bisa terlewat. */}
+            {sortKey ? (
+              <div className="tugas-alat__urutan">
+                <Tag type="magenta">
+                  Urutan diubah manual ({KOLOM_TABEL.find((k) => k.key === sortKey)?.label}
+                  {sortDir === 'asc' ? ', naik' : ', turun'}) — SUPER URGENT tidak lagi otomatis di atas
+                </Tag>
+                <Button kind="ghost" size="sm" onClick={resetSort}>
+                  Kembali ke urutan bawaan
                 </Button>
               </div>
+            ) : (
+              <span className="halaman__redup">
+                {modules.length} modul{filtersActive ? ' (mengikuti saringan)' : ''}
+              </span>
+            )}
+            <div className="tugas-alat__buka-tutup">
+              <Button kind="ghost" size="sm" onClick={openAll}>
+                Buka semua
+              </Button>
+              <Button kind="ghost" size="sm" onClick={closeAll}>
+                Tutup semua
+              </Button>
             </div>
+          </div>
 
-            {/* F.1: modul bisa dibuka-tutup */}
-            <div className="flex flex-col gap-3">
-              {modules.map((mod) => {
-                const done = mod.tasks.filter((t) => isTaskDone(t.status)).length;
-                const pct = mod.tasks.length > 0 ? Math.round((done / mod.tasks.length) * 100) : 0;
-                const hasSuperUrgent = mod.tasks.some((t) => t.urgency === 'super_urgent' && isTaskUnresolved(t.status));
-                const allDone = mod.tasks.length > 0 && done === mod.tasks.length;
-                const open = isModuleOpen(mod.module_code, hasSuperUrgent);
-                return (
-                  <Card key={mod.module_code} className={hasSuperUrgent ? 'border-2 border-destructive' : allDone ? 'border-2 border-success' : undefined}>
-                    <button type="button" className="flex w-full items-center justify-between gap-3 p-4 text-left" onClick={() => toggleModule(mod.module_code)}>
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono text-xs text-muted-foreground">{open ? '▾' : '▸'}</span>
-                        <span className="font-semibold text-foreground">{mod.module_name}</span>
-                        {hasSuperUrgent ? <Badge variant="critical">SUPER URGENT</Badge> : null}
-                        {!hasSuperUrgent && allDone ? <Badge variant="success">Semua Selesai</Badge> : null}
-                      </div>
-                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                        <span>{mod.tasks.length} task</span>
-                        <span>{done} selesai</span>
-                        <span className="font-medium text-foreground">{pct}%{filtersActive ? ' (hasil saringan)' : ''}</span>
-                      </div>
-                    </button>
-                    {open ? (
-                      <CardContent className="border-t p-0">
-                        {/* II.1 — BENTUK TABEL, satu baris satu task. Penjelasan, pengaruh,
-                            dan detail pekerjaan TIDAK ikut di baris — itu yang membuat bentuk
-                            kartu terasa panjang. Semuanya pindah ke baris yang dimekarkan.
+          {/* MODUL BISA DIBUKA-TUTUP.
+              Accordion Carbon TIDAK dipakai di sini, dan itu disengaja: modul yang memuat
+              SUPER URGENT belum selesai WAJIB terbuka otomatis (keputusan D.2, ditegaskan
+              ulang pemilik produk 24 Agu 2026), dan Accordion Carbon tidak menyediakan
+              "terbuka karena isinya genting" — hanya terbuka karena diklik. Yang dipakai
+              tetap tombol Carbon + panel, dengan keadaan terbuka dihitung sendiri. */}
+          <div className="tugas-modul-daftar">
+            {modules.map((mod) => {
+              const done = mod.tasks.filter((t) => isTaskDone(t.status)).length;
+              const pct = mod.tasks.length > 0 ? Math.round((done / mod.tasks.length) * 100) : 0;
+              const hasSuperUrgent = mod.tasks.some((t) => t.urgency === 'super_urgent' && isTaskUnresolved(t.status));
+              const allDone = mod.tasks.length > 0 && done === mod.tasks.length;
+              const open = isModuleOpen(mod.module_code, hasSuperUrgent);
+              return (
+                <div key={mod.module_code} className={`tugas-modul${hasSuperUrgent ? ' tugas-modul--genting' : allDone ? ' tugas-modul--selesai' : ''}`}>
+                  <Button
+                    kind="ghost"
+                    className="tugas-modul__tombol"
+                    renderIcon={open ? ChevronDown : ChevronRight}
+                    onClick={() => toggleModule(mod.module_code)}
+                  >
+                    <span className="tugas-modul__nama">{mod.module_name}</span>
+                    {hasSuperUrgent ? <Tag type="red">SUPER URGENT</Tag> : null}
+                    {!hasSuperUrgent && allDone ? <Tag type="green">Semua selesai</Tag> : null}
+                    <span className="tugas-modul__angka">
+                      {mod.tasks.length} task · {done} selesai · {pct}%{filtersActive ? ' (hasil saringan)' : ''}
+                    </span>
+                  </Button>
 
-                            II.8 — tabel menggulir DI DALAM wadahnya (overflow-x-auto), BUKAN
-                            membuat halaman bergulir menyamping. overflow-hidden DILARANG:
-                            itu memotong kolom tanpa ada cara melihatnya. */}
-                        <div className="hidden overflow-x-auto md:block">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="border-b bg-muted/40 text-left">
-                                {KOLOM_TABEL.map((k) => (
-                                  <th key={k.key ?? k.label} className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                                    {k.key ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => toggleSort(k.key as SortKey)}
-                                        className="inline-flex items-center gap-1 hover:text-foreground"
-                                      >
-                                        {k.label}
-                                        <span aria-hidden="true" className="text-[10px]">
-                                          {sortKey === k.key ? (sortDir === 'asc' ? '\u25B2' : '\u25BC') : '\u21C5'}
-                                        </span>
-                                      </button>
-                                    ) : (
-                                      k.label
-                                    )}
-                                  </th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {sortTasks(mod.tasks).map((t) => {
-                                const isExpanded = expandedTaskId === t.build_task_id;
-                                return (
-                                  <Fragment key={t.build_task_id}>
-                                    <tr className="border-b align-top">
-                                      {/* II.6 — garis tepi kiri urgensi dipertahankan, dipindah ke sel
-                                          pertama karena baris tabel tidak punya "tepi kartu". */}
-                                      <td className={`px-3 py-2.5 font-mono font-semibold text-foreground ${URGENCY_BORDER[t.urgency]}`}>
-                                        {t.task_code}
-                                      </td>
-                                      <td className="px-3 py-2.5 text-foreground">{t.name}</td>
-                                      <td className="px-3 py-2.5">
-                                        {/* Teks status WAJIB tetap ada — warna tidak boleh jadi satu-satunya penanda. */}
-                                        {/* Label DISENGAJA di baris yang SAMA dengan Badge, mengikuti konvensi yang sudah ada.
-                                            Pengawas kebocoran identifier (tests/ui_raw_leak_watchdog.test.ts) memeriksa PER BARIS:
-                                            bila STATUS_LABELS pindah ke baris lain, baris ini kehilangan penanda amannya dan
-                                            dilaporkan sebagai kebocoran, padahal t.status di sini cuma kunci pencarian warna.
-                                            Lihat AUD-23. */}
-                                        <Badge variant={STATUS_BADGE[t.status]} className={STATUS_EXTRA_CLASS[t.status]}>{STATUS_LABELS[t.status]}</Badge>
-                                      </td>
-                                      <td className="px-3 py-2.5 text-xs uppercase tracking-wide text-muted-foreground">
-                                        {URGENCY_LABELS[t.urgency]}
-                                      </td>
-                                      <td className="px-3 py-2.5 text-muted-foreground">{t.pic}</td>
-                                      <td className="px-3 py-2.5">
-                                        <div className="flex flex-wrap gap-1">
-                                          {t.tags.map((tag) => (
-                                            <Badge key={tag} variant="outline" className="text-[10px]">
-                                              {tag}
-                                            </Badge>
-                                          ))}
-                                        </div>
-                                        <span className="text-[10px] text-muted-foreground">
-                                          {t.aman_paralel ? '\u25CF Aman Paralel' : '\u25CB Menunggu Cetakan UX'}
-                                        </span>
-                                      </td>
-                                      <td className="whitespace-nowrap px-3 py-2.5 text-muted-foreground">{ageInCurrentStatus(t) ?? '\u2014'}</td>
-                                      <td className="whitespace-nowrap px-3 py-2.5">
-                                        <button type="button" className="text-primary underline" onClick={() => toggleTaskDetail(t)}>
-                                          {isExpanded ? 'Tutup' : 'Detail'}
-                                        </button>
-                                        {t.link_url ? (
-                                          <Link href={t.link_url} className="ml-3 text-primary underline">
-                                            Buka layar
-                                          </Link>
-                                        ) : null}
-                                      </td>
-                                    </tr>
-                                    {isExpanded ? (
-                                      <tr className="border-b bg-muted/30">
-                                        <td colSpan={KOLOM_TABEL.length} className="px-3 py-3">
-                                          {renderDetailTask(t)}
-                                        </td>
-                                      </tr>
-                                    ) : null}
-                                  </Fragment>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-
-                        {/* II.8 — di layar sempit baris menjadi KARTU BERTUMPUK, dan labelnya
-                            mengambil judul kolom yang sesungguhnya. */}
-                        <div className="flex flex-col gap-3 p-3 md:hidden">
-                          {sortTasks(mod.tasks).map((t) => {
-                            const isExpanded = expandedTaskId === t.build_task_id;
-                            return (
-                              <div key={t.build_task_id} className={`border bg-background ${URGENCY_BORDER[t.urgency]}`}>
-                                <dl className="divide-y">
-                                  <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 px-3 py-2">
-                                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Kode</dt>
-                                    <dd className="font-mono font-semibold text-foreground">{t.task_code}</dd>
+                  {open ? (
+                    <Table size="lg" className="tabel-responsif">
+                      <TableHead>
+                        <TableRow>
+                          {KOLOM_TABEL.map((k) => (
+                            <TableHeader
+                              key={k.label}
+                              isSortable={Boolean(k.key)}
+                              onClick={k.key ? () => toggleSort(k.key as SortKey) : undefined}
+                              sortDirection={sortKey === k.key ? (sortDir === 'asc' ? 'ASC' : 'DESC') : 'NONE'}
+                              isSortHeader={sortKey === k.key}
+                            >
+                              {k.label}
+                            </TableHeader>
+                          ))}
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {sortTasks(mod.tasks).map((t) => {
+                          const isExpanded = expandedTaskId === t.build_task_id;
+                          return (
+                            <Fragment key={t.build_task_id}>
+                              <TableRow className={`tugas-baris tugas-baris--${t.urgency}`}>
+                                <TableCell data-label="Kode">
+                                  <span className="tugas-kode">{t.task_code}</span>
+                                </TableCell>
+                                <TableCell data-label="Nama">{t.name}</TableCell>
+                                <TableCell data-label="Status">
+                                  {/* Teks status WAJIB tetap ada — warna tidak boleh jadi satu-satunya
+                                      penanda. Label DISENGAJA di baris yang SAMA dengan Tag: pengawas
+                                      kebocoran identifier memeriksa PER BARIS, dan memisahnya membuat
+                                      baris ini kehilangan penanda amannya (lihat AUD-23). */}
+                                  <Tag type={STATUS_WARNA_TAG[t.status] ?? 'gray'}>{STATUS_LABELS[t.status]}</Tag>
+                                </TableCell>
+                                <TableCell data-label="Urgensi">{URGENCY_LABELS[t.urgency]}</TableCell>
+                                <TableCell data-label="PIC">{t.pic}</TableCell>
+                                <TableCell data-label="Tag">
+                                  <div className="tugas-tag-sel">
+                                    {t.tags.map((tag) => (
+                                      <Tag key={tag} type="outline">
+                                        {tag}
+                                      </Tag>
+                                    ))}
+                                    <span className="halaman__redup">{t.aman_paralel ? 'Aman paralel' : 'Menunggu cetakan UX'}</span>
                                   </div>
-                                  <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 px-3 py-2">
-                                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Nama</dt>
-                                    <dd className="min-w-0 break-words text-foreground">{t.name}</dd>
-                                  </div>
-                                  <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 px-3 py-2">
-                                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Status</dt>
-                                    <dd>
-                                      {/* Label DISENGAJA di baris yang SAMA dengan Badge, mengikuti konvensi yang sudah ada.
-                                          Pengawas kebocoran identifier (tests/ui_raw_leak_watchdog.test.ts) memeriksa PER BARIS:
-                                          bila STATUS_LABELS pindah ke baris lain, baris ini kehilangan penanda amannya dan
-                                          dilaporkan sebagai kebocoran, padahal t.status di sini cuma kunci pencarian warna.
-                                          Lihat AUD-23. */}
-                                      <Badge variant={STATUS_BADGE[t.status]} className={STATUS_EXTRA_CLASS[t.status]}>{STATUS_LABELS[t.status]}</Badge>
-                                    </dd>
-                                  </div>
-                                  <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 px-3 py-2">
-                                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Urgensi</dt>
-                                    <dd className="text-xs uppercase tracking-wide text-muted-foreground">{URGENCY_LABELS[t.urgency]}</dd>
-                                  </div>
-                                  <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 px-3 py-2">
-                                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">PIC</dt>
-                                    <dd className="text-muted-foreground">{t.pic}</dd>
-                                  </div>
-                                  <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 px-3 py-2">
-                                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Tag</dt>
-                                    <dd className="flex flex-wrap gap-1">
-                                      {t.tags.map((tag) => (
-                                        <Badge key={tag} variant="outline" className="text-[10px]">
-                                          {tag}
-                                        </Badge>
-                                      ))}
-                                    </dd>
-                                  </div>
-                                  <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 px-3 py-2">
-                                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Menggantung</dt>
-                                    <dd className="text-muted-foreground">{ageInCurrentStatus(t) ?? '\u2014'}</dd>
-                                  </div>
-                                  <div className="px-3 py-2">
-                                    <button type="button" className="text-primary underline" onClick={() => toggleTaskDetail(t)}>
-                                      {isExpanded ? 'Tutup Detail' : 'Detail'}
-                                    </button>
+                                </TableCell>
+                                <TableCell data-label="Menggantung">{ageInCurrentStatus(t) ?? '—'}</TableCell>
+                                <TableCell data-label="Aksi">
+                                  <div className="tugas-aksi-sel">
+                                    <Button kind="ghost" size="sm" onClick={() => toggleTaskDetail(t)}>
+                                      {isExpanded ? 'Tutup' : 'Detail'}
+                                    </Button>
                                     {t.link_url ? (
-                                      <Link href={t.link_url} className="ml-3 text-primary underline">
+                                      <Link href={t.link_url} className="cds--link">
                                         Buka layar
                                       </Link>
                                     ) : null}
                                   </div>
-                                </dl>
-                                {isExpanded ? <div className="border-t bg-muted/30 p-3">{renderDetailTask(t)}</div> : null}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </CardContent>
-                    ) : null}
-                  </Card>
-                );
-              })}
-            </div>
-          </>
-        )}
-      </div>
-    </main>
+                                </TableCell>
+                              </TableRow>
+                              {isExpanded ? (
+                                <TableRow className="cds--expandable-row">
+                                  <TableCell colSpan={KOLOM_TABEL.length}>{renderDetailTask(t)}</TableCell>
+                                </TableRow>
+                              ) : null}
+                            </Fragment>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
   );
 }

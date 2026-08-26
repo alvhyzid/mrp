@@ -39,6 +39,9 @@ describe('Dashboard Proyek AI (K1b) — seed, progres AUTO_QUERY dari data nyata
   let adminToken: string;
   let productionToken: string;
   let kamusTermId: number;
+  // Id pengguna MILIK company fixture ini. Sebelumnya angka 1 ditulis langsung, dan itu
+  // menunjuk pengguna milik perusahaan LAIN -- lihat catatan di test kamus di bawah.
+  let adminUserId: number;
 
   async function loginToken(email: string): Promise<string> {
     const client: SupabaseClient = createClient(supabaseUrl!, anonKey!, { auth: { persistSession: false } });
@@ -88,6 +91,14 @@ describe('Dashboard Proyek AI (K1b) — seed, progres AUTO_QUERY dari data nyata
     ]);
     const { data: term } = await adminClient.from('kamus_terms').select('kamus_term_id').eq('company_id', companyId).eq('term_key', 'items.standard_cost').single();
     kamusTermId = term!.kamus_term_id;
+
+    const { data: adminRow } = await adminClient
+      .from('users')
+      .select('user_id')
+      .eq('company_id', companyId)
+      .eq('email', 'admin.aiprojecttest@debug.mrp')
+      .single();
+    adminUserId = adminRow!.user_id;
   });
 
   afterAll(async () => {
@@ -164,7 +175,20 @@ describe('Dashboard Proyek AI (K1b) — seed, progres AUTO_QUERY dari data nyata
     expect(before.progress_percent).toBeCloseTo(0, 5); // 0 dari 4 baris confirmed dulu
 
     // Jawab + konfirmasi langsung lewat admin client (setara alur UI kamus, bukan menduplikasi endpoint kamus di test ini).
-    await adminClient.from('kamus_terms').update({ status: 'DIKONFIRMASI', answer_plain: 'test', answered_by: 1, confirmed_by: 1 }).eq('kamus_term_id', kamusTermId);
+    // DIPERBAIKI 25 Agu 2026. Versi lama menulis `answered_by: 1, confirmed_by: 1` --
+    // angka yang ditulis langsung, menunjuk pengguna milik perusahaan LAIN. Di database yang
+    // kebetulan punya user_id 1, tulisannya lolos dan test hijau; di database yang tidak,
+    // tulisannya DITOLAK kunci asing dan test gagal dengan "progres 0" yang terlihat seperti
+    // cacat perhitungan progres -- padahal yang gagal adalah tulisan test-nya sendiri.
+    //
+    // Dua hal diperbaiki sekaligus, dan yang kedua yang sebenarnya penting: memakai id
+    // pengguna milik company fixture ini, DAN MEMERIKSA GALATNYA. Tulisan yang tidak
+    // diperiksa adalah tulisan yang belum tentu terjadi.
+    const { error: galatKonfirmasi } = await adminClient
+      .from('kamus_terms')
+      .update({ status: 'DIKONFIRMASI', answer_plain: 'test', answered_by: adminUserId, confirmed_by: adminUserId })
+      .eq('kamus_term_id', kamusTermId);
+    expect(galatKonfirmasi, `konfirmasi kamus gagal ditulis: ${galatKonfirmasi?.message}`).toBeNull();
 
     const reqAfter = makeRequest('http://localhost/api/ai-project', adminToken, 'GET');
     const after = ((await getAiProjectDashboard(reqAfter)).body as any).tasks.find((t: any) => t.name === 'Kamus prioritas 1-2');

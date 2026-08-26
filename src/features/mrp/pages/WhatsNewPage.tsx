@@ -4,8 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Breadcrumb, BreadcrumbItem, Link as CarbonLink, SkeletonText, Tag, Tile } from '@carbon/react';
 
 // Daftar dikelola manual (BUKAN otomatis dari commit log -- itu sistem
 // tersendiri yang belum dibutuhkan, prinsip "jangan bikin abstraksi untuk
@@ -144,44 +143,46 @@ export default function WhatsNewPage() {
 
   if (checkingAccess) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="px-6 text-center text-sm text-muted-foreground">Memuat...</div>
-      </main>
+      <div className="halaman">
+        <SkeletonText heading width="16rem" />
+        <SkeletonText paragraph lineCount={4} />
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-muted/30 py-10">
-      <div className="flex w-full flex-col gap-6 px-6">
-        <div>
-          <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Internal</p>
-          <h1 className="text-2xl font-semibold text-foreground">Apa yang Baru</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Fitur yang baru selesai dibangun -- klik judulnya untuk langsung membuka halamannya.</p>
-        </div>
+    <div className="halaman">
+      <Breadcrumb noTrailingSlash className="halaman__remah">
+        <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
+        <BreadcrumbItem isCurrentPage>
+          <span className="cds--link halaman__remah-mati">Internal</span>
+        </BreadcrumbItem>
+        <BreadcrumbItem isCurrentPage>What&apos;s New</BreadcrumbItem>
+      </Breadcrumb>
 
-        <div className="flex flex-col gap-3">
-          {items.map((item) => (
-            <Card key={item.title}>
-              <CardHeader>
-                <div className="flex items-center justify-between gap-3">
-                  <CardTitle className="text-lg">
-                    <Link href={item.href} className="hover:underline">
-                      {item.title}
-                    </Link>
-                  </CardTitle>
-                  <Badge variant="secondary">{item.date}</Badge>
-                </div>
-                <CardDescription>{item.description}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Link href={item.href} className="text-sm text-primary hover:underline">
-                  Buka halaman →
-                </Link>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+      <div>
+        <h1 className="halaman__judul">Apa yang baru</h1>
+        <p className="halaman__pengantar">
+          {items.length} fitur yang baru selesai dibangun — klik judulnya untuk langsung membuka halamannya.
+        </p>
       </div>
-    </main>
+
+      <div className="baru-daftar">
+        {items.map((item) => (
+          <Tile key={item.title} className="baru-kartu">
+            <div className="baru-kartu__kepala">
+              {/* Link Carbon, bukan <a> bergaya sendiri: warna, garis bawah, dan penanda
+                  fokusnya sudah ditetapkan Carbon. `as={Link}` menjaga perpindahan halaman
+                  tetap lewat router Next, bukan memuat ulang seluruh aplikasi. */}
+              <CarbonLink as={Link} href={item.href} className="baru-kartu__judul">
+                {item.title}
+              </CarbonLink>
+              <Tag type="cool-gray">{item.date}</Tag>
+            </div>
+            <p className="halaman__redup">{item.description}</p>
+          </Tile>
+        ))}
+      </div>
+    </div>
   );
 }

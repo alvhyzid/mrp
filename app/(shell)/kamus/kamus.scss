@@ -1,0 +1,99 @@
+@use '@carbon/react/scss/spacing' as *;
+@use '@carbon/react/scss/theme' as *;
+@use '@carbon/react/scss/type' as *;
+@use '@carbon/react/scss/breakpoint' as *;
+
+// Gaya khas halaman Kamus. Nol angka px ditulis langsung — seluruh jarak memakai token
+// $spacing-* Carbon, dan seluruh warna memakai token tema.
+
+.kamus-alat {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+}
+
+.kamus-alat__tombol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-04;
+}
+
+.kamus-ekspor {
+  margin-top: $spacing-03;
+}
+
+.kamus-daftar {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+}
+
+.kamus-kartu {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+}
+
+.kamus-kartu__kepala {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-04;
+}
+
+.kamus-kartu__tag {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.kamus-kartu__teknis {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-02;
+}
+
+.kamus-kartu__teknis-isi {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-02;
+  padding-left: $spacing-05;
+  font-family: font-family('mono');
+  @include type-style('code-01');
+  color: $text-secondary;
+  // Identifier teknis bisa panjang dan tanpa spasi; tanpa ini ia mendorong lebar kartu
+  // dan melahirkan gulir menyamping yang dilarang aturan responsive.
+  overflow-wrap: anywhere;
+}
+
+// Tombol aksi kartu. Di layar sempit ketiganya menumpuk penuh lebar supaya tetap
+// bisa ditekan jari; di layar lebar mereka sebaris.
+.kamus-kartu__aksi {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-04;
+
+  @include breakpoint('md') {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+}
+
+.kamus-kartu__jawaban {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-03;
+  @include type-style('body-compact-01');
+  color: $text-primary;
+}
+
+// Satu BARIS saringan. Pembungkusnya yang mengatur susunan; lebar tiap kontrol diatur
+// kelas bersama `.halaman__saring`.
+.kamus-saring {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-05;
+}

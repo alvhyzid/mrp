@@ -468,6 +468,90 @@ Kasus yang melahirkannya: kode unggah foto profil punya komentar yang menyadari 
 
 **Bentuk kalimat yang dituju**: *"ini menangani A; ini TIDAK menangani B."*
 
+## Peringatan Disusun Menurut KEPUTUSAN, Bukan Menurut Perhitungan (ditetapkan 25 Agu 2026)
+
+**Satu keputusan, satu peringatan. Sebab-sebabnya disebutkan DI DALAMNYA.**
+
+Alasannya, dan ini yang akan dirujuk untuk peringatan lain:
+
+> Orang gudang tidak bertanya *"apakah stok di bawah ambang persen"* atau *"apakah kebutuhan melebihi sisa"*. Ia bertanya **satu hal**: bahan ini perlu dipesan atau tidak.
+>
+> Dan yang paling berharga: **dua sebab yang BERTENTANGAN jadi terlihat.** Bila stok cukup menurut persen tapi kurang menurut jadwal produksi, itu **informasi terpenting di layar** — dan dua peringatan terpisah justru menyembunyikannya.
+
+Dua peringatan untuk satu bahan memaksa orang menerjemahkan **dua jawaban jadi satu keputusan**, dan begitu keduanya pernah tidak sepakat, ia berhenti mempercayai keduanya.
+
+**Yang WAJIB ada di peringatan gabungan:**
+1. **Seluruh sebab yang menyala**, bukan yang pertama saja.
+2. **Sebab yang TIDAK menyala pun disebut bila membantu keputusan** — mis. *"sisa 8%, tapi masih cukup untuk produksi terjadwal"*. Itu keterangan yang **mencegah pembelian tergesa-gesa**.
+3. **Sebab yang bertentangan ditampilkan menonjol** — itu yang paling perlu dilihat manusia.
+4. Keadaan yang **artinya berbeda** tidak dicampur — mis. "belum pernah dibeli" bukan "stok habis".
+
+## Isian yang Satu Hal Wajib Punya SATU Label (ditetapkan 25 Agu 2026)
+
+**Dua field bisa BERDAMPINGAN dan tetap tidak terbaca sebagai satu isian, bila masing-masing punya label sendiri. Bukan jaraknya yang memisahkan, melainkan LABELNYA.**
+
+Kasus yang melahirkannya: pemilik produk meminta "kolom angka di sebelah dropdown satuan" untuk masa simpan — dan itu **persis** yang sudah ada di layar. Diukur: keduanya berdampingan di baris yang sama. Yang membuatnya tidak dikenali adalah dua label terpisah: **"Shelf life"** dan **"Satuan shelf life"** terbaca sebagai **dua hal**; satu kelompok berlabel **"Masa simpan"** terbaca sebagai **satu**.
+
+**ATURAN**: isian yang secara makna satu hal WAJIB punya **satu label**, bukan label per bagian.
+
+## Field yang Saling Membatalkan Wajib Berdekatan dan Hubungannya Terlihat (ditetapkan 25 Agu 2026)
+
+**Bila mengisi satu field membuat field lain tidak berlaku, keduanya WAJIB berdekatan dan hubungan itu WAJIB terlihat — bukan hanya diketahui kode.**
+
+Kasus yang melahirkannya: "Stok minimum (persen)" berada di kolom **ketiga**, "Stok minimum (angka mutlak)" di kolom **pertama baris berikutnya**. Yang satu **membatalkan** yang lain, dan orang bisa mengisi salah satunya **tanpa pernah melihat yang lain**.
+
+Ini lebih berat daripada kelas label di atas: yang itu membuat orang tidak menemukan isiannya; yang ini membuat orang **mengisi sesuatu yang diam-diam tidak berlaku**.
+
+## Teks Panjang di Migrasi Ditulis Tanpa Bergantung Pemisah (ditetapkan 25 Agu 2026)
+
+**Teks yang memuat karakter pemisah pernyataan bisa merusak migrasi tanpa gejala yang jelas.**
+
+Sebuah migrasi gagal **tiga kali** berturut-turut, dan galatnya menunjuk ke akhir berkas — bukan ke penyebabnya. Sebab sebenarnya: **tiga kutip berturut-turut** (`'''`) di dalam sebuah string menutupnya lebih awal, sehingga sisa migrasi terbaca sebagai potongan yang tidak lengkap.
+
+**ATURAN**: teks panjang di dalam migrasi — terutama yang memuat kutip, titik koma, atau tanda dolar — ditulis lewat `concat_ws(chr(10), '…', '…')`, bukan lewat rangkaian `E'…' || E'…'`. Itu menghilangkan **seluruh kelasnya**, bukan satu kejadiannya.
+
+**TAMBAHAN 25 Agu 2026, setelah kelas KEDUA muncul di hari yang sama.** `insert ... values (` yang isinya panjang gampang ditutup dengan **satu** kurung padahal butuh **dua** — satu untuk `concat_ws`, satu untuk `values`. Postgres menjawabnya dengan `unexpected end of function definition at end of input` sambil menunjuk **baris terakhir berkas**, yaitu tempat yang sama sekali salah. Ini terjadi **dua kali dalam satu giliran kerja**, dan kedua kalinya menghabiskan waktu jauh lebih banyak daripada seharusnya.
+
+Penjaganya sekarang ada: `tests/migrasi_kurung_seimbang.test.ts` menghitung kurung di luar string dan komentar, lalu menyebut **baris tempat kurungnya dibuka**. Jangan mengandalkan pesan Postgres untuk kelas cacat ini — ia menunjuk ujung berkas.
+
+## FOKUS SATU TASK — Temuan Lain DICATAT, Bukan Dikerjakan (ditetapkan 25 Agu 2026)
+
+**Saat mengerjakan sebuah task, temuan yang TIDAK BERHUBUNGAN dengan task itu DICATAT SEBAGAI TASK — bukan dikerjakan saat itu juga. Lebih baik daftar tugas bertambah panjang dan diselesaikan satu per satu, daripada satu pekerjaan tidak pernah selesai karena terus berbelok ke pekerjaan lain.**
+
+**BUKTI YANG MELAHIRKANNYA, dicatat apa adanya**: 25 Agustus, pekerjaan dimulai siang dengan menerapkan Carbon Design ke seluruh halaman. Sampai malam, yang dikerjakan adalah fitur peringatan stok bahan, permintaan pembelian, dan Tasks & Approvals — **tidak satu pun berhubungan dengan Carbon**.
+
+> **Tidak ada satu pun langkah yang salah secara sendiri-sendiri. Yang salah adalah tidak ada yang menghitung berapa jauh sudah berbelok.**
+
+**INI MENGIKAT ARSITEK JUGA, bukan hanya Claude Code.** Sebagian besar pergeseran hari itu justru lahir dari sisi arsitek: laporan koreksi UI dijawab dengan blok perintah fitur baru yang lengkap, alih-alih menyuruh temuannya dicatat. **Bila Claude Code melaporkan temuan di luar konteks task berjalan, jawabannya adalah "catat sebagai task"** — bukan blok perintah membangunnya. Blok perintah disusun saat task itu tiba gilirannya.
+
+### Yang TETAP dikerjakan saat itu juga — empat pengecualian, dan hanya empat
+
+Batasnya ditulis tegas karena aturan ini berbahaya bila diterapkan buta:
+
+1. **MENGHALANGI task berjalan.** Bila pekerjaan tidak bisa dilanjutkan tanpa memperbaikinya, itu **bagian dari task**, bukan temuan.
+2. **KEBOCORAN DATA atau KEHILANGAN DATA.** Isolasi antar tenant, data yang bisa terhapus permanen, kredensial yang terbuka.
+3. **RUSAK OLEH PEKERJAAN INI SENDIRI.** Bila sebuah halaman rusak karena yang baru dikerjakan, itu tanggung jawab task berjalan.
+4. **SATU BARIS ATAU KURANG, dan jelas benar.** Mencatatnya sebagai task lebih mahal daripada memperbaikinya.
+
+Selain empat itu: **CATAT, jangan kerjakan.**
+
+### Cara mencatatnya — supaya tidak jadi alasan menghindar
+
+1. Cukup detail sehingga bisa dikerjakan **tanpa mengulang penyelidikan**. Sertakan bukti yang sudah ditemukan.
+2. Sebutkan asalnya: *"ditemukan saat mengerjakan [task]"*.
+3. **Urgensi yang jujur.** Temuan yang dicatat sebagai "Bisa Menunggu" padahal berbahaya **sama saja dengan tidak dicatat**.
+4. Bila temuannya menyentuh task berjalan tapi bisa ditunda, sebutkan kaitannya **di kedua task**.
+
+### Pergeseran DILAPORKAN, tidak diam-diam
+
+Setiap laporan menyebutkan: **"task yang dikerjakan: X. Temuan yang dicatat dan TIDAK dikerjakan: [daftar]."** Bila daftar itu panjang, **itu sendiri informasi** — pekerjaan yang sedang dikerjakan mungkin menyentuh bagian sistem yang banyak masalahnya.
+
+**BUTIR WAJIB DI SETIAP LAPORAN**: *"Apakah giliran ini tetap pada task yang direncanakan? Bila tidak, kenapa, dan apakah alasannya masuk salah satu dari empat pengecualian di atas?"* Inilah yang menghitung berapa jauh sudah berbelok — hal yang selama ini tidak ada.
+
+### Prinsip yang menjelaskan kenapa aturan ini perlu
+
+> **Setiap belokan terasa masuk akal saat diambil. Yang tidak terasa adalah JUMLAHNYA. Sepuluh belokan yang masing-masing masuk akal tetap menghasilkan hari yang tidak menyelesaikan apa pun.**
+
 ## DS-RULES — Gerbang Rencana Carbon Sebelum Membangun Layar (ditetapkan 25 Agu 2026)
 
 Ditetapkan atas permintaan eksplisit pemilik produk setelah gelombang layar publik selesai. **Berlaku untuk SETIAP layar internal yang dibangun atau dimigrasikan sejak sekarang, tanpa kecuali.**
@@ -523,6 +607,66 @@ Ditetapkan atas permintaan eksplisit pemilik produk setelah gelombang layar publ
 **E.2 — YANG BOLEH ditanyakan hanya yang TIDAK dijawab Carbon**: aturan bisnis, istilah Bahasa Indonesia, urutan field menurut alur kerja pabrik, kebutuhan lantai produksi, dan hak akses.
 
 **E.3 — JANGAN memutuskan sendiri hal yang dijawab Carbon dengan alasan "sepertinya lebih baik".** Bila Carbon dinilai keliru untuk kasus ini, itu **DEVIASI** — didokumentasikan sebagai domain pattern dengan alasan tertulis, **bukan improvisasi diam-diam**.
+
+## Aturan Navigasi & Route — MENGIKAT (ditetapkan 25 Agu 2026)
+
+Diambil dari `docs/FABRIX_UX_Application_Shell_Navigation_Architecture_v1_0.md` (§5, §27, §32, §33–§36, §45). Dicatat **sebagai aturan, bukan sebagai task**, karena berlaku ke seluruh pekerjaan navigasi — bukan ke satu pekerjaan tertentu.
+
+1. **Status navigasi DATA-DRIVEN.** Penanda status tiap item navigasi diisi **dari hasil audit**, dan **DILARANG diketik dari ingatan**. Sumbernya `docs/ar0-inventaris-as-is.md` dan `docs/nav-matriks-status-dan-konflik.md`. Status yang ditebak akan berbohong tanpa ada yang tahu.
+
+2. **Alamat halaman DILARANG dikarang.** Setiap item navigasi yang bertanda aktif **wajib punya route yang benar-benar ada**. Bila belum ada, itemnya ditandai belum aktif — bukan diberi alamat yang terdengar masuk akal.
+
+3. **Fitur yang SUDAH terbangun tapi tidak punya rumah di navigasi WAJIB diinventarisasi.** Fitur yang tidak punya menu akan hilang dari ingatan semua orang, dan kelak dibangun ulang oleh seseorang yang tidak tahu ia sudah ada.
+
+4. **Route yang sudah ada dan berfungsi DIPERTAHANKAN.** **DILARANG membuat sistem route paralel.** Bila sebuah alamat perlu berubah, perubahannya lewat **pengalihan**, bukan dengan meninggalkan yang lama mati.
+
+5. **STOP-DOCUMENT-ESCALATE bila route bertabrakan.** Bila dua hal memperebutkan satu alamat: **berhenti**, catat tabrakannya, dan tanyakan ke pemilik produk. **DILARANG membuat route duplikat diam-diam** — yang kalah akan mati tanpa gejala.
+
+6. **DILARANG membuat halaman kosong supaya sitemap terlihat lengkap.** Halaman kosong yang bisa dibuka lebih buruk daripada menu yang jujur bertanda "belum ada": yang pertama membuat orang mengira fiturnya rusak, yang kedua membuat orang tahu ia belum dibangun.
+
+## Pola Unggah Gambar — BERLAKU untuk SELURUH Unggahan Berikutnya (ditetapkan 25 Agu 2026)
+
+Ditetapkan pemilik produk setelah alur foto profil selesai, dan **berlaku maju untuk semua proses unggah**, bukan hanya foto profil dan tanda tangan.
+
+1. **GAMBARNYA SENDIRI adalah tombolnya.** Diklik → jendela pilih berkas terbuka. Tidak ada tombol "Pilih berkas" terpisah di bawahnya.
+2. **Bawaannya IKON Carbon**, bukan inisial huruf dan bukan tulisan "belum ada". Inisial terlihat seperti data padahal cuma tebakan dari nama.
+3. **Begitu dipilih, gambarnya langsung berubah jadi PRATINJAU**, dengan keterangan menetap **"— belum tersimpan"**. Belum ada apa pun yang terkirim ke server.
+4. **Tombol simpan ada DI LUAR kartu**, dan menutup seluruh perubahan di kartu itu sekaligus. Ia **mati** selama belum ada yang berubah.
+5. **Konfirmasi lewat MODAL** (varian transaksional), karena di situ memang ada keputusan yang harus diambil.
+6. **Hasilnya lewat NOTIFIKASI, BUKAN MODAL** — berhasil maupun gagal. Tempatnya **kanan atas, tepat di bawah header**, lewat komponen bersama `AreaNotifikasi` (`src/components/ui/notifikasi.tsx`). **Jangan menempatkannya sendiri per halaman.**
+
+   **Yang Carbon tetapkan dan yang TIDAK** — diukur dari paket terpasang, bukan dari ingatan:
+   - **Ditetapkan Carbon**: lebar toast 288px (352px di breakpoint `max`), anatomi, warna, ikon.
+   - **TIDAK ditetapkan Carbon**: **posisi** (`_toast-notification.scss` punya nol aturan `position`) dan **durasi** (`timeout` bawaan `0` = tidak pernah hilang sendiri). Keduanya **keputusan kita**, dan keduanya hidup di satu berkas itu.
+
+7. **Pesan BERHASIL hilang sendiri setelah 5 detik; pesan GAGAL TIDAK pernah hilang sendiri.** Alasannya panduan Carbon: *"jangan pakai toast untuk informasi yang harus diingat pengguna sambil bekerja"*. Yang berhasil boleh lewat begitu saja — perubahannya sudah terlihat di layar. Yang gagal memuat hal yang harus **ditindaklanjuti**, dan pesan yang menghilang sebelum dibaca sama dengan pesan yang tidak pernah muncul.
+8. **Gambar yang gagal dimuat jatuh ke ikon bawaan**, bukan gambar patah.
+9. **Nama berkas UNIK**, `upsert: false`, dan **berkas lama TIDAK dihapus** saat unggahan baru. Pembersihannya urusan INF-23.
+10. **Berlaku juga aturan unggah yang sudah ada**: titik unggah BARU wajib lewat `uploadFileWithMetadata` di `src/lib/fileUpload.ts`.
+
+**Bedanya modal dan notifikasi, supaya tidak tertukar lagi**: **modal untuk MEMUTUSKAN, notifikasi untuk MEMBERI TAHU.** Modal untuk pesan berhasil menghentikan pekerjaan dan harus ditutup dulu padahal tidak ada keputusan yang perlu diambil.
+
+> **Asal aturan butir 6**, dicatat karena ia contoh bagus cara kerja yang dituju: Claude Code membangun modal berhasil sesuai permintaan, **lalu menyebutkan bahwa Carbon menganjurkan sebaliknya** dan mencatatnya sebagai deviasi atas keputusan pemilik produk. Pemilik produk membacanya dan mencabut permintaannya sendiri: *"ikuti saran carbon, saya yg salah"*. Yang membuat itu mungkin bukan Claude Code menolak, melainkan Claude Code **mengerjakan sambil menyebut harganya**.
+
+## Dilarang Membangun Sistem Identitas/Peran/Persetujuan PARALEL (ditetapkan 25 Agu 2026)
+
+Dari §32 dokumen arsitektur peran, dan dicatat **sebagai aturan yang berlaku SEKARANG** — bukan sebagai bagian task `SEC-18` yang masih menunggu giliran.
+
+**Bila yang sudah ada bisa diperluas dengan aman, DILARANG membuat sistem identitas, peran, izin, atau persetujuan yang kedua.** Urutan keputusannya:
+
+| Keadaan yang sudah ada | Yang dilakukan |
+|---|---|
+| Sudah memenuhi kebutuhan | **PERTAHANKAN** |
+| Memenuhi sebagian | **PERLUAS** yang ada |
+| Butuh perombakan skema | **PINDAHKAN — dokumentasikan DULU** |
+| Sudah usang | **CABUT — dokumentasikan DULU** |
+| Tidak jelas | **KEPUTUSAN PEMILIK PRODUK**, jangan ditebak |
+
+**Kenapa ini aturan dan bukan anjuran**: sistem izin kedua tidak pernah mengumumkan dirinya. Ia terlihat seperti fitur baru yang rapi, sementara yang lama tetap berjalan — dan sejak saat itu **tidak ada satu tempat pun yang bisa menjawab "siapa boleh apa"**. Ini bentuk terburuk dari kelas "dua jalur hidup", karena yang dijaganya adalah hak akses.
+
+**Konflik pemisahan tugas dideteksi SAAT PENUGASAN peran, bukan setelahnya** (§17). Menemukan bahwa satu orang memeriksa pekerjaannya sendiri lewat laporan bulanan berarti temuannya datang setelah dokumennya terbit. **Penimpaan boleh, tapi WAJIB beralasan dan tercatat** — sama seperti seluruh penimpaan lain di sistem ini.
+
+> Prinsip keamanan §30 lainnya — least privilege, deny by default, isolasi tenant, auditability — **tidak ditulis ulang di sini**, karena isolasi tenant ber-`company_id` sudah jadi prinsip arsitektur nomor 1 di berkas ini, dan sisanya melekat pada RLS yang sudah berjalan. Menuliskannya dua kali akan melahirkan dua daftar prinsip keamanan yang bisa menyimpang.
 
 ## Huruf Kapital Hanya di Awal Kalimat (ditetapkan 25 Agu 2026)
 

@@ -4,8 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Breadcrumb, BreadcrumbItem, InlineNotification, Link as CarbonLink, SkeletonText, Tag, Tile } from '@carbon/react';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 import { formatNumberId } from '@/lib/currency';
 
@@ -106,167 +105,173 @@ export default function AiReadinessPage() {
 
   if (checkingAccess) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="px-6 text-center text-sm text-muted-foreground">Memuat...</div>
-      </main>
+      <div className="halaman">
+        <SkeletonText heading width="20rem" />
+        <SkeletonText paragraph lineCount={4} />
+      </div>
     );
   }
 
   const lockedCapabilities = data?.capabilities.filter((c) => !c.is_unlocked) ?? [];
 
   return (
-    <main className="min-h-screen bg-muted/30 py-10">
-      <div className="flex w-full flex-col gap-6 px-6">
-        <div>
-          <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Kesiapan AI</p>
-          <h1 className="text-2xl font-semibold text-foreground">Sejauh Mana Data Anda Siap untuk AI</h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Setiap kemampuan AI dibuka bertahap sesuai kesiapan data Anda, bukan dinyalakan sekaligus di atas data yang belum layak. Ini mencegah hasil AI
-            yang dangkal & mengecewakan di awal.
-          </p>
-        </div>
+    <div className="halaman">
+      <Breadcrumb noTrailingSlash className="halaman__remah">
+        <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
+        <BreadcrumbItem isCurrentPage>
+          <span className="cds--link halaman__remah-mati">AI</span>
+        </BreadcrumbItem>
+        <BreadcrumbItem isCurrentPage>AI Readiness</BreadcrumbItem>
+      </Breadcrumb>
 
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
-
-        {data ? (
-          <>
-            <Card>
-              <CardContent className="flex flex-wrap items-center gap-6 pt-6">
-                <div>
-                  <span className="flex items-center gap-1 text-xs uppercase tracking-wide text-muted-foreground">
-                    Kesiapan Keseluruhan
-                    <ProvenanceInfoButton
-                      label="Kesiapan Keseluruhan"
-                      envelope={{
-                        formula: 'Rata-rata sederhana dari readiness_percent semua kemampuan AI (bukan tertimbang) — tiap kemampuan bobotnya sama di angka ini, walau prasyarat DI DALAM tiap kemampuan sendiri tertimbang.',
-                        inputs: [{ label: 'Jumlah kemampuan dirata-rata', value: formatNumberId(data.total_count, 0) }]
-                      }}
-                    />
-                  </span>
-                  <p className="text-2xl font-semibold text-foreground">{formatNumberId(data.overall_readiness_percent, 1)}%</p>
-                </div>
-                <div>
-                  <span className="flex items-center gap-1 text-xs uppercase tracking-wide text-muted-foreground">
-                    Kemampuan Terbuka
-                    <ProvenanceInfoButton
-                      label="Kemampuan Terbuka"
-                      envelope={{
-                        formula: 'Jumlah kemampuan yang SEMUA prasyarat is_blocking=true-nya terpenuhi (gerbang keras, bukan skor) dibagi total kemampuan. Kemampuan tanpa prasyarat blocking selalu terbuka.',
-                        inputs: [
-                          { label: 'Terbuka', value: formatNumberId(data.unlocked_count, 0) },
-                          { label: 'Total', value: formatNumberId(data.total_count, 0) }
-                        ]
-                      }}
-                    />
-                  </span>
-                  <p className="text-2xl font-semibold text-foreground">
-                    {formatNumberId(data.unlocked_count, 0)} / {formatNumberId(data.total_count, 0)}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {lockedCapabilities.length > 0 ? (
-              <Card>
-                <CardHeader>
-                  <CardDescription className="uppercase tracking-[0.2em]">Yang Bisa Anda Kerjakan</CardDescription>
-                  <CardTitle className="text-lg">Tugas untuk Membuka Kemampuan Berikutnya</CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-3">
-                  {lockedCapabilities.flatMap((c) =>
-                    c.blocking_reasons.map((reason) => {
-                      const metricKey = c.requirements.find((r) => r.code === reason.code)?.metric_key ?? '';
-                      const action = actionLinkForMetric(metricKey);
-                      return (
-                        <div key={`${c.code}-${reason.code}`} className="flex items-center justify-between rounded-md border p-3 text-sm">
-                          <div>
-                            <p className="font-medium text-foreground">
-                              {c.name}: {reason.label}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Saat ini {formatMetricValue(metricKey, reason.actual)} dari target {formatMetricValue(metricKey, reason.threshold)}
-                            </p>
-                          </div>
-                          {action ? (
-                            <Link href={action.href} className="text-sm font-medium text-primary underline underline-offset-2">
-                              {action.text}
-                            </Link>
-                          ) : null}
-                        </div>
-                      );
-                    })
-                  )}
-                </CardContent>
-              </Card>
-            ) : null}
-
-            <div className="flex flex-col gap-4">
-              {data.capabilities.map((c) => (
-                <Card key={c.code}>
-                  <CardHeader>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <CardDescription className="uppercase tracking-[0.2em]">{tierLabels[c.tier] ?? c.tier}</CardDescription>
-                        <CardTitle className="text-lg">{c.name}</CardTitle>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={c.is_unlocked ? 'success' : 'secondary'}>{c.is_unlocked ? 'Terbuka' : 'Terkunci'}</Badge>
-                        <span className="flex items-center gap-1 text-sm font-medium text-foreground">
-                          {formatNumberId(c.readiness_percent, 1)}%
-                          <ProvenanceInfoButton
-                            label={`Kesiapan — ${c.name}`}
-                            envelope={{
-                              formula: 'Rata-rata TERTIMBANG persen tiap prasyarat kemampuan ini (Σ persen×bobot ÷ Σ bobot). Terbuka HANYA kalau semua prasyarat is_blocking=true terpenuhi — skor tinggi TIDAK otomatis membuka kalau ada 1 prasyarat blocking yang belum tercapai.',
-                              inputs: c.requirements.map((r) => ({ label: r.label, value: `${formatNumberId(r.percent, 1)}% (bobot dari admin platform)` }))
-                            }}
-                          />
-                        </span>
-                      </div>
-                    </div>
-                    <p className="text-sm text-muted-foreground">{c.description}</p>
-                  </CardHeader>
-                  {c.requirements.length > 0 ? (
-                    <CardContent className="flex flex-col gap-2">
-                      {c.requirements.map((r) => {
-                        const guidance = metricGuidance(r.metric_key);
-                        return (
-                          <div key={r.code} className="flex flex-col gap-0.5 rounded-md border p-2 text-sm">
-                            <div className="flex items-center justify-between">
-                              <span className="flex items-center gap-1">
-                                {r.label}
-                                <ProvenanceInfoButton
-                                  label={r.label}
-                                  envelope={{
-                                    formula: `Persen = MIN(100, aktual ÷ ambang × 100) untuk metrik "${r.metric_key}" (komparator ${r.comparator === 'GTE' ? 'aktual harus ≥ ambang' : 'aktual harus ≤ ambang'}). Nilai aktual dihitung LIVE dari data nyata, bukan cache statis.`,
-                                    inputs: [
-                                      { label: 'Aktual', value: formatMetricValue(r.metric_key, r.actual) },
-                                      { label: 'Ambang', value: formatMetricValue(r.metric_key, r.threshold) },
-                                      { label: 'Persen', value: `${formatNumberId(r.percent, 1)}%` }
-                                    ],
-                                    sourceDocument: 'recomputeAiReadiness.ts'
-                                  }}
-                                />
-                              </span>
-                              <Badge variant={r.met ? 'success' : 'warning'}>
-                                {formatMetricValue(r.metric_key, r.actual)} / {formatMetricValue(r.metric_key, r.threshold)}
-                              </Badge>
-                            </div>
-                            {!r.met && guidance ? <p className="text-xs italic text-muted-foreground">{guidance}</p> : null}
-                          </div>
-                        );
-                      })}
-                    </CardContent>
-                  ) : (
-                    <CardContent>
-                      <p className="text-sm text-muted-foreground">Tidak ada prasyarat — selalu aktif.</p>
-                    </CardContent>
-                  )}
-                </Card>
-              ))}
-            </div>
-          </>
-        ) : null}
+      <div>
+        <h1 className="halaman__judul">Sejauh mana data Anda siap untuk AI</h1>
+        <p className="halaman__pengantar">
+          Setiap kemampuan AI dibuka bertahap sesuai kesiapan data Anda, bukan dinyalakan sekaligus di atas data
+          yang belum layak. Ini mencegah hasil AI yang dangkal dan mengecewakan di awal.
+        </p>
       </div>
-    </main>
+
+      {error ? <InlineNotification kind="error" lowContrast title="Gagal memuat" subtitle={error} hideCloseButton /> : null}
+
+      {data ? (
+        <>
+          <div className="kisi-metrik ai-ringkas">
+            <Tile>
+              <span className="metrik__label ai-label">
+                Kesiapan keseluruhan
+                <ProvenanceInfoButton
+                  label="Kesiapan Keseluruhan"
+                  envelope={{
+                    formula:
+                      'Rata-rata sederhana dari readiness_percent semua kemampuan AI (bukan tertimbang) — tiap kemampuan bobotnya sama di angka ini, walau prasyarat DI DALAM tiap kemampuan sendiri tertimbang.',
+                    inputs: [{ label: 'Jumlah kemampuan dirata-rata', value: formatNumberId(data.total_count, 0) }]
+                  }}
+                />
+              </span>
+              <span className="metrik__angka">{formatNumberId(data.overall_readiness_percent, 1)}%</span>
+            </Tile>
+            <Tile>
+              <span className="metrik__label ai-label">
+                Kemampuan terbuka
+                <ProvenanceInfoButton
+                  label="Kemampuan Terbuka"
+                  envelope={{
+                    formula:
+                      'Jumlah kemampuan yang SEMUA prasyarat is_blocking=true-nya terpenuhi (gerbang keras, bukan skor) dibagi total kemampuan. Kemampuan tanpa prasyarat blocking selalu terbuka.',
+                    inputs: [
+                      { label: 'Terbuka', value: formatNumberId(data.unlocked_count, 0) },
+                      { label: 'Total', value: formatNumberId(data.total_count, 0) }
+                    ]
+                  }}
+                />
+              </span>
+              <span className="metrik__angka">
+                {formatNumberId(data.unlocked_count, 0)} / {formatNumberId(data.total_count, 0)}
+              </span>
+            </Tile>
+          </div>
+
+          {lockedCapabilities.length > 0 ? (
+            <Tile className="ai-kartu">
+              <h2 className="halaman__subjudul">Tugas untuk membuka kemampuan berikutnya</h2>
+              <div className="ai-daftar">
+                {lockedCapabilities.flatMap((c) =>
+                  c.blocking_reasons.map((reason) => {
+                    const metricKey = c.requirements.find((r) => r.code === reason.code)?.metric_key ?? '';
+                    const action = actionLinkForMetric(metricKey);
+                    return (
+                      <div key={`${c.code}-${reason.code}`} className="ai-baris">
+                        <div>
+                          <p className="ai-baris__judul">
+                            {c.name}: {reason.label}
+                          </p>
+                          <p className="halaman__redup">
+                            Saat ini {formatMetricValue(metricKey, reason.actual)} dari target{' '}
+                            {formatMetricValue(metricKey, reason.threshold)}
+                          </p>
+                        </div>
+                        {action ? (
+                          <CarbonLink as={Link} href={action.href}>
+                            {action.text}
+                          </CarbonLink>
+                        ) : null}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </Tile>
+          ) : null}
+
+          {data.capabilities.map((c) => (
+            <Tile key={c.code} className="ai-kartu">
+              <div className="ai-kepala">
+                <div>
+                  <span className="metrik__label">{tierLabels[c.tier] ?? c.tier}</span>
+                  <h2 className="halaman__subjudul halaman__subjudul--rapat">{c.name}</h2>
+                </div>
+                <div className="ai-kepala__kanan">
+                  {/* Tag Carbon: hijau = terbuka, abu = terkunci. Warna mengikuti ARTI. */}
+                  <Tag type={c.is_unlocked ? 'green' : 'gray'}>{c.is_unlocked ? 'Terbuka' : 'Terkunci'}</Tag>
+                  <span className="ai-persen">
+                    {formatNumberId(c.readiness_percent, 1)}%
+                    <ProvenanceInfoButton
+                      label={`Kesiapan — ${c.name}`}
+                      envelope={{
+                        formula:
+                          'Rata-rata TERTIMBANG persen tiap prasyarat kemampuan ini (Σ persen×bobot ÷ Σ bobot). Terbuka HANYA kalau semua prasyarat is_blocking=true terpenuhi — skor tinggi TIDAK otomatis membuka kalau ada 1 prasyarat blocking yang belum tercapai.',
+                        inputs: c.requirements.map((r) => ({
+                          label: r.label,
+                          value: `${formatNumberId(r.percent, 1)}% (bobot dari admin platform)`
+                        }))
+                      }}
+                    />
+                  </span>
+                </div>
+              </div>
+              <p className="halaman__redup">{c.description}</p>
+
+              {c.requirements.length > 0 ? (
+                <div className="ai-daftar">
+                  {c.requirements.map((r) => {
+                    const guidance = metricGuidance(r.metric_key);
+                    return (
+                      <div key={r.code} className="ai-syarat">
+                        <div className="ai-syarat__atas">
+                          <span className="ai-syarat__label">
+                            {r.label}
+                            <ProvenanceInfoButton
+                              label={r.label}
+                              envelope={{
+                                formula: `Persen = MIN(100, aktual ÷ ambang × 100) untuk metrik "${r.metric_key}" (komparator ${r.comparator === 'GTE' ? 'aktual harus ≥ ambang' : 'aktual harus ≤ ambang'}). Nilai aktual dihitung LIVE dari data nyata, bukan cache statis.`,
+                                inputs: [
+                                  { label: 'Aktual', value: formatMetricValue(r.metric_key, r.actual) },
+                                  { label: 'Ambang', value: formatMetricValue(r.metric_key, r.threshold) },
+                                  { label: 'Persen', value: `${formatNumberId(r.percent, 1)}%` }
+                                ],
+                                sourceDocument: 'recomputeAiReadiness.ts'
+                              }}
+                            />
+                          </span>
+                          <Tag type={r.met ? 'green' : 'magenta'}>
+                            {formatMetricValue(r.metric_key, r.actual)} / {formatMetricValue(r.metric_key, r.threshold)}
+                          </Tag>
+                        </div>
+                        {/* Petunjuk hanya muncul untuk syarat yang BELUM terpenuhi: menampilkan
+                            saran untuk hal yang sudah beres cuma menambah teks tanpa tindakan. */}
+                        {!r.met && guidance ? <p className="ai-petunjuk">{guidance}</p> : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="halaman__redup">Tidak ada prasyarat — kemampuan ini selalu aktif.</p>
+              )}
+            </Tile>
+          ))}
+        </>
+      ) : null}
+    </div>
   );
 }

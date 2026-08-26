@@ -4,8 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Breadcrumb, BreadcrumbItem, Button, InlineNotification, Link as CarbonLink, SkeletonText } from '@carbon/react';
 import { KpiCard } from '@/components/ui/kpi-card';
 import { formatCurrency, formatNumberId } from '@/lib/currency';
 import { isCompanyLeadership } from '@/lib/roles';
@@ -147,97 +146,102 @@ export default function KpiPage() {
 
   if (checkingAccess) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="px-6 text-center text-sm text-muted-foreground">Memuat...</div>
-      </main>
+      <div className="halaman">
+        <SkeletonText heading width="16rem" />
+        <SkeletonText paragraph lineCount={3} />
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-muted/30 py-10">
-      <div className="flex w-full flex-col gap-6 px-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Ringkasan</p>
-            <h1 className="text-2xl font-semibold text-foreground">KPI Perusahaan</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              6 KPI awal (Margin, Margin %, Biaya/unit, Laba Operasional, Yield, Nilai Persediaan) -- baseline dulu, target kemudian. Klik ikon ⓘ di tiap kartu untuk detail lengkap.
-            </p>
-          </div>
-          <div className="flex items-center gap-4">
-            {/* AUD-36 — PEMICU perekaman snapshot. Tombol ini ada karena penyimpanannya
-                dicabut dari pemuatan halaman: tanpa pemicu yang terlihat, riwayat KPI tidak
-                akan pernah bertambah lagi. Aturan proyek: tombol hanya ditambahkan BERSAMA
-                pemicu dan akibatnya -- di sini ketiganya lahir bersamaan. */}
-            <Button size="sm" variant="outline" disabled={merekam} onClick={handleRekamSnapshot}>
-              {merekam ? 'Merekam…' : 'Rekam angka periode ini'}
-            </Button>
-            <Link href="/kpi/saya" className="text-sm font-medium text-primary underline underline-offset-2">
-              KPI Saya →
-            </Link>
-          </div>
-        </div>
+    <div className="halaman">
+      <Breadcrumb noTrailingSlash className="halaman__remah">
+        <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
+        <BreadcrumbItem isCurrentPage>
+          <span className="cds--link halaman__remah-mati">Data &amp; Analytics</span>
+        </BreadcrumbItem>
+        <BreadcrumbItem isCurrentPage>KPI</BreadcrumbItem>
+      </Breadcrumb>
 
-        {pesanRekam ? <p className="text-sm text-muted-foreground">{pesanRekam}</p> : null}
-
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
-
-        {!loading && cards.length === 0 ? (
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em]">Belum Ada KPI</CardDescription>
-              <CardTitle className="text-lg">{isCompanyLeadership(role) ? 'Seed 6 KPI awal untuk memulai' : 'Tidak ada KPI yang bisa Anda lihat dari role ini'}</CardTitle>
-            </CardHeader>
-            {isCompanyLeadership(role) ? (
-              <CardContent className="flex flex-col gap-2">
-                <Button size="sm" className="w-fit" disabled={seeding} onClick={handleSeed}>
-                  {seeding ? 'Menjalankan...' : 'Seed 6 KPI Awal'}
-                </Button>
-                {seedMessage ? <p className="text-xs text-muted-foreground">{seedMessage}</p> : null}
-              </CardContent>
-            ) : null}
-          </Card>
-        ) : null}
-
-        {loading ? (
-          <p className="text-sm text-muted-foreground">Memuat KPI...</p>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {cards.map((card) => {
-              const config = DISPLAY_CONFIG[card.metric_key] ?? { title: card.metric_key, format: (v: number) => String(v), higherIsBetter: null };
-              return (
-                <KpiCard
-                  key={card.kpi_registry_id}
-                  title={config.title}
-                  pillar={card.pillar}
-                  value={card.value}
-                  formatValue={config.format}
-                  targetValue={card.target_value}
-                  benchmarkValue={card.benchmark_value}
-                  benchmarkLabel={card.benchmark_label}
-                  delta={card.delta}
-                  higherIsBetter={config.higherIsBetter}
-                  sparkline={card.sparkline}
-                  complete={card.complete}
-                  frequency={card.frequency}
-                  provenanceEnvelope={{ formula: card.provenance.formula, inputs: card.provenance.inputs, sourceDocument: card.provenance.sourceDocument }}
-                  definition={card.definition}
-                  kpiTab={{
-                    valueLabel: card.value !== null ? config.format(card.value) : 'belum bisa dihitung',
-                    targetLabel: card.target_value !== null ? config.format(card.target_value) : null,
-                    benchmarkLabel: card.benchmark_value !== null ? `${config.format(card.benchmark_value)} (${card.benchmark_label ?? 'arah'})` : null,
-                    deltaLabel: card.delta !== null ? `${card.delta >= 0 ? '+' : ''}${config.format(card.delta)}` : null,
-                    attributionLevel: card.attribution_level,
-                    responsibilities: card.responsibilities,
-                    improvementLevers: card.improvement_levers,
-                    openActions: card.open_actions.map((a) => ({ finding: a.finding, actionText: a.action_text, dueDate: a.due_date }))
-                  }}
-                />
-              );
-            })}
-          </div>
-        )}
+      <div>
+        <h1 className="halaman__judul">KPI perusahaan</h1>
+        <p className="halaman__pengantar">
+          {loading ? 'Memuat…' : `${cards.length} KPI ditampilkan.`} Baseline dulu, target kemudian —
+          klik ikon info di tiap kartu untuk melihat dari mana angkanya berasal.
+        </p>
       </div>
-    </main>
+
+      <div className="kpi-aksi">
+        {/* PEMICU PEREKAMAN SNAPSHOT (AUD-36). Tombol ini ada karena penyimpanannya DICABUT
+            dari pemuatan halaman: tanpa pemicu yang terlihat, riwayat KPI tidak akan pernah
+            bertambah lagi — dan grafik trennya akan merekam KAPAN ORANG MEMBUKA HALAMAN,
+            bukan bagaimana angkanya bergerak. */}
+        <Button size="md" kind="tertiary" disabled={merekam} onClick={handleRekamSnapshot}>
+          {merekam ? 'Merekam…' : 'Rekam angka periode ini'}
+        </Button>
+        <CarbonLink as={Link} href="/kpi/saya">
+          KPI saya →
+        </CarbonLink>
+      </div>
+
+      {pesanRekam ? <InlineNotification kind="info" lowContrast title={pesanRekam} hideCloseButton /> : null}
+      {error ? <InlineNotification kind="error" lowContrast title="Gagal memuat" subtitle={error} hideCloseButton /> : null}
+
+      {!loading && cards.length === 0 ? (
+        <div className="kpi-kosong">
+          <InlineNotification
+            kind="info"
+            lowContrast
+            hideCloseButton
+            title={isCompanyLeadership(role) ? 'Belum ada KPI' : 'Tidak ada KPI yang bisa Anda lihat dari peran ini'}
+            subtitle={isCompanyLeadership(role) ? seedMessage || 'Enam KPI awal perlu dibuat sekali untuk memulai.' : undefined}
+          />
+          {isCompanyLeadership(role) ? (
+            <Button size="sm" kind="tertiary" disabled={seeding} onClick={handleSeed}>
+              {seeding ? 'Menjalankan…' : 'Buat 6 KPI awal'}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {loading ? (
+        <SkeletonText paragraph lineCount={4} />
+      ) : (
+        <div className="kisi-metrik kpi-kisi">
+          {cards.map((card) => {
+            const config = DISPLAY_CONFIG[card.metric_key] ?? { title: card.metric_key, format: (v: number) => String(v), higherIsBetter: null };
+            return (
+              <KpiCard
+                key={card.kpi_registry_id}
+                title={config.title}
+                pillar={card.pillar}
+                value={card.value}
+                formatValue={config.format}
+                targetValue={card.target_value}
+                benchmarkValue={card.benchmark_value}
+                benchmarkLabel={card.benchmark_label}
+                delta={card.delta}
+                higherIsBetter={config.higherIsBetter}
+                sparkline={card.sparkline}
+                complete={card.complete}
+                frequency={card.frequency}
+                provenanceEnvelope={{ formula: card.provenance.formula, inputs: card.provenance.inputs, sourceDocument: card.provenance.sourceDocument }}
+                definition={card.definition}
+                kpiTab={{
+                  valueLabel: card.value !== null ? config.format(card.value) : 'belum bisa dihitung',
+                  targetLabel: card.target_value !== null ? config.format(card.target_value) : null,
+                  benchmarkLabel: card.benchmark_value !== null ? `${config.format(card.benchmark_value)} (${card.benchmark_label ?? 'arah'})` : null,
+                  deltaLabel: card.delta !== null ? `${card.delta >= 0 ? '+' : ''}${config.format(card.delta)}` : null,
+                  attributionLevel: card.attribution_level,
+                  responsibilities: card.responsibilities,
+                  improvementLevers: card.improvement_levers,
+                  openActions: card.open_actions.map((a) => ({ finding: a.finding, actionText: a.action_text, dueDate: a.due_date }))
+                }}
+              />
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }

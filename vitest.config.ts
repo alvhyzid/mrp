@@ -74,6 +74,9 @@ export default defineConfig({
     // Pengawas URL<->kunci (23 Agu 2026): berjalan SEKALI sebelum test apa pun.
     // Gagal keras bila URL dan kunci tidak menunjuk project yang sama -- lihat
     // komentar di dalam berkasnya untuk kenapa gejalanya dulu menyesatkan.
-    globalSetup: ['./tests/setup/assertUrlAndKeysMatch.ts']
+    // Pengawas migrasi tertinggal (25 Agu 2026): menolak menjalankan test bila project uji
+    // belum menerima seluruh migrasi di repo. Sembilan dari sebelas kegagalan lokal pernah
+    // berasal dari sini, dan semuanya menyamar sebagai kemunduran kode.
+    globalSetup: ['./tests/setup/assertUrlAndKeysMatch.ts', './tests/setup/assertMigrationsUpToDate.ts']
   }
 });

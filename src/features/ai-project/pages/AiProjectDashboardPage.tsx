@@ -3,9 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Breadcrumb, BreadcrumbItem, Button, Checkbox, InlineNotification, SkeletonText, Tag, Tile } from '@carbon/react';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 import { formatNumberId } from '@/lib/currency';
 
@@ -124,183 +122,195 @@ export default function AiProjectDashboardPage() {
 
   if (checkingAccess) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="px-6 text-center text-sm text-muted-foreground">Memuat...</div>
-      </main>
+      <div className="halaman">
+        <SkeletonText heading width="18rem" />
+        <SkeletonText paragraph lineCount={4} />
+      </div>
     );
   }
 
-  if (accessDenied || error === 'Dashboard Proyek AI khusus company_admin atau general_manager (tim inti).') {
+  const ditolak = accessDenied || error === 'Dashboard Proyek AI khusus company_admin atau general_manager (tim inti).';
+  if (ditolak) {
     return (
-      <main className="min-h-screen bg-muted/30 py-16">
-        <div className="max-w-3xl px-6">
-          <Card>
-            <CardHeader>
-              <CardDescription className="uppercase tracking-[0.2em] text-destructive">Akses Ditolak</CardDescription>
-              <CardTitle className="text-2xl">Dashboard Proyek AI</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Halaman internal ini khusus company_admin atau general_manager.</p>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+      <div className="halaman">
+        <h1 className="halaman__judul">Dashboard proyek AI</h1>
+        <InlineNotification
+          kind="error"
+          lowContrast
+          hideCloseButton
+          title="Halaman internal ini khusus pimpinan perusahaan"
+          subtitle="Akun Anda tidak punya izin membukanya."
+        />
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-muted/30 py-10">
-      <div className="flex w-full flex-col gap-6 px-6">
-        <div>
-          <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Internal — Tim Inti</p>
-          <h1 className="text-2xl font-semibold text-foreground">Dashboard Proyek AI</h1>
-        </div>
+    <div className="halaman">
+      <Breadcrumb noTrailingSlash className="halaman__remah">
+        <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
+        <BreadcrumbItem isCurrentPage>
+          <span className="cds--link halaman__remah-mati">AI</span>
+        </BreadcrumbItem>
+        <BreadcrumbItem isCurrentPage>AI Project</BreadcrumbItem>
+      </Breadcrumb>
 
-        {phases.length === 0 && !loading ? (
-          <Card>
-            <CardContent className="flex flex-col gap-3 pt-6">
-              <p className="text-sm text-muted-foreground">Struktur fase & tugas belum di-seed.</p>
-              <Button size="sm" className="w-fit" onClick={handleSeed}>
-                Seed Struktur Fase 0-4
+      <div>
+        <h1 className="halaman__judul">Dashboard proyek AI</h1>
+        <p className="halaman__pengantar">
+          Progres dihitung berjenjang dari data nyata — tugas ke fase, fase ke total — bukan diisi tangan.
+        </p>
+      </div>
+
+      {phases.length === 0 && !loading ? (
+        <div className="proyek-kosong">
+          <InlineNotification kind="info" lowContrast hideCloseButton title="Struktur fase & tugas belum dibuat" />
+          <Button size="sm" kind="tertiary" onClick={handleSeed}>
+            Buat struktur fase 0–4
+          </Button>
+        </div>
+      ) : (
+        <>
+          <Tile className="proyek-total">
+            <span className="metrik__label proyek-label">
+              Progres total proyek AI
+              <ProvenanceInfoButton
+                label="Progres Total Proyek AI"
+                envelope={{
+                  formula:
+                    'Σ (progres % tiap fase × bobot fase ÷ 100). Progres per fase sendiri = Σ (progres % tiap tugas × bobot tugas ÷ 100). Berjenjang: tugas → fase → total, masing-masing tertimbang.',
+                  inputs: phases.map((p) => ({
+                    label: p.name,
+                    value: `${formatNumberId(p.progress_percent, 1)}% × bobot ${formatNumberId(p.weight_percent, 2)}%`
+                  })),
+                  sourceDocument: 'computeAiProjectProgress.ts'
+                }}
+              />
+            </span>
+            <span className="proyek-angka-besar">{formatNumberId(overallPercent, 1)}%</span>
+            {latestSnapshot ? (
+              <span className="halaman__redup">
+                Snapshot terakhir: {formatNumberId(latestSnapshot.overall_percent, 1)}% (
+                {new Date(latestSnapshot.taken_at).toLocaleDateString('id-ID')})
+              </span>
+            ) : null}
+            <div className="proyek-aksi">
+              <Button size="sm" kind="tertiary" onClick={handleSeed}>
+                Buat ulang struktur (aman diulang)
               </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <>
-            <Card>
-              <CardContent className="flex flex-col gap-2 pt-6">
-                <span className="flex items-center gap-1 text-xs uppercase tracking-wide text-muted-foreground">
-                  Progres Total Proyek AI
+              {/* PEMICU SNAPSHOT yang terlihat. Penyimpanannya sengaja TIDAK menumpang
+                  pemuatan halaman — riwayat yang lahir dari kunjungan halaman merekam
+                  kebiasaan menjelajah, bukan bagaimana angkanya bergerak. */}
+              <Button size="sm" kind="tertiary" onClick={handleSnapshot}>
+                Rekam angka hari ini
+              </Button>
+            </div>
+            {status ? <span className="halaman__redup">{status}</span> : null}
+          </Tile>
+
+          <div className="kisi-metrik proyek-fase">
+            {phases.map((phase) => (
+              <Tile key={phase.ai_project_phase_id}>
+                <span className="metrik__label proyek-label">
+                  {phase.name}
                   <ProvenanceInfoButton
-                    label="Progres Total Proyek AI"
+                    label={phase.name}
                     envelope={{
-                      formula: 'Σ (progres % tiap fase × bobot fase ÷ 100). Progres per fase sendiri = Σ (progres % tiap tugas × bobot tugas ÷ 100). Berjenjang: tugas → fase → total, masing-masing tertimbang.',
-                      inputs: phases.map((p) => ({ label: p.name, value: `${formatNumberId(p.progress_percent, 1)}% × bobot ${formatNumberId(p.weight_percent, 2)}%` })),
-                      sourceDocument: 'computeAiProjectProgress.ts'
+                      formula:
+                        'Σ (progres % tiap tugas di fase ini × bobot tugas ÷ 100). Kontribusinya ke total proyek = progres fase ini × bobot fase ini ÷ 100.',
+                      inputs: [
+                        { label: 'Progres fase', value: `${formatNumberId(phase.progress_percent, 1)}%` },
+                        { label: 'Bobot fase', value: `${formatNumberId(phase.weight_percent, 2)}%` },
+                        { label: 'Kontribusi ke total', value: `${formatNumberId(phase.contribution_to_total, 2)}%` }
+                      ]
                     }}
                   />
                 </span>
-                <span className="text-4xl font-semibold text-foreground">{formatNumberId(overallPercent, 1)}%</span>
-                {latestSnapshot ? (
-                  <span className="text-xs text-muted-foreground">
-                    Snapshot terakhir: {formatNumberId(latestSnapshot.overall_percent, 1)}% ({new Date(latestSnapshot.taken_at).toLocaleDateString('id-ID')})
-                  </span>
-                ) : null}
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={handleSeed}>
-                    Seed Ulang (idempoten)
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={handleSnapshot}>
-                    Ambil Snapshot Sekarang
-                  </Button>
-                </div>
-                {status ? <span className="text-xs text-muted-foreground">{status}</span> : null}
-              </CardContent>
-            </Card>
+                <span className="metrik__angka">{formatNumberId(phase.progress_percent, 0)}%</span>
+                <span className="halaman__redup">Bobot {formatNumberId(phase.weight_percent, 2)}% dari total</span>
+              </Tile>
+            ))}
+          </div>
 
-            <div className="grid gap-3 sm:grid-cols-5">
-              {phases.map((phase) => (
-                <Card key={phase.ai_project_phase_id}>
-                  <CardContent className="flex flex-col gap-1 pt-6">
-                    <span className="flex items-center gap-1 text-xs uppercase tracking-wide text-muted-foreground">
-                      {phase.name}
-                      <ProvenanceInfoButton
-                        label={phase.name}
-                        envelope={{
-                          formula: 'Σ (progres % tiap tugas di fase ini × bobot tugas ÷ 100). Kontribusinya ke total proyek = progres fase ini × bobot fase ini ÷ 100.',
-                          inputs: [
-                            { label: 'Progres fase', value: `${formatNumberId(phase.progress_percent, 1)}%` },
-                            { label: 'Bobot fase', value: `${formatNumberId(phase.weight_percent, 2)}%` },
-                            { label: 'Kontribusi ke total', value: `${formatNumberId(phase.contribution_to_total, 2)}%` }
-                          ]
-                        }}
-                      />
-                    </span>
-                    <span className="text-xl font-semibold text-foreground">{formatNumberId(phase.progress_percent, 0)}%</span>
-                    <span className="text-xs text-muted-foreground">Bobot {formatNumberId(phase.weight_percent, 2)}% dari total</span>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardDescription className="uppercase tracking-[0.2em]">Prioritas</CardDescription>
-                <CardTitle className="text-lg">Bisa Dikerjakan Sekarang (dampak per menit)</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-2">
-                {actionable.map((task) => (
-                  <div key={task.ai_project_task_id} className="rounded-md border p-2 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{task.name}</span>
-                      <Badge variant="secondary">{ownerLabels[task.owner_type] ?? task.owner_type}</Badge>
-                    </div>
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                      {formatNumberId(task.progress_percent, 0)}% selesai · {task.progress_detail} · +{formatNumberId(task.contribution_to_total_if_complete, 2)}% total bila selesai
-                      <ProvenanceInfoButton
-                        label="Dampak per Menit"
-                        envelope={{
-                          formula:
-                            'Kontribusi bila selesai = (100 − progres% tugas ini) × bobot tugas% × bobot fase% ÷ 10000 — yaitu SISA potensi kenaikan progres total kalau tugas ini dituntaskan sekarang. Daftar ini diurutkan dari kontribusi terbesar (proksi "dampak per menit", BUKAN estimasi waktu literal — sistem belum punya data durasi tugas nyata).',
-                          inputs: [
-                            { label: 'Progres tugas saat ini', value: `${formatNumberId(task.progress_percent, 1)}%` },
-                            { label: 'Bobot tugas (dalam fase)', value: `${formatNumberId(task.weight_percent, 2)}%` }
-                          ],
-                          sourceDocument: 'getAiProjectDashboard.ts'
-                        }}
-                      />
-                    </span>
+          <Tile className="proyek-kartu">
+            <h2 className="halaman__subjudul">Bisa dikerjakan sekarang, dampak terbesar di atas</h2>
+            <div className="proyek-daftar">
+              {actionable.map((task) => (
+                <div key={task.ai_project_task_id} className="proyek-baris">
+                  <div className="proyek-baris__atas">
+                    <span className="proyek-baris__judul">{task.name}</span>
+                    <Tag type="cool-gray">{ownerLabels[task.owner_type] ?? task.owner_type}</Tag>
                   </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            <div className="flex flex-col gap-3">
-              {tasks.map((task) => (
-                <Card key={task.ai_project_task_id}>
-                  <CardHeader>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <CardTitle className="text-base">{task.name}</CardTitle>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary">{ownerLabels[task.owner_type] ?? task.owner_type}</Badge>
-                        <Badge variant={task.progress_percent >= 100 ? 'success' : 'secondary'}>{formatNumberId(task.progress_percent, 0)}%</Badge>
-                        <ProvenanceInfoButton
-                          label={`Progres — ${task.name}`}
-                          envelope={{
-                            formula:
-                              task.progress_source === 'AUTO_QUERY'
-                                ? 'Dihitung LIVE dari query data nyata (progress_key terkait) — bukan diisi manual.'
-                                : 'Dihitung dari checklist: jumlah item tercentang ÷ total item checklist × 100%.',
-                            inputs: [
-                              { label: 'Sumber progres', value: task.progress_source },
-                              { label: 'Detail', value: task.progress_detail }
-                            ]
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <CardDescription>
-                      {task.progress_detail} · bobot {formatNumberId(task.weight_percent, 2)}% fase · +{formatNumberId(task.contribution_to_total_if_complete, 2)}% total bila selesai
-                    </CardDescription>
-                  </CardHeader>
-                  {task.checklist_items.length > 0 ? (
-                    <CardContent className="flex flex-col gap-1">
-                      {task.checklist_items.map((item) => (
-                        <label key={item.ai_project_checklist_item_id} className="flex items-center gap-2 text-sm">
-                          <input type="checkbox" checked={item.done} onChange={() => handleToggleChecklist(item.ai_project_checklist_item_id, item.done)} />
-                          <span className={item.done ? 'text-muted-foreground line-through' : ''}>{item.label}</span>
-                        </label>
-                      ))}
-                    </CardContent>
-                  ) : null}
-                </Card>
+                  <span className="proyek-baris__rincian">
+                    {formatNumberId(task.progress_percent, 0)}% selesai · {task.progress_detail} · +
+                    {formatNumberId(task.contribution_to_total_if_complete, 2)}% total bila selesai
+                    <ProvenanceInfoButton
+                      label="Dampak per Menit"
+                      envelope={{
+                        formula:
+                          'Kontribusi bila selesai = (100 − progres% tugas ini) × bobot tugas% × bobot fase% ÷ 10000 — yaitu SISA potensi kenaikan progres total kalau tugas ini dituntaskan sekarang. Daftar ini diurutkan dari kontribusi terbesar (proksi "dampak per menit", BUKAN estimasi waktu literal — sistem belum punya data durasi tugas nyata).',
+                        inputs: [
+                          { label: 'Progres tugas saat ini', value: `${formatNumberId(task.progress_percent, 1)}%` },
+                          { label: 'Bobot tugas (dalam fase)', value: `${formatNumberId(task.weight_percent, 2)}%` }
+                        ],
+                        sourceDocument: 'getAiProjectDashboard.ts'
+                      }}
+                    />
+                  </span>
+                </div>
               ))}
             </div>
-          </>
-        )}
+          </Tile>
 
-        {error && error !== 'Dashboard Proyek AI khusus company_admin atau general_manager (tim inti).' ? <p className="text-sm text-destructive">{error}</p> : null}
-      </div>
-    </main>
+          {tasks.map((task) => (
+            <Tile key={task.ai_project_task_id} className="proyek-kartu">
+              <div className="proyek-baris__atas">
+                <h2 className="proyek-tugas__judul">{task.name}</h2>
+                <div className="proyek-tugas__kanan">
+                  <Tag type="cool-gray">{ownerLabels[task.owner_type] ?? task.owner_type}</Tag>
+                  <Tag type={task.progress_percent >= 100 ? 'green' : 'gray'}>
+                    {formatNumberId(task.progress_percent, 0)}%
+                  </Tag>
+                  <ProvenanceInfoButton
+                    label={`Progres — ${task.name}`}
+                    envelope={{
+                      formula:
+                        task.progress_source === 'AUTO_QUERY'
+                          ? 'Dihitung LIVE dari query data nyata (progress_key terkait) — bukan diisi manual.'
+                          : 'Dihitung dari checklist: jumlah item tercentang ÷ total item checklist × 100%.',
+                      inputs: [
+                        { label: 'Sumber progres', value: task.progress_source },
+                        { label: 'Detail', value: task.progress_detail }
+                      ]
+                    }}
+                  />
+                </div>
+              </div>
+              <p className="halaman__redup">
+                {task.progress_detail} · bobot {formatNumberId(task.weight_percent, 2)}% fase · +
+                {formatNumberId(task.contribution_to_total_if_complete, 2)}% total bila selesai
+              </p>
+              {task.checklist_items.length > 0 ? (
+                <div className="proyek-centang">
+                  {task.checklist_items.map((item) => (
+                    <Checkbox
+                      key={item.ai_project_checklist_item_id}
+                      id={`centang-${item.ai_project_checklist_item_id}`}
+                      labelText={item.label}
+                      checked={item.done}
+                      onChange={() => handleToggleChecklist(item.ai_project_checklist_item_id, item.done)}
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </Tile>
+          ))}
+        </>
+      )}
+
+      {error && !ditolak ? (
+        <InlineNotification kind="error" lowContrast title="Gagal" subtitle={error} hideCloseButton />
+      ) : null}
+    </div>
   );
 }

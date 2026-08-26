@@ -830,7 +830,7 @@ export default function ShipmentsPage() {
       {/* LANGKAH 1 dari 2 — modal BERTAHAP: baris item dan detail pengiriman diisi dulu,
           konfirmasinya di langkah berikutnya. */}
       {creatingForSo ? (
-        <ComposedModal open={createStep === 'form'} size="lg" onClose={() => { closeCreateForm(); return true; }}>
+        <ComposedModal open={createStep === 'form'} size="md" onClose={() => { closeCreateForm(); return true; }}>
           <ModalHeader
             label="Langkah 1 dari 2"
             title={`Buat pengiriman — ${creatingForSo.so_number} (${creatingForSo.customer_name})`}

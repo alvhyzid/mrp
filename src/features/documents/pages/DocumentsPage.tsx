@@ -531,6 +531,10 @@ export default function DocumentsPage() {
         </ModalFooter>
       </ComposedModal>
 
+      {/* TETAP lg, dan ini pengecualian yang beralasan — bukan sisa yang belum disapu.
+          Aturan "lg hanya untuk komponen kompleks" justru terpenuhi di sini: isinya PDF atau
+          gambar berukuran penuh, bukan formulir. Mengecilkannya ke md berarti memaksa orang
+          membaca dokumen di kanvas yang lebih sempit tanpa alasan. */}
       <ComposedModal open={viewerOpen} onClose={() => { setViewerOpen(false); return true; }} size="lg">
         <ModalHeader title={viewerData?.title ?? 'Dokumen'} label="Master dokumen" />
         <ModalBody>

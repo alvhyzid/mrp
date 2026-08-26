@@ -1307,7 +1307,7 @@ export default function PurchasingPage() {
 
       {/* MODAL BUAT PO — BERTAHAP: baris item ditambah dan dihapus sebelum disimpan. */}
       {canManage ? (
-        <ComposedModal open={isPoModalOpen} size="lg" onClose={() => { setIsPoModalOpen(false); return true; }}>
+        <ComposedModal open={isPoModalOpen} size="md" onClose={() => { setIsPoModalOpen(false); return true; }}>
           <ModalHeader label="Pembelian" title="Buat PO baru" closeModal={() => setIsPoModalOpen(false)} />
           <ModalBody hasForm>
             <div className="beli-form">

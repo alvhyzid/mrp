@@ -358,6 +358,45 @@ describe('DS-16 — pengawas elemen mentah & tabel non-responsif di halaman inte
     expect(kurang).toHaveLength(0);
   });
 
+  // ==========================================================================
+  // UKURAN MODAL: lg HANYA untuk isi yang benar-benar kompleks
+  // ==========================================================================
+  // Carbon memilih ukuran modal dari ISI: "Modals with brief text should be extra small or
+  // small to avoid long single lines; for complex components, like a data table, the default
+  // or large modal is more suitable."
+  //
+  // Sebelum aturan ini ada, DELAPAN dari 22 modal memakai lg — dan hampir semuanya formulir
+  // biasa yang kebetulan panjang. lg dipakai untuk MEMUATKAN field, bukan karena isinya
+  // kompleks, dan itulah yang membuat modal antar halaman terasa berbeda-beda.
+  const MODAL_LG_SAH = new Set([
+    // Pratinjau dokumen: isinya PDF atau gambar berukuran penuh, bukan formulir.
+    'src/features/documents/pages/DocumentsPage.tsx'
+  ]);
+
+  it('NOL modal berukuran lg di luar yang tercatat sah', () => {
+    const salah: string[] = [];
+    for (const abs of berkasHalaman(DIR_FITUR).sort()) {
+      const rel = abs.replace(`${AKAR}/`, '');
+      if (MODAL_LG_SAH.has(rel)) continue;
+      const isi = tanpaKomentar(readFileSync(abs, 'utf8'));
+      const re = /<(?:ComposedModal|Modal)(?=[\s/>])/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(isi)) !== null) {
+        const tag = tagPembuka(isi, m.index);
+        if (/size="lg"/.test(tag)) salah.push(`${rel}:${nomorBaris(isi, m.index)}`);
+      }
+    }
+    if (salah.length > 0) {
+      throw new Error(
+        `Modal berukuran lg di luar daftar sah:\n  ${salah.join('\n  ')}\n\n` +
+          'lg disediakan untuk komponen KOMPLEKS (tabel, pratinjau dokumen). Formulir yang ' +
+          'kebetulan panjang dipecah jadi langkah, BUKAN dibesarkan modalnya. Bila isinya ' +
+          'memang kompleks, daftarkan di MODAL_LG_SAH beserta alasannya.'
+      );
+    }
+    expect(salah).toHaveLength(0);
+  });
+
   it('menyebutkan tabel yang jumlah kolomnya TIDAK bisa dibaca — bukan meloloskannya diam-diam', () => {
     const takTerbaca: string[] = [];
     for (const abs of berkasHalaman(DIR_FITUR).sort()) {

@@ -39,6 +39,7 @@ import {
 } from '@carbon/react';
 import { Add, TrashCan } from '@carbon/icons-react';
 import { KepalaHalaman } from '@/components/ui/kepala-halaman';
+import { AreaNotifikasi, type Notifikasi } from '@/components/ui/notifikasi';
 
 // PO KLIEN — dimigrasikan ke Carbon 26 Agu 2026 (DS-09), cetakan Master Item.
 import { canManageCustomerPo, canApproveDepartment, isCompanyLeadership } from '@/lib/roles';
@@ -189,6 +190,15 @@ export default function CustomerPurchaseOrdersPage() {
 
   const [form, setForm] = useState(emptyForm);
   const [langkah, setLangkah] = useState(0);
+  // HASIL YANG BERHASIL LEWAT NOTIFIKASI, bukan lewat pesan di dalam modal.
+  // Sebelum ini pesan "PO berhasil dibuat" disetel ke formMessage TEPAT SEBELUM modalnya
+  // ditutup — jadi ia tidak pernah sempat terbaca siapa pun. Yang tersisa di layar hanya
+  // daftar yang berubah sendiri tanpa penjelasan.
+  const [notifikasi, setNotifikasi] = useState<Notifikasi[]>([]);
+  const beriTahu = useCallback((jenis: Notifikasi['jenis'], judul: string, rincian?: string) => {
+    setNotifikasi((lama) => [...lama, { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, jenis, judul, rincian }]);
+  }, []);
+  const tutupNotifikasi = useCallback((id: string) => setNotifikasi((lama) => lama.filter((n) => n.id !== id)), []);
   const [formStatus, setFormStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [formMessage, setFormMessage] = useState('');
   // Stabil untuk 1 percobaan submit (dipakai server buat cegah dokumen duplikat kalau
@@ -344,16 +354,28 @@ export default function CustomerPurchaseOrdersPage() {
     setItemBaruStatus('idle');
     setItemBaruMessage('');
     setShowItemBaru(false);
+
+    // DAFTARNYA DIAMBIL ULANG DI SINI, bukan lewat loadItems(), karena id item barunya
+    // dibutuhkan SEKARANG — dan `POST /api/items` TIDAK mengembalikannya. Ia hanya menjawab
+    // { success: true }.
+    //
+    // Versi pertama fungsi ini membaca `body.item.item_id` dan memasangnya ke baris kosong.
+    // Kodenya terbaca meyakinkan, typecheck lolos, dan ia TIDAK PERNAH BISA BEKERJA — nilai
+    // itu tidak ada di jawaban server. Yang menemukannya bukan membaca ulang, melainkan
+    // membuat satu PO dari ujung ke ujung dan melihat "Item tidak valid".
+    const kodeBaru = itemBaru.item_code.trim();
     setItemBaru(itemBaruKosong);
-    await loadItems();
-    // Langsung dipasang ke baris pertama yang itemnya masih kosong — orang membuat produk
-    // baru justru KARENA sedang mengisi baris itu.
-    const idBaru = String(body.item?.item_id ?? '');
-    if (idBaru) {
+    const segar = await authedFetch('/api/items');
+    const daftar: ItemOption[] = segar.ok ? segar.body.items || [] : [];
+    if (daftar.length > 0) setItems(daftar);
+    const dibuat = daftar.find((i) => i.item_code === kodeBaru);
+    if (dibuat) {
+      // Dipasang ke baris pertama yang itemnya masih kosong — orang membuat produk baru
+      // justru KARENA sedang mengisi baris itu.
       setForm((prev) => {
         const indeks = prev.lines.findIndex((l) => !l.item_id);
         if (indeks === -1) return prev;
-        return { ...prev, lines: prev.lines.map((l, i) => (i === indeks ? { ...l, item_id: idBaru } : l)) };
+        return { ...prev, lines: prev.lines.map((l, i) => (i === indeks ? { ...l, item_id: String(dibuat.item_id) } : l)) };
       });
     }
   };
@@ -377,11 +399,28 @@ export default function CustomerPurchaseOrdersPage() {
       return;
     }
 
-    setFormStatus('success');
-    setFormMessage('PO client berhasil dibuat. 3 approval department otomatis dibuat (status pending).');
+    setFormStatus('idle');
+    setFormMessage('');
     resetForm();
     setFormIdempotencyKey(crypto.randomUUID());
     setIsFormModalOpen(false);
+
+    // KEGAGALAN TETAP DI DALAM MODAL, keberhasilan lewat notifikasi — dan bedanya bukan
+    // selera: saat gagal, modalnya TETAP TERBUKA dan pesannya menyangkut field yang harus
+    // diperbaiki, jadi ia harus berada di tempat field itu. Saat berhasil, modalnya sudah
+    // tertutup dan tidak ada lagi tempat untuk menaruh pesannya.
+    //
+    // DIBERITAHU SEBELUM memuat ulang daftar, bukan sesudah. Versi pertama menaruhnya
+    // sesudah `await loadPurchaseOrders()`, dan akibatnya konfirmasinya BARU MUNCUL setelah
+    // tabelnya selesai dimuat — layar sempat menampilkan rangka pemuatan tanpa satu pun
+    // penjelasan bahwa penyimpanannya berhasil. Pengguna sudah tahu hasilnya sebelum
+    // tabelnya siap; menahannya tidak menambah kebenaran apa pun.
+    beriTahu(
+      'success',
+      'PO klien berhasil dibuat',
+      'Tiga persetujuan departemen otomatis dibuat dengan status menunggu.'
+    );
+
     await loadPurchaseOrders();
   };
 
@@ -1115,6 +1154,10 @@ export default function CustomerPurchaseOrdersPage() {
           </ModalFooter>
         </ComposedModal>
       ) : null}
+
+      {/* Ditempatkan SEKALI di kaki halaman; posisinya (kanan atas, di bawah header) diatur
+          komponennya sendiri. Aturan proyek: jangan menempatkan notifikasi per halaman. */}
+      <AreaNotifikasi daftar={notifikasi} onTutup={tutupNotifikasi} />
     </div>
   );
 }

@@ -653,7 +653,7 @@ export default function HrDashboardPage() {
         // MODAL TRANSAKSIONAL: field-nya banyak, tapi keputusannya SATU — simpan karyawan.
         <ComposedModal
           open={isEmployeeModalOpen}
-          size="lg"
+          size="md"
           onClose={() => {
             resetEmployeeForm();
             setIsEmployeeModalOpen(false);

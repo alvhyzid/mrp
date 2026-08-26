@@ -708,7 +708,7 @@ export default function BomsPage() {
         // MODAL BERTAHAP: komponen ditambah dan dihapus sebelum disimpan.
         <ComposedModal
           open={isFormModalOpen}
-          size="lg"
+          size="md"
           onClose={() => {
             resetForm();
             setIsFormModalOpen(false);

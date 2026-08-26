@@ -1174,7 +1174,7 @@ export default function ItemsPage() {
       {canManage ? (
         <ComposedModal
           open={isFormModalOpen}
-          size="lg"
+          size="md"
           onClose={() => {
             resetForm();
             setIsFormModalOpen(false);
@@ -1490,6 +1490,11 @@ export default function ItemsPage() {
           tidak membantu orang yang salah menekan baris. */}
       <Modal
         open={itemAkanDihapus !== null}
+        // sm, bukan md bawaan: Carbon menyediakan xs/sm justru untuk teks pendek dan SATU
+        // keputusan — "modals with brief text should be extra small or small to avoid long
+        // single lines". Modal md untuk satu kalimat pertanyaan membuat barisnya terlalu
+        // panjang untuk dibaca sekali lihat.
+        size="sm"
         danger
         modalHeading={
           itemAkanDihapus ? `Hapus “${itemAkanDihapus.name}” (${itemAkanDihapus.item_code || 'tanpa kode'})?` : ''
@@ -1513,6 +1518,7 @@ export default function ItemsPage() {
 
       <Modal
         open={hargaAkanDihapus !== null}
+        size="sm"
         danger
         modalHeading="Hapus supplier ini dari daftar pemasok bahan ini?"
         modalLabel="Tindakan merusak"

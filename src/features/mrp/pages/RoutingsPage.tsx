@@ -726,7 +726,7 @@ export default function RoutingsPage() {
       {canManage ? (
         <ComposedModal
           open={isFormModalOpen}
-          size="lg"
+          size="md"
           onClose={() => {
             resetForm();
             setIsFormModalOpen(false);

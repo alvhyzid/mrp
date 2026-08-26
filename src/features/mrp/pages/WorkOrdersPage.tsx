@@ -1057,7 +1057,7 @@ export default function WorkOrdersPage() {
 
       {canManage ? (
         // MODAL TRANSAKSIONAL: field-nya beberapa, tapi keputusannya SATU — buat Work Order.
-        <ComposedModal open={isCreateModalOpen} size="lg" onClose={() => { setIsCreateModalOpen(false); return true; }}>
+        <ComposedModal open={isCreateModalOpen} size="md" onClose={() => { setIsCreateModalOpen(false); return true; }}>
           <ModalHeader label="Produksi" title="Buat Work Order" closeModal={() => setIsCreateModalOpen(false)} />
           <ModalBody hasForm>
             <p className="halaman__pengantar">

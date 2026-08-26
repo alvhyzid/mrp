@@ -148,7 +148,13 @@ dua hal yang tidak diberikan baris judul biasa.
 
 Keputusan pemilik produk, 25 Agu 2026.
 
-### 6b. Tabel jadi kartu bertumpuk di bawah 768px
+### 6b. Tabel jadi kartu bertumpuk di bawah 672px
+
+> **Koreksi 26 Agu 2026**: judul bagian ini sebelumnya tertulis "di bawah 768px" sementara
+> isinya menyebut 42rem dan CSS-nya `max-width: 41.98rem` — yaitu **672px**. Angka 768 di
+> judul salah, dan salahnya bukan sepele: 768 adalah salah satu lebar uji wajib, jadi siapa
+> pun yang percaya judul itu akan mengira sudah menguji tepat di titik baliknya padahal
+> belum. Ini sebab langsung kenapa **672 kini jadi lebar uji wajib**.
 
 Carbon menggulir menyamping; aturan proyek melarang gulir menyamping di lebar mana pun.
 
@@ -161,6 +167,43 @@ Di bawah 42rem tiap baris jadi satu kartu, nama kolomnya dibawa lewat `data-labe
 
 Dan yang menemukan cacat itu bukan pengukuran: "nol gulir menyamping" tetap **hijau** padahal
 barisnya tumpang tindih. Yang menemukannya **melihat tangkapan layarnya**.
+
+---
+
+## 6c. BUKTI VISUAL: enam lebar, DUA TEPI (ditetapkan 26 Agu 2026, dari DS-14)
+
+**Lebar wajib: 360 / 672 / 768 / 1280 / 1440 / 1920.**
+Empat lebar lama adalah lebar yang **lazim dipakai orang**; tidak satu pun menyentuh **titik
+perubahan** susunan. **672** adalah titik balik tabel→kartu di atas; **1440** mengisi jarak
+antara 1312 dan 1584 milik Carbon. Aturan umumnya: **daftar lebar wajib harus mencakup titik
+perubahan, bukan hanya lebar yang lazim.**
+
+**Yang diperiksa di tiap lebar — TIGA hal, bukan satu:**
+
+| # | Pemeriksaan | Menangkap |
+|---|---|---|
+| 1 | `scrollWidth > clientWidth` | isi yang meluber ke kanan **dan menghasilkan gulir** |
+| 2 | elemen dengan `right > clientWidth` | kolom yang **terpotong di kanan tanpa gulir** |
+| 3 | elemen dengan `left < 0` | kontrol yang **hilang di tepi kiri** |
+
+**Pemeriksaan 1 saja TIDAK CUKUP, dan ini sebab DS-14.** Ia hanya menangkap satu arah. Yang
+terpotong ke kiri dipotong diam-diam oleh induknya — halamannya **tidak menggulir sama
+sekali** — jadi ukuran lama menjawab "lulus". Terukur di `/items` 360px: saringan "Tipe"
+berada di **−47 sampai −19**, hilang seluruhnya, sementara ukuran lama melaporkan bersih.
+Toolbar Carbon meratakan isinya ke kanan lalu memotong kelebihannya, jadi **yang hilang selalu
+yang paling kiri**.
+
+**Yang TIDAK boleh dihitung sebagai cacat** — pengawas yang salah tuduh melatih orang
+mengabaikan hasilnya, dan pengukur ini **memang sempat salah tuduh** sebelum diperketat:
+elemen yang disembunyikan dengan teknik baku "terbaca pembaca layar saja" —
+`.cds--visually-hidden`, `.sr-only`, leluhur berukuran ≤ 1px ber-`overflow` tersembunyi, atau
+leluhur ber-`clip`/`clip-path`.
+
+**Yang menandainya adalah TEKNIKNYA, bukan POSISINYA.** `.tabel-responsif thead` disembunyikan
+lewat kotak 1×1 px ber-`clip-path`, jadi judul kolomnya tetap punya geometri lebar padahal nol
+piksel tampak — versi pertama pengukur ini melaporkannya sebagai lima cacat yang tidak ada.
+Saringan yang benar-benar hilang di tepi kiri **tidak** memakai teknik itu, jadi ia tetap
+tertangkap: dibuktikan dua arah, bukan sekadar dilonggarkan sampai diam.
 
 ---
 

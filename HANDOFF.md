@@ -2,6 +2,103 @@
 
 Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`). Tiap sesi Claude Code WAJIB baca ini dulu sebelum mulai, dan memperbarui bagian relevan begitu sesi selesai. Klaim di sini harus tetap diverifikasi ulang, bukan otomatis dipercaya — HANDOFF ini rangkuman, bukan pengganti bukti.
 
+## PP.1/PP.2 — UKURAN LAMA BILANG 0 CACAT; UKURAN BARU MENEMUKAN 11 (26 Agu 2026)
+
+**Ukuran responsive yang dipakai berbulan-bulan hanya menangkap SATU ARAH.** `scrollWidth >
+clientWidth` berbunyi untuk yang meluber ke **kanan**; yang terpotong ke **kiri** dipotong
+diam-diam oleh induknya — halamannya **tidak menggulir sama sekali**, jadi ukuran itu menjawab
+**"lulus"**.
+
+Ukurannya diperbaiki lebih dulu, baru kasusnya diukur ulang. **Enam lebar wajib sekarang:
+360 / 672 / 768 / 1280 / 1440 / 1920** (butir 5 & 6 Aturan Responsive di CLAUDE.md, dan
+bagian 6c `docs/governance/cetakan-halaman-data.md`).
+
+### Hasil sapuan SELURUH halaman — 29 rute × 6 lebar = 174 kombinasi
+
+| Ukuran | Jawaban |
+|---|---|
+| **Lama** (gulir menyamping) | **0 cacat** — seluruh 29 halaman "lulus" |
+| **Baru** (dua tepi) | **11 kombinasi bercacat di 4 halaman** |
+
+Rinciannya: **8 kombinasi meluber ke kanan** (`/documents`, `/hr`, `/items`, `/warehouse`) dan
+**3 kombinasi terpotong ke kiri** (`/documents`, `/items`). **Seluruhnya hanya di 360, 672,
+dan 768 px**; di 1280 / 1440 / 1920 nol cacat.
+
+### Yang hilang bukan cuma label
+
+- **`/documents` 768px**: kolom **"Aksi"** di 782..811 pada layar 768 — **tombol aksinya tidak
+  bisa dijangkau sama sekali**.
+- **`/hr` 672 & 768px**: kolom **"Aksi"** di 776..836 — sama.
+- **`/warehouse` 360px**: kolom "Aksi" di 504..533, dan tab "Saldo awal (lot baru)" terpotong.
+- **`/documents` 360px**: **DUA** saringan hilang seluruhnya di tepi kiri.
+- **`/items` 360px**: saringan "Tipe"; **672 & 768px**: kolom "Status" terpotong.
+
+### DS-14 ternyata TIGA sebab, bukan satu
+
+Ditemukan saat menelusuri angkanya: **sebagian tabel tidak memakai `.tabel-responsif`**, jadi
+di layar sempit ia tetap berbentuk tabel alih-alih membalik jadi kartu. Diukur: **`/hr` punya
+2 `<Table>`, hanya 1 ber-kelas itu; `/warehouse` punya 3, hanya 1.** "Dua jalur hidup" lagi,
+kali ini **di dalam satu halaman**.
+
+Jadi DS-14 memuat tiga sebab yang menghasilkan gejala sama dan **tidak bisa ditambal sekaligus**:
+toolbar yang memotong dari kiri · tabel yang tidak ikut membalik jadi kartu · kolom "Aksi" yang
+jatuh di lebar menengah.
+
+### Pengukurnya sendiri sempat salah tuduh, dan diperketat di giliran yang sama
+
+Versi pertama melaporkan judul kolom tabel di 360px sebagai cacat. Kenyataannya
+`.tabel-responsif thead` memakai teknik baku "terbaca pembaca layar saja" — kotak 1×1 px
+ber-`clip-path` — jadi anak-anaknya punya geometri lebar padahal **nol piksel tampak**.
+
+**Yang menandai "sengaja disembunyikan" adalah TEKNIKNYA, bukan POSISINYA.** Setelah diperketat,
+saringan yang benar-benar hilang **tetap tertangkap** — dibuktikan dua arah, bukan dilonggarkan
+sampai diam.
+
+## PP.4 — KELAS BARU: "YANG LEBIH DULU BENAR JUSTRU TERLEWAT" (26 Agu 2026)
+
+Sebelas halaman tidak memakai `KepalaHalaman` **karena mereka sudah Carbon LEBIH DULU**,
+sehingga tidak pernah masuk daftar sapuan migrasi. Daftarnya disusun dari **"halaman yang
+belum dikerjakan"**, dan halaman yang sudah dikerjakan **dengan cara lama** tidak ada di
+daftar itu — bukan karena dilewatkan, melainkan karena **tidak pernah tercatat sebagai
+pekerjaan**.
+
+> **ATURAN: daftar pekerjaan yang disusun dari "yang belum dikerjakan" akan melewatkan yang
+> sudah dikerjakan dengan cara lama. Sapuan wajib bertolak dari SELURUH halaman, bukan dari
+> daftar yang tersisa.**
+
+**Kenapa ini kelas tersendiri, bukan sekadar kelalaian**: bentuk kesalahannya justru
+**memberi rasa selesai yang lebih kuat**. Daftar sisa yang habis terbaca sebagai "nol
+tersisa" — dan memang nol, untuk daftar itu. Yang tidak pernah ditanyakan adalah apakah
+daftarnya sendiri mencakup semuanya.
+
+Ini juga **bentuk kelima** dari kelas "dua jalur hidup" yang sudah tercatat di CLAUDE.md,
+dengan sebab yang belum pernah muncul sebelumnya: empat sebelumnya lahir dari **menulis
+ulang** hal yang sudah punya komponen bersama; yang kelima lahir dari **sudah benar lebih
+dulu, lalu tidak ikut pindah** ketika pintu bersamanya dibuat.
+
+## PP.5 — ALAT UKUR MELAPOR TERBALIK: KEJADIAN KELIMA (26 Agu 2026)
+
+Skrip pembuat item uji melaporkan **GAGAL untuk empat pembuatan yang sebenarnya BERHASIL**.
+**Bila laporannya dipercaya, kesimpulannya terbalik 180 derajat** — "modal tidak bisa
+menyimpan" padahal ia menyimpan dengan benar. Yang menangkapnya hanya tangkapan layar
+berikutnya, yang memperlihatkan empat baris di tabel di belakang modal.
+
+Sebabnya: skrip menyimpulkan "modal masih terbuka" dari `#item_code` yang masih ada di DOM.
+**`<Modal>` Carbon tetap ter-render saat tertutup**, jadi elemen itu selalu ada.
+
+**Kejadian sebelumnya dari kelas yang sama**: grep baris log · `numTotalTestSuites` ·
+hitungan alert 10/0/9/4 · angka 37 yang ditarik. **Ini yang kelima.**
+
+> **ATURAN yang sudah ada, DIPERKUAT: alat ukur wajib diperiksa terhadap kenyataan sebelum
+> hasilnya dipakai menyimpulkan — TERUTAMA saat hasilnya mengejutkan.**
+
+Rasa terkejut adalah **sinyal untuk memeriksa alat ukurnya**, bukan sinyal untuk mulai
+menjelaskan temuannya. Empat dari lima kejadian ini menghasilkan angka yang mengejutkan lebih
+dulu, dan tiap kali waktu terbuang untuk menjelaskan angka yang tidak pernah ada.
+
+**Tanda kehadiran yang benar untuk modal Carbon**, supaya tidak terulang: periksa kelas
+`.cds--modal.is-visible`, atau lebih baik lagi periksa **akibatnya** — barisnya bertambah.
+
 ## OO — MIGRASI YANG DITULIS TAPI TIDAK PERNAH DITERAPKAN (26 Agu 2026)
 
 ### Yang terjadi

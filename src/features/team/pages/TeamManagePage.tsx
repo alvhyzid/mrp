@@ -12,6 +12,7 @@ import {
   ModalBody,
   ModalFooter,
   ModalHeader,
+  Pagination,
   SkeletonText,
   Table,
   TableBody,
@@ -64,6 +65,10 @@ export default function TeamManagePage() {
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [membersError, setMembersError] = useState('');
   const [cari, setCari] = useState('');
+  // Pembagian halaman — bagian dari cetakan halaman data yang halaman ini lewatkan.
+  // Ditemukan 26 Agu 2026 lewat perbandingan berdampingan oleh pemilik produk.
+  const [halaman, setHalaman] = useState(1);
+  const [perHalaman, setPerHalaman] = useState(15);
   const [membersLoading, setMembersLoading] = useState(true);
   const [savingUserId, setSavingUserId] = useState<number | null>(null);
 
@@ -228,7 +233,9 @@ export default function TeamManagePage() {
 
   // Baris memuat NILAI YANG DITAMPILKAN: mengurut kolom Peran harus mengurut "Manajer Gudang",
   // bukan slug `warehouse_manager` yang tidak pernah dilihat siapa pun.
-  const barisTabel = anggotaTerlihat.map((m) => ({
+  const barisTabel = anggotaTerlihat
+    .slice((halaman - 1) * perHalaman, halaman * perHalaman)
+    .map((m) => ({
     id: String(m.user_id),
     name: m.name || '',
     email: m.email,
@@ -337,20 +344,43 @@ export default function TeamManagePage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {rows.map((row: any) => {
-                    const member = anggotaTerlihat.find((m) => String(m.user_id) === row.id)!;
-                    const { key, ...sisa } = getRowProps({ row });
-                    return (
-                      <TableRow key={key} {...sisa}>
-                        {row.cells.map((cell: any) => (
-                          <TableCell key={cell.id} data-label={cell.info.header}>{isiSel(member, cell.info.header)}</TableCell>
-                        ))}
-                      </TableRow>
-                    );
-                  })}
+                  {rows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={headers.length}>
+                        {cari.trim() ? `Tidak ada anggota yang cocok dengan "${cari.trim()}".` : 'Belum ada anggota tim.'}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    rows.map((row: any) => {
+                      const member = anggotaTerlihat.find((m) => String(m.user_id) === row.id)!;
+                      const { key, ...sisa } = getRowProps({ row });
+                      return (
+                        <TableRow key={key} {...sisa}>
+                          {row.cells.map((cell: any) => (
+                            <TableCell key={cell.id} data-label={cell.info.header}>{isiSel(member, cell.info.header)}</TableCell>
+                          ))}
+                        </TableRow>
+                      );
+                    })
+                  )}
                 </TableBody>
               </Table>
-              {members.length === 0 ? <p className="halaman__pengantar">Belum ada anggota tim.</p> : null}
+              <Pagination
+                page={halaman}
+                pageSize={perHalaman}
+                pageSizes={[15, 30, 50]}
+                totalItems={anggotaTerlihat.length}
+                onChange={({ page, pageSize }: { page: number; pageSize: number }) => {
+                  setHalaman(page);
+                  setPerHalaman(pageSize);
+                }}
+                itemsPerPageText="Baris per halaman"
+                backwardText="Halaman sebelumnya"
+                forwardText="Halaman berikutnya"
+                itemRangeText={(mulai: number, akhir: number, total: number) => `${mulai}–${akhir} dari ${total} anggota`}
+                pageRangeText={(_kini: number, total: number) => `dari ${total} halaman`}
+                pageNumberText="Nomor halaman"
+              />
             </TableContainer>
           )}
         </DataTable>

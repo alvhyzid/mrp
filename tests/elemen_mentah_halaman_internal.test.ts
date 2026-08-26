@@ -265,6 +265,99 @@ describe('DS-16 — pengawas elemen mentah & tabel non-responsif di halaman inte
     expect(basi).toHaveLength(0);
   });
 
+  // ==========================================================================
+  // HALAMAN DAFTAR WAJIB LENGKAP: pembagian halaman + keadaan kosong DI DALAM tabel
+  // ==========================================================================
+  // KENAPA PEMERIKSAAN INI ADA, dan ia contoh terbaik kenapa pengawas mengalahkan aturan:
+  // pemilik produk membuka /customers dan /customer-purchase-orders BERDAMPINGAN, lalu
+  // bertanya "kenapa dua tabel berbeda?". Keduanya sama-sama Carbon, sama-sama hasil DS-09,
+  // dan tetap berbeda — /customers MENYEMBUNYIKAN pembagian halaman saat daftarnya kosong
+  // dan menaruh pesan kosongnya DI LUAR tabel sebagai <p>.
+  //
+  // Tidak satu pun pemeriksaan yang ada bisa melihatnya: bukan typecheck, bukan test,
+  // bukan pengukur dua tepi (susunannya sah), bukan build. Yang melihatnya MATA MANUSIA
+  // yang membandingkan dua halaman sekaligus — dan itu tidak bisa dijadwalkan.
+  //
+  // Sapuan sesudahnya menemukan dua halaman lain yang bahkan TIDAK PUNYA pembagian halaman
+  // sama sekali (Master Dokumen dan Kelola Tim). Satu pertanyaan, tiga halaman.
+  const TANPA_PEMBAGIAN_HALAMAN_SAH = new Set([
+    // Tabel RINGKASAN di dashboard PPIC: ia sengaja pendek dan diakhiri tautan
+    // "Buka halaman Work Order lengkap". Membagi halaman sebuah ringkasan tidak masuk akal —
+    // yang ingin menelusuri semuanya diarahkan ke halaman penuhnya.
+    'src/features/ppic/pages/PpicDashboardPage.tsx'
+  ]);
+
+  it('halaman berdaftar (punya pencarian toolbar) WAJIB punya pembagian halaman', () => {
+    const kurang: string[] = [];
+    for (const abs of berkasHalaman(DIR_FITUR).sort()) {
+      const rel = abs.replace(`${AKAR}/`, '');
+      if (TANPA_PEMBAGIAN_HALAMAN_SAH.has(rel)) continue;
+      const isi = tanpaKomentar(readFileSync(abs, 'utf8'));
+      if (!/<TableToolbarSearch(?=[\s/>])/.test(isi)) continue;
+      if (!/<Pagination(?=[\s/>])/.test(isi)) kurang.push(rel);
+    }
+    if (kurang.length > 0) {
+      throw new Error(
+        `Halaman berdaftar berikut tidak punya <Pagination>:\n  ${kurang.join('\n  ')}\n\n` +
+          'Cetakan halaman data mewajibkannya. Bila sebuah tabel memang RINGKASAN dan bukan ' +
+          'daftar penuh, daftarkan di TANPA_PEMBAGIAN_HALAMAN_SAH beserta alasannya.'
+      );
+    }
+    expect(kurang).toHaveLength(0);
+  });
+
+  it('pembagian halaman TIDAK boleh disembunyikan saat daftarnya kosong', () => {
+    const salah: { berkas: string; baris: number }[] = [];
+    for (const abs of berkasHalaman(DIR_FITUR).sort()) {
+      const rel = abs.replace(`${AKAR}/`, '');
+      const isi = tanpaKomentar(readFileSync(abs, 'utf8'));
+      const baris = isi.split('\n');
+      baris.forEach((b, i) => {
+        // `$` DIPERLUKAN: baris ini dipecah per '\n', jadi `<Pagination` yang berdiri
+        // sendiri di ujung baris TIDAK punya karakter sesudahnya. Versi pertama memakai
+        // lookahead [\s/>] saja dan akibatnya TIDAK PERNAH berbunyi — ketahuan hanya karena
+        // pola lamanya disisipkan kembali dengan sengaja untuk membuktikan ia bisa gagal.
+        if (!/<Pagination(?=[\s/>]|$)/.test(b)) return;
+        // Bentuk yang dicari: cabang KEDUA dari `... === 0 ? (...) : (<Pagination ...`.
+        // Lima baris sebelumnya sudah cukup — `) : (` selalu tepat di atasnya.
+        const sebelum = baris.slice(Math.max(0, i - 5), i).join('\n');
+        if (/\)\s*:\s*\($/m.test(sebelum) && /length\s*===\s*0/.test(baris.slice(Math.max(0, i - 12), i).join('\n'))) {
+          salah.push({ berkas: rel, baris: i + 1 });
+        }
+      });
+    }
+    if (salah.length > 0) {
+      throw new Error(
+        `Pembagian halaman disembunyikan saat kosong di:\n` +
+          salah.map((s) => `  ${s.berkas}:${s.baris}`).join('\n') +
+          '\n\nCetakan Master Item menampilkannya SELALU, termasuk saat kosong ("0–0 dari 0"). ' +
+          'Menyembunyikannya membuat halaman itu terlihat berbeda dari halaman bertabel lain.'
+      );
+    }
+    expect(salah).toHaveLength(0);
+  });
+
+  it('halaman berdaftar menaruh pesan kosong DI DALAM tabel, bukan sebagai <p> di luarnya', () => {
+    const kurang: string[] = [];
+    for (const abs of berkasHalaman(DIR_FITUR).sort()) {
+      const rel = abs.replace(`${AKAR}/`, '');
+      const isi = tanpaKomentar(readFileSync(abs, 'utf8'));
+      if (!/<TableToolbarSearch(?=[\s/>])/.test(isi)) continue;
+      if (!/<TableCell\s+colSpan/.test(isi)) kurang.push(rel);
+    }
+    // BATAS YANG JUJUR: ini memeriksa ADANYA sel keadaan-kosong, bukan bahwa sel itu milik
+    // tabel UTAMA halaman tersebut. Halaman bertabel banyak bisa lolos dengan sel kosong di
+    // tabel yang lain. Itu batas pencocokan teks, dan disebut di sini alih-alih dibiarkan.
+    if (kurang.length > 0) {
+      throw new Error(
+        `Halaman berdaftar berikut tidak punya keadaan kosong di dalam tabel:\n  ${kurang.join('\n  ')}\n\n` +
+          'Pesan kosong sebagai <p> DI LUAR tabel membuat lebar dan jaraknya berbeda dari ' +
+          'halaman lain — itu yang membuat /customers terlihat lain sendiri.'
+      );
+    }
+    expect(kurang).toHaveLength(0);
+  });
+
   it('menyebutkan tabel yang jumlah kolomnya TIDAK bisa dibaca — bukan meloloskannya diam-diam', () => {
     const takTerbaca: string[] = [];
     for (const abs of berkasHalaman(DIR_FITUR).sort()) {

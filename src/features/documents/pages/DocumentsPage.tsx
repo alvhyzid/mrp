@@ -14,6 +14,7 @@ import {
   ModalBody,
   ModalFooter,
   ModalHeader,
+  Pagination,
   SkeletonText,
   Table,
   TableBody,
@@ -75,6 +76,10 @@ export default function DocumentsPage() {
   const [filterDepartment, setFilterDepartment] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [cari, setCari] = useState('');
+  // Pembagian halaman — bagian dari cetakan halaman data, dan halaman ini melewatkannya.
+  // Ditemukan 26 Agu 2026 saat pemilik produk membandingkan dua halaman berdampingan.
+  const [halaman, setHalaman] = useState(1);
+  const [perHalaman, setPerHalaman] = useState(15);
   const [uploadOpen, setUploadOpen] = useState(false);
   // Isian modal unggah dulu memakai <select> dan <input> mentah yang dibaca FormData saat
   // submit. Kontrol Carbon TIDAK menaruh nilainya di FormData, jadi nilainya disimpan di sini
@@ -239,7 +244,9 @@ export default function DocumentsPage() {
   // Baris memuat NILAI YANG DITAMPILKAN, bukan objek mentah: Carbon mengurutkan berdasarkan
   // nilai di baris, jadi baris berisi enum mentah akan mengurut "TERBATAS" padahal layar
   // menampilkan "Terbatas".
-  const barisTabel = dokumenTerlihat.map((d) => ({
+  const barisTabel = dokumenTerlihat
+    .slice((halaman - 1) * perHalaman, halaman * perHalaman)
+    .map((d) => ({
     id: String(d.document_id),
     judul: `${d.title}${d.doc_number ? ` (${d.doc_number})` : ''}`,
     jenis: documentTypes.find((t) => t.code === d.doc_type)?.name ?? d.doc_type,
@@ -385,22 +392,45 @@ export default function DocumentsPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {rows.map((row: any) => {
-                    const doc = documents.find((d) => String(d.document_id) === row.id)!;
-                    const { key, ...sisa } = getRowProps({ row });
-                    return (
-                      <TableRow key={key} {...sisa}>
-                        {row.cells.map((cell: any) => (
-                          <TableCell key={cell.id} data-label={cell.info.header}>{isiSel(doc, cell.info.header)}</TableCell>
-                        ))}
-                      </TableRow>
-                    );
-                  })}
+                  {rows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={headers.length}>
+                        {cari.trim()
+                          ? `Tidak ada dokumen yang cocok dengan "${cari.trim()}".`
+                          : 'Belum ada dokumen yang bisa Anda lihat.'}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    rows.map((row: any) => {
+                      const doc = documents.find((d) => String(d.document_id) === row.id)!;
+                      const { key, ...sisa } = getRowProps({ row });
+                      return (
+                        <TableRow key={key} {...sisa}>
+                          {row.cells.map((cell: any) => (
+                            <TableCell key={cell.id} data-label={cell.info.header}>{isiSel(doc, cell.info.header)}</TableCell>
+                          ))}
+                        </TableRow>
+                      );
+                    })
+                  )}
                 </TableBody>
               </Table>
-              {documents.length === 0 ? (
-                <p className="halaman__pengantar">Belum ada dokumen yang bisa Anda lihat.</p>
-              ) : null}
+              <Pagination
+                page={halaman}
+                pageSize={perHalaman}
+                pageSizes={[15, 30, 50]}
+                totalItems={dokumenTerlihat.length}
+                onChange={({ page, pageSize }: { page: number; pageSize: number }) => {
+                  setHalaman(page);
+                  setPerHalaman(pageSize);
+                }}
+                itemsPerPageText="Baris per halaman"
+                backwardText="Halaman sebelumnya"
+                forwardText="Halaman berikutnya"
+                itemRangeText={(mulai: number, akhir: number, total: number) => `${mulai}–${akhir} dari ${total} dokumen`}
+                pageRangeText={(_kini: number, total: number) => `dari ${total} halaman`}
+                pageNumberText="Nomor halaman"
+              />
             </TableContainer>
           )}
         </DataTable>

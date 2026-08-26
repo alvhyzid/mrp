@@ -425,41 +425,48 @@ export default function CustomersPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {rows.map((row: any) => {
-                    const c = customers.find((x) => String(x.customer_id) === row.id)!;
-                    const { key, ...sisa } = getRowProps({ row });
-                    return (
-                      <TableRow key={key} {...sisa}>
-                        {row.cells.map((cell: any) => (
-                          <TableCell key={cell.id} data-label={cell.info.header}>{isiSel(c, cell.info.header)}</TableCell>
-                        ))}
-                      </TableRow>
-                    );
-                  })}
+                  {rows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={headers.length}>
+                        {cari.trim() ? `Tidak ada pelanggan yang cocok dengan "${cari.trim()}".` : 'Belum ada pelanggan.'}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    rows.map((row: any) => {
+                      const c = customers.find((x) => String(x.customer_id) === row.id)!;
+                      const { key, ...sisa } = getRowProps({ row });
+                      return (
+                        <TableRow key={key} {...sisa}>
+                          {row.cells.map((cell: any) => (
+                            <TableCell key={cell.id} data-label={cell.info.header}>{isiSel(c, cell.info.header)}</TableCell>
+                          ))}
+                        </TableRow>
+                      );
+                    })
+                  )}
                 </TableBody>
               </Table>
-              {terlihat.length === 0 ? (
-                <p className="halaman__pengantar">
-                  {cari.trim() ? `Tidak ada pelanggan yang cocok dengan "${cari.trim()}".` : 'Belum ada pelanggan.'}
-                </p>
-              ) : (
-                <Pagination
-                  page={halaman}
-                  pageSize={perHalaman}
-                  pageSizes={[15, 30, 50]}
-                  totalItems={terlihat.length}
-                  onChange={({ page, pageSize }: { page: number; pageSize: number }) => {
-                    setHalaman(page);
-                    setPerHalaman(pageSize);
-                  }}
-                  itemsPerPageText="Baris per halaman"
-                  backwardText="Halaman sebelumnya"
-                  forwardText="Halaman berikutnya"
-                  itemRangeText={(mulai: number, akhir: number, total: number) => `${mulai}–${akhir} dari ${total} pelanggan`}
-                  pageRangeText={(_kini: number, total: number) => `dari ${total} halaman`}
-                  pageNumberText="Nomor halaman"
-                />
-              )}
+              {/* PEMBAGIAN HALAMAN SELALU TAMPIL, termasuk saat daftarnya kosong — sama seperti
+                  cetakan Master Item. Sebelum 26 Agu 2026 ia DISEMBUNYIKAN saat kosong dan
+                  pesan kosongnya ditaruh DI LUAR tabel sebagai <p>, dan itulah yang membuat
+                  halaman ini terlihat berbeda dari halaman bertabel lain di layar yang sama.
+                  Pemilik produk menemukannya dengan membandingkan dua halaman berdampingan. */}
+              <Pagination
+                page={halaman}
+                pageSize={perHalaman}
+                pageSizes={[15, 30, 50]}
+                totalItems={terlihat.length}
+                onChange={({ page, pageSize }: { page: number; pageSize: number }) => {
+                  setHalaman(page);
+                  setPerHalaman(pageSize);
+                }}
+                itemsPerPageText="Baris per halaman"
+                backwardText="Halaman sebelumnya"
+                forwardText="Halaman berikutnya"
+                itemRangeText={(mulai: number, akhir: number, total: number) => `${mulai}–${akhir} dari ${total} pelanggan`}
+                pageRangeText={(_kini: number, total: number) => `dari ${total} halaman`}
+                pageNumberText="Nomor halaman"
+              />
             </TableContainer>
           )}
         </DataTable>

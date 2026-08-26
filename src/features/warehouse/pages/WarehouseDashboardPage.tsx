@@ -611,7 +611,7 @@ export default function WarehouseDashboardPage() {
       {alertsLoading ? (
         <DataTableSkeleton columnCount={4} rowCount={3} showHeader={false} showToolbar={false} />
       ) : (
-        <Table size="lg">
+        <Table size="lg" className="tabel-responsif">
           <TableHead>
             <TableRow>
               <TableHeader>Jenis</TableHeader>
@@ -638,10 +638,10 @@ export default function WarehouseDashboardPage() {
             ) : (
               alerts.map((a) => (
                 <TableRow key={a.system_alert_id}>
-                  <TableCell>{alertTypeLabels[a.alert_type] ?? a.alert_type}</TableCell>
-                  <TableCell>{a.related_item_code ? `${a.related_item_code} — ${a.related_item_name}` : '—'}</TableCell>
-                  <TableCell>{a.message}</TableCell>
-                  <TableCell>
+                  <TableCell data-label="Jenis">{alertTypeLabels[a.alert_type] ?? a.alert_type}</TableCell>
+                  <TableCell data-label="Item">{a.related_item_code ? `${a.related_item_code} — ${a.related_item_name}` : '—'}</TableCell>
+                  <TableCell data-label="Pesan">{a.message}</TableCell>
+                  <TableCell data-label="Tingkat">
                     <Tag type={severityWarnaTag[a.severity] ?? 'gray'}>{severityLabels[a.severity] ?? a.severity}</Tag>
                   </TableCell>
                 </TableRow>
@@ -656,7 +656,7 @@ export default function WarehouseDashboardPage() {
       {pendingPosLoading ? (
         <DataTableSkeleton columnCount={6} rowCount={3} showHeader={false} showToolbar={false} />
       ) : (
-        <Table size="lg">
+        <Table size="lg" className="tabel-responsif">
           <TableHead>
             <TableRow>
               <TableHeader>No. PO</TableHeader>
@@ -676,13 +676,13 @@ export default function WarehouseDashboardPage() {
             ) : (
               pendingPos.map((po) => (
                 <TableRow key={po.purchase_order_id}>
-                  <TableCell>PO-{String(po.purchase_order_id).padStart(4, '0')}</TableCell>
-                  <TableCell>{po.supplier_name}</TableCell>
-                  <TableCell>{po.production_plant_name}</TableCell>
-                  <TableCell>{poStatusLabels[po.status] ?? po.status}</TableCell>
-                  <TableCell>{po.expected_date ?? '—'}</TableCell>
-                  <TableCell>{po.line_count}</TableCell>
-                  <TableCell>
+                  <TableCell data-label="No. PO">PO-{String(po.purchase_order_id).padStart(4, '0')}</TableCell>
+                  <TableCell data-label="Supplier">{po.supplier_name}</TableCell>
+                  <TableCell data-label="Tujuan lokasi">{po.production_plant_name}</TableCell>
+                  <TableCell data-label="Status">{poStatusLabels[po.status] ?? po.status}</TableCell>
+                  <TableCell data-label="Perkiraan datang">{po.expected_date ?? '—'}</TableCell>
+                  <TableCell data-label="Jumlah baris">{po.line_count}</TableCell>
+                  <TableCell data-label="Aksi">
                     <Button kind="ghost" size="sm" onClick={() => handleToggleExpand(po)}>
                       {expandedPoId === po.purchase_order_id ? 'Tutup' : 'Terima barang'}
                     </Button>

@@ -3,18 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  Button,
-  InlineNotification,
-  SkeletonText,
-  StructuredListBody,
-  StructuredListCell,
-  StructuredListHead,
-  StructuredListRow,
-  StructuredListWrapper
-} from '@carbon/react';
+import { Button, InlineNotification, SkeletonText, StructuredListBody, StructuredListCell, StructuredListHead, StructuredListRow, StructuredListWrapper } from '@carbon/react';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
 import { getFieldLabel, getRoleLabel, getEntityLabel, COMMON_STATUS_LABELS } from '@/lib/glossary';
 
 export default function TestTenantPage() {
@@ -91,22 +81,21 @@ export default function TestTenantPage() {
 
   return (
     <div className="halaman">
-      <Breadcrumb noTrailingSlash className="halaman__remah">
-        <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>
-          <span className="cds--link halaman__remah-mati">Internal</span>
-        </BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>Test Tenant</BreadcrumbItem>
-      </Breadcrumb>
-
-      <div>
-        <h1 className="halaman__judul">Data login saat ini</h1>
-        <p className="halaman__pengantar">
-          Masuk sebagai <strong>{userEmail ?? 'tidak diketahui'}</strong>, {getFieldLabel('company_id')}{' '}
+      <KepalaHalaman
+        remah={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Internal" },
+          { label: "Test Tenant" }
+        ]}
+        judul="Data login saat ini"
+        pengantar={
+          <>
+            Masuk sebagai <strong>{userEmail ?? 'tidak diketahui'}</strong>, {getFieldLabel('company_id')}{' '}
           <strong>{companyId === null ? '—' : companyId}</strong>. Daftar di bawah memperlihatkan apa yang
           BENAR-BENAR bisa dibaca sesi ini setelah disaring Row-Level Security.
-        </p>
-      </div>
+          </>
+        }
+      />
 
       {/* AKSI MERUSAK DIPISAH DAN BERJAUHAN dari aksi biasa (aturan modal butir 9): "Keluar"
           mengakhiri sesi, dan tidak boleh berdempetan dengan tautan navigasi biasa. */}

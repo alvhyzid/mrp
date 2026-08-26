@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Breadcrumb, BreadcrumbItem, InlineNotification, SkeletonText, Tag, Tile } from '@carbon/react';
+import { InlineNotification, SkeletonText, Tag, Tile } from '@carbon/react';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 import { formatNumberId } from '@/lib/currency';
 import { getEntityLabel, COMMON_STATUS_LABELS } from '@/lib/glossary';
@@ -117,21 +118,15 @@ export default function ProcessMiningPage() {
 
   return (
     <div className="halaman">
-      <Breadcrumb noTrailingSlash className="halaman__remah">
-        <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>
-          <span className="cds--link halaman__remah-mati">Data &amp; Analytics</span>
-        </BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>Process Mining</BreadcrumbItem>
-      </Breadcrumb>
-
-      <div>
-        <h1 className="halaman__judul">Process mining</h1>
-        <p className="halaman__pengantar">
-          Melihat bagaimana pekerjaan benar-benar mengalir di sistem — dari jejak perubahan status,
-          bukan dari bagaimana alurnya seharusnya berjalan di atas kertas.
-        </p>
-      </div>
+      <KepalaHalaman
+        remah={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Data & Analytics" },
+          { label: "Process Mining" }
+        ]}
+        judul="Process mining"
+        pengantar="Melihat bagaimana pekerjaan benar-benar mengalir di sistem — dari jejak perubahan status, bukan dari bagaimana alurnya seharusnya berjalan di atas kertas."
+      />
 
       {error ? <InlineNotification kind="error" lowContrast title="Gagal memuat" subtitle={error} hideCloseButton /> : null}
 

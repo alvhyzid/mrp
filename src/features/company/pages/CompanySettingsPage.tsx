@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Breadcrumb, BreadcrumbItem, Button, FileUploaderButton, InlineNotification, Modal, SkeletonText, TextInput, Tile } from '@carbon/react';
+import { Button, FileUploaderButton, InlineNotification, Modal, SkeletonText, TextInput, Tile } from '@carbon/react';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
 import { Image as IkonGambar } from '@carbon/icons-react';
 import { AreaNotifikasi, type Notifikasi } from '@/components/ui/notifikasi';
 
@@ -187,20 +188,15 @@ export default function CompanySettingsPage() {
 
   return (
     <div className="halaman">
-      <Breadcrumb noTrailingSlash className="halaman__remah">
-        <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>
-          <span className="cds--link halaman__remah-mati">Administration</span>
-        </BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>Company Data</BreadcrumbItem>
-      </Breadcrumb>
-
-      <div>
-        <h1 className="halaman__judul">Data perusahaan</h1>
-        <p className="halaman__pengantar">
-          Nama dan logo di sini muncul di dokumen yang tercetak — surat jalan, faktur, dan lampiran lain.
-        </p>
-      </div>
+      <KepalaHalaman
+        remah={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Administration" },
+          { label: "Company Data" }
+        ]}
+        judul="Data perusahaan"
+        pengantar="Nama dan logo di sini muncul di dokumen yang tercetak — surat jalan, faktur, dan lampiran lain."
+      />
 
       <Tile className="perusahaan-kartu">
         {/* POLA UNGGAH GAMBAR: logonya sendiri yang diklik, dipratinjau dulu, dan baru

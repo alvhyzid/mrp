@@ -491,7 +491,7 @@ export default function BomsPage() {
         <p className="halaman__redup">Buffer {formatNumberId(b.buffer_percentage, 2)}% — kebutuhan bahan per batch dihitung dengan tambahan ini.</p>
       ) : null}
 
-      <Table size="lg">
+      <Table size="lg" className="tabel-responsif">
         <TableHead>
           <TableRow>
             <TableHeader>Komponen</TableHeader>
@@ -529,29 +529,29 @@ export default function BomsPage() {
         <TableBody>
           {b.lines.map((line) => (
             <TableRow key={line.bom_line_id}>
-              <TableCell>
+              <TableCell data-label="Komponen">
                 <div className="bom-sel-item">
                   <span className="bom-sel-item__kode">{line.component_item_code}</span>
                   <span className="bom-sel-item__nama">{line.component_item_name}</span>
                 </div>
               </TableCell>
-              <TableCell>
+              <TableCell data-label="Tipe">
                 {line.component_item_type ? <Tag type="outline">{typeLabels[line.component_item_type] ?? line.component_item_type}</Tag> : null}
               </TableCell>
-              <TableCell>
+              <TableCell data-label="Jumlah per batch">
                 {(line.qty_per_unit_output * b.standard_yield_qty).toLocaleString('id-ID', { maximumFractionDigits: 4 })} {line.uom}
               </TableCell>
-              <TableCell>
+              <TableCell data-label="Per unit output">
                 {line.qty_per_unit_output.toLocaleString('id-ID', { maximumFractionDigits: 6 })} {line.uom}
               </TableCell>
-              <TableCell>
+              <TableCell data-label="Tahap SOP">
                 {line.routing_step_id && routingStepById.get(line.routing_step_id) ? (
                   `${routingStepById.get(line.routing_step_id)!.sequence_no}. ${routingStepById.get(line.routing_step_id)!.step_name}`
                 ) : (
                   <span className="halaman__redup">Sejak tahap 1</span>
                 )}
               </TableCell>
-              {canViewCost ? <TableCell>{formatCurrency(line.component_standard_cost)}</TableCell> : null}
+              {canViewCost ? <TableCell data-label="Biaya standar">{formatCurrency(line.component_standard_cost)}</TableCell> : null}
             </TableRow>
           ))}
         </TableBody>

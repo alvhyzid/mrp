@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Breadcrumb, BreadcrumbItem, InlineNotification, SkeletonText, Tag, Tile } from '@carbon/react';
+import { InlineNotification, SkeletonText, Tag, Tile } from '@carbon/react';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
 import { formatCurrency, formatNumberId } from '@/lib/currency';
 import { getRoleLabel } from '@/lib/glossary';
 
@@ -93,21 +94,15 @@ export default function MyKpiPage() {
 
   return (
     <div className="halaman">
-      <Breadcrumb noTrailingSlash className="halaman__remah">
-        <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>
-          <span className="cds--link halaman__remah-mati">Data &amp; Analytics</span>
-        </BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>My KPI</BreadcrumbItem>
-      </Breadcrumb>
-
-      <div>
-        <h1 className="halaman__judul">KPI saya</h1>
-        <p className="halaman__pengantar">
-          KPI yang relevan dengan peran Anda, dan tindakan yang jadi tanggung jawab Anda.
-          Bukan papan peringkat — tidak ada perbandingan antar pegawai di sini.
-        </p>
-      </div>
+      <KepalaHalaman
+        remah={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Data & Analytics" },
+          { label: "My KPI" }
+        ]}
+        judul="KPI saya"
+        pengantar="KPI yang relevan dengan peran Anda, dan tindakan yang jadi tanggung jawab Anda. Bukan papan peringkat — tidak ada perbandingan antar pegawai di sini."
+      />
 
       {error ? <InlineNotification kind="error" lowContrast title="Gagal memuat" subtitle={error} hideCloseButton /> : null}
 

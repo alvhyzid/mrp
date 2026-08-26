@@ -205,6 +205,43 @@ piksel tampak — versi pertama pengukur ini melaporkannya sebagai lima cacat ya
 Saringan yang benar-benar hilang di tepi kiri **tidak** memakai teknik itu, jadi ia tetap
 tertangkap: dibuktikan dua arah, bukan sekadar dilonggarkan sampai diam.
 
+## 6d. BUKTI VISUAL WAJIB MENCAKUP KEADAAN TERBUKA (ditetapkan 26 Agu 2026, dari DS-14)
+
+**Seluruh bukti visual yang pernah diambil di proyek ini memotret halaman dalam keadaan
+TERTUTUP.** Yang tersembunyi sampai diklik tidak pernah masuk ke satu pun tangkapan layar,
+satu pun pengukuran, dan satu pun kesimpulan.
+
+Terbukti: **empat dari tujuh tabel** yang melewatkan kelas responsif berada **di dalam baris
+yang dimekarkan**. Tidak ada sapuan visual jenis apa pun yang bisa melihatnya — yang
+menemukannya adalah membaca berkas.
+
+**ATURAN: bukti visual wajib menyebutkan APA YANG TIDAK TERLIHAT dalam keadaan itu.**
+Bukti yang tidak menyebut batasnya akan dibaca sebagai bukti menyeluruh.
+
+**Yang wajib dibuka dulu sebelum diukur, per jenis halaman:**
+
+| Yang tersembunyi | Halaman yang punya | Cara membukanya |
+|---|---|---|
+| Tabel rincian di baris yang dimekarkan | Boms, PO klien, Routing, Pengiriman, Sales Order, Work Order, Pembelian, Item | klik tombol mekar satu baris |
+| Modal tambah/ubah | seluruh halaman master | klik tombol aksi utama |
+| Tab yang tidak aktif | Gudang, PPIC | klik tiap tab |
+| Pencarian yang terlipat | seluruh halaman bertabel | klik ikon cari |
+| Panel bantuan (`FieldLabel`) | seluruh formulir | klik ikon tanya |
+
+**BIAYANYA, disebutkan supaya keputusannya sadar**: sapuan keadaan tertutup saja sudah
+29 rute × 6 lebar = 174 pengukuran, dan berjalan **25–40 menit**. Menambahkan keadaan terbuka
+menambah kira-kira **dua kali lipat** pengukuran untuk halaman bertabel — perkiraan total
+**60–75 menit** per verifikasi menyeluruh.
+
+**Dan ada ongkos yang lebih besar daripada waktu**: baris hanya bisa dimekarkan bila **ADA
+BARISNYA**. Tenant uji kosong, jadi verifikasi keadaan terbuka mensyaratkan **membuat data
+lebih dulu lewat layar** dan menghapusnya lagi sesudahnya. Itu bukan tambahan menit; itu
+tambahan langkah yang bisa gagal sendiri.
+
+**Karena itu urutannya**: pengawas yang MEMBACA BERKAS (`DS-16`) didahulukan daripada sapuan
+yang MELIHAT LAYAR, untuk kelas cacat yang bisa ditemukan dari kode. Sapuan keadaan terbuka
+dipakai untuk yang **hanya** bisa dilihat mata — susunan, tumpang tindih, keterbacaan.
+
 ---
 
 ## 7. Cacat Carbon yang diperbaiki global

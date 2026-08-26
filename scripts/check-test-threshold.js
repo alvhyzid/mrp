@@ -16,9 +16,21 @@
 const fs = require('fs');
 const path = require('path');
 
-const MIN_PASSED = 307;   // sekarang 327 (+7 dari tests/company_settings_mst26.test.ts, DS-1) -- ruang ~20
+// ANGKA DIPERBARUI 26 Agu 2026, dan penyebabnya layak dicatat karena ia contoh kelas yang
+// sudah punya aturannya sendiri di CLAUDE.md ("penjaga yang salah tuduh diperketat").
+//
+// EXPECTED_FILES tertinggal di 54 sejak 25 Agu, sementara berkas test sudah 62 — DELAPAN
+// berkas ditambahkan tanpa angkanya ikut diperbarui. Karena syaratnya dulu `!==`, pengawas
+// ini GAGAL KERAS justru ketika suite BERTUMBUH. Itu bentuk salah tuduh yang paling melatih
+// orang mengabaikan hasil: ia berteriak untuk kabar baik.
+//
+// DIPERBAIKI BENTUKNYA, bukan cuma angkanya: sekarang LANTAI (`<`), bukan kecocokan persis.
+// Yang dijaga aturan ini sejak awal adalah "apakah ada berkas yang diam-diam BERHENTI
+// berjalan" — dan untuk itu lantai sudah cukup. Pertumbuhan tidak pernah jadi kemunduran,
+// jadi ia tidak boleh berbunyi merah.
+const MIN_PASSED = 360;   // 26 Agu 2026: 369 lulus + test DS-16 (elemen mentah) -- ruang ~15
 const MAX_SKIPPED = 10;   // sekarang 7 dilewati sadar (2 pengawas data nyata)
-const EXPECTED_FILES = 54;  // +storage_ikut_terhapus (JJ.1), +backup_table_list_lengkap (LL), +auth_user_lewat_helper_watchdog (TT), +company_settings_mst26 (DS-1)
+const MIN_FILES = 63;     // 26 Agu 2026: run penuh 63 berkas, 373 lulus, 7 dilewati
 
 const arg = process.argv[2] || 'test-results.json';
 const file = path.isAbsolute(arg) ? arg : path.join(process.cwd(), arg);
@@ -92,9 +104,9 @@ if (retries > MAX_RETRIES) {
 }
 if (passed < MIN_PASSED) problems.push(`test lulus ${passed}, di bawah ambang ${MIN_PASSED}`);
 if (skipped > MAX_SKIPPED) problems.push(`test dilewati ${skipped}, di atas batas ${MAX_SKIPPED}`);
-if (files !== EXPECTED_FILES) problems.push(`berkas berjalan ${files}, seharusnya ${EXPECTED_FILES}`);
+if (files < MIN_FILES) problems.push(`berkas berjalan ${files}, minimum ${MIN_FILES}`);
 
-console.log(`\nPENGAWAS AMBANG -- lulus: ${passed} (min ${MIN_PASSED}) | dilewati: ${skipped} (maks ${MAX_SKIPPED}) | gagal: ${failed} | berkas: ${files} (harus ${EXPECTED_FILES})`);
+console.log(`\nPENGAWAS AMBANG -- lulus: ${passed} (min ${MIN_PASSED}) | dilewati: ${skipped} (maks ${MAX_SKIPPED}) | gagal: ${failed} | berkas: ${files} (min ${MIN_FILES})`);
 console.log(`PENGULANGAN LOGIN terpakai ${retries} kali run ini (patokan 24 Agu 2026: 0-2 | batas ${MAX_RETRIES}).`);
 
 if (problems.length > 0) {
@@ -105,7 +117,7 @@ if (problems.length > 0) {
       `bukan sekadar tidak ada yang merah. Berkas yang seluruh isinya dilewati tetap dihitung\n` +
       `"passed" oleh vitest, jadi tanpa pengawas ini suite bisa mati diam-diam.\n\n` +
       `Bila penurunan ini DISENGAJA (mis. test dihapus atau sengaja dilewati), perbarui\n` +
-      `MIN_PASSED / MAX_SKIPPED / EXPECTED_FILES di scripts/check-test-threshold.js\n` +
+      `MIN_PASSED / MAX_SKIPPED / MIN_FILES di scripts/check-test-threshold.js\n` +
       `beserta alasannya -- jangan dibiarkan lewat diam-diam.\n`
   );
   process.exit(1);

@@ -1115,7 +1115,12 @@ export default function PpicDashboardPage() {
               <p className="text-sm text-muted-foreground">Tidak ada usulan menunggu keputusan saat ini.</p>
             ) : (
               <div className="overflow-x-auto rounded-md border">
+                {/* pengawas-elemen:mulai — papan Gantt & kisi waktu PPIC. Carbon TIDAK punya
+                    komponen Gantt, dan Table Carbon membawa aturan tinggi baris yang merusak kisi
+                    ber-table-fixed yang selnya bisa dijatuhi (drag & drop). Diputuskan saat DS-09;
+                    JANGAN "diseragamkan" belakangan. */}
                 <table className="w-full text-data">
+                {/* pengawas-elemen:selesai */}
                   <thead>
                     <tr className="border-b">
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Item</th>
@@ -1187,7 +1192,12 @@ export default function PpicDashboardPage() {
               <p className="text-sm text-muted-foreground">Belum ada Work Center aktif.</p>
             ) : (
               <div className="overflow-x-auto rounded-md border">
+                {/* pengawas-elemen:mulai — papan Gantt & kisi waktu PPIC. Carbon TIDAK punya
+                    komponen Gantt, dan Table Carbon membawa aturan tinggi baris yang merusak kisi
+                    ber-table-fixed yang selnya bisa dijatuhi (drag & drop). Diputuskan saat DS-09;
+                    JANGAN "diseragamkan" belakangan. */}
                 <table className="w-full text-data">
+                {/* pengawas-elemen:selesai */}
                   <thead>
                     <tr className="border-b">
                       <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Work Center</th>
@@ -1365,7 +1375,12 @@ export default function PpicDashboardPage() {
                 onDragCancel={() => { setActiveDragWorkCenterId(null); setActiveDragLabel(null); }}
               >
                 <div className="overflow-x-auto rounded-md border">
+                  {/* pengawas-elemen:mulai — papan Gantt & kisi waktu PPIC. Carbon TIDAK punya
+                      komponen Gantt, dan Table Carbon membawa aturan tinggi baris yang merusak kisi
+                      ber-table-fixed yang selnya bisa dijatuhi (drag & drop). Diputuskan saat DS-09;
+                      JANGAN "diseragamkan" belakangan. */}
                   <table className="w-full table-fixed text-data">
+                  {/* pengawas-elemen:selesai */}
                     <thead>
                       <tr className="border-b">
                         <th className="h-8 w-36 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Work Center</th>
@@ -1423,7 +1438,12 @@ export default function PpicDashboardPage() {
                   Tampilan Harian cuma untuk lihat jadwal (tidak bisa diseret) — jangkar jam pakai jam mulai shift batch (kalau ada), pakai offset kumulatif yang sama dengan tampilan Mingguan.
                 </p>
                 <div className="overflow-x-auto rounded-md border">
+                  {/* pengawas-elemen:mulai — papan Gantt & kisi waktu PPIC. Carbon TIDAK punya
+                      komponen Gantt, dan Table Carbon membawa aturan tinggi baris yang merusak kisi
+                      ber-table-fixed yang selnya bisa dijatuhi (drag & drop). Diputuskan saat DS-09;
+                      JANGAN "diseragamkan" belakangan. */}
                   <table className="w-full table-fixed text-data">
+                  {/* pengawas-elemen:selesai */}
                     <thead>
                       <tr className="border-b">
                         <th className="h-8 w-36 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Work Center</th>
@@ -1472,13 +1492,23 @@ export default function PpicDashboardPage() {
               <>
                 <p className="text-xs text-muted-foreground">Angka = jumlah batch yang punya tahap pada hari itu di Work Center tersebut. Klik tanggal untuk lihat detail Harian.</p>
                 <div className="overflow-x-auto rounded-md border">
+                  {/* pengawas-elemen:mulai — papan Gantt & kisi waktu PPIC. Carbon TIDAK punya
+                      komponen Gantt, dan Table Carbon membawa aturan tinggi baris yang merusak kisi
+                      ber-table-fixed yang selnya bisa dijatuhi (drag & drop). Diputuskan saat DS-09;
+                      JANGAN "diseragamkan" belakangan. */}
                   <table className="w-full table-fixed text-data">
+                  {/* pengawas-elemen:selesai */}
                     <thead>
                       <tr className="border-b">
                         <th className="h-8 w-36 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Work Center</th>
                         {ganttDays.map((day) => (
                           <th key={day} className="h-8 w-12 px-0 text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            {/* pengawas-elemen:mulai — papan Gantt & kisi waktu PPIC. Carbon TIDAK punya
+                                komponen Gantt, dan Table Carbon membawa aturan tinggi baris yang merusak kisi
+                                ber-table-fixed yang selnya bisa dijatuhi (drag & drop). Diputuskan saat DS-09;
+                                JANGAN "diseragamkan" belakangan. */}
                             <button type="button" onClick={() => handleGoToDaily(day)} className="w-full hover:underline" title={`Lihat tampilan Harian untuk ${day}`}>
+                            {/* pengawas-elemen:selesai */}
                               {day.slice(-2)}
                             </button>
                           </th>
@@ -1505,7 +1535,12 @@ export default function PpicDashboardPage() {
                             const warnaTag = capacityMinutes ? utilizationWarnaTag((entry.active_minutes / capacityMinutes) * 100) : 'gray';
                             return (
                               <td key={day} className="px-1 py-2 text-center">
+                                {/* pengawas-elemen:mulai — papan Gantt & kisi waktu PPIC. Carbon TIDAK punya
+                                    komponen Gantt, dan Table Carbon membawa aturan tinggi baris yang merusak kisi
+                                    ber-table-fixed yang selnya bisa dijatuhi (drag & drop). Diputuskan saat DS-09;
+                                    JANGAN "diseragamkan" belakangan. */}
                                 <button type="button" onClick={() => handleGoToDaily(day)} title={`${formatNumberId(entry.batch_count, 0)} batch · ${formatNumberId(Math.round(entry.active_minutes), 0)} mnt aktif — klik untuk detail Harian`}>
+                                {/* pengawas-elemen:selesai */}
                                   <Tag type={warnaTag}>{formatNumberId(entry.batch_count, 0)}</Tag>
                                 </button>
                               </td>
@@ -1797,7 +1832,12 @@ export default function PpicDashboardPage() {
           {yieldSummary && !yieldLoading ? (
             <div className="flex flex-col gap-3 text-sm">
               <div className="overflow-x-auto rounded-none border">
+                {/* pengawas-elemen:mulai — papan Gantt & kisi waktu PPIC. Carbon TIDAK punya
+                    komponen Gantt, dan Table Carbon membawa aturan tinggi baris yang merusak kisi
+                    ber-table-fixed yang selnya bisa dijatuhi (drag & drop). Diputuskan saat DS-09;
+                    JANGAN "diseragamkan" belakangan. */}
                 <table className="w-full text-data">
+                {/* pengawas-elemen:selesai */}
                   <thead>
                     <tr className="border-b">
                       <th className="h-8 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Tahap</th>

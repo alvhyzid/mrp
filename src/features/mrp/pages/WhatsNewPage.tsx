@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Breadcrumb, BreadcrumbItem, Link as CarbonLink, SkeletonText, Tag, Tile } from '@carbon/react';
+import { Link as CarbonLink, SkeletonText, Tag, Tile } from '@carbon/react';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
 
 // Daftar dikelola manual (BUKAN otomatis dari commit log -- itu sistem
 // tersendiri yang belum dibutuhkan, prinsip "jangan bikin abstraksi untuk
@@ -152,20 +153,19 @@ export default function WhatsNewPage() {
 
   return (
     <div className="halaman">
-      <Breadcrumb noTrailingSlash className="halaman__remah">
-        <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>
-          <span className="cds--link halaman__remah-mati">Internal</span>
-        </BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>What&apos;s New</BreadcrumbItem>
-      </Breadcrumb>
-
-      <div>
-        <h1 className="halaman__judul">Apa yang baru</h1>
-        <p className="halaman__pengantar">
-          {items.length} fitur yang baru selesai dibangun — klik judulnya untuk langsung membuka halamannya.
-        </p>
-      </div>
+      <KepalaHalaman
+        remah={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Internal" },
+          { label: "What&apos;s New" }
+        ]}
+        judul="Apa yang baru"
+        pengantar={
+          <>
+            {items.length} fitur yang baru selesai dibangun — klik judulnya untuk langsung membuka halamannya.
+          </>
+        }
+      />
 
       <div className="baru-daftar">
         {items.map((item) => (

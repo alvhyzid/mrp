@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Breadcrumb, BreadcrumbItem, InlineNotification, Link as CarbonLink, SkeletonText, Tag, Tile } from '@carbon/react';
+import { InlineNotification, Link as CarbonLink, SkeletonText, Tag, Tile } from '@carbon/react';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 import { formatNumberId } from '@/lib/currency';
 
@@ -116,21 +117,15 @@ export default function AiReadinessPage() {
 
   return (
     <div className="halaman">
-      <Breadcrumb noTrailingSlash className="halaman__remah">
-        <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>
-          <span className="cds--link halaman__remah-mati">AI</span>
-        </BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>AI Readiness</BreadcrumbItem>
-      </Breadcrumb>
-
-      <div>
-        <h1 className="halaman__judul">Sejauh mana data Anda siap untuk AI</h1>
-        <p className="halaman__pengantar">
-          Setiap kemampuan AI dibuka bertahap sesuai kesiapan data Anda, bukan dinyalakan sekaligus di atas data
-          yang belum layak. Ini mencegah hasil AI yang dangkal dan mengecewakan di awal.
-        </p>
-      </div>
+      <KepalaHalaman
+        remah={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "AI" },
+          { label: "AI Readiness" }
+        ]}
+        judul="Sejauh mana data Anda siap untuk AI"
+        pengantar="Setiap kemampuan AI dibuka bertahap sesuai kesiapan data Anda, bukan dinyalakan sekaligus di atas data yang belum layak. Ini mencegah hasil AI yang dangkal dan mengecewakan di awal."
+      />
 
       {error ? <InlineNotification kind="error" lowContrast title="Gagal memuat" subtitle={error} hideCloseButton /> : null}
 

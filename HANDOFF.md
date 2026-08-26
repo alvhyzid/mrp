@@ -2,6 +2,76 @@
 
 Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`). Tiap sesi Claude Code WAJIB baca ini dulu sebelum mulai, dan memperbarui bagian relevan begitu sesi selesai. Klaim di sini harus tetap diverifikasi ulang, bukan otomatis dipercaya — HANDOFF ini rangkuman, bukan pengganti bukti.
 
+## QQ.0 — HASIL AKHIR: 174 DARI 174 KOMBINASI BERSIH (26 Agu 2026)
+
+| Pemeriksaan | Sebelum | Sesudah |
+|---|---|---|
+| Gulir menyamping | 0 | **0** |
+| Meluber ke kanan tanpa gulir | 8 kombinasi, 4 rute | **0** |
+| Terpotong ke kiri | 3 kombinasi, 2 rute | **0** |
+
+29 rute × 6 lebar wajib. **Test: 63 berkas, 373 lulus, 7 dilewati, nol gagal.** Typecheck bersih.
+
+**Yang dikerjakan, menurut CAKUPAN dan bukan menurut urutan ditemukan:**
+
+1. **`DS-16` lebih dulu** — pengawas yang membaca berkas. Menolak elemen mentah **dan** `<Table>`
+   tanpa kelas responsif. Dibuktikan **dua arah** dengan penyisipan sungguhan.
+2. **`DS-14` sebab ketiga** — kelas kedua `.tabel-responsif--lebar` (ambang 1056px) lewat
+   **mixin Sass**, dipakai hanya 3 tabel berkolom ≥ 8. Ambang bawaan **tidak diubah**.
+3. **`DS-14` sebab kedua** — 7 tabel diberi kelas + `data-label`. Sensus: **36 dari 36**.
+4. **`DS-14` sebab pertama** — toolbar boleh turun baris. Ternyata **di semua lebar**, bukan
+   hanya di bawah 42rem: sisa cacatnya terukur tepat satu breakpoint di atasnya.
+5. **`DS-13`** — 11 halaman pindah ke `KepalaHalaman`. 6. **`DS-15`** — Sales Order bersih,
+   termasuk dua `<input>` setinggi 24px yang melanggar aturan field 40px dan sentuh 44px.
+
+**`DS-14` SENGAJA BELUM DITUTUP** (perintah QQ.4): angka 11 adalah **batas bawah** — empat
+tabel di dalam baris yang dimekarkan belum pernah terukur, karena tenant uji kosong.
+
+### Pengukurnya salah tuduh DUA KALI, keduanya diperketat di giliran yang sama
+
+1. **Judul kolom tabel di 360px** — `.tabel-responsif thead` memakai teknik baku
+   "terbaca pembaca layar saja" (kotak 1×1 px ber-`clip-path`).
+2. **Tab "Saldo awal (lot baru)" di `/warehouse` 360px** — dilaporkan meluber 3px. Diukur:
+   daftar tabnya ber-`overflow-x: auto`, **benar-benar bisa digulir** (347 > 288), dan Carbon
+   merender **dua tombol gulir**. Tabnya **terjangkau** — itu perilaku bawaan Tabs Carbon.
+
+> **Yang dijaga aturan proyek adalah "hilang TANPA jalan melihatnya", bukan "berada di luar
+> viewport".** Pengukur yang tidak membedakan keduanya akan menuduh komponen yang benar.
+
+### Pengawas ambang test ternyata sudah basi sejak sehari sebelumnya
+
+`EXPECTED_FILES` tertinggal di **54** sementara berkas test sudah **62** — delapan berkas
+ditambahkan tanpa angkanya ikut diperbarui. Karena syaratnya `!==`, pengawas itu **gagal keras
+justru ketika suite BERTUMBUH**.
+
+**Bentuknya yang diperbaiki, bukan cuma angkanya**: sekarang **LANTAI** (`MIN_FILES`), bukan
+kecocokan persis. Yang dijaga sejak awal adalah "adakah berkas yang diam-diam berhenti
+berjalan" — untuk itu lantai sudah cukup, dan **pertumbuhan tidak pernah jadi kemunduran**.
+
+## QQ — SELURUH BUKTI VISUAL PROYEK INI MEMOTRET HALAMAN DALAM KEADAAN TERTUTUP (26 Agu 2026)
+
+**Empat dari tujuh tabel yang melewatkan kelas responsif berada DI DALAM BARIS YANG
+DIMEKARKAN** — tidak ada di layar sampai seseorang mengkliknya.
+
+**Tidak ada sapuan visual jenis apa pun yang bisa melihatnya**: bukan pembacaan halaman, bukan
+tangkapan layar, dan bukan pengukur dua tepi yang baru dibuat hari ini. Ketiganya memotret
+halaman dalam keadaan **tertutup**.
+
+> **KONSEKUENSI YANG JAUH LEBIH LUAS DARIPADA TABEL: seluruh bukti visual yang pernah diambil
+> di proyek ini punya lubang yang sama** — untuk apa pun yang tersembunyi sampai diklik: panel
+> detail, modal, tab tidak aktif, saringan terlipat, panel bantuan.
+>
+> **ATURAN: bukti visual wajib menyebutkan APA YANG TIDAK TERLIHAT dalam keadaan itu. Bukti
+> yang tidak menyebut batasnya akan dibaca sebagai bukti menyeluruh.**
+
+Daftar "apa yang harus dibuka dulu" per jenis halaman, beserta **perkiraan biayanya** (dari
+~30 menit jadi ~60–75 menit per verifikasi menyeluruh, plus keharusan membuat data lewat layar
+lebih dulu karena tenant uji kosong): `docs/governance/cetakan-halaman-data.md` bagian 6d.
+
+**Dan itu sebabnya urutan pengerjaan dibalik**: pengawas yang **MEMBACA BERKAS** didahulukan
+daripada sapuan yang **MELIHAT LAYAR**, untuk kelas cacat yang bisa ditemukan dari kode.
+Sapuan keadaan terbuka disisakan untuk yang hanya bisa dilihat mata.
+
 ## PP — SAPUAN BERTOLAK DARI ELEMEN, BUKAN DARI HALAMAN (26 Agu 2026)
 
 **Satu halaman bisa punya beberapa tabel, dan hanya sebagian dipindahkan ke bentuk

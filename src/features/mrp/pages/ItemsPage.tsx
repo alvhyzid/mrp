@@ -1079,7 +1079,7 @@ export default function ItemsPage() {
                   </TableToolbarContent>
                 </TableToolbar>
 
-                <Table {...rp.getTableProps()} className="tabel-responsif">
+                <Table {...rp.getTableProps()} className="tabel-responsif--lebar">
                   <TableHead>
                     <TableRow>
                       <TableExpandHeader aria-label="Buka detail" />

@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Breadcrumb, BreadcrumbItem, Button, Dropdown, InlineNotification, SkeletonText, Tag, TextInput, Tile } from '@carbon/react';
+import { Button, Dropdown, InlineNotification, SkeletonText, Tag, TextInput, Tile } from '@carbon/react';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 import { formatNumberId } from '@/lib/currency';
 import { ATTENDANCE_EVENT_TYPE_LABELS } from '@/lib/glossary';
@@ -189,21 +190,20 @@ export default function AttendancePage() {
 
   return (
     <div className="halaman">
-      <Breadcrumb noTrailingSlash className="halaman__remah">
-        <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>
-          <span className="cds--link halaman__remah-mati">People</span>
-        </BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>Attendance</BreadcrumbItem>
-      </Breadcrumb>
-
-      <div>
-        <h1 className="halaman__judul">Kehadiran harian</h1>
-        <p className="halaman__pengantar">
-          {attendance.length === 0 ? 'Belum ada data kehadiran' : `${attendance.length} karyawan tercatat`} untuk tanggal{' '}
+      <KepalaHalaman
+        remah={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "People" },
+          { label: "Attendance" }
+        ]}
+        judul="Kehadiran harian"
+        pengantar={
+          <>
+            {attendance.length === 0 ? 'Belum ada data kehadiran' : `${attendance.length} karyawan tercatat`} untuk tanggal{' '}
           {date}. Jam kerja, keterlambatan, dan lembur dihitung ULANG dari catatan masuk-pulang — tidak pernah diketik.
-        </p>
-      </div>
+          </>
+        }
+      />
 
       <TextInput
         id="absensi-tanggal"

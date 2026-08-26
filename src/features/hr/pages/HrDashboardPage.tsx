@@ -493,7 +493,7 @@ export default function HrDashboardPage() {
       {attendanceLoading ? (
         <DataTableSkeleton columnCount={5} rowCount={4} showHeader={false} showToolbar={false} />
       ) : (
-        <Table size="lg">
+        <Table size="lg" className="tabel-responsif">
           <TableHead>
             <TableRow>
               {kolomAbsensi.map((k) => (
@@ -509,13 +509,13 @@ export default function HrDashboardPage() {
             ) : (
               attendance.map((a) => (
                 <TableRow key={a.employee_attendance_id}>
-                  <TableCell>{a.employee_name}</TableCell>
-                  <TableCell>{a.employee_department ? departmentLabels[a.employee_department] ?? a.employee_department : '—'}</TableCell>
-                  <TableCell>
+                  <TableCell data-label={kolomAbsensi[0].header}>{a.employee_name}</TableCell>
+                  <TableCell data-label={kolomAbsensi[1].header}>{a.employee_department ? departmentLabels[a.employee_department] ?? a.employee_department : '—'}</TableCell>
+                  <TableCell data-label={kolomAbsensi[2].header}>
                     <Tag type={attendanceWarnaTag[a.status] ?? 'gray'}>{attendanceStatusLabels[a.status] ?? a.status}</Tag>
                   </TableCell>
-                  <TableCell>{jam(a.check_in_at)}</TableCell>
-                  <TableCell>{jam(a.check_out_at)}</TableCell>
+                  <TableCell data-label={kolomAbsensi[3].header}>{jam(a.check_in_at)}</TableCell>
+                  <TableCell data-label={kolomAbsensi[4].header}>{jam(a.check_out_at)}</TableCell>
                 </TableRow>
               ))
             )}
@@ -572,7 +572,7 @@ export default function HrDashboardPage() {
                     ) : null}
                   </TableToolbarContent>
                 </TableToolbar>
-                <Table {...rp.getTableProps()} className="tabel-responsif">
+                <Table {...rp.getTableProps()} className="tabel-responsif--lebar">
                   <TableHead>
                     <TableRow>
                       {rp.headers.map((h: any) => {

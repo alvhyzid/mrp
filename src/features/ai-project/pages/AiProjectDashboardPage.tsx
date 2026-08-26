@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Breadcrumb, BreadcrumbItem, Button, Checkbox, InlineNotification, SkeletonText, Tag, Tile } from '@carbon/react';
+import { Button, Checkbox, InlineNotification, SkeletonText, Tag, Tile } from '@carbon/react';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 import { formatNumberId } from '@/lib/currency';
 
@@ -147,20 +148,15 @@ export default function AiProjectDashboardPage() {
 
   return (
     <div className="halaman">
-      <Breadcrumb noTrailingSlash className="halaman__remah">
-        <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>
-          <span className="cds--link halaman__remah-mati">AI</span>
-        </BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>AI Project</BreadcrumbItem>
-      </Breadcrumb>
-
-      <div>
-        <h1 className="halaman__judul">Dashboard proyek AI</h1>
-        <p className="halaman__pengantar">
-          Progres dihitung berjenjang dari data nyata — tugas ke fase, fase ke total — bukan diisi tangan.
-        </p>
-      </div>
+      <KepalaHalaman
+        remah={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "AI" },
+          { label: "AI Project" }
+        ]}
+        judul="Dashboard proyek AI"
+        pengantar="Progres dihitung berjenjang dari data nyata — tugas ke fase, fase ke total — bukan diisi tangan."
+      />
 
       {phases.length === 0 && !loading ? (
         <div className="proyek-kosong">

@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Breadcrumb, BreadcrumbItem, Button, InlineNotification, Link as CarbonLink, SkeletonText } from '@carbon/react';
+import { Button, InlineNotification, Link as CarbonLink, SkeletonText } from '@carbon/react';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
 import { KpiCard } from '@/components/ui/kpi-card';
 import { formatCurrency, formatNumberId } from '@/lib/currency';
 import { isCompanyLeadership } from '@/lib/roles';
@@ -155,21 +156,20 @@ export default function KpiPage() {
 
   return (
     <div className="halaman">
-      <Breadcrumb noTrailingSlash className="halaman__remah">
-        <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>
-          <span className="cds--link halaman__remah-mati">Data &amp; Analytics</span>
-        </BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>KPI</BreadcrumbItem>
-      </Breadcrumb>
-
-      <div>
-        <h1 className="halaman__judul">KPI perusahaan</h1>
-        <p className="halaman__pengantar">
-          {loading ? 'Memuat…' : `${cards.length} KPI ditampilkan.`} Baseline dulu, target kemudian —
+      <KepalaHalaman
+        remah={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Data & Analytics" },
+          { label: "KPI" }
+        ]}
+        judul="KPI perusahaan"
+        pengantar={
+          <>
+            {loading ? 'Memuat…' : `${cards.length} KPI ditampilkan.`} Baseline dulu, target kemudian —
           klik ikon info di tiap kartu untuk melihat dari mana angkanya berasal.
-        </p>
-      </div>
+          </>
+        }
+      />
 
       <div className="kpi-aksi">
         {/* PEMICU PEREKAMAN SNAPSHOT (AUD-36). Tombol ini ada karena penyimpanannya DICABUT

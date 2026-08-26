@@ -3,17 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  InlineNotification,
-  SkeletonText,
-  StructuredListBody,
-  StructuredListCell,
-  StructuredListHead,
-  StructuredListRow,
-  StructuredListWrapper
-} from '@carbon/react';
+import { InlineNotification, SkeletonText, StructuredListBody, StructuredListCell, StructuredListHead, StructuredListRow, StructuredListWrapper } from '@carbon/react';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
 import { getFieldLabel, getRoleLabel, getEntityLabel, COMMON_STATUS_LABELS } from '@/lib/glossary';
 
 function parseJwt(token: string) {
@@ -86,22 +77,21 @@ export default function DebugPage() {
 
   return (
     <div className="halaman">
-      <Breadcrumb noTrailingSlash className="halaman__remah">
-        <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>
-          <span className="cds--link halaman__remah-mati">Internal</span>
-        </BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>Debug Auth &amp; RLS</BreadcrumbItem>
-      </Breadcrumb>
-
-      <div>
-        <h1 className="halaman__judul">Debug auth &amp; RLS</h1>
-        <p className="halaman__pengantar">
-          Halaman ini memperlihatkan APA YANG BENAR-BENAR BISA DIBACA sesi login Anda setelah
+      <KepalaHalaman
+        remah={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Internal" },
+          { label: "Debug Auth & RLS" }
+        ]}
+        judul="Debug auth &amp; RLS"
+        pengantar={
+          <>
+            Halaman ini memperlihatkan APA YANG BENAR-BENAR BISA DIBACA sesi login Anda setelah
           disaring Row-Level Security — bukan apa yang seharusnya bisa dibaca menurut peran.{' '}
           {getFieldLabel('company_id')} sesi ini: <strong>{companyId === null ? '—' : companyId}</strong>.
-        </p>
-      </div>
+          </>
+        }
+      />
 
       {error ? <InlineNotification kind="error" lowContrast title="Gagal membaca" subtitle={error} hideCloseButton /> : null}
 

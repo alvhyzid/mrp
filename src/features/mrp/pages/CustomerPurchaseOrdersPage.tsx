@@ -437,7 +437,7 @@ export default function CustomerPurchaseOrdersPage() {
           </StructuredListBody>
         </StructuredListWrapper>
 
-        <Table size="lg">
+        <Table size="lg" className="tabel-responsif">
           <TableHead>
             <TableRow>
               <TableHeader>Item</TableHeader>
@@ -451,13 +451,13 @@ export default function CustomerPurchaseOrdersPage() {
           <TableBody>
             {po.lines.map((line) => (
               <TableRow key={line.customer_purchase_order_line_id}>
-                <TableCell>
+                <TableCell data-label="Item">
                   {line.item_code} — {line.item_name}
                 </TableCell>
-                <TableCell>
+                <TableCell data-label="Qty">
                   {formatNumberId(line.qty_ordered, 2)} {line.item_base_uom}
                 </TableCell>
-                {adaKolomHarga ? <TableCell>{formatCurrency(line.unit_price, { maxDecimals: 0 })}</TableCell> : null}
+                {adaKolomHarga ? <TableCell data-label="Harga satuan">{formatCurrency(line.unit_price, { maxDecimals: 0 })}</TableCell> : null}
               </TableRow>
             ))}
           </TableBody>

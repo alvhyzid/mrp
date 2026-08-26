@@ -507,7 +507,7 @@ export default function RoutingsPage() {
           subtitle="Perubahan tidak akan mengubah batch tersebut — angkanya sudah dibekukan sejak batch itu dimulai."
         />
       ) : null}
-      <Table size="lg">
+      <Table size="lg" className="tabel-responsif">
         <TableHead>
           <TableRow>
             <TableHeader>Urutan</TableHeader>
@@ -520,15 +520,15 @@ export default function RoutingsPage() {
         <TableBody>
           {r.steps.map((step) => (
             <TableRow key={step.routing_step_id}>
-              <TableCell>{step.sequence_no}</TableCell>
-              <TableCell>{step.step_name}</TableCell>
-              <TableCell>{step.work_center_name ? `${step.work_center_name}${step.work_center_code ? ` (${step.work_center_code})` : ''}` : '—'}</TableCell>
-              <TableCell>
+              <TableCell data-label="Urutan">{step.sequence_no}</TableCell>
+              <TableCell data-label="Nama tahap">{step.step_name}</TableCell>
+              <TableCell data-label="Work center">{step.work_center_name ? `${step.work_center_name}${step.work_center_code ? ` (${step.work_center_code})` : ''}` : '—'}</TableCell>
+              <TableCell data-label="Durasi aktif / laju">
                 {step.duration_per_unit_minutes !== null
                   ? `${formatNumberId(step.duration_per_unit_minutes, 6)} mnt/unit (laju)`
                   : `${formatNumberId(step.active_duration_minutes, 2)} mnt`}
               </TableCell>
-              <TableCell>{formatNumberId(step.wait_duration_minutes, 2)} mnt</TableCell>
+              <TableCell data-label="Durasi tunggu">{formatNumberId(step.wait_duration_minutes, 2)} mnt</TableCell>
             </TableRow>
           ))}
         </TableBody>

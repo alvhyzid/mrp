@@ -371,7 +371,7 @@ export default function DocumentsPage() {
                   </Button>
                 </TableToolbarContent>
               </TableToolbar>
-              <Table {...getTableProps()} size="lg" className="tabel-responsif">
+              <Table {...getTableProps()} size="lg" className="tabel-responsif--lebar">
                 <TableHead>
                   <TableRow>
                     {headers.map((header: any) => {
@@ -437,7 +437,12 @@ export default function DocumentsPage() {
               itemToString={(item: string) => documentTypes.find((t) => t.code === item)?.name ?? item}
               onChange={({ selectedItem }: { selectedItem: string | null }) => setJenisTerpilih(selectedItem ?? '')}
             />
+            {/* pengawas-elemen:mulai — <input type="hidden"> DISENGAJA: kontrol Carbon tidak
+                menaruh nilainya di FormData, sedangkan form ini dibaca lewat FormData saat
+                submit. Ini JEMBATAN nilai, bukan field yang dilihat pengguna — komponen
+                bersama justru salah di sini karena ia merender kontrol yang terlihat. */}
             <input type="hidden" name="doc_type" value={jenisTerpilih} />
+            {/* pengawas-elemen:selesai */}
 
             <TextInput id="unggah-judul" name="title" size="lg" labelText="Judul" required />
             <TextInput id="unggah-nomor" name="doc_number" size="lg" labelText="Nomor dokumen" helperText="Boleh dikosongkan." />
@@ -453,7 +458,12 @@ export default function DocumentsPage() {
                 itemToString={(item: string) => SENSITIVITY_LABELS[item] ?? item}
                 onChange={({ selectedItem }: { selectedItem: string | null }) => setSensitivitasTerpilih(selectedItem ?? 'UMUM')}
               />
+              {/* pengawas-elemen:mulai — <input type="hidden"> DISENGAJA: kontrol Carbon tidak
+                  menaruh nilainya di FormData, sedangkan form ini dibaca lewat FormData saat
+                  submit. Ini JEMBATAN nilai, bukan field yang dilihat pengguna — komponen
+                  bersama justru salah di sini karena ia merender kontrol yang terlihat. */}
               <input type="hidden" name="sensitivity" value={sensitivitasTerpilih} />
+              {/* pengawas-elemen:selesai */}
               <Dropdown
                 id="unggah-departemen"
                 size="lg"
@@ -465,7 +475,12 @@ export default function DocumentsPage() {
                 itemToString={(item: string) => (item === '' ? '—' : DEPARTMENT_LABELS[item] ?? item)}
                 onChange={({ selectedItem }: { selectedItem: string | null }) => setDepartemenTerpilih(selectedItem ?? '')}
               />
+              {/* pengawas-elemen:mulai — <input type="hidden"> DISENGAJA: kontrol Carbon tidak
+                  menaruh nilainya di FormData, sedangkan form ini dibaca lewat FormData saat
+                  submit. Ini JEMBATAN nilai, bukan field yang dilihat pengguna — komponen
+                  bersama justru salah di sini karena ia merender kontrol yang terlihat. */}
               <input type="hidden" name="department" value={departemenTerpilih} />
+              {/* pengawas-elemen:selesai */}
             </div>
 
             <div className="dokumen-sejajar">

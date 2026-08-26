@@ -542,7 +542,7 @@ export default function ShipmentsPage() {
           </StructuredListBody>
         </StructuredListWrapper>
 
-        <Table size="lg">
+        <Table size="lg" className="tabel-responsif">
           <TableHead>
             <TableRow>
               <TableHeader>Item</TableHeader>
@@ -558,23 +558,23 @@ export default function ShipmentsPage() {
           <TableBody>
             {shipment.lines.map((line) => (
               <TableRow key={line.shipment_line_id}>
-                <TableCell>
+                <TableCell data-label="Item">
                   {line.item_code} — {line.item_name}
                 </TableCell>
-                <TableCell>
+                <TableCell data-label="Qty dikirim">
                   {formatNumberId(line.qty_shipped, 2)} {line.item_base_uom}
                 </TableCell>
-                <TableCell>
+                <TableCell data-label="Lot">
                   {line.lot_number}
                   {line.lot_expiry_date ? ` (kedaluwarsa ${new Date(line.lot_expiry_date).toLocaleDateString('id-ID')})` : ''}
                 </TableCell>
                 {shipment.status !== 'draft' ? (
-                  <TableCell>
+                  <TableCell data-label="Stok lot saat ini">
                     {line.lot_quantity_on_hand ?? '—'} {line.item_base_uom}
                   </TableCell>
                 ) : null}
                 {shipment.status !== 'draft' ? (
-                  <TableCell>
+                  <TableCell data-label="Total sudah dikirim (SO ini)">
                     {line.so_line_qty_shipped ?? '—'} / {line.so_line_qty_ordered ?? '—'} {line.item_base_uom}
                   </TableCell>
                 ) : null}

@@ -216,6 +216,66 @@ $area-sentuh-minimum: 2.75rem; // 44px
   inline-size: min(100%, 14rem);
 }
 
+// ============================================================================
+// TOOLBAR TABEL DI LAYAR SEMPIT — kontrolnya TURUN BARIS, tidak terpotong (DS-14, sebab
+// pertama; 26 Agu 2026)
+// ============================================================================
+// APA YANG TERJADI SEBELUM INI, dan kenapa tidak ada yang menyadarinya selama berbulan-bulan:
+// toolbar Carbon meratakan isinya ke KANAN (`justify-content: flex-end`) lalu MEMOTONG
+// kelebihannya. Yang terpotong karena itu SELALU yang paling kiri — dan karena isinya keluar
+// lewat tepi kiri, halamannya TIDAK MENGGULIR sama sekali.
+//
+// Akibatnya pemeriksaan "tidak boleh ada gulir menyamping" menjawab LULUS untuk halaman yang
+// kehilangan seluruh kotak saringannya. Terukur 26 Agu 2026 di 360px:
+//   /items     : saringan "Tipe" di -47..-19          -> hilang seluruhnya
+//   /documents : "Semua jenis" di -316..-238 DAN
+//                "Semua departemen" di -174..-48      -> DUA saringan hilang
+//
+// Yang dilakukan: di bawah 42rem toolbar boleh MENINGGI dan isinya TURUN BARIS, dengan tiap
+// saringan selebar penuh — sejalan dengan aturan responsive "field form jadi satu kolom penuh
+// di layar sempit". Tinggi tetap 48px milik Carbon SENGAJA dilepas di sini; itu tinggi untuk
+// satu baris, dan di sini barisnya lebih dari satu.
+//
+// JANGAN diganti dengan membuat toolbarnya menggulir menyamping: aturan proyek melarangnya,
+// dan gulir di dalam toolbar justru menyembunyikan kontrol dengan cara yang sama.
+// TURUN BARIS BERLAKU DI SEMUA LEBAR, bukan hanya di bawah 42rem.
+//
+// Versi pertama membatasinya ke bawah 42rem, dan sisa cacatnya terukur TEPAT SATU BREAKPOINT
+// di atasnya: /documents pada 672px masih kehilangan saringan "Semua jenis" di -4..74.
+// Halaman itu punya DUA saringan; jumlah kontrol toolbar berbeda antar halaman, jadi ambang
+// tetap tidak akan pernah benar untuk semuanya.
+//
+// `flex-wrap: wrap` di semua lebar TIDAK mengubah apa pun selama isinya muat — ia hanya
+// bekerja saat benar-benar tidak muat. Itu membuatnya benar tanpa perlu menebak ambang.
+.cds--table-toolbar {
+  block-size: auto;
+}
+
+.cds--toolbar-content {
+  flex-wrap: wrap;
+  block-size: auto;
+  row-gap: spacing.$spacing-03;
+}
+
+@media (max-width: 41.98rem) {
+  .cds--toolbar-content {
+    justify-content: flex-start;
+  }
+
+  // Saringan mengambil satu baris penuh. Tanpa ini ia tetap 14rem dan dua saringan
+  // berdampingan masih meluber di 360px.
+  .cds--toolbar-content .halaman__saring {
+    inline-size: 100%;
+    max-inline-size: none;
+    flex: 1 1 100%;
+  }
+
+  // Tombol aksi utama ikut selebar penuh supaya tidak berdesakan dengan pencarian.
+  .cds--toolbar-content > .cds--btn {
+    flex: 1 1 100%;
+  }
+}
+
 .halaman__redup {
   @include type.type-style('body-01');
   color: theme.$text-secondary;
@@ -360,8 +420,12 @@ $area-sentuh-minimum: 2.75rem; // 44px
 //
 // CARA PAKAI: beri `className="tabel-responsif"` pada <Table>, dan `data-label={judulKolom}`
 // pada TIAP <TableCell>. Tanpa data-label, kartunya kehilangan nama kolomnya.
-@media (max-width: 41.98rem) {
-  .tabel-responsif thead {
+// MIXIN, bukan salinan (26 Agu 2026). Aturan "baris jadi kartu" dipakai DUA kelas dengan
+// AMBANG BERBEDA, dan menyalin 70 baris CSS untuk yang kedua akan melahirkan persis kelas
+// cacat yang sedang diperbaiki: dua jalur hidup untuk hal yang sama, yang kedua tidak ikut
+// berubah saat yang pertama diperbaiki.
+@mixin baris-jadi-kartu($sel) {
+  #{$sel} thead {
     // Judul kolom pindah ke tiap sel lewat data-label; menyisakan kepala tabel di layar sempit
     // hanya menampilkan deretan judul tanpa isinya.
     position: absolute;
@@ -377,13 +441,13 @@ $area-sentuh-minimum: 2.75rem; // 44px
   // <tbody> masih `table-row-group`, peramban tetap menata anak-anaknya sebagai baris tabel
   // dan tinggi tetap bawaan Carbon ikut berlaku. Ditemukan dari MELIHAT tangkapan layarnya —
   // pengukuran "nol gulir menyamping" tetap hijau padahal barisnya tumpang tindih.
-  .tabel-responsif,
-  .tabel-responsif tbody {
+  #{$sel},
+  #{$sel} tbody {
     display: block;
     inline-size: 100%;
   }
 
-  .tabel-responsif tbody tr {
+  #{$sel} tbody tr {
     display: block;
     block-size: auto;
     min-block-size: 0;
@@ -392,7 +456,7 @@ $area-sentuh-minimum: 2.75rem; // 44px
     background-color: theme.$layer;
   }
 
-  .tabel-responsif tbody td {
+  #{$sel} tbody td {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
@@ -404,7 +468,7 @@ $area-sentuh-minimum: 2.75rem; // 44px
     padding-block: spacing.$spacing-03;
   }
 
-  .tabel-responsif tbody td::before {
+  #{$sel} tbody td::before {
     content: attr(data-label);
     @include type.type-style('label-01');
     color: theme.$text-secondary;
@@ -412,28 +476,62 @@ $area-sentuh-minimum: 2.75rem; // 44px
   }
 
   // Sel tombol mekar: tetap sebaris, tapi TANPA label — ia bukan kolom data.
-  .tabel-responsif tbody td.cds--table-expand {
+  #{$sel} tbody td.cds--table-expand {
     justify-content: flex-start;
     padding-block: 0;
   }
 
-  .tabel-responsif tbody td.cds--table-expand::before {
+  #{$sel} tbody td.cds--table-expand::before {
     content: none;
   }
 
   // Baris detail memakai seluruh lebar dan TIDAK dijadikan kartu — ia isi, bukan ringkasan.
-  .tabel-responsif tbody tr.cds--expandable-row {
+  #{$sel} tbody tr.cds--expandable-row {
     margin-block-start: calc(-1 * #{spacing.$spacing-05});
   }
 
-  .tabel-responsif tbody tr.cds--expandable-row td {
+  #{$sel} tbody tr.cds--expandable-row td {
     display: block;
     padding-inline: spacing.$spacing-05;
   }
 
-  .tabel-responsif tbody tr.cds--expandable-row td::before {
+  #{$sel} tbody tr.cds--expandable-row td::before {
     content: none;
   }
+}
+
+// AMBANG BAWAAN: 41,98rem (672px) — batas `md` Carbon.
+// Diukur 26 Agu 2026 di 24 tabel yang terlihat: 21 di antaranya MUAT di 672px.
+@media (max-width: 41.98rem) {
+  @include baris-jadi-kartu('.tabel-responsif');
+}
+
+// ============================================================================
+// TABEL LEBAR: ambang 65,98rem (1056px) — batas `lg` Carbon
+// ============================================================================
+// KENAPA ADA AMBANG KEDUA, dan kenapa BUKAN mengubah ambang bawaan (DS-14, sebab ketiga).
+//
+// Diukur 26 Agu 2026, lebar ALAMI tiap tabel pada 672px (lebar terkecil di mana ia masih
+// berbentuk tabel):
+//   TIGA tabel butuh lebih dari 672px : /documents 811px (8 kolom), /hr absensi karyawan
+//                                       820px (8 kolom), /items 776px (9 kolom).
+//   NOL tabel butuh lebih dari 1056px : yang terlebar 820px.
+//   21 tabel sisanya MUAT di 672px.
+//
+// Karena itu ambang bawaannya TIDAK diubah. Menaikkan seluruhnya ke 1056px akan mengubah
+// 21 tabel yang hari ini benar menjadi kartu di rentang 672-1055px — kehilangan pembandingan
+// antar baris di tablet, untuk masalah yang hanya dimiliki tiga tabel.
+//
+// PENANDA PEMAKAIAN: pakai kelas ini bila tabelnya 8 KOLOM ATAU LEBIH. Ketiga tabel di atas
+// berkolom 8, 8, dan 9; seluruh tabel <= 7 kolom terukur muat.
+//
+// BATAS PENGUKURAN YANG WAJIB DISADARI: tenant uji KOSONG, jadi lebar itu ditentukan JUDUL
+// KOLOM saja. Dengan data sungguhan lebarnya hanya bisa LEBIH BESAR. Untuk tabel <= 7 kolom
+// yang terukur "muat", jaraknya ke 672px TIDAK terukur — mereka muat, tapi tidak diketahui
+// seberapa longgar. Bila kelak ada yang terpotong di 672-1055px, pindahkan ke kelas ini;
+// jangan menaikkan ambang bawaannya.
+@media (max-width: 65.98rem) {
+  @include baris-jadi-kartu('.tabel-responsif--lebar');
 }
 
 // ============================================================================

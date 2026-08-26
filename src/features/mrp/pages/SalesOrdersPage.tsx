@@ -28,6 +28,7 @@ import {
   TableToolbar,
   TableToolbarContent,
   TableToolbarSearch,
+  TextInput,
   Tag
 } from '@carbon/react';
 import { KepalaHalaman } from '@/components/ui/kepala-halaman';
@@ -627,70 +628,72 @@ export default function SalesOrdersPage() {
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-md border">
-                <table className="w-full text-data">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Item</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Qty Dipesan</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Sudah Direncanakan di WO</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Sudah Dikirim</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Sisa Belum Dikirim</th>
-                      {showPriceColumn ? <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Harga Satuan</th> : null}
-                      {canViewPlanningFeasibility(role) ? <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Kelayakan</th> : null}
-                      {canViewFinancialData(role) ? <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Margin Watch</th> : null}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {expandedSo.lines.map((line) => (
-                      <tr key={line.sales_order_line_id} className="border-b last:border-0">
-                        <td className="px-3 py-1.5">
-                          {line.item_code} — {line.item_name}
-                        </td>
-                        <td className="px-3 py-1.5">
-                          {formatNumberId(line.qty_ordered, 2)} {line.item_base_uom}
-                        </td>
-                        <td className="px-3 py-1.5">
-                          {formatNumberId(line.qty_already_planned_in_wo, 2)} {line.item_base_uom}
-                        </td>
-                        <td className="px-3 py-1.5">
-                          {formatNumberId(line.qty_shipped, 2)} {line.item_base_uom}
-                        </td>
-                        <td className="px-3 py-1.5">
-                          {line.qty_remaining_to_ship > 0 ? <span className="font-medium text-foreground">{formatNumberId(line.qty_remaining_to_ship, 2)}</span> : <span className="text-muted-foreground">0</span>} {line.item_base_uom}
-                        </td>
-                        {showPriceColumn ? <td className="px-3 py-1.5">{line.unit_price === null ? <span className="text-muted-foreground">-</span> : formatCurrency(line.unit_price, { maxDecimals: 0 })}</td> : null}
-                        {canViewPlanningFeasibility(role) ? (
-                          <td className="px-3 py-1.5">
-                            <Button
-                              kind="tertiary"
-                              size="sm"
-                              disabled={feasibilityLoading && feasibilityLineId === line.sales_order_line_id}
-                              onClick={() => handleCheckFeasibility(line.sales_order_line_id)}
-                              title="Menghitung & menampilkan kelayakan jadwal dari data SAAT INI -- tidak menyimpan/mengunci apa pun. Untuk mengunci rencana sebagai acuan permanen, pakai tombol 'Kunci' di dalam panel."
-                            >
-                              {feasibilityLoading && feasibilityLineId === line.sales_order_line_id ? 'Memuat...' : 'Cek Kelayakan'}
-                            </Button>
-                          </td>
-                        ) : null}
-                        {canViewFinancialData(role) ? (
-                          <td className="px-3 py-1.5">
-                            <Button
-                              kind="tertiary"
-                              size="sm"
-                              disabled={marginLoading && marginLineId === line.sales_order_line_id}
-                              onClick={() => handleCheckMarginWatch(line.sales_order_line_id)}
-                              title="Menghitung & menampilkan margin dari data SAAT INI -- tidak menyimpan/mengunci apa pun. Untuk mengunci baseline sebagai acuan permanen, pakai tombol 'Kunci' di dalam panel."
-                            >
-                              {marginLoading && marginLineId === line.sales_order_line_id ? 'Memuat...' : 'Margin Watch'}
-                            </Button>
-                          </td>
-                        ) : null}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <Table size="lg" className="tabel-responsif">
+                <TableHead>
+                  <TableRow>
+                    <TableHeader>Item</TableHeader>
+                    <TableHeader>Qty dipesan</TableHeader>
+                    <TableHeader>Sudah direncanakan di WO</TableHeader>
+                    <TableHeader>Sudah dikirim</TableHeader>
+                    <TableHeader>Sisa belum dikirim</TableHeader>
+                    {showPriceColumn ? <TableHeader>Harga satuan</TableHeader> : null}
+                    {canViewPlanningFeasibility(role) ? <TableHeader>Kelayakan</TableHeader> : null}
+                    {canViewFinancialData(role) ? <TableHeader>Margin Watch</TableHeader> : null}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {expandedSo.lines.map((line) => (
+                    <TableRow key={line.sales_order_line_id}>
+                      <TableCell data-label="Item">
+                        {line.item_code} — {line.item_name}
+                      </TableCell>
+                      <TableCell data-label="Qty dipesan">
+                        {formatNumberId(line.qty_ordered, 2)} {line.item_base_uom}
+                      </TableCell>
+                      <TableCell data-label="Sudah direncanakan di WO">
+                        {formatNumberId(line.qty_already_planned_in_wo, 2)} {line.item_base_uom}
+                      </TableCell>
+                      <TableCell data-label="Sudah dikirim">
+                        {formatNumberId(line.qty_shipped, 2)} {line.item_base_uom}
+                      </TableCell>
+                      <TableCell data-label="Sisa belum dikirim">
+                        {line.qty_remaining_to_ship > 0 ? formatNumberId(line.qty_remaining_to_ship, 2) : <span className="halaman__redup">0</span>} {line.item_base_uom}
+                      </TableCell>
+                      {showPriceColumn ? (
+                        <TableCell data-label="Harga satuan">
+                          {line.unit_price === null ? <span className="halaman__redup">—</span> : formatCurrency(line.unit_price, { maxDecimals: 0 })}
+                        </TableCell>
+                      ) : null}
+                      {canViewPlanningFeasibility(role) ? (
+                        <TableCell data-label="Kelayakan">
+                          <Button
+                            kind="tertiary"
+                            size="sm"
+                            disabled={feasibilityLoading && feasibilityLineId === line.sales_order_line_id}
+                            onClick={() => handleCheckFeasibility(line.sales_order_line_id)}
+                            title="Menghitung & menampilkan kelayakan jadwal dari data SAAT INI -- tidak menyimpan/mengunci apa pun. Untuk mengunci rencana sebagai acuan permanen, pakai tombol 'Kunci' di dalam panel."
+                          >
+                            {feasibilityLoading && feasibilityLineId === line.sales_order_line_id ? 'Memuat...' : 'Cek Kelayakan'}
+                          </Button>
+                        </TableCell>
+                      ) : null}
+                      {canViewFinancialData(role) ? (
+                        <TableCell data-label="Margin Watch">
+                          <Button
+                            kind="tertiary"
+                            size="sm"
+                            disabled={marginLoading && marginLineId === line.sales_order_line_id}
+                            onClick={() => handleCheckMarginWatch(line.sales_order_line_id)}
+                            title="Menghitung & menampilkan margin dari data SAAT INI -- tidak menyimpan/mengunci apa pun. Untuk mengunci baseline sebagai acuan permanen, pakai tombol 'Kunci' di dalam panel."
+                          >
+                            {marginLoading && marginLineId === line.sales_order_line_id ? 'Memuat...' : 'Margin Watch'}
+                          </Button>
+                        </TableCell>
+                      ) : null}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
 
               {marginLineId && expandedSo.lines.some((l) => l.sales_order_line_id === marginLineId) ? (
                 <div className="rounded-md border p-4">
@@ -706,12 +709,14 @@ export default function SalesOrdersPage() {
                           {marginResult.relock_reason ? ` Alasan kunci ulang: "${marginResult.relock_reason}".` : ''}
                           {canViewFinancialData(role) && role === 'company_admin' ? (
                             <span className="ml-2 inline-flex items-center gap-1">
-                              <input
-                                type="text"
+                              <TextInput
+                                id="alasan-kunci-ulang-margin"
+                                size="sm"
+                                labelText="Alasan kunci ulang"
+                                hideLabel
                                 placeholder="alasan kunci ulang"
                                 value={marginRelockReason}
-                                onChange={(e) => setMarginRelockReason(e.target.value)}
-                                className="h-6 rounded border px-1 text-xs"
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMarginRelockReason(e.target.value)}
                               />
                               <Button kind="tertiary" size="sm" disabled={marginLockStatus === 'locking'} onClick={() => handleLockMargin(marginLineId!, true)}>
                                 Kunci Ulang
@@ -918,12 +923,14 @@ export default function SalesOrdersPage() {
                             {feasibilityResult.relock_reason ? ` Alasan kunci ulang: "${feasibilityResult.relock_reason}".` : ''}
                             {canViewFinancialData(role) && role === 'company_admin' ? (
                               <span className="ml-2 inline-flex items-center gap-1">
-                                <input
-                                  type="text"
+                                <TextInput
+                                  id="alasan-kunci-ulang-kelayakan"
+                                  size="sm"
+                                  labelText="Alasan kunci ulang"
+                                  hideLabel
                                   placeholder="alasan kunci ulang"
                                   value={feasibilityRelockReason}
-                                  onChange={(e) => setFeasibilityRelockReason(e.target.value)}
-                                  className="h-6 rounded border px-1 text-xs"
+                                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFeasibilityRelockReason(e.target.value)}
                                 />
                                 <Button kind="tertiary" size="sm" disabled={feasibilityLockStatus === 'locking'} onClick={() => handleLockFeasibility(feasibilityLineId!, true)}>
                                   Kunci Ulang
@@ -1126,32 +1133,32 @@ export default function SalesOrdersPage() {
                                 }}
                               />
                             </p>
-                            <div className="overflow-hidden rounded-md border">
-                              <table className="w-full text-data">
-                                <thead>
-                                  <tr className="border-b">
-                                    <th className="h-7 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Item</th>
-                                    <th className="h-7 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Tahap</th>
-                                    <th className="h-7 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Butuh</th>
-                                    <th className="h-7 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Stok</th>
-                                    <th className="h-7 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Kurang</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {feasibilityResult.material_shortages.map((s) => (
-                                    <tr key={s.item_id} className="border-b last:border-0">
-                                      <td className="px-2 py-1">
-                                        {s.item_code} — {s.name}
-                                      </td>
-                                      <td className="px-2 py-1 text-muted-foreground">{s.blocking_stage ? `${s.blocking_stage.sequence_no}. ${s.blocking_stage.step_name}` : 'Sejak tahap 1'}</td>
-                                      <td className="px-2 py-1">{formatNumberId(s.needed, 2)}</td>
-                                      <td className="px-2 py-1">{formatNumberId(s.available, 2)}</td>
-                                      <td className="px-2 py-1 font-medium text-destructive">{formatNumberId(s.short, 2)}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
+                            <Table size="sm" className="tabel-responsif">
+                              <TableHead>
+                                <TableRow>
+                                  <TableHeader>Item</TableHeader>
+                                  <TableHeader>Tahap</TableHeader>
+                                  <TableHeader>Butuh</TableHeader>
+                                  <TableHeader>Stok</TableHeader>
+                                  <TableHeader>Kurang</TableHeader>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {feasibilityResult.material_shortages.map((s) => (
+                                  <TableRow key={s.item_id}>
+                                    <TableCell data-label="Item">
+                                      {s.item_code} — {s.name}
+                                    </TableCell>
+                                    <TableCell data-label="Tahap">
+                                      <span className="halaman__redup">{s.blocking_stage ? `${s.blocking_stage.sequence_no}. ${s.blocking_stage.step_name}` : 'Sejak tahap 1'}</span>
+                                    </TableCell>
+                                    <TableCell data-label="Butuh">{formatNumberId(s.needed, 2)}</TableCell>
+                                    <TableCell data-label="Stok">{formatNumberId(s.available, 2)}</TableCell>
+                                    <TableCell data-label="Kurang">{formatNumberId(s.short, 2)}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
                           </div>
                         ) : (
                           <p className="text-xs text-success">Tidak ada kekurangan bahan terdeteksi.</p>
@@ -1167,30 +1174,28 @@ export default function SalesOrdersPage() {
                 {expandedSo.shipments.length === 0 ? (
                   <p className="text-sm text-muted-foreground">Belum ada pengiriman untuk SO ini.</p>
                 ) : (
-                  <div className="overflow-hidden rounded-md border">
-                    <table className="w-full text-data">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">No. Surat Jalan</th>
-                          <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Status</th>
-                          <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Alamat Tujuan</th>
-                          <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Dibuat</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {expandedSo.shipments.map((shipment) => (
-                          <tr key={shipment.shipment_id} className="border-b last:border-0">
-                            <td className="px-3 py-1.5">{shipment.shipment_number}</td>
-                            <td className="px-3 py-1.5">
-                              <Tag type={shipmentStatusWarnaTag[shipment.status] ?? 'gray'}>{shipmentStatusLabels[shipment.status] ?? shipment.status}</Tag>
-                            </td>
-                            <td className="px-3 py-1.5 text-xs">{shipment.delivery_address}</td>
-                            <td className="px-3 py-1.5">{new Date(shipment.created_at).toLocaleDateString('id-ID')}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <Table size="lg" className="tabel-responsif">
+                    <TableHead>
+                      <TableRow>
+                        <TableHeader>No. surat jalan</TableHeader>
+                        <TableHeader>Status</TableHeader>
+                        <TableHeader>Alamat tujuan</TableHeader>
+                        <TableHeader>Dibuat</TableHeader>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {expandedSo.shipments.map((shipment) => (
+                        <TableRow key={shipment.shipment_id}>
+                          <TableCell data-label="No. surat jalan">{shipment.shipment_number}</TableCell>
+                          <TableCell data-label="Status">
+                            <Tag type={shipmentStatusWarnaTag[shipment.status] ?? 'gray'}>{shipmentStatusLabels[shipment.status] ?? shipment.status}</Tag>
+                          </TableCell>
+                          <TableCell data-label="Alamat tujuan">{shipment.delivery_address}</TableCell>
+                          <TableCell data-label="Dibuat">{new Date(shipment.created_at).toLocaleDateString('id-ID')}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 )}
               </div>
                                 </div>

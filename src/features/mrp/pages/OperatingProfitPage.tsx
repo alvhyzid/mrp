@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
-import { Breadcrumb, BreadcrumbItem, Dropdown, InlineNotification, SkeletonText, Tile } from '@carbon/react';
+import { Dropdown, InlineNotification, SkeletonText, Tile } from '@carbon/react';
+import { KepalaHalaman } from '@/components/ui/kepala-halaman';
 import { canViewFinancialData } from '@/lib/roles';
 import { formatCurrency } from '@/lib/currency';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
@@ -177,22 +178,21 @@ export default function OperatingProfitPage() {
 
   return (
     <div className="halaman">
-      <Breadcrumb noTrailingSlash className="halaman__remah">
-        <BreadcrumbItem href="/dashboard">Dashboard</BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>
-          <span className="cds--link halaman__remah-mati">Finance &amp; Costing</span>
-        </BreadcrumbItem>
-        <BreadcrumbItem isCurrentPage>Operating Profit</BreadcrumbItem>
-      </Breadcrumb>
-
-      <div>
-        <h1 className="halaman__judul">Laba operasional</h1>
-        <p className="halaman__pengantar">
-          {monthLabels[month - 1]} {year}
+      <KepalaHalaman
+        remah={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Finance & Costing" },
+          { label: "Operating Profit" }
+        ]}
+        judul="Laba operasional"
+        pengantar={
+          <>
+            {monthLabels[month - 1]} {year}
           {result ? ` — periode ${formatDateId(result.period_start)} sampai ${formatDateId(result.period_end)}` : ''}.
           Periodenya mengikuti tanggal gajian perusahaan, bukan bulan kalender.
-        </p>
-      </div>
+          </>
+        }
+      />
 
       <div className="laba-periode">
         <Dropdown

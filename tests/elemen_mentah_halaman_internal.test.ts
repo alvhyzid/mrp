@@ -123,6 +123,41 @@ function tagPembuka(teks: string, i: number): string {
   return teks.slice(i, i + 500);
 }
 
+/// Berapa kolom sebuah tabel? Menghitung <TableHeader> literal di dalam <TableHead>, DAN —
+/// bila kepalanya memetakan sebuah array kolom — jumlah entri array itu.
+///
+/// MENGEMBALIKAN null BILA TIDAK YAKIN, dan itu disengaja: menebak jumlah kolom lalu
+/// menuduh berdasarkan tebakan adalah persis kelas "penjaga salah tuduh" yang sudah lima kali
+/// terjadi di proyek ini. Tabel yang tidak terbaca dilaporkan sebagai TIDAK TERPERIKSA di
+/// test tersendiri, bukan diloloskan diam-diam.
+function hitungKolom(isi: string, indeksTabel: number): number | null {
+  const akhir = isi.indexOf('</TableHead>', indeksTabel);
+  if (akhir === -1) return null;
+  const kepala = isi.slice(indeksTabel, akhir);
+
+  const literal = (kepala.match(/<TableHeader(?=[\s/>])/g) ?? []).length;
+  const peta = kepala.match(/\{\s*([A-Za-z_$][\w$]*)\s*\.map\(/);
+  if (!peta) return literal || null;
+
+  // Array kolomnya: dari `const NAMA` sampai `];` pertama sesudahnya.
+  const deklarasi = new RegExp(`const\\s+${peta[1]}\\b[^\\n]*`).exec(isi);
+  if (!deklarasi) return null;
+  const mulaiArray = isi.indexOf('[', deklarasi.index);
+  const akhirArray = isi.indexOf('];', mulaiArray);
+  if (mulaiArray === -1 || akhirArray === -1) return null;
+  const blokArray = isi.slice(mulaiArray, akhirArray);
+
+  const entri = (blokArray.match(/\bheader\s*:/g) ?? []).length;
+  if (entri === 0) return null;
+
+  // Kolom yang ditambahkan bersyarat sesudah array dibuat ikut dihitung — batas ATAS,
+  // supaya tabel yang kadang berkolom banyak tidak lolos hanya karena kadang tidak.
+  const sesudahArray = isi.slice(akhirArray, isi.indexOf('return', akhirArray) + 1);
+  const tambahan = (sesudahArray.match(new RegExp(`${peta[1]}\\w*\\.push\\(`, 'g')) ?? []).length;
+
+  return literal + entri + tambahan;
+}
+
 function sisirBerkas(abs: string): Temuan[] {
   const rel = abs.replace(`${AKAR}/`, '');
   const asli = readFileSync(abs, 'utf8');
@@ -151,14 +186,31 @@ function sisirBerkas(abs: string): Temuan[] {
     const baris = nomorBaris(isi, t.index);
     if (dikecualikan.has(baris)) continue;
     const tag = tagPembuka(isi, t.index);
-    if (/tabel-responsif/.test(tag)) continue;
-    temuan.push({
-      berkas: rel,
-      baris,
-      jenis: '<Table> tanpa .tabel-responsif',
-      keterangan:
-        'tanpa kelas ini tabelnya tetap tabel di layar sempit dan kolom terakhir jatuh ke luar layar'
-    });
+
+    if (!/tabel-responsif/.test(tag)) {
+      temuan.push({
+        berkas: rel,
+        baris,
+        jenis: '<Table> tanpa .tabel-responsif',
+        keterangan:
+          'tanpa kelas ini tabelnya tetap tabel di layar sempit dan kolom terakhir jatuh ke luar layar'
+      });
+      continue;
+    }
+
+    // ATURAN AMBANG LEBAR (RR.4): 8 kolom atau lebih WAJIB memakai varian lebar.
+    // Diukur 26 Agu 2026: tabel 8-9 kolom butuh 776-820px, jadi ia TETAP terpotong di
+    // rentang 672-1055px meski kelas responsif biasa sudah dipasang. Tabel <= 7 kolom
+    // terukur muat di 672px.
+    const jumlahKolom = hitungKolom(isi, t.index);
+    if (jumlahKolom !== null && jumlahKolom >= 8 && !/tabel-responsif--lebar/.test(tag)) {
+      temuan.push({
+        berkas: rel,
+        baris,
+        jenis: '<Table> berkolom banyak tanpa varian lebar',
+        keterangan: `${jumlahKolom} kolom — pakai className="tabel-responsif--lebar" (ambang 1056px)`
+      });
+    }
   }
 
   return temuan;
@@ -211,6 +263,33 @@ describe('DS-16 — pengawas elemen mentah & tabel non-responsif di halaman inte
       );
     }
     expect(basi).toHaveLength(0);
+  });
+
+  it('menyebutkan tabel yang jumlah kolomnya TIDAK bisa dibaca — bukan meloloskannya diam-diam', () => {
+    const takTerbaca: string[] = [];
+    for (const abs of berkasHalaman(DIR_FITUR).sort()) {
+      const rel = abs.replace(`${AKAR}/`, '');
+      const asli = readFileSync(abs, 'utf8');
+      const isi = tanpaKomentar(asli);
+      const dikecualikan = barisDikecualikan(asli, rel);
+      const re = /<Table(?=[\s/>])/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(isi)) !== null) {
+        const baris = nomorBaris(isi, m.index);
+        if (dikecualikan.has(baris)) continue;
+        if (hitungKolom(isi, m.index) === null) takTerbaca.push(`${rel}:${baris}`);
+      }
+    }
+
+    // Ini BUKAN kegagalan — ia laporan kejujuran. Angka "nol pelanggaran" di test sebelumnya
+    // hanya berarti sesuatu bila diketahui berapa banyak yang memang TIDAK diperiksa.
+    if (takTerbaca.length > 0) {
+      console.log(
+        `[DS-16] ${takTerbaca.length} tabel tidak terbaca jumlah kolomnya, jadi aturan ambang ` +
+          `8-kolom TIDAK berlaku untuknya:\n  ${takTerbaca.join('\n  ')}`
+      );
+    }
+    expect(Array.isArray(takTerbaca)).toBe(true);
   });
 
   describe('bukti negatif — pengawas ini TERBUKTI BISA gagal', () => {

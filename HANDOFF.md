@@ -2,6 +2,67 @@
 
 Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`). Tiap sesi Claude Code WAJIB baca ini dulu sebelum mulai, dan memperbarui bagian relevan begitu sesi selesai. Klaim di sini harus tetap diverifikasi ulang, bukan otomatis dipercaya — HANDOFF ini rangkuman, bukan pengganti bukti.
 
+## RR — ADA TIGA PROJECT SUPABASE, BUKAN DUA (26 Agu 2026)
+
+Laporan sebelumnya berbunyi *"kedua project kini 294 dari 294"*. Kalimatnya benar untuk dua
+project yang diperiksa, dan **menyesatkan** — projectnya **tiga**:
+
+| Ref | Peran | Ditunjuk oleh |
+|---|---|---|
+| `kfvtrwuuqcjfkkuqizxt` | data nyata PT ITM | `.env.local` |
+| `nclkepwlsgmfbslgsajq` | uji lokal | `.env.staging.local` |
+| **`gzxrgbwhmjwiakcyjipd`** | **CI** | **rahasia GitHub Actions** |
+
+**Yang menemukannya bukan sensus, melainkan CI yang gagal** — dan yang berbunyi adalah penjaga
+migrasi yang baru dipasang hari ini.
+
+> **Sensus yang bertolak dari BERKAS ENV di komputer hanya bisa menemukan project yang punya
+> berkas env.** Project CI hidup di rahasia GitHub, jadi ia tidak pernah masuk daftar yang
+> disapu. Bentuknya sama persis dengan "sapuan bertolak dari halaman, bukan dari elemen" —
+> daftar yang disusun dari tempat yang mudah dilihat melewatkan yang tidak punya wakil di situ.
+
+**CI merah BUKAN karena empat commit hari ini**: CI sudah merah **delapan run berturut-turut
+sejak 25 Agu**, sebelum satu pun commit hari ini. Ketiga project kini **295 dari 295**.
+
+### Aturan pengukur (RR.1) — terjemahan mesin adalah bagian yang paling mungkin keliru
+
+> **Yang dijaga aturan proyek adalah "HILANG TANPA JALAN MELIHATNYA", bukan "BERADA DI LUAR
+> VIEWPORT".** Pengukur yang tidak membedakan keduanya akan menuduh komponen yang justru benar:
+> tab yang bisa digulir dengan tombol gulir bawaan Carbon **terjangkau**, dan `thead` yang
+> "terbaca pembaca layar saja" adalah **teknik baku**.
+>
+> **ATURAN: aturan yang ditulis untuk manusia ("harus bisa dijangkau") tidak otomatis bisa
+> diukur mesin. Setiap pengukur wajib MENYATAKAN bagaimana ia menerjemahkan aturannya — dan
+> terjemahan itu bagian yang paling mungkin keliru.**
+
+### Pengaman yang menghukum kemajuan (RR.2) — kelas tersendiri, dan sapuannya
+
+`EXPECTED_FILES` tertinggal di 54 sementara berkas test sudah 62. Karena syaratnya kecocokan
+persis, pengawas itu **gagal keras justru ketika suite BERTUMBUH** — menghukum hal yang
+seharusnya baik. **Bentuknya** yang diubah jadi lantai, bukan angkanya diperbarui.
+
+**Sapuan kelasnya**: dari seluruh test dan skrip, kecocokan persis terhadap angka yang wajar
+bertumbuh hanya ditemukan **dua kali** — `check-test-threshold.js` (sudah diperbaiki) dan
+`kpi_module.test.ts` (`toBe(6)` dua kali; dicatat `AUD-47`). Sisanya sehat: `toEqual([])`,
+`toBeGreaterThan(50)`, dan pembandingan **diturunkan dari sumbernya**
+(`KATALOG_SETELAN.length`) — bentuk yang tinggal ditiru.
+
+### RR.3 — angka sebenarnya untuk keadaan TERBUKA
+
+Data uji dibuat lewat layar di tenant uji, baris dimekarkan, diukur di enam lebar:
+**12 kombinasi, nol cacat di ketiga pemeriksaan.** Di 360px tabel di dalam baris mekar
+ber-`display: block` — **benar-benar jadi kartu** — dan **nol sel tanpa `data-label`**.
+
+**Dua dari empat** tabel tersembunyi kini terukur (Routing, BOM). **Belum**: PO klien dan
+Pengiriman. `DS-14` **tetap terbuka**.
+
+**Pembersihan**: nol baris berpola `UJI-RR3` di seluruh basis data; potret 91 tabel menunjukkan
+tepat 3 tabel berubah dan kembali ke nol.
+
+**Dan pembersihan itu sendiri menemukan dua hal**: halaman BOM **tidak punya Hapus maupun
+Arsip sama sekali** (`DS-17` — data yang lahir lewat layar tidak bisa mati lewat layar), dan
+halaman Routing masih memakai `window.confirm` alih-alih modal berbahaya Carbon (`AUD-47`).
+
 ## QQ.0 — HASIL AKHIR: 174 DARI 174 KOMBINASI BERSIH (26 Agu 2026)
 
 | Pemeriksaan | Sebelum | Sesudah |

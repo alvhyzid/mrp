@@ -628,7 +628,7 @@ export default function SalesOrdersPage() {
                 </div>
               </div>
 
-              <Table size="lg" className="tabel-responsif">
+              <Table size="lg" className="tabel-responsif--lebar">
                 <TableHead>
                   <TableRow>
                     <TableHeader>Item</TableHeader>

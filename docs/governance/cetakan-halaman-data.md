@@ -170,6 +170,31 @@ barisnya tumpang tindih. Yang menemukannya **melihat tangkapan layarnya**.
 
 ---
 
+### 6b-2. ATURAN AMBANG: 8 kolom atau lebih memakai VARIAN LEBAR
+
+> **Tabel dengan 8 KOLOM ATAU LEBIH memakai `className="tabel-responsif--lebar"` (baris jadi
+> kartu di bawah 1056px). Di bawah itu, `className="tabel-responsif"` (di bawah 672px).**
+
+**Dasarnya diukur, bukan dipilih**: lebar alami 24 tabel pada 672px — tiga tabel berkolom 8–9
+butuh **776–820px**, sisanya (≤ 7 kolom) muat. Nol tabel butuh lebih dari 1056px.
+
+**Kenapa ambang bawaannya tidak dinaikkan saja**: 21 dari 24 tabel muat di 672px. Menaikkan
+seluruhnya ke 1056px akan mengubah tabel yang hari ini benar menjadi kartu di rentang
+672–1055px — kehilangan pembandingan antar baris di tablet, untuk masalah milik tiga tabel.
+
+**DIJAGA OTOMATIS** oleh `tests/elemen_mentah_halaman_internal.test.ts`, jadi tabel berkolom
+banyak yang memakai varian biasa tertangkap **tanpa menunggu seseorang mengukurnya di 672px**.
+Terbukti di giliran yang sama ia lahir: pengawas itu langsung menemukan tabel item Sales Order
+(8 kolom) yang baru saja dipindahkan ke varian biasa — dan tabel itu ada **di dalam baris yang
+dimekarkan**, jadi tidak ada pengukuran layar yang bisa menemukannya.
+
+**BATAS PENGHITUNGNYA, disebut supaya angkanya tidak dipercaya berlebihan**: ia membaca
+`<TableHeader>` literal dan entri array kolom, serta menghitung `push()` bersyarat sebagai
+BATAS ATAS. Tabel yang jumlah kolomnya tidak bisa dibaca dilaporkan sebagai **tidak
+terperiksa**, bukan diloloskan diam-diam.
+
+---
+
 ## 6c. BUKTI VISUAL: enam lebar, DUA TEPI (ditetapkan 26 Agu 2026, dari DS-14)
 
 **Lebar wajib: 360 / 672 / 768 / 1280 / 1440 / 1920.**

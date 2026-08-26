@@ -1,5 +1,7 @@
 @use '@carbon/react/scss/spacing' as *;
 @use '@carbon/react/scss/breakpoint' as *;
+@use '@carbon/react/scss/type' as type;
+@use '@carbon/react/scss/theme' as theme;
 
 // Gaya khas Dashboard PPIC. Nol angka px yang tidak disebut alasannya.
 
@@ -44,4 +46,123 @@
 
 .ppic-form__lebar-penuh {
   grid-column: 1 / -1;
+}
+
+// ============================================================================
+// KELAS TEKS PPIC — pengganti Tailwind tulis tangan (26 Agu 2026)
+// ============================================================================
+// Halaman ini memuat 114 baris ber-kelas Tailwind tulis tangan: ukuran, warna, dan jarak
+// diketik langsung di JSX. Itu sebab langsung rasa "dibuat orang berbeda" — tiap tempat
+// memilih ukurannya sendiri, dan tidak ada satu tempat pun yang bisa diperbaiki sekaligus.
+//
+// Diganti token Carbon. Nol px, nol nilai warna langsung.
+//
+// YANG SENGAJA BELUM DISENTUH: kelas milik papan Gantt (`table-fixed`, `h-8 w-36`,
+// `border-b`, `overflow-x-auto`). Papan Gantt sedang menunggu giliran dibangun ulang sesuai
+// spesifikasi Carbon `data-visualization/gantt-charts`; merapikan gayanya sekarang berarti
+// merapikan sesuatu yang akan diganti seluruhnya.
+
+.ppic-redup-kecil {
+  @include type.type-style('label-01');
+  color: theme.$text-secondary;
+}
+
+.ppic-label {
+  @include type.type-style('label-01');
+  color: theme.$text-secondary;
+  text-transform: uppercase;
+  letter-spacing: 0.32px;
+}
+
+.ppic-teks-gagal {
+  @include type.type-style('body-01');
+  color: theme.$text-error;
+}
+
+.ppic-teks-tegas {
+  @include type.type-style('heading-compact-01');
+  color: theme.$text-primary;
+}
+
+.ppic-kanan {
+  text-align: end;
+}
+
+.ppic-tumpuk {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-02;
+}
+
+// Baris aksi di dalam sel tabel: aksi merusak DIPISAH jaraknya dari aksi biasa
+// (aturan proyek nomor 9 — jari jauh lebih besar daripada kursor).
+.ppic-aksi-baris {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-03;
+}
+
+.ppic-aksi-baris__merusak {
+  margin-inline-start: auto;
+}
+
+// Judul kolom yang membawa tombol Asal-Usul di sebelahnya.
+.ppic-kepala-berikon {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-02;
+}
+
+.ppic-baris-antara {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-03;
+}
+
+.ppic-pemisah-atas {
+  border-block-start: 1px solid theme.$border-subtle-01;
+  padding-block-start: $spacing-04;
+}
+
+.ppic-angka-besar {
+  @include type.type-style('productive-heading-03');
+  color: theme.$text-primary;
+}
+
+// Daftar keterangan di modal detail tahap: label di kiri, nilai di kanan.
+// DUA KOLOM DI SINI SAH, dan disebut supaya tidak "dirapikan" jadi satu kolom nanti:
+// aturan "field memenuhi lebar modal" berbicara tentang FIELD FORMULIR. Ini bukan formulir
+// melainkan daftar nilai — pasangan label-nilai memang dibaca berdampingan.
+.ppic-daftar-nilai {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: $spacing-03 $spacing-05;
+  padding: $spacing-04;
+  border: 1px solid theme.$border-subtle-01;
+}
+
+.ppic-baris-pemisah {
+  padding-block: $spacing-02;
+  border-block-end: 1px solid theme.$border-subtle-01;
+
+  &:last-child {
+    border-block-end: 0;
+  }
+}
+
+.ppic-catatan-sisip {
+  @include type.type-style('label-01');
+  color: theme.$text-secondary;
+  margin-inline-start: $spacing-02;
+}
+
+.ppic-catatan-sisip--waspada {
+  color: theme.$support-caution-major;
+}
+
+.ppic-jarak-atas {
+  margin-block-start: $spacing-04;
 }

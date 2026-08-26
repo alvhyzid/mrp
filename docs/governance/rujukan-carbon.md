@@ -32,6 +32,24 @@ Dokumen ini hanya menyimpan **alamat**, bukan isi.
 |---|---|
 | `carbondesignsystem.com` | **KAPAN** dan **KENAPA** sebuah komponen dipakai — pola, Usage, Style |
 | `react.carbondesignsystem.com` | **BAGAIMANA** memakainya — properti apa yang ada, nilai bawaannya, perilakunya |
+| `carbondesignsystem.com/data-visualization/` | **GRAFIK & VISUALISASI** — dan ini tempat KEEMPAT yang mudah terlewat |
+
+> **KOREKSI 26 Agu 2026, dicatat karena kekeliruannya nyata.** Rencana Carbon untuk halaman
+> PPIC menyatakan *"papan Gantt TIDAK punya pola Carbon"*. Itu **salah** — Carbon punya
+> spesifikasi Gantt lengkap di `data-visualization/gantt-charts`, dengan anatomi kartu,
+> anatomi batang tugas, dan anjuran desainnya.
+>
+> **Cara kekeliruannya lahir layak diingat**: pemeriksaan dilakukan di `patterns/` dan
+> `components/` — dua tempat yang memang disebut aturan — lalu disimpulkan "tidak ada".
+> Tempat ketiga, `data-visualization/`, tidak pernah dibuka. Ini bentuk yang sama dengan
+> aturan "memeriksa yang TERTULIS tidak bisa menemukan yang TIDAK tertulis": pemeriksaannya
+> benar, kesimpulannya kelewat luas.
+>
+> **SATU HAL LAGI YANG WAJIB DIBACA di halaman Gantt itu**, karena ia mengubah arti
+> "pakai Carbon": *"The charts below are not included in the carbon-charts library."*
+> Gantt di Carbon adalah **spesifikasi + berkas Figma (Alpha)**, BUKAN komponen yang bisa
+> dipasang. `@carbon/charts` pun tidak memuatnya. Jadi mengikutinya berarti MEMBANGUN sesuai
+> spesifikasinya — dan itu pekerjaan yang jauh lebih besar daripada memasang komponen.
 
 **Kenapa yang kedua ditambahkan (25 Agu 2026)**: kesalahan `persistent` pada pencarian tabel
 lahir persis karena propertinya tidak pernah diperiksa di Storybook. Properti itu **mematikan

@@ -261,7 +261,7 @@ function DraggableBlock({ block, canDrag, onOpenDetail }: { block: GanttBlock; c
     >
       <div className="font-medium">{block.batch_number}</div>
       <div className="truncate">{block.item_code ?? block.item_name}</div>
-      <div className="text-[10px] text-muted-foreground">
+      <div className="ppic-redup-kecil">
         {block.step_name} · {formatNumberId(block.duration_minutes, 2)} mnt
       </div>
     </div>
@@ -284,9 +284,9 @@ function DraggableUnscheduled({ batch, canDrag }: { batch: UnscheduledBatch; can
       style={draggable ? { touchAction: 'none' } : undefined}
       className={`select-none flex items-center justify-between rounded-md border p-2 text-sm ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-not-allowed opacity-60'} ${isDragging ? 'opacity-30' : ''}`}
     >
-      <span className="font-medium text-foreground">{batch.batch_number}</span>
-      <span className="text-muted-foreground">{batch.item_code ?? batch.item_name}</span>
-      <span className="text-data text-muted-foreground">
+      <span className="ppic-teks-tegas">{batch.batch_number}</span>
+      <span className="halaman__redup">{batch.item_code ?? batch.item_name}</span>
+      <span className="halaman__redup">
         {formatNumberId(batch.planned_qty, 2)} {batch.uom}
       </span>
     </div>
@@ -310,7 +310,7 @@ function DroppableCell({
       ref={setNodeRef}
       className={`px-1.5 py-1.5 align-top transition-colors ${isOver && !restrictedRow ? 'bg-info-subtle/60' : ''} ${restrictedRow ? 'cursor-not-allowed' : ''}`}
     >
-      <div className="flex flex-col gap-1">{children}</div>
+      <div className="ppic-tumpuk">{children}</div>
     </td>
   );
 }
@@ -1104,72 +1104,79 @@ export default function PpicDashboardPage() {
       </Link>
 
       <h2 className="halaman__subjudul">Usulan Standar Produksi Menunggu Keputusan</h2>
-            <p className="text-sm text-muted-foreground">
+            <p className="halaman__redup">
               Sistem mengusulkan pembaruan standar dari sampel batch nyata — TIDAK PERNAH diterapkan otomatis. Sahkan atau tolak di sini; nilai lama tetap dipakai sampai Anda memutuskan.
             </p>
-            {proposalsError ? <p className="text-sm text-destructive">{proposalsError}</p> : null}
-            {proposalMessage ? <p className="text-sm text-destructive">{proposalMessage}</p> : null}
+            {proposalsError ? (
+              <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal memuat usulan" subtitle={proposalsError} />
+            ) : null}
+            {proposalMessage ? (
+              <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal memutuskan" subtitle={proposalMessage} />
+            ) : null}
             {proposalsLoading ? (
-              <p className="text-sm text-muted-foreground">Memuat...</p>
-            ) : proposals.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Tidak ada usulan menunggu keputusan saat ini.</p>
+              <DataTableSkeleton columnCount={7} rowCount={3} showHeader={false} showToolbar={false} />
             ) : (
-              <div className="overflow-x-auto rounded-md border">
-                {/* pengawas-elemen:mulai — papan Gantt & kisi waktu PPIC. Carbon TIDAK punya
-                    komponen Gantt, dan Table Carbon membawa aturan tinggi baris yang merusak kisi
-                    ber-table-fixed yang selnya bisa dijatuhi (drag & drop). Diputuskan saat DS-09;
-                    JANGAN "diseragamkan" belakangan. */}
-                <table className="w-full text-data">
-                {/* pengawas-elemen:selesai */}
-                  <thead>
-                    <tr className="border-b">
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Item</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Metrik</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Nilai Lama</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Nilai Usulan</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Dampak</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Metode / n</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {proposals.map((p) => (
-                      <tr key={p.production_standard_proposal_id} className="border-b last:border-0">
-                        <td className="px-3 py-1.5">
+              <Table size="lg" className="tabel-responsif">
+                <TableHead>
+                  <TableRow>
+                    <TableHeader>Item</TableHeader>
+                    <TableHeader>Metrik</TableHeader>
+                    <TableHeader>Nilai lama</TableHeader>
+                    <TableHeader>Nilai usulan</TableHeader>
+                    <TableHeader>Dampak</TableHeader>
+                    <TableHeader>Metode / n</TableHeader>
+                    <TableHeader>Aksi</TableHeader>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {proposals.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7}>Tidak ada usulan menunggu keputusan saat ini.</TableCell>
+                    </TableRow>
+                  ) : (
+                    proposals.map((p) => (
+                      <TableRow key={p.production_standard_proposal_id}>
+                        <TableCell data-label="Item">
                           {p.item_code ?? p.item_name}
-                          {p.routing_step_name ? <span className="text-xs text-muted-foreground"> · {p.routing_step_name}</span> : null}
-                        </td>
-                        <td className="px-3 py-1.5">{metricKeyLabels[p.metric_key] ?? p.metric_key}</td>
-                        <td className="px-3 py-1.5">
-                          {p.old_value !== null && p.old_value !== undefined ? formatNumberId(p.old_value, 2) : '-'} <span className="text-xs text-muted-foreground">({p.old_source ?? 'belum ada'})</span>
-                        </td>
-                        <td className="px-3 py-1.5 font-medium text-foreground">
+                          {p.routing_step_name ? <span className="halaman__redup"> · {p.routing_step_name}</span> : null}
+                        </TableCell>
+                        <TableCell data-label="Metrik">{metricKeyLabels[p.metric_key] ?? p.metric_key}</TableCell>
+                        <TableCell data-label="Nilai lama">
+                          {p.old_value !== null && p.old_value !== undefined ? formatNumberId(p.old_value, 2) : '—'}{' '}
+                          <span className="halaman__redup">({p.old_source ?? 'belum ada'})</span>
+                        </TableCell>
+                        <TableCell data-label="Nilai usulan">
                           {formatNumberId(p.proposed_value, 2)}
                           {p.will_flip_to_dipelajari ? <Tag type="purple">akan jadi DIPELAJARI</Tag> : null}
-                        </td>
-                        <td className="px-3 py-1.5">{p.change_pct === null ? '-' : `${p.change_pct > 0 ? '+' : ''}${formatNumberId(p.change_pct, 2)}%`}</td>
-                        <td className="px-3 py-1.5 text-xs text-muted-foreground">
-                          {p.calculation_method === 'median' ? 'Median' : 'Rata-rata (buang outlier)'} · n={formatNumberId(p.sample_count, 0)}
-                        </td>
-                        <td className="px-3 py-1.5">
+                        </TableCell>
+                        <TableCell data-label="Dampak">
+                          {p.change_pct === null ? '—' : `${p.change_pct > 0 ? '+' : ''}${formatNumberId(p.change_pct, 2)}%`}
+                        </TableCell>
+                        <TableCell data-label="Metode / n">
+                          <span className="halaman__redup">
+                            {p.calculation_method === 'median' ? 'Median' : 'Rata-rata (buang outlier)'} · n={formatNumberId(p.sample_count, 0)}
+                          </span>
+                        </TableCell>
+                        <TableCell data-label="Aksi">
                           {canDecideProductionStandardProposal(role) ? (
-                            <div className="flex gap-2">
+                            <div className="ppic-aksi-baris">
                               <Button size="sm" disabled={proposalBusyId === p.production_standard_proposal_id} onClick={() => handleDecideProposal(p.production_standard_proposal_id, 'approved')}>
                                 Sahkan
                               </Button>
-                              <Button kind="danger--tertiary" size="sm" disabled={proposalBusyId === p.production_standard_proposal_id} onClick={() => handleDecideProposal(p.production_standard_proposal_id, 'rejected')}>
+                              {/* Aksi merusak DIPISAH jaraknya dari aksi biasa (aturan proyek nomor 9). */}
+                              <Button kind="danger--tertiary" size="sm" className="ppic-aksi-baris__merusak" disabled={proposalBusyId === p.production_standard_proposal_id} onClick={() => handleDecideProposal(p.production_standard_proposal_id, 'rejected')}>
                                 Tolak
                               </Button>
                             </div>
                           ) : (
-                            <span className="text-xs text-muted-foreground">Hanya planner</span>
+                            <span className="halaman__redup">Hanya planner</span>
                           )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             )}
 
       <h2 className="halaman__subjudul">Kapasitas per Work Center — Minggu Ini
@@ -1181,44 +1188,45 @@ export default function PpicDashboardPage() {
                   inputs: [{ label: 'Hari kerja/minggu', value: String(workingDaysPerWeek) }]
                 }}
               /></h2>
-            <p className="text-sm text-muted-foreground">
+            <p className="halaman__redup">
               Jam terjadwal dihitung dari batch produksi aktif minggu ini (Senin–Minggu). Kapasitas tersedia = kapasitas per hari × {workingDaysPerWeek} hari kerja/minggu.
             </p>
-            {capacityError ? <p className="text-sm text-destructive">{capacityError}</p> : null}
-            {capacityMessage ? <p className="text-sm text-destructive">{capacityMessage}</p> : null}
+            {capacityError ? (
+              <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal memuat kapasitas" subtitle={capacityError} />
+            ) : null}
+            {capacityMessage ? (
+              <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal menyimpan kapasitas" subtitle={capacityMessage} />
+            ) : null}
             {capacityLoading ? (
-              <p className="text-sm text-muted-foreground">Memuat...</p>
-            ) : capacity.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Belum ada Work Center aktif.</p>
+              <DataTableSkeleton columnCount={6} rowCount={3} showHeader={false} showToolbar={false} />
             ) : (
-              <div className="overflow-x-auto rounded-md border">
-                {/* pengawas-elemen:mulai — papan Gantt & kisi waktu PPIC. Carbon TIDAK punya
-                    komponen Gantt, dan Table Carbon membawa aturan tinggi baris yang merusak kisi
-                    ber-table-fixed yang selnya bisa dijatuhi (drag & drop). Diputuskan saat DS-09;
-                    JANGAN "diseragamkan" belakangan. */}
-                <table className="w-full text-data">
-                {/* pengawas-elemen:selesai */}
-                  <thead>
-                    <tr className="border-b">
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Work Center</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Lokasi</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Kapasitas/Hari</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Kapasitas Minggu Ini</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Jam Terjadwal</th>
-                      <th className="h-8 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Utilisasi</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {capacity.map((wc) => (
-                      <tr key={wc.work_center_id} className="border-b last:border-0">
-                        <td className="px-3 py-1.5">
+              <Table size="lg" className="tabel-responsif">
+                <TableHead>
+                  <TableRow>
+                    <TableHeader>Work center</TableHeader>
+                    <TableHeader>Lokasi</TableHeader>
+                    <TableHeader>Kapasitas/hari</TableHeader>
+                    <TableHeader>Kapasitas minggu ini</TableHeader>
+                    <TableHeader>Jam terjadwal</TableHeader>
+                    <TableHeader>Utilisasi</TableHeader>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {capacity.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6}>Belum ada Work Center aktif.</TableCell>
+                    </TableRow>
+                  ) : (
+                    capacity.map((wc) => (
+                      <TableRow key={wc.work_center_id}>
+                        <TableCell data-label="Work center">
                           {wc.name}
-                          {wc.code ? <span className="text-xs text-muted-foreground"> ({wc.code})</span> : null}
-                        </td>
-                        <td className="px-3 py-1.5">{wc.production_plant_name ?? '-'}</td>
-                        <td className="px-3 py-1.5">
+                          {wc.code ? <span className="halaman__redup"> ({wc.code})</span> : null}
+                        </TableCell>
+                        <TableCell data-label="Lokasi">{wc.production_plant_name ?? '—'}</TableCell>
+                        <TableCell data-label="Kapasitas/hari">
                           {canManageWorkCenterCapacity(role) ? (
-                            <div className="flex items-center gap-2">
+                            <div className="ppic-kapasitas">
                               {/* KAPASITAS adalah SATU isian bermakna: jam per unit × jumlah unit.
                                   Keduanya berdampingan di bawah satu kelompok, bukan dua field
                                   berlabel sendiri-sendiri yang kebetulan bersebelahan. */}
@@ -1240,7 +1248,7 @@ export default function PpicDashboardPage() {
                                   setCapacityEdits((prev) => ({ ...prev, [wc.work_center_id]: String(value ?? '') }))
                                 }
                               />
-                              <span className="halaman__redup">×</span>
+                              <span className="halaman__redup" aria-hidden="true">×</span>
                               <NumberInput
                                 id={`kapasitas-unit-${wc.work_center_id}`}
                                 label="Jumlah unit"
@@ -1256,38 +1264,42 @@ export default function PpicDashboardPage() {
                                 }
                               />
                               <Button kind="tertiary" size="sm" disabled={capacitySavingId === wc.work_center_id} onClick={() => handleSaveCapacity(wc.work_center_id)}>
-                                {capacitySavingId === wc.work_center_id ? '...' : 'Simpan'}
+                                {capacitySavingId === wc.work_center_id ? 'Menyimpan…' : 'Simpan'}
                               </Button>
                             </div>
                           ) : wc.capacity_hours_per_day !== null ? (
                             `${formatNumberId(wc.capacity_hours_per_day, 2)} jam${wc.unit_count > 1 ? ` × ${formatNumberId(wc.unit_count, 0)} unit` : ''}`
                           ) : (
-                            <span className="text-muted-foreground">-</span>
+                            <span className="halaman__redup">—</span>
                           )}
-                        </td>
-                        {wc.capacity_hours_per_day === null ? (
-                          <td className="px-3 py-1.5 text-muted-foreground" colSpan={3}>
-                            Kapasitas belum diatur
-                          </td>
-                        ) : (
-                          <>
-                            <td className="px-3 py-1.5">{formatNumberId(wc.total_capacity_hours, 2)} jam</td>
-                            <td className="px-3 py-1.5">{formatNumberId(wc.scheduled_hours, 2)} jam</td>
-                            <td className="px-3 py-1.5">
-                              <Tag type={utilizationWarnaTag(wc.utilization_pct ?? 0)}>{formatNumberId(wc.utilization_pct, 2)}%</Tag>
-                            </td>
-                          </>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                        </TableCell>
+                        <TableCell data-label="Kapasitas minggu ini">
+                          {wc.capacity_hours_per_day === null ? (
+                            <span className="halaman__redup">Kapasitas belum diatur</span>
+                          ) : (
+                            `${formatNumberId(wc.total_capacity_hours, 2)} jam`
+                          )}
+                        </TableCell>
+                        <TableCell data-label="Jam terjadwal">
+                          {wc.capacity_hours_per_day === null ? <span className="halaman__redup">—</span> : `${formatNumberId(wc.scheduled_hours, 2)} jam`}
+                        </TableCell>
+                        <TableCell data-label="Utilisasi">
+                          {wc.capacity_hours_per_day === null ? (
+                            <span className="halaman__redup">—</span>
+                          ) : (
+                            <Tag type={utilizationWarnaTag(wc.utilization_pct ?? 0)}>{formatNumberId(wc.utilization_pct, 2)}%</Tag>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             )}
 
       <h2 className="halaman__subjudul">Gantt Produksi per Work Center</h2>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm text-muted-foreground">
+            <div className="ppic-baris-antara">
+              <p className="halaman__redup">
                 Blok = 1 tahap routing per batch. Posisi tanggal dihitung dari waktu aktif + waktu tunggu tahap-tahap sebelumnya (mis. tahap sesudah curing 48 jam baru muncul 2 hari kemudian); lebar blok cuma durasi aktif mesin (waktu tunggu tidak menyibukkan mesin, beda dari posisinya). Klik blok untuk lihat detail.
                 {ganttView === 'weekly' ? ' Seret batch berstatus Direncanakan untuk jadwalkan ulang (tetap di Work Center yang sama) — batch yang sudah berjalan/selesai tidak bisa diseret.' : ''}
               </p>
@@ -1306,9 +1318,9 @@ export default function PpicDashboardPage() {
               </ContentSwitcher>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="ppic-baris-antara">
               {ganttView === 'weekly' ? (
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="ppic-aksi-baris">
                   <Button kind="tertiary" size="sm" onClick={() => setGanttWeekOffset((prev) => prev - 1)}>
                     ← Minggu Sebelumnya
                   </Button>
@@ -1320,7 +1332,7 @@ export default function PpicDashboardPage() {
                   </Button>
                 </div>
               ) : ganttView === 'daily' ? (
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="ppic-aksi-baris">
                   <Button kind="tertiary" size="sm" onClick={() => handleShiftDailyDate(-1)}>
                     ← Hari Sebelumnya
                   </Button>
@@ -1330,10 +1342,10 @@ export default function PpicDashboardPage() {
                   <Button kind="tertiary" size="sm" onClick={() => handleShiftDailyDate(1)}>
                     Hari Berikutnya →
                   </Button>
-                  <span className="text-sm font-medium text-foreground">{ganttDailyDate}</span>
+                  <span className="ppic-teks-tegas">{ganttDailyDate}</span>
                 </div>
               ) : (
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="ppic-aksi-baris">
                   <Button kind="tertiary" size="sm" onClick={() => handleShiftMonth(-1)}>
                     ← Bulan Sebelumnya
                   </Button>
@@ -1348,19 +1360,19 @@ export default function PpicDashboardPage() {
                   <Button kind="tertiary" size="sm" onClick={() => handleShiftMonth(1)}>
                     Bulan Berikutnya →
                   </Button>
-                  <span className="text-sm font-medium text-foreground">
+                  <span className="ppic-teks-tegas">
                     {MONTH_LABELS[ganttMonth.month - 1]} {ganttMonth.year}
                   </span>
                 </div>
               )}
             </div>
 
-            {ganttError ? <p className="text-sm text-destructive">{ganttError}</p> : null}
-            {dragMessage ? <p className="text-sm text-destructive">{dragMessage}</p> : null}
+            {ganttError ? <p className="ppic-teks-gagal">{ganttError}</p> : null}
+            {dragMessage ? <p className="ppic-teks-gagal">{dragMessage}</p> : null}
             {ganttLoading ? (
-              <p className="text-sm text-muted-foreground">Memuat...</p>
+              <p className="halaman__redup">Memuat...</p>
             ) : ganttWorkCenters.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Belum ada Work Center aktif.</p>
+              <p className="halaman__redup">Belum ada Work Center aktif.</p>
             ) : ganttView === 'weekly' ? (
               // pointerWithin (bukan default rectIntersection) — target drop ditentukan dari
               // posisi KURSOR, bukan dari area tumpang-tindih rect elemen yang diseret. Penting
@@ -1398,7 +1410,7 @@ export default function PpicDashboardPage() {
                           <tr key={wc.work_center_id} className={`border-b align-top last:border-0 transition-opacity ${restrictedRow ? 'opacity-40' : ''}`}>
                             <td className="px-3 py-2 font-medium text-foreground">
                               {wc.name}
-                              {wc.code ? <span className="text-xs font-normal text-muted-foreground"> ({wc.code})</span> : null}
+                              {wc.code ? <span className="ppic-redup-kecil"> ({wc.code})</span> : null}
                             </td>
                             {ganttDays.map((day) => {
                               const cellBlocks = ganttBlocksByCell.get(`${wc.work_center_id}_${day}`) ?? [];
@@ -1420,7 +1432,7 @@ export default function PpicDashboardPage() {
                 <div>
                   <p className="mb-2 mt-3 text-sm font-medium text-foreground">Belum Dijadwalkan (planned_date kosong)</p>
                   {ganttUnscheduled.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Semua batch aktif sudah punya tanggal rencana.</p>
+                    <p className="halaman__redup">Semua batch aktif sudah punya tanggal rencana.</p>
                   ) : (
                     <div className="flex flex-col gap-2">
                       {ganttUnscheduled.map((b) => (
@@ -1434,7 +1446,7 @@ export default function PpicDashboardPage() {
               </DndContext>
             ) : ganttView === 'daily' ? (
               <>
-                <p className="text-xs text-muted-foreground">
+                <p className="ppic-redup-kecil">
                   Tampilan Harian cuma untuk lihat jadwal (tidak bisa diseret) — jangkar jam pakai jam mulai shift batch (kalau ada), pakai offset kumulatif yang sama dengan tampilan Mingguan.
                 </p>
                 <div className="overflow-x-auto rounded-md border">
@@ -1459,13 +1471,13 @@ export default function PpicDashboardPage() {
                         <tr key={wc.work_center_id} className="border-b align-top last:border-0">
                           <td className="px-3 py-2 font-medium text-foreground">
                             {wc.name}
-                            {wc.code ? <span className="text-xs font-normal text-muted-foreground"> ({wc.code})</span> : null}
+                            {wc.code ? <span className="ppic-redup-kecil"> ({wc.code})</span> : null}
                           </td>
                           {Array.from({ length: 24 }, (_, h) => h).map((hour) => {
                             const cellBlocks = ganttBlocksByHourCell.get(`${wc.work_center_id}_${hour}`) ?? [];
                             return (
                               <td key={hour} className="px-1 py-1.5 align-top">
-                                <div className="flex flex-col gap-1">
+                                <div className="ppic-tumpuk">
                                   {cellBlocks.map((block, i) => (
                                     <div
                                       key={`${block.production_batch_id}_${block.sequence_no}_${i}`}
@@ -1475,7 +1487,7 @@ export default function PpicDashboardPage() {
                                     >
                                       <div className="font-medium">{formatHourLabel(block.minute_of_day)} · {block.batch_number}</div>
                                       <div className="truncate">{block.item_code ?? block.item_name}</div>
-                                      <div className="text-muted-foreground">{block.step_name}</div>
+                                      <div className="halaman__redup">{block.step_name}</div>
                                     </div>
                                   ))}
                                 </div>
@@ -1490,7 +1502,7 @@ export default function PpicDashboardPage() {
               </>
             ) : (
               <>
-                <p className="text-xs text-muted-foreground">Angka = jumlah batch yang punya tahap pada hari itu di Work Center tersebut. Klik tanggal untuk lihat detail Harian.</p>
+                <p className="ppic-redup-kecil">Angka = jumlah batch yang punya tahap pada hari itu di Work Center tersebut. Klik tanggal untuk lihat detail Harian.</p>
                 <div className="overflow-x-auto rounded-md border">
                   {/* pengawas-elemen:mulai — papan Gantt & kisi waktu PPIC. Carbon TIDAK punya
                       komponen Gantt, dan Table Carbon membawa aturan tinggi baris yang merusak kisi
@@ -1520,7 +1532,7 @@ export default function PpicDashboardPage() {
                         <tr key={wc.work_center_id} className="border-b align-top last:border-0">
                           <td className="px-3 py-2 font-medium text-foreground">
                             {wc.name}
-                            {wc.code ? <span className="text-xs font-normal text-muted-foreground"> ({wc.code})</span> : null}
+                            {wc.code ? <span className="ppic-redup-kecil"> ({wc.code})</span> : null}
                           </td>
                           {ganttDays.map((day) => {
                             const entry = ganttMonthlySummaryByCell.get(`${wc.work_center_id}_${day}`);
@@ -1604,7 +1616,7 @@ export default function PpicDashboardPage() {
           )}
         </DataTable>
       )}
-            <div className="mt-3">
+            <div className="ppic-jarak-atas">
               <Link href="/boms" className="cds--link">
                 Buka halaman BOM lengkap
               </Link>
@@ -1619,68 +1631,68 @@ export default function PpicDashboardPage() {
         />
         <ModalBody hasForm>
 
-          {blockDetailLoading ? <p className="text-sm text-muted-foreground">Memuat detail...</p> : null}
-          {blockDetailError ? <p className="text-sm text-destructive">{blockDetailError}</p> : null}
+          {blockDetailLoading ? <p className="halaman__redup">Memuat detail...</p> : null}
+          {blockDetailError ? <p className="ppic-teks-gagal">{blockDetailError}</p> : null}
 
           {blockDetail && !blockDetailLoading ? (
-            <div className="flex flex-col gap-4 text-sm">
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-none border p-3">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">No. Batch</div>
-                <div className="text-right font-medium">{blockDetail.batch.batch_number}</div>
+            <div className="ppic-tumpuk">
+              <div className="ppic-daftar-nilai">
+                <div className="ppic-label">No. Batch</div>
+                <div className="ppic-kanan ppic-teks-tegas">{blockDetail.batch.batch_number}</div>
 
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Item</div>
-                <div className="text-right">{blockDetail.item?.item_code ?? blockDetail.item?.item_name ?? '-'}</div>
+                <div className="ppic-label">Item</div>
+                <div className="ppic-kanan">{blockDetail.item?.item_code ?? blockDetail.item?.item_name ?? '-'}</div>
 
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Nama Tahap</div>
-                <div className="text-right">{blockDetail.step.step_name}</div>
+                <div className="ppic-label">Nama Tahap</div>
+                <div className="ppic-kanan">{blockDetail.step.step_name}</div>
 
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Work Center</div>
-                <div className="text-right">{blockDetail.workCenter ? `${blockDetail.workCenter.name}${blockDetail.workCenter.code ? ` (${blockDetail.workCenter.code})` : ''}` : '-'}</div>
+                <div className="ppic-label">Work Center</div>
+                <div className="ppic-kanan">{blockDetail.workCenter ? `${blockDetail.workCenter.name}${blockDetail.workCenter.code ? ` (${blockDetail.workCenter.code})` : ''}` : '-'}</div>
 
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Tanggal Rencana</div>
-                <div className="text-right">{blockDetail.batch.planned_date ?? '-'}</div>
+                <div className="ppic-label">Tanggal Rencana</div>
+                <div className="ppic-kanan">{blockDetail.batch.planned_date ?? '-'}</div>
 
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Durasi Aktif</div>
-                <div className="text-right">
+                <div className="ppic-label">Durasi Aktif</div>
+                <div className="ppic-kanan">
                   {blockDetail.step.active_duration_minutes} mnt
                   {blockDetail.durasi_standar_dari_snapshot ? (
-                    <span className="ml-1 text-xs font-normal text-muted-foreground">(beku sejak batch dimulai)</span>
+                    <span className="ppic-catatan-sisip">(beku sejak batch dimulai)</span>
                   ) : blockDetail.tanpa_snapshot_batch_lama ? (
-                    <span className="ml-1 text-xs font-normal text-warning-subtle-foreground">(tanpa snapshot — batch sebelum fitur ini ada)</span>
+                    <span className="ppic-catatan-sisip ppic-catatan-sisip--waspada">(tanpa snapshot — batch sebelum fitur ini ada)</span>
                   ) : null}
                 </div>
 
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Durasi Tunggu</div>
-                <div className="text-right">{blockDetail.step.wait_duration_minutes} mnt</div>
+                <div className="ppic-label">Durasi Tunggu</div>
+                <div className="ppic-kanan">{blockDetail.step.wait_duration_minutes} mnt</div>
 
                 {blockDetail.shift ? (
                   <>
-                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Shift</div>
-                    <div className="text-right">
+                    <div className="ppic-label">Shift</div>
+                    <div className="ppic-kanan">
                       {blockDetail.shift.name} ({blockDetail.shift.start_time}–{blockDetail.shift.end_time})
                     </div>
                   </>
                 ) : null}
 
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Status Batch</div>
-                <div className="text-right">
+                <div className="ppic-label">Status Batch</div>
+                <div className="ppic-kanan">
                   <Tag type={statusWarnaTag[blockDetail.batch.status] ?? 'gray'}>{statusLabels[blockDetail.batch.status] ?? blockDetail.batch.status}</Tag>
                 </div>
               </div>
 
               <div>
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Pekerja Ditugaskan</p>
+                <p className="ppic-label">Pekerja Ditugaskan</p>
                 {blockDetail.assignments.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Belum ada pekerja yang ditugaskan ke tahap ini.</p>
+                  <p className="halaman__redup">Belum ada pekerja yang ditugaskan ke tahap ini.</p>
                 ) : (
-                  <div className="flex flex-col gap-1">
+                  <div className="ppic-tumpuk">
                     {blockDetail.assignments.map((a) => (
-                      <div key={a.work_order_assignment_id} className="flex items-center justify-between border-b py-1 last:border-0">
+                      <div key={a.work_order_assignment_id} className="ppic-baris-antara ppic-baris-pemisah">
                         <div>
-                          <span className="font-medium text-foreground">{a.employee_name ?? '-'}</span>
-                          {a.employee_position ? <span className="text-xs text-muted-foreground"> · {a.employee_position}</span> : null}
+                          <span className="ppic-teks-tegas">{a.employee_name ?? '-'}</span>
+                          {a.employee_position ? <span className="ppic-redup-kecil"> · {a.employee_position}</span> : null}
                         </div>
-                        <span className="text-xs text-muted-foreground">{assignmentStatusLabels[a.status] ?? a.status}</span>
+                        <span className="ppic-redup-kecil">{assignmentStatusLabels[a.status] ?? a.status}</span>
                       </div>
                     ))}
                   </div>
@@ -1688,29 +1700,29 @@ export default function PpicDashboardPage() {
               </div>
 
               <div>
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Progres Tercatat</p>
+                <div className="ppic-baris-antara">
+                  <p className="ppic-label">Progres Tercatat</p>
                   <Button kind="tertiary" size="sm" onClick={handleOpenYieldSummary}>
                     Ringkasan Yield Batch
                   </Button>
                 </div>
                 {blockDetail.progress.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Belum ada progres tercatat untuk tahap ini.</p>
+                  <p className="halaman__redup">Belum ada progres tercatat untuk tahap ini.</p>
                 ) : (
-                  <div className="flex flex-col gap-1">
+                  <div className="ppic-tumpuk">
                     {blockDetail.progress.map((p) => (
-                      <div key={p.work_order_step_progress_id} className="border-b py-1 last:border-0">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-foreground">{progressStatusLabels[p.status] ?? p.status}</span>
-                          <span className="text-xs text-muted-foreground">
+                      <div key={p.work_order_step_progress_id} className="ppic-baris-pemisah">
+                        <div className="ppic-baris-antara">
+                          <span className="ppic-teks-tegas">{progressStatusLabels[p.status] ?? p.status}</span>
+                          <span className="ppic-redup-kecil">
                             Input: {p.qty_input !== null ? `${formatNumberId(p.qty_input, 2)} ${p.uom_input ?? ''}` : '-'} → Output: {p.qty_recorded !== null ? `${formatNumberId(p.qty_recorded, 2)} ${p.uom ?? ''}` : '-'}
                             {p.shrinkage_pct !== null ? ` · Susut ${formatNumberId(p.shrinkage_pct, 2)}%` : ''}
                           </span>
                         </div>
-                        <div className="text-xs text-muted-foreground">
+                        <div className="ppic-redup-kecil">
                           Mulai: {formatDateTime(p.started_at)} · Selesai: {formatDateTime(p.completed_at)}
                         </div>
-                        {p.notes ? <div className="text-xs text-muted-foreground">Catatan: {p.notes}</div> : null}
+                        {p.notes ? <div className="ppic-redup-kecil">Catatan: {p.notes}</div> : null}
                       </div>
                     ))}
                   </div>
@@ -1718,11 +1730,11 @@ export default function PpicDashboardPage() {
               </div>
 
               {canRecordStepProgress(role) ? (
-                <div className="border-t pt-3">
-                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Catat Progres Tahap Ini</p>
+                <div className="ppic-pemisah-atas">
+                  <p className="ppic-label">Catat Progres Tahap Ini</p>
                   {progressSuggestion ? (
-                    <p className="mb-2 text-xs text-muted-foreground">
-                      Jumlah masuk disarankan: <span className="font-medium text-foreground">{formatNumberId(progressSuggestion.qty, 2)} {progressSuggestion.uom ?? ''}</span>{' '}
+                    <p className="ppic-redup-kecil">
+                      Jumlah masuk disarankan: <span className="ppic-teks-tegas">{formatNumberId(progressSuggestion.qty, 2)} {progressSuggestion.uom ?? ''}</span>{' '}
                       ({progressSuggestion.source === 'previous_step' ? 'dari output tahap sebelumnya' : 'dari planned_qty batch — tahap pertama/belum ada data sebelumnya'}) — bisa diubah.
                     </p>
                   ) : null}
@@ -1809,7 +1821,7 @@ export default function PpicDashboardPage() {
                     />
                   </div>
                   {progressFormMessage ? <p className={`mt-2 text-sm ${progressFormStatus === 'error' ? 'text-destructive' : 'text-success'}`}>{progressFormMessage}</p> : null}
-                  <Button size="sm" className="mt-2" disabled={progressFormStatus === 'saving'} onClick={handleSubmitProgress}>
+                  <Button size="sm" className="ppic-jarak-atas" disabled={progressFormStatus === 'saving'} onClick={handleSubmitProgress}>
                     {progressFormStatus === 'saving' ? 'Menyimpan...' : 'Simpan Progres'}
                   </Button>
                 </div>
@@ -1827,64 +1839,63 @@ export default function PpicDashboardPage() {
           closeModal={() => setYieldOpen(false)}
         />
         <ModalBody>
-          {yieldLoading ? <p className="text-sm text-muted-foreground">Memuat ringkasan yield...</p> : null}
-          {yieldError ? <p className="text-sm text-destructive">{yieldError}</p> : null}
+          {yieldLoading ? <p className="halaman__redup">Memuat ringkasan yield...</p> : null}
+          {yieldError ? <p className="ppic-teks-gagal">{yieldError}</p> : null}
           {yieldSummary && !yieldLoading ? (
-            <div className="flex flex-col gap-3 text-sm">
-              <div className="overflow-x-auto rounded-none border">
-                {/* pengawas-elemen:mulai — papan Gantt & kisi waktu PPIC. Carbon TIDAK punya
-                    komponen Gantt, dan Table Carbon membawa aturan tinggi baris yang merusak kisi
-                    ber-table-fixed yang selnya bisa dijatuhi (drag & drop). Diputuskan saat DS-09;
-                    JANGAN "diseragamkan" belakangan. */}
-                <table className="w-full text-data">
-                {/* pengawas-elemen:selesai */}
-                  <thead>
-                    <tr className="border-b">
-                      <th className="h-8 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Tahap</th>
-                      <th className="h-8 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Input</th>
-                      <th className="h-8 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Output</th>
-                      <th className="h-8 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          Susut
-                          <ProvenanceInfoButton
-                            label="Susut per Tahap"
-                            envelope={{
-                              formula: '(Input tahap − Output tahap) ÷ Input tahap × 100%. Susut = seluruh selisih input-output tahap ini, termasuk reject DAN penyusutan proses biasa (evaporasi, dsb) — kolom "Reject" di sebelah kanan memecah berapa persen dari susut ini yang spesifik karena reject.',
-                              inputs: [{ label: 'Dihitung per baris', value: 'Tiap tahap di tabel ini' }]
-                            }}
-                          />
-                        </span>
-                      </th>
-                      <th className="h-8 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Reject</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {yieldSummary.steps.map((s) => (
-                      <tr key={s.routing_step_id} className="border-b last:border-0">
-                        <td className="px-2 py-1.5">
+            <div className="ppic-tumpuk">
+              <Table size="lg" className="tabel-responsif">
+                <TableHead>
+                  <TableRow>
+                    <TableHeader>Tahap</TableHeader>
+                    <TableHeader>Input</TableHeader>
+                    <TableHeader>Output</TableHeader>
+                    <TableHeader>
+                      <span className="ppic-kepala-berikon">
+                        Susut
+                        <ProvenanceInfoButton
+                          label="Susut per Tahap"
+                          envelope={{
+                            formula: '(Input tahap − Output tahap) ÷ Input tahap × 100%. Susut = seluruh selisih input-output tahap ini, termasuk reject DAN penyusutan proses biasa (evaporasi, dsb) — kolom "Reject" di sebelah kanan memecah berapa persen dari susut ini yang spesifik karena reject.',
+                            inputs: [{ label: 'Dihitung per baris', value: 'Tiap tahap di tabel ini' }]
+                          }}
+                        />
+                      </span>
+                    </TableHeader>
+                    <TableHeader>Reject</TableHeader>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {yieldSummary.steps.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5}>Belum ada tahap tercatat untuk batch ini.</TableCell>
+                    </TableRow>
+                  ) : (
+                    yieldSummary.steps.map((s) => (
+                      <TableRow key={s.routing_step_id}>
+                        <TableCell data-label="Tahap">
                           {s.sequence_no}. {s.step_name}
-                        </td>
-                        <td className="px-2 py-1.5">{s.qty_input !== null ? `${formatNumberId(s.qty_input, 2)} ${s.uom_input ?? ''}` : '-'}</td>
-                        <td className="px-2 py-1.5">{s.qty_recorded !== null ? `${formatNumberId(s.qty_recorded, 2)} ${s.uom ?? ''}` : '-'}</td>
-                        <td className="px-2 py-1.5">{s.shrinkage_pct !== null ? `${formatNumberId(s.shrinkage_pct, 2)}%` : '-'}</td>
-                        <td className="px-2 py-1.5">
+                        </TableCell>
+                        <TableCell data-label="Input">{s.qty_input !== null ? `${formatNumberId(s.qty_input, 2)} ${s.uom_input ?? ''}` : '—'}</TableCell>
+                        <TableCell data-label="Output">{s.qty_recorded !== null ? `${formatNumberId(s.qty_recorded, 2)} ${s.uom ?? ''}` : '—'}</TableCell>
+                        <TableCell data-label="Susut">{s.shrinkage_pct !== null ? `${formatNumberId(s.shrinkage_pct, 2)}%` : '—'}</TableCell>
+                        <TableCell data-label="Reject">
                           {s.qty_reject !== null ? (
-                            <span className="text-destructive">
+                            <span className="ppic-teks-gagal">
                               {formatNumberId(s.qty_reject, 2)} {s.uom ?? ''}
                               {s.reject_share_of_shrinkage_pct !== null ? ` (${formatNumberId(s.reject_share_of_shrinkage_pct, 2)}% dari susut)` : ''}
                             </span>
                           ) : (
-                            '-'
+                            '—'
                           )}
-                          {s.reject_reason ? <div className="text-xs text-muted-foreground">{s.reject_reason}</div> : null}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="flex items-center justify-between border-t pt-2">
-                <span className="flex items-center gap-1 text-sm font-medium text-foreground">
+                          {s.reject_reason ? <div className="halaman__redup">{s.reject_reason}</div> : null}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+              <div className="ppic-baris-antara ppic-pemisah-atas">
+                <span className="ppic-kepala-berikon ppic-teks-tegas">
                   Total Yield Batch
                   <ProvenanceInfoButton
                     label="Total Yield Batch"
@@ -1897,21 +1908,21 @@ export default function PpicDashboardPage() {
                     }}
                   />
                 </span>
-                <span className="text-lg font-semibold text-foreground">{yieldSummary.total_yield_pct !== null ? `${formatNumberId(yieldSummary.total_yield_pct, 2)}%` : 'Belum bisa dihitung'}</span>
+                <span className="ppic-angka-besar">{yieldSummary.total_yield_pct !== null ? `${formatNumberId(yieldSummary.total_yield_pct, 2)}%` : 'Belum bisa dihitung'}</span>
               </div>
               {yieldSummary.total_reject > 0 ? (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-foreground">Total Reject (semua tahap)</span>
-                  <span className="text-sm font-medium text-destructive">{formatNumberId(yieldSummary.total_reject, 2)}</span>
+                <div className="ppic-baris-antara">
+                  <span className="ppic-teks-tegas">Total Reject (semua tahap)</span>
+                  <span className="ppic-teks-gagal">{formatNumberId(yieldSummary.total_reject, 2)}</span>
                 </div>
               ) : null}
-              <p className="text-xs text-muted-foreground">
+              <p className="ppic-redup-kecil">
                 Total Yield = Output tahap terakhir (baik, sudah dikurangi reject) ÷ Input tahap pertama × 100% — reject sudah otomatis TIDAK ikut terhitung sebagai yield.
               </p>
 
               {canProposeProductionStandard(role) ? (
-                <div className="border-t pt-3">
-                  <p className="mb-2 text-xs text-muted-foreground">
+                <div className="ppic-pemisah-atas">
+                  <p className="ppic-redup-kecil">
                     K8 — kalau batch ini SUDAH selesai semua tahapnya, ajukan datanya sebagai sampel belajar standar produksi (yield, unit/batch, durasi tiap tahap). Batch dengan log tahap belum lengkap otomatis DIKECUALIKAN (dilaporkan, bukan dilewati diam-diam).
                   </p>
                   <Button kind="tertiary" size="sm" disabled={learnStatus === 'pending'} onClick={handleLearnFromBatch}>

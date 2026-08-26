@@ -27,6 +27,23 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # BUILD PRODUKSI (ditambahkan 26 Agu 2026) — dan alasannya sebuah kejadian nyata.
+      #
+      # CI ini SELAMA INI TIDAK PERNAH MEM-BUILD. Typecheck lulus, seluruh test hijau, dan
+      # `next dev` berjalan mulus — sementara `next build` GAGAL dengan 90 galat sekaligus.
+      # Penyebabnya satu baris `import '@carbon/react/index.scss'` yang memancarkan aturan
+      # @font-face berawalan `~@ibm/plex/...`, sintaks milik webpack yang Turbopack tidak
+      # kenal. `next dev` melewatinya karena ia tidak menyelesaikan seluruh aset di muka.
+      #
+      # Akibatnya: deployment Vercel gagal DUA KALI berturut-turut sementara CI tidak punya
+      # satu pun langkah yang bisa berbunyi. Situs tayang berhenti diperbarui, dan satu-satunya
+      # petunjuk ada di catatan deployment GitHub — tempat yang tidak dilihat siapa pun.
+      #
+      # Diletakkan SEBELUM test: build gagal dalam hitungan detik, sedangkan suite test
+      # butuh belasan menit. Kegagalan yang murah didahulukan.
+      - name: Build produksi (next build) -- typecheck & test TIDAK bisa menangkap kegagalan build
+        run: npm run build
+
       - name: Test suite (typecheck + 25 test lintas-role, termasuk isolasi antar company)
         run: npm run test:ci
         env:

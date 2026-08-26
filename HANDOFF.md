@@ -2,6 +2,42 @@
 
 Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`). Tiap sesi Claude Code WAJIB baca ini dulu sebelum mulai, dan memperbarui bagian relevan begitu sesi selesai. Klaim di sini harus tetap diverifikasi ulang, bukan otomatis dipercaya — HANDOFF ini rangkuman, bukan pengganti bukti.
 
+## SS — TYPECHECK HIJAU, TEST HIJAU, DEV JALAN — DAN BUILD PRODUKSI GAGAL (26 Agu 2026)
+
+**Situs tayang berhenti diperbarui, dan tidak satu pun pemeriksaan yang ada berbunyi.**
+
+Deployment Vercel **gagal dua kali berturut-turut** untuk kedua commit hari ini, sementara:
+typecheck bersih · 63 berkas test hijau · `next dev` berjalan mulus · 174/174 kombinasi
+tampilan bersih. Satu-satunya petunjuk ada di **catatan deployment GitHub** — tempat yang
+tidak dilihat siapa pun.
+
+**Penyebabnya SATU BARIS**, di `app/shipments/[shipmentId]/surat-jalan/layout.tsx`:
+
+```
+import '@carbon/react/index.scss';   // <- memancarkan @font-face ber-awalan ~@ibm/plex/...
+```
+
+`~` adalah sintaks resolusi milik **webpack**. Turbopack tidak mengenalnya, jadi `next build`
+gagal dengan **90 galat "Module not found"** sekaligus. **`next dev` melewatinya** karena ia
+tidak menyelesaikan seluruh aset di muka.
+
+Berkas bersama `@/styles/carbon.scss` sudah menutup lubang itu sejak awal —
+`@use '@carbon/styles/scss/config' with ($css--font-face: false)`. Jadi ini **"dua jalur
+hidup" sekali lagi**, dan kali ini jalur keduanya bahkan **tidak bisa dibangun**.
+
+> **CI TIDAK PERNAH MEM-BUILD.** Itu lubangnya. Typecheck memeriksa tipe, test memeriksa
+> perilaku, `next dev` memeriksa perkembangan — **tidak satu pun memeriksa apakah aplikasinya
+> bisa dirakit untuk produksi.**
+
+**Diperbaiki dua lapis, dan yang kedua yang penting:**
+1. Impornya diganti ke berkas bersama. Build lokal lulus.
+2. **`npm run build` ditambahkan ke CI**, diletakkan **sebelum** test — build gagal dalam
+   hitungan detik, suite test butuh belasan menit. Kegagalan yang murah didahulukan.
+
+**ATURAN yang lahir darinya**: sebelum menyatakan sebuah perubahan siap dirilis, **jalankan
+`npm run build`** — bukan hanya typecheck dan test. Tiga pemeriksaan yang semuanya hijau tidak
+berarti apa-apa untuk pertanyaan *"apakah ini bisa di-deploy?"* bila tak satu pun menanyakannya.
+
 ## RR — ADA TIGA PROJECT SUPABASE, BUKAN DUA (26 Agu 2026)
 
 Laporan sebelumnya berbunyi *"kedua project kini 294 dari 294"*. Kalimatnya benar untuk dua

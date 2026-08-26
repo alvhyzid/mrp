@@ -1217,7 +1217,15 @@ export default function PpicDashboardPage() {
                       <TableCell colSpan={6}>Belum ada Work Center aktif.</TableCell>
                     </TableRow>
                   ) : (
-                    capacity.map((wc) => (
+                    capacity.map((wc) => {
+                      // Hasil kali dihitung dari nilai yang SEDANG DIKETIK, bukan dari yang
+                      // tersimpan -- supaya angka "= N jam/hari" ikut bergerak saat disunting
+                      // dan penggunanya melihat akibat ketikannya sebelum menekan Simpan.
+                      const jamPerUnitKini = Number(capacityEdits[wc.work_center_id] ?? wc.capacity_hours_per_day ?? Number.NaN);
+                      const jumlahUnitKini = Number(unitCountEdits[wc.work_center_id] ?? wc.unit_count ?? 1);
+                      const totalPerHari =
+                        Number.isFinite(jamPerUnitKini) && Number.isFinite(jumlahUnitKini) ? jamPerUnitKini * jumlahUnitKini : null;
+                      return (
                       <TableRow key={wc.work_center_id}>
                         <TableCell data-label="Work center">
                           {wc.name}
@@ -1228,8 +1236,11 @@ export default function PpicDashboardPage() {
                           {canManageWorkCenterCapacity(role) ? (
                             <div className="ppic-kapasitas">
                               {/* KAPASITAS adalah SATU isian bermakna: jam per unit × jumlah unit.
-                                  Keduanya berdampingan di bawah satu kelompok, bukan dua field
-                                  berlabel sendiri-sendiri yang kebetulan bersebelahan. */}
+                                  Tiap kotak membawa SATUANNYA SENDIRI secara terlihat, dan hasil
+                                  kalinya ditampilkan di ujung. Sebelum 26 Agu 2026 keduanya polos
+                                  ber-hideLabel: pembaca layar tahu artinya, mata tidak.
+                                  Satuan ditandai aria-hidden supaya pembaca layar tidak mendengar
+                                  hal yang sama dua kali (label prop sudah menyebutkannya). */}
                               <NumberInput
                                 id={`kapasitas-jam-${wc.work_center_id}`}
                                 label="Jam per unit"
@@ -1248,7 +1259,8 @@ export default function PpicDashboardPage() {
                                   setCapacityEdits((prev) => ({ ...prev, [wc.work_center_id]: String(value ?? '') }))
                                 }
                               />
-                              <span className="halaman__redup" aria-hidden="true">×</span>
+                              <span className="ppic-kapasitas__satuan" aria-hidden="true">jam/unit</span>
+                              <span className="ppic-kapasitas__kali" aria-hidden="true">×</span>
                               <NumberInput
                                 id={`kapasitas-unit-${wc.work_center_id}`}
                                 label="Jumlah unit"
@@ -1263,6 +1275,10 @@ export default function PpicDashboardPage() {
                                   setUnitCountEdits((prev) => ({ ...prev, [wc.work_center_id]: String(value ?? '') }))
                                 }
                               />
+                              <span className="ppic-kapasitas__satuan" aria-hidden="true">unit</span>
+                              {totalPerHari !== null ? (
+                                <span className="ppic-kapasitas__hasil">= {formatNumberId(totalPerHari, 2)} jam/hari</span>
+                              ) : null}
                               <Button kind="tertiary" size="sm" disabled={capacitySavingId === wc.work_center_id} onClick={() => handleSaveCapacity(wc.work_center_id)}>
                                 {capacitySavingId === wc.work_center_id ? 'Menyimpan…' : 'Simpan'}
                               </Button>
@@ -1291,7 +1307,8 @@ export default function PpicDashboardPage() {
                           )}
                         </TableCell>
                       </TableRow>
-                    ))
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>

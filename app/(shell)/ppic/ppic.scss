@@ -25,13 +25,43 @@
   max-inline-size: 24rem;
 }
 
-// Kapasitas: jam per unit × jumlah unit adalah SATU isian bermakna.
+// Kapasitas: jam per unit × jumlah unit adalah SATU isian bermakna, jadi keduanya
+// disusun MENDATAR — perkalian dibaca menyamping. Sebelumnya keduanya menumpuk ke bawah
+// (pembungkusnya tidak punya aturan sama sekali) dan tanda × kehilangan artinya.
+.ppic-kapasitas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-03;
+}
+
 .ppic-kapasitas-jam {
   max-inline-size: 7rem;
 }
 
 .ppic-kapasitas-unit {
   max-inline-size: 6rem;
+}
+
+// Satuan yang terlihat: sengaja redup supaya angkanya tetap yang paling menonjol.
+.ppic-kapasitas__satuan {
+  @include type.type-style('label-01');
+
+  color: theme.$text-secondary;
+}
+
+.ppic-kapasitas__kali {
+  @include type.type-style('body-compact-01');
+
+  color: theme.$text-secondary;
+}
+
+// Hasil kalinya TIDAK aria-hidden: ia keterangan baru, bukan pengulangan label.
+.ppic-kapasitas__hasil {
+  @include type.type-style('body-compact-01');
+
+  margin-inline-end: $spacing-03;
+  color: theme.$text-primary;
 }
 
 .ppic-form {

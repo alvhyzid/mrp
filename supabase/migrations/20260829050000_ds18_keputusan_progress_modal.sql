@@ -1,0 +1,75 @@
+-- DS-18 (26 Agu 2026): keputusan pemilik produk — formulir panjang DIPECAH JADI LANGKAH
+-- (Progress modal Carbon), bukan dijadikan halaman penuh dan bukan dua kolom.
+do $mig$
+declare v_company_id integer;
+begin
+  select company_id into v_company_id from companies where name = 'PT ITM' limit 1;
+  if v_company_id is null then return; end if;
+
+  update build_tasks
+     set detail_pekerjaan = detail_pekerjaan || chr(10) || concat_ws(chr(10),
+       '',
+       '=== KEPUTUSAN PEMILIK PRODUK 26 Agu 2026 ===',
+       '"kalau form terlalu panjang pecah menjadi beberapa section, pastikan form di tiap',
+       ' section sesuai dengan konteksnya"',
+       '',
+       'Itu Progress modal Carbon (components/modal/usage#progress-modal). Dan syarat yang',
+       'pemilik produk sebutkan TERNYATA SAMA PERSIS dengan peringatan Carbon di kalimat',
+       'berikutnya:',
+       '  "A progress modal is not a solution for excess modal content. It should only be',
+       '   used to present information in more consumable and focused chunks."',
+       'Jadi memecah TIDAK SAH bila hanya untuk memuatkan isi yang kebanyakan.',
+       '',
+       'UJI SEBUAH BAGIAN SAH: bagian itu bisa diberi judul yang menyebut SATU hal, dan setiap',
+       'field di dalamnya menjawab hal itu. Bila judulnya terpaksa "Lanjutan" atau "Bagian 2",',
+       'pemecahannya salah.',
+       '',
+       'ANATOMI TOMBOL ditetapkan Carbon, jangan dirancang sendiri: Batal (ghost, kiri) +',
+       'Sebelumnya (secondary) & Berikutnya (primary) berpasangan di kanan, tiap tombol 25%',
+       'lebar modal dan menempel penuh ke tepi. Di langkah TERAKHIR, label "Berikutnya"',
+       'berganti jadi aksi finalnya.',
+       'Komponen penanda langkahnya sudah ada di paket: ProgressIndicator (@carbon/react).',
+       '',
+       'HALAMAN PENUH TETAP DIPAKAI hanya bila alurnya BERCABANG — "For complex flows with',
+       'complex choices, consider using a full page instead of a modal." Formulir yang',
+       'urutannya tetap, sepanjang apa pun, cukup progress modal.',
+       '',
+       '=== PEMBAGIAN BAGIAN YANG DIUSULKAN, dari field yang benar-benar ada ===',
+       '',
+       'PO KLIEN (15 field) -> 4 langkah:',
+       '  1. Klien & nomor PO      : Klien, Nomor PO klien (+ klien baru: nama, jenis, kontak)',
+       '  2. Orang yang dihubungi  : Nama PIC, Jabatan, No. HP, Email',
+       '  3. Tanggal & pembayaran  : Tanggal PO, Tanggal kirim diminta, Syarat pembayaran',
+       '  4. Barang yang dipesan   : baris item (Item, Qty, Harga)',
+       '',
+       'KARYAWAN (14 field) -> 3 langkah:',
+       '  1. Identitas & penempatan: Nama, Kode karyawan pabrik, Posisi, Department,',
+       '                             Lokasi kerja, Status kepegawaian',
+       '  2. Gaji & tunjangan      : Skema gaji, Nilai gaji, Tunjangan makan/hari,',
+       '                             Tunjangan transport/hari',
+       '  3. Pajak & BPJS          : Status PTKP, Golongan TER, Tarif TER, Kepesertaan BPJS,',
+       '                             Biaya pemberi kerja per bulan',
+       '',
+       'ITEM (13 field) -> 3 langkah:',
+       '  1. Identitas item        : Kode item, Nama item, Tipe, Status',
+       '  2. Satuan & konversi     : Satuan dasar, Satuan beli, Faktor konversi',
+       '  3. Aturan persediaan     : Masa simpan (angka+satuan), Stok minimum, Biaya standar',
+       '',
+       'BOM (12 field) -> 2 langkah:',
+       '  1. Item induk & hasil    : Item hasil (induk), Hasil standar per batch (angka+satuan),',
+       '                             Sumber angka, Keterangan asal angka, Buffer (%), Status',
+       '  2. Komponen              : baris komponen (Item, Jumlah, Satuan, Tahap SOP)',
+       '  DUA, bukan tiga: "Buffer & status" sendirian hanya berisi dua field dan tidak punya',
+       '  konteks sendiri — memisahkannya akan melanggar uji "judul menyebut satu hal".',
+       '',
+       'CATATAN: pembagian ini disusun dari NAMA FIELD yang ada, bukan dari pengetahuan alur',
+       'kerja pabrik. Pemilik produk berhak mengoreksinya — dan koreksi itu justru yang paling',
+       'bernilai, karena "sesuai konteksnya" adalah pengetahuan yang hanya dia punya.',
+       '',
+       'URUTAN KERJA: PO klien dikerjakan lebih dulu sebagai CETAKAN (ia yang terpanjang dan',
+       'paling banyak jenis fieldnya). Tiga sisanya menyusul dengan bentuk yang sama, supaya',
+       'tidak lahir empat cara berbeda memecah formulir.'
+     )
+   where company_id = v_company_id and task_code = 'DS-18';
+end
+$mig$;

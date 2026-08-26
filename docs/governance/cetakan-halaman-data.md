@@ -300,6 +300,45 @@ Dan pola dialog Carbon menyebut batasnya lebih tegas:
 sekaligus, dan menghasilkan formulir yang sulit dipindai — mata harus melompat kiri-kanan
 alih-alih turun satu jalur.
 
+### 6e-2. FORMULIR PANJANG DIPECAH JADI LANGKAH — Progress Modal
+
+**Keputusan pemilik produk, 26 Agu 2026**: formulir yang terlalu panjang **dipecah menjadi
+beberapa bagian**, bukan dijadikan halaman penuh dan bukan dijadikan dua kolom.
+
+Carbon menyediakannya sebagai **Progress modal** (`components/modal/usage#progress-modal`):
+
+> *"For longer tasks, use a progress modal to give the user a sense of completion and
+> orientation within the focused flow."*
+
+**DAN PERINGATAN DI KALIMAT BERIKUTNYA — ini syaratnya, bukan tambahan:**
+
+> *"A progress modal is not a solution for excess modal content. It should only be used to
+> present information in more consumable and focused chunks."*
+
+Artinya: **memecah tidak sah bila hanya untuk memuatkan isi yang kebanyakan.** Tiap bagian
+wajib berdiri sebagai **satu konteks yang utuh** — pemilik produk merumuskannya sama persis:
+*"pastikan form di tiap section sesuai dengan konteksnya"*.
+
+**UJI SEBUAH BAGIAN SAH ATAU TIDAK**: bagian itu bisa diberi judul yang **menyebut satu hal**,
+dan setiap field di dalamnya menjawab hal itu. Bila judulnya terpaksa berbunyi "Lanjutan" atau
+"Bagian 2", pemecahannya salah — itu memuatkan, bukan mengelompokkan.
+
+**Anatomi tombolnya ditetapkan Carbon, jangan dirancang sendiri:**
+- Tiga tombol: **Batal** (ghost, di **kiri**) · **Sebelumnya** (secondary) + **Berikutnya**
+  (primary) **berpasangan di kanan**.
+- Lebar tiap tombol **25% lebar modal**, menempel penuh ke tepi (*full bleed*).
+- **Di langkah terakhir, label "Berikutnya" berganti jadi aksi finalnya** — mis. "Buat PO klien".
+
+**Kapan TETAP halaman penuh, bukan progress modal:**
+
+> *"For complex flows with complex choices, consider using a full page instead of a modal."*
+
+Yaitu ketika langkah berikutnya **bergantung pada pilihan** di langkah sebelumnya sampai
+alurnya bercabang. Formulir yang urutannya tetap — sepanjang apa pun — cukup progress modal.
+
+**Komponennya sudah ada di paket terpasang**: `ProgressIndicator` di `@carbon/react`.
+Jangan merakit penanda langkah sendiri.
+
 ---
 
 ## 6d. BUKTI VISUAL WAJIB MENCAKUP KEADAAN TERBUKA (ditetapkan 26 Agu 2026, dari DS-14)

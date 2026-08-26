@@ -2,6 +2,69 @@
 
 Dokumen kerja lintas-sesi (pola B.11, lihat `docs/rencana-kerja-playbook-ams.md`). Tiap sesi Claude Code WAJIB baca ini dulu sebelum mulai, dan memperbarui bagian relevan begitu sesi selesai. Klaim di sini harus tetap diverifikasi ulang, bukan otomatis dipercaya — HANDOFF ini rangkuman, bukan pengganti bukti.
 
+## PP — SAPUAN BERTOLAK DARI ELEMEN, BUKAN DARI HALAMAN (26 Agu 2026)
+
+**Satu halaman bisa punya beberapa tabel, dan hanya sebagian dipindahkan ke bentuk
+responsif.** Di layar lebar keduanya terlihat serupa, jadi tidak ada yang menyadarinya — dan
+halaman itu sudah **bertanda selesai**, sehingga tidak diperiksa ulang.
+
+> **ATURAN: sapuan bertolak dari ELEMEN yang disapu, bukan dari HALAMAN yang memuatnya.
+> Halaman yang ditandai selesai berhenti dicurigai — dan itu yang membuat sisa di dalamnya
+> bertahan paling lama.**
+
+**Diukur, bukan diduga**: 33 `<Table>` Carbon di 16 berkas halaman; **26 memakai
+`.tabel-responsif`, 7 tidak**. Enam halaman "sebagian":
+
+| Halaman | Tabel | Responsif |
+|---|---|---|
+| `HrDashboardPage` | 2 | 1 |
+| `BomsPage` | 2 | 1 |
+| `CustomerPurchaseOrdersPage` | 2 | 1 |
+| `RoutingsPage` | 2 | 1 |
+| `ShipmentsPage` | 3 | 2 |
+| `WarehouseDashboardPage` | 3 | 1 |
+
+Sisanya penuh: Purchasing 4/4, Work Orders 3/3, PPIC 3/3, Produksi 3/3.
+
+### Mekanismenya lebih tajam daripada "tabel kedua di bawah halaman"
+
+**EMPAT dari tujuh tabel itu berada DI DALAM BARIS YANG DIMEKARKAN** — Boms, PO klien,
+Routing, Pengiriman. Tabel itu **tidak ada di layar** sampai seseorang mengklik baris untuk
+membukanya.
+
+Akibatnya: **tidak ada sapuan visual jenis apa pun yang bisa melihatnya.** Bukan pembacaan
+halaman, bukan tangkapan layar, dan bukan pengukuran dua tepi yang baru dibuat — semuanya
+memotret halaman dalam keadaan tertutup. **Hanya pembacaan berkas yang bisa.** Itulah
+argumen terkuat kenapa `DS-16` (pengawas) mengalahkan sapuan, dan kenapa ia didahulukan.
+
+### Terlewat, bukan sengaja — dibuktikan empat arah
+
+- **Kapan ditulis**: sebelum DS-09, keenam berkas itu punya **nol** `<Table>` Carbon.
+  Seluruh 33 tabel **lahir di dalam DS-09**, dan `.tabel-responsif` lahir di **commit yang
+  sama**. Jadi bukan "ditulis sebelum kelasnya ada" — keduanya lahir bersama, dan 7 tetap
+  terlewat **di dalam sapuan yang sama**.
+- **Masuk sapuan?** Ya, keenamnya. Yang terlewat bukan halamannya, melainkan tabel keduanya.
+- **Ada catatan pengecualian?** **Nol.** Bandingkan papan Gantt PPIC, yang pengecualiannya
+  ditulis terang-terangan.
+- **Bentuknya cocok jadi kartu?** Ketujuhnya daftar baris biasa. Cocok semua.
+
+### Sebab KEDUA ada, dan tidak boleh diratakan dengan yang pertama
+
+`/items` dan `/documents` punya **1 tabel, 1 responsif** — dan **tetap terpotong di 672px dan
+768px**. Sebabnya berbeda: **kelas responsif hanya berlaku di bawah 672px**. Di rentang
+672–768 tabelnya tetap tabel, dan kolom terakhir jatuh ke luar layar. Membalik jadi kartu
+tidak menolong di situ karena belum aktif.
+
+**DS-14 karena itu punya TIGA sebab**: toolbar memotong dari kiri (360px) · tabel tanpa kelas
+responsif · **tabel dengan kelas pun terpotong di 672–768px**. Yang ketiga paling luas — ia
+tidak peduli kelasnya sudah dipasang atau belum.
+
+### Angka 11 adalah BATAS BAWAH
+
+Pengukuran itu **tidak pernah memekarkan satu baris pun**, jadi empat tabel di dalam baris
+yang dimekarkan — yang justru termasuk tujuh tabel tanpa kelas — **belum terukur sama sekali**.
+Tenant uji juga kosong, sehingga barisnya memang tidak ada untuk dibuka.
+
 ## PP.1/PP.2 — UKURAN LAMA BILANG 0 CACAT; UKURAN BARU MENEMUKAN 11 (26 Agu 2026)
 
 **Ukuran responsive yang dipakai berbulan-bulan hanya menangkap SATU ARAH.** `scrollWidth >

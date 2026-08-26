@@ -1,0 +1,66 @@
+-- DS-18 (26 Agu 2026): aturan ukuran modal & jumlah kolom form — sebelumnya TIDAK ADA,
+-- dan ketiadaannya terukur sebagai 22 modal yang tidak konsisten.
+do $mig$
+declare v_company_id integer;
+begin
+  select company_id into v_company_id from companies where name = 'PT ITM' limit 1;
+  if v_company_id is null then return; end if;
+
+  perform pastikan_kode_task_kosong('DS-18');
+
+  insert into build_tasks (company_id, task_code, name, module_code, module_name, description,
+    effect_description, urgency, status, origin, pic, detail_pekerjaan, notes)
+  values (v_company_id, 'DS-18',
+    'Ukuran Modal & Jumlah Kolom Form Tidak Konsisten — Aturannya Memang Belum Pernah Ada',
+    'DS', 'Design System',
+    concat_ws(chr(10),
+      'Diukur 26 Agu 2026: 22 modal di berkas halaman, sebaran ukuran sm 4 / md 9 / lg 9,',
+      'dan formulir berjumlah field mirip dikerjakan berbeda — 18 satu kolom, 4 dua kolom.',
+      'Formulir 10 field ada yang md satu kolom, formulir 15 field ada yang lg dua kolom.'),
+    concat_ws(chr(10),
+      'Pemilik produk menyadarinya sendiri: "ada yg 1 text field memakan semua width modal,',
+      'ada yg 1 modal berisi 2 kolom text field". Modal adalah bagian yang paling sering',
+      'dilihat pengguna saat MENGISI data, jadi ketidakkonsistenannya paling terasa.'),
+    'penting', 'menunggu', 'temuan_claude', 'Claude Code',
+    concat_ws(chr(10),
+      'ATURANNYA SUDAH DITULIS 26 Agu 2026 di docs/governance/cetakan-halaman-data.md',
+      'bagian 6e, diturunkan dari Carbon — bukan dikarang:',
+      '',
+      '  LEBAR: Carbon TIDAK menetapkan batas piksel. Lebarnya persentase layar per',
+      '  breakpoint (diukur dari paket terpasang, bukan dokumentasi):',
+      '    xs  48% / 32% / 24%   sm  60% / 42% / 36%',
+      '    md  84% / 60% / 48%   lg  96% / 84% / 72%   (untuk md / lg / xlg)',
+      '  Di bawah 672px keempatnya 100% — modal memang jadi layar penuh di HP.',
+      '',
+      '  UKURAN dipilih dari ISI: xs/sm untuk teks pendek dan SATU keputusan; md bawaan',
+      '  untuk formulir biasa; lg HANYA untuk komponen kompleks seperti tabel.',
+      '',
+      '  KOLOM: SATU. Carbon menyebutnya langsung — "form inputs and other components expand',
+      '  the entire width of a modal". Margin kanan 20% berlaku untuk TEKS, bukan field.',
+      '  Dua field berdampingan bukan dua kolom melainkan SATU isian berpasangan (angka +',
+      '  satuan), dan aturannya sudah ada di bagian 3a.',
+      '',
+      '  TIDAK MUAT: (1) kurangi isinya, (2) naik satu ukuran, (3) sudah lg dan masih',
+      '  menggulir banyak -> HALAMAN PENUH. DILARANG membelah jadi dua kolom supaya muat.',
+      '',
+      'YANG TERUKUR MELANGGAR — empat modal terbesar, urut jumlah field:',
+      '  CustomerPurchaseOrdersPage:692  15 field  lg  DUA KOLOM',
+      '  HrDashboardPage:654             14 field  lg  satu kolom',
+      '  ItemsPage:1175                  13 field  lg  satu kolom',
+      '  BomsPage:709                    12 field  lg  DUA KOLOM',
+      'Dan dua lagi yang memakai dua kolom di ukuran lebih kecil:',
+      '  PpicDashboardPage:1614           9 field  md  DUA KOLOM',
+      '  ShipmentsPage:833                7 field  lg  DUA KOLOM',
+      '',
+      'Ukuran yang tidak beralasan juga terukur: sembilan modal memakai lg padahal isinya',
+      'formulir biasa, bukan tabel.'),
+    concat_ws(chr(10),
+      'MENUNGGU KEPUTUSAN PEMILIK PRODUK untuk satu hal yang TIDAK dijawab Carbon:',
+      'modal mana yang layak jadi HALAMAN PENUH. Carbon memberi kriterianya (terlalu banyak',
+      'menggulir di ukuran lg), tapi apakah sebuah tugas "sering dilakukan" atau tidak adalah',
+      'pengetahuan alur kerja pabrik, bukan pengetahuan desain.',
+      '',
+      'Sisanya — menyeragamkan ukuran dan mencabut dua kolom — tidak perlu ditanyakan:',
+      'Carbon sudah menjawabnya, dan menanyakan hal yang sudah dijawab Carbon berarti',
+      'membayar biaya adopsi tanpa mendapat manfaatnya.'));
+end $mig$;

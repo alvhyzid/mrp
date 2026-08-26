@@ -230,6 +230,78 @@ piksel tampak — versi pertama pengukur ini melaporkannya sebagai lima cacat ya
 Saringan yang benar-benar hilang di tepi kiri **tidak** memakai teknik itu, jadi ia tetap
 tertangkap: dibuktikan dua arah, bukan sekadar dilonggarkan sampai diam.
 
+## 6e. UKURAN MODAL DAN JUMLAH KOLOM FORM (ditetapkan 26 Agu 2026)
+
+Sebelum ini **tidak ada aturannya sama sekali** — CLAUDE.md hanya mengatur *anatomi* modal
+(header/body/footer), bukan ukuran maupun jumlah kolom. Akibatnya terukur: **22 modal dengan
+sebaran ukuran sm 4 · md 9 · lg 9**, dan formulir berjumlah field mirip dikerjakan berbeda —
+ada yang satu kolom, ada yang dua kolom.
+
+### Lebar modal: TIDAK ADA batas piksel — persentase layar per breakpoint
+
+Diukur dari `node_modules/@carbon/styles/scss/components/modal/_modal.scss`, bukan dari
+dokumentasi:
+
+| Ukuran | < 672px | 672–1055 | 1056–1311 | ≥ 1312 |
+|---|---|---|---|---|
+| `xs` | 100% | 48% | 32% | 24% |
+| `sm` | 100% | 60% | 42% | 36% |
+| `md` (bawaan) | 100% | 84% | 60% | 48% |
+| `lg` | 100% | 96% | 84% | 72% |
+
+Dalam piksel nyata: di monitor 1920px → `xs` 461 · `sm` 691 · `md` 922 · `lg` 1382.
+Di HP, **keempatnya 100%** — modal memang jadi layar penuh, dan itu sudah sesuai aturan
+responsive proyek.
+
+### Memilih ukuran: dari ISI, bukan dari jumlah field
+
+Carbon (`components/modal/usage`):
+
+> *"Choose a size that works best for the amount of modal content you have. Modals with brief
+> text should be extra small or small to avoid long single lines; for complex components, like
+> a data table, the default or large modal is more suitable."*
+
+Terjemahan yang berlaku di sini:
+- **`xs` / `sm`** — teks pendek dan **satu keputusan**: konfirmasi hapus, pemberitahuan.
+  Alasannya bukan hemat ruang melainkan **menghindari baris teks yang terlalu panjang**.
+- **`md`** — bawaan. Formulir biasa.
+- **`lg`** — **hanya** bila isinya komponen kompleks seperti **tabel**.
+
+### Satu kolom atau dua? Carbon menjawabnya langsung
+
+> *"…form inputs and other components expand the entire width of a modal."*
+> (`components/modal/usage`, bagian Alignment)
+
+**Jadi: SATU KOLOM. Field memenuhi lebar modal.** Margin kanan 20% di modal besar berlaku
+untuk **teks penjelasan**, BUKAN untuk field.
+
+**Dua field berdampingan bukan "dua kolom"** — itu **satu isian yang kebetulan berpasangan**
+(angka + satuan, tanggal mulai + tanggal selesai), dan aturannya sudah ada di bagian 3a:
+satu kelompok, satu label. Membelah formulir jadi dua kolom untuk **memuatkan lebih banyak
+field** adalah menyiasati modal yang kekecilan — dan jawabannya bukan dua kolom.
+
+### Kalau tidak muat: naik ukuran, lalu HALAMAN PENUH
+
+> *"If your modal has too much scrolling because of a maximum height limitation, consider using
+> the next modal size up. If the large modal height is still not enough space then a full page
+> might be needed instead."*
+
+Dan pola dialog Carbon menyebut batasnya lebih tegas:
+
+> *"Don't use to display complex or large amounts of data."* · *"Don't recreate a full app or
+> page in a dialog."* · Modal untuk *"short and non-frequent tasks."*
+
+**Urutan keputusannya, dan tidak boleh dilompati:**
+1. Isi bisa dikurangi? (progressive disclosure — field lanjutan muncul hanya bila relevan)
+2. Belum cukup → naik satu ukuran.
+3. Sudah `lg` dan masih menggulir banyak → **halaman penuh, bukan modal.**
+
+**Yang DILARANG**: membelah jadi dua kolom supaya muat. Itu melewati ketiga langkah di atas
+sekaligus, dan menghasilkan formulir yang sulit dipindai — mata harus melompat kiri-kanan
+alih-alih turun satu jalur.
+
+---
+
 ## 6d. BUKTI VISUAL WAJIB MENCAKUP KEADAAN TERBUKA (ditetapkan 26 Agu 2026, dari DS-14)
 
 **Seluruh bukti visual yang pernah diambil di proyek ini memotret halaman dalam keadaan

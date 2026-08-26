@@ -1,0 +1,472 @@
+@use '@carbon/react/scss/spacing' as *;
+@use '@carbon/react/scss/breakpoint' as *;
+@use '@carbon/react/scss/type' as type;
+@use '@carbon/react/scss/theme' as theme;
+@use '@carbon/react/scss/colors' as warna;
+
+// ============================================================================
+// PAPAN GANTT — dibangun menurut spesifikasi Carbon "data-visualization/Gantt charts".
+//
+// KENAPA DITULIS TANGAN, bukan memakai komponen: halaman spesifikasinya menyatakan
+// sendiri "The charts below are not included in the carbon-charts library". Gantt di
+// Carbon adalah SPESIFIKASI + berkas Figma, bukan komponen siap pasang. Jadi bentuknya
+// mengikuti gambar resminya; TOKEN-nya tetap token Carbon, nol angka warna karangan.
+//
+// Susunannya: satu baris = satu flex. Sel kiri (daftar) LENGKET di tepi kiri sambil
+// jalur waktunya menggulir mendatar. Ini yang membuat nama tugas tetap terbaca saat
+// waktunya digeser — sifat pokok Gantt, dan sebab kenapa panel kiri bukan tabel
+// terpisah: dua panel terpisah harus disamakan tinggi barisnya sendiri, dan begitu
+// ada satu baris yang lebih tinggi, keduanya melenceng tanpa ada yang memberi tahu.
+// ============================================================================
+
+$lebar-kiri: 20rem;
+
+.gantt {
+  overflow-x: auto;
+  border: 1px solid theme.$border-subtle-01;
+  background: theme.$layer-01;
+}
+
+.gantt__isi {
+  // Lebar jalur waktu = jumlah kolom x lebar kolom. Keduanya diberikan dari TSX lewat
+  // custom property, supaya rumusnya hidup di satu tempat (di sini), bukan tersebar
+  // sebagai angka di dalam gaya sebaris.
+  min-inline-size: max-content;
+}
+
+.gantt__baris {
+  display: flex;
+  align-items: stretch;
+  border-block-end: 1px solid theme.$border-subtle-01;
+
+  &:last-child {
+    border-block-end: 0;
+  }
+}
+
+.gantt__baris--mekar {
+  background: theme.$layer-accent-01;
+}
+
+.gantt__sel-kiri {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 2;
+  flex: 0 0 $lebar-kiri;
+  inline-size: $lebar-kiri;
+  padding: $spacing-03 $spacing-05;
+  border-inline-end: 1px solid theme.$border-subtle-01;
+  background: theme.$layer-01;
+}
+
+.gantt__baris--mekar .gantt__sel-kiri {
+  background: theme.$layer-accent-01;
+}
+
+// Sub-kartu batch: putih di atas latar biru muda, persis anatomi "sub cards" Carbon.
+.gantt__sel-kiri--anak {
+  padding-inline-start: $spacing-07;
+  background: theme.$layer-01;
+}
+
+.gantt__jalur {
+  position: relative;
+  flex: 0 0 auto;
+  inline-size: calc(var(--gantt-kolom) * var(--gantt-lebar-kolom));
+  min-block-size: 3.5rem;
+}
+
+// ---------------------------------------------------------------------------
+// Kepala waktu: bulan, lalu nama hari. AKHIR PEKAN DIREDUPKAN (anjuran Carbon).
+// ---------------------------------------------------------------------------
+.gantt__kepala {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 3;
+  background: theme.$layer-01;
+}
+
+.gantt__kepala .gantt__sel-kiri {
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.gantt__judul-papan {
+  @include type.type-style('heading-compact-01');
+
+  color: theme.$text-primary;
+}
+
+.gantt__subjudul-papan {
+  @include type.type-style('label-01');
+
+  color: theme.$text-secondary;
+}
+
+.gantt__periode {
+  @include type.type-style('label-01');
+
+  padding: $spacing-02 $spacing-03;
+  color: theme.$text-secondary;
+  border-block-end: 1px solid theme.$border-subtle-01;
+}
+
+.gantt__hari-baris {
+  display: flex;
+}
+
+.gantt__hari {
+  @include type.type-style('label-01');
+
+  flex: 0 0 var(--gantt-lebar-kolom);
+  inline-size: var(--gantt-lebar-kolom);
+  padding: $spacing-02 $spacing-03;
+  color: theme.$text-secondary;
+  border-inline-start: 1px solid theme.$border-subtle-01;
+}
+
+.gantt__hari--pekan {
+  color: theme.$text-disabled;
+}
+
+.gantt__hari--kini {
+  @include type.type-style('heading-compact-01');
+
+  color: theme.$link-primary;
+}
+
+// ---------------------------------------------------------------------------
+// Lapisan kolom: garis kisi + sasaran jatuh (drag). pointer-events NONE disengaja —
+// dnd-kit menentukan sasaran dari KOORDINAT kursor, bukan dari uji-tembak elemen,
+// jadi lapisan ini tidak perlu (dan tidak boleh) mencuri klik dari batangnya.
+// ---------------------------------------------------------------------------
+.gantt__kolom-lapis {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  pointer-events: none;
+}
+
+.gantt__kolom {
+  flex: 0 0 var(--gantt-lebar-kolom);
+  inline-size: var(--gantt-lebar-kolom);
+  border-inline-start: 1px solid theme.$border-subtle-00;
+}
+
+.gantt__kolom--pekan {
+  background: theme.$layer-accent-01;
+}
+
+.gantt__kolom--sasaran {
+  background: theme.$highlight;
+}
+
+.gantt__garis-kini {
+  position: absolute;
+  inset-block: 0;
+  inline-size: 2px;
+  background: theme.$support-error;
+  pointer-events: none;
+}
+
+// ---------------------------------------------------------------------------
+// Batang jadwal. Warna latar muda + garis kiri pekat: batang harus terbaca sebagai
+// SATU benda, bukan kotak kosong bergaris.
+// ---------------------------------------------------------------------------
+.gantt__batang {
+  position: absolute;
+  display: flex;
+  gap: $spacing-02;
+  align-items: center;
+  // 2.75rem = 44px, batas sentuh minimal proyek. Tahap 2 jam pada kolom selebar hari
+  // hanya belasan piksel — benar menurut skala, dan tidak bisa ditekan jari. Yang
+  // dilebarkan HANYA gambarnya; durasi sebenarnya tetap tertulis di dalam batang.
+  min-inline-size: 2.75rem;
+  block-size: 2.25rem;
+  padding-inline: $spacing-02;
+  border: 1px solid transparent;
+  cursor: pointer;
+  inline-size: var(--gantt-lebar);
+  inset-inline-start: var(--gantt-kiri);
+  inset-block-start: var(--gantt-atas);
+}
+
+.gantt__batang:focus-visible {
+  outline: 2px solid theme.$focus;
+  outline-offset: 1px;
+}
+
+.gantt__batang--seret {
+  cursor: grab;
+  touch-action: none;
+}
+
+.gantt__batang--diseret {
+  opacity: 0.3;
+}
+
+// Batang RINGKASAN Work Order: terisi netral, bukan kotak putih tanpa isi. Warna
+// bermakna MESIN, dan sebuah Work Order melintasi beberapa mesin — jadi memberinya
+// salah satu warna mesin akan berbohong tentang mesin mana yang dipakai.
+.gantt__batang--ringkasan {
+  background: theme.$layer-accent-01;
+  border-color: theme.$border-strong-01;
+}
+
+// Nama tahap di panel KIRI, dengan titik warna Work Center-nya. Ini yang menggantikan
+// label di sebelah batang: batang di skala minggu terlalu sempit untuk teks, dan label
+// yang ditaruh di sebelahnya saling menimpa begitu dua tahap berdekatan.
+.gantt__tahap-butir {
+  @include type.type-style('label-01');
+
+  display: flex;
+  gap: $spacing-02;
+  align-items: center;
+  margin-inline-end: $spacing-03;
+  color: theme.$text-secondary;
+}
+
+.gantt__batang-nama {
+  @include type.type-style('label-01');
+
+  overflow: hidden;
+  color: theme.$text-primary;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gantt__batang-persen {
+  @include type.type-style('label-01');
+
+  margin-inline-start: auto;
+  color: theme.$text-secondary;
+}
+
+// Garis progres di BAWAH batang: bagian pekat = selesai, sisanya abu. Persis anatomi
+// "Task component" Carbon, dan angkanya nyata — dari work_order_step_progress.
+.gantt__progres {
+  position: absolute;
+  block-size: 3px;
+  background: theme.$border-subtle-02;
+  inline-size: var(--gantt-lebar);
+  inset-inline-start: var(--gantt-kiri);
+  inset-block-start: calc(var(--gantt-atas) + 2.25rem);
+}
+
+.gantt__progres-isi {
+  block-size: 100%;
+  inline-size: var(--gantt-progres);
+}
+
+// Belah ketupat = tonggak waktu. PADAT berarti sudah TERJADI, KOSONG berarti masih
+// RENCANA — pasangan yang sama dengan gambar Carbon, hanya artinya diambil dari data
+// kita sendiri (scheduled_start/end vs actual_start_at/actual_completed_at).
+.gantt__tonggak {
+  position: absolute;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border: 1px solid theme.$border-inverse;
+  transform: rotate(45deg);
+  inset-inline-start: var(--gantt-kiri);
+  inset-block-start: calc(var(--gantt-atas) + 2.6rem);
+}
+
+.gantt__tonggak--nyata {
+  background: theme.$border-inverse;
+}
+
+.gantt__tonggak--rencana {
+  background: theme.$layer-01;
+}
+
+// Garis siku penghubung antar tahap berurutan — "urutan tahap" kita, "dependency"
+// pada gambar Carbon. Hanya digambar di dalam baris batch yang sama.
+.gantt__penghubung {
+  position: absolute;
+  border-color: theme.$border-strong-01;
+  border-style: solid;
+  border-width: 0 0 1px 1px;
+  inline-size: var(--gantt-lebar);
+  block-size: 0.75rem;
+  inset-inline-start: var(--gantt-kiri);
+  inset-block-start: var(--gantt-atas);
+  pointer-events: none;
+}
+
+// ---------------------------------------------------------------------------
+// Panel kiri
+// ---------------------------------------------------------------------------
+.gantt__kepala-kartu {
+  display: flex;
+  gap: $spacing-03;
+  align-items: flex-start;
+}
+
+.gantt__chevron {
+  flex: 0 0 auto;
+}
+
+.gantt__nama {
+  @include type.type-style('heading-compact-01');
+
+  color: theme.$text-primary;
+}
+
+.gantt__nama--anak {
+  @include type.type-style('body-compact-01');
+}
+
+.gantt__rentang {
+  @include type.type-style('label-01');
+
+  color: theme.$text-secondary;
+}
+
+.gantt__tag-baris {
+  display: flex;
+  flex-wrap: wrap;
+  margin-block-start: $spacing-02;
+}
+
+// Deretan foto pelaksana. Foto KOSONG adalah keadaan normal (karyawan tanpa akun
+// aplikasi), dan jatuhnya ke IKON — bukan ke inisial nama. Inisial terlihat seperti
+// data padahal cuma tebakan; aturan unggah gambar proyek ini menyebutnya langsung.
+.gantt__pelaksana {
+  display: flex;
+  align-items: center;
+  margin-block-start: $spacing-02;
+}
+
+.gantt__foto {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  margin-inline-end: -$spacing-02;
+  overflow: hidden;
+  color: theme.$icon-on-color;
+  background: theme.$background-inverse;
+  border: 1px solid theme.$layer-01;
+  border-radius: 50%;
+}
+
+.gantt__foto img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+.gantt__foto-sisa {
+  @include type.type-style('label-01');
+
+  margin-inline-start: $spacing-03;
+  color: theme.$text-secondary;
+}
+
+// Foto di dalam batang — ukurannya lebih kecil karena tingginya batang tetap.
+.gantt__batang-foto {
+  flex: 0 0 auto;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  margin-inline-start: -1px;
+}
+
+// ---------------------------------------------------------------------------
+// Warna batang: palet dasar Carbon.
+//
+// TOKEN VISUALISASI DATA TIDAK DIPAKAI karena TIDAK ADA di paket yang terpasang —
+// ia hidup di @carbon/charts, yang bukan dependensi proyek ini (diperiksa 26 Agu
+// 2026, bukan diingat). Jadi warnanya diambil dari palet dasar Carbon.
+//
+// URUTANNYA DISUSUN, bukan menurut abjad: anjuran resmi Gantt Carbon berbunyi
+// "arrange task bars with contrasting colors next to each other and similar colors
+// away from each other" — jadi biru bertetangga dengan jingga, bukan dengan ungu.
+// ---------------------------------------------------------------------------
+@each $nama, $muda, $pekat in (
+  ('1', warna.$blue-20, warna.$blue-60),
+  ('2', warna.$orange-20, warna.$orange-70),
+  ('3', warna.$teal-20, warna.$teal-60),
+  ('4', warna.$magenta-20, warna.$magenta-60),
+  ('5', warna.$green-20, warna.$green-60),
+  ('6', warna.$purple-20, warna.$purple-60),
+  ('7', warna.$yellow-20, warna.$yellow-50),
+  ('8', warna.$cyan-20, warna.$cyan-70)
+) {
+  .gantt__batang--w#{$nama} {
+    background: $muda;
+    border-color: $pekat;
+  }
+
+  .gantt__progres-isi--w#{$nama} {
+    background: $pekat;
+  }
+
+  .gantt__titik--w#{$nama} {
+    background: $pekat;
+  }
+}
+
+// Belah ketupat di legenda BUKAN di atas jalur waktu, jadi posisinya statis.
+.gantt__legenda-tonggak {
+  position: static;
+  flex: 0 0 auto;
+}
+
+.gantt__legenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-05;
+  padding: $spacing-03 0;
+}
+
+.gantt__legenda-butir {
+  @include type.type-style('label-01');
+
+  display: flex;
+  gap: $spacing-02;
+  align-items: center;
+  color: theme.$text-secondary;
+}
+
+.gantt__titik {
+  inline-size: 0.75rem;
+  block-size: 0.75rem;
+  border-radius: 50%;
+}
+
+.gantt__saringan {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-05;
+  align-items: flex-end;
+  padding-block-end: $spacing-05;
+}
+
+.gantt__saringan-kotak {
+  min-inline-size: 14rem;
+}
+
+.gantt__kosong {
+  @include type.type-style('body-compact-01');
+
+  padding: $spacing-07;
+  color: theme.$text-secondary;
+  text-align: center;
+}
+
+// Di layar sempit panel kiri memakan hampir seluruh lebar. Dipersempit, TIDAK
+// dihilangkan: papan tanpa nama tugas adalah deretan batang tanpa keterangan.
+@media (max-width: 41.98rem) {
+  .gantt__sel-kiri {
+    flex-basis: 11rem;
+    inline-size: 11rem;
+    padding-inline: $spacing-03;
+  }
+
+  .gantt__sel-kiri--anak {
+    padding-inline-start: $spacing-05;
+  }
+}

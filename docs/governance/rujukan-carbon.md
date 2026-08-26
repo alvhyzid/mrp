@@ -115,6 +115,7 @@ pemeriksaan yang terbukti menangkap kelas cacat ini.
 | Konfirmasi POD | `components/form/usage` + `components/file-uploader/usage` |
 | Layar daftar data (Item, BOM, SO, WO, …) | `components/data-table/usage` + `patterns/list-pattern` |
 | Dasbor | `components/tile/usage` + `elements/2x-grid/overview` |
+| **Papan Gantt PPIC** | `data-visualization/gantt-charts` — buka **ketiga gambarnya**: *Card component* (panel kiri), *Task component* (batang, garis progres, belah ketupat), *Design recommendations* (toolbar + papan utuh) |
 
 ## Penempatan tombol — Carbon menjawabnya, dan jawabannya BERGANTUNG PADA WADAH
 

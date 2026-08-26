@@ -21,6 +21,26 @@ type RoutingStep = {
 
 type Shift = { shift_id: number; start_time: string };
 
+type WorkOrderRow = {
+  work_order_id: number;
+  routing_id: number | null;
+  item_id: number;
+  planned_qty: number | null;
+  status: string;
+  priority: string;
+  scheduled_start: string | null;
+  scheduled_end: string | null;
+  actual_start_at: string | null;
+  actual_completed_at: string | null;
+  sales_order_line_id: number | null;
+};
+
+// "Siapa mengerjakan" — nama dipakai untuk teks alternatif foto, foto boleh kosong.
+// FOTO KOSONG ADALAH KEADAAN NORMAL, bukan kegagalan: karyawan hanya punya foto bila
+// akunnya tertaut ke pengguna aplikasi (employees.linked_user_id), dan sebagian besar
+// karyawan pabrik tidak punya akun. Tampilannya jatuh ke ikon Carbon, bukan inisial.
+type Pelaksana = { employee_id: number; name: string; avatar_url: string | null; step_id: number | null };
+
 function parseTimeToMinutes(time: string): number {
   const [h, m] = time.split(':').map(Number);
   return (h || 0) * 60 + (m || 0);
@@ -142,8 +162,13 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
     const shiftIds = Array.from(new Set((batches ?? []).map((b) => b.shift_id).filter((id): id is number => !!id)));
     const [woRes, shiftsRes] = await Promise.all([
       woIds.length
-        ? adminClient.from('work_orders').select('work_order_id, routing_id, item_id').in('work_order_id', woIds)
-        : Promise.resolve({ data: [] as { work_order_id: number; routing_id: number | null; item_id: number }[], error: null }),
+        ? adminClient
+            .from('work_orders')
+            .select(
+              'work_order_id, routing_id, item_id, planned_qty, status, priority, scheduled_start, scheduled_end, actual_start_at, actual_completed_at, sales_order_line_id'
+            )
+            .in('work_order_id', woIds)
+        : Promise.resolve({ data: [] as WorkOrderRow[], error: null }),
       shiftIds.length ? adminClient.from('shifts').select('shift_id, start_time').in('shift_id', shiftIds) : Promise.resolve({ data: [] as Shift[], error: null })
     ]);
     if (woRes.error) return { status: 500, body: { error: woRes.error.message } };
@@ -164,6 +189,76 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
     ]);
     if (itemsRes.error) return { status: 500, body: { error: itemsRes.error.message } };
     if (stepsRes.error) return { status: 500, body: { error: stepsRes.error.message } };
+
+    // === TAMBAHAN DS-19: pelaksana, kemajuan tahap, dan Sales Order ===================
+    // Ketiganya MEMBACA tabel yang sudah ada. Bila salah satunya kosong, papan tetap
+    // tampil — bagian itu saja yang tidak muncul; ia bukan syarat papan bisa dibaca.
+    const [assignRes, progressRes] = await Promise.all([
+      woIds.length
+        ? adminClient
+            .from('work_order_assignments')
+            .select('work_order_id, employee_id, routing_step_id, status')
+            .in('work_order_id', woIds)
+        : Promise.resolve({ data: [] as { work_order_id: number; employee_id: number; routing_step_id: number | null; status: string }[], error: null }),
+      woIds.length
+        ? adminClient
+            .from('work_order_step_progress')
+            .select('work_order_id, routing_step_id, status')
+            .in('work_order_id', woIds)
+        : Promise.resolve({ data: [] as { work_order_id: number; routing_step_id: number; status: string }[], error: null })
+    ]);
+    if (assignRes.error) return { status: 500, body: { error: assignRes.error.message } };
+    if (progressRes.error) return { status: 500, body: { error: progressRes.error.message } };
+
+    const employeeIds = Array.from(new Set((assignRes.data ?? []).map((a) => a.employee_id)));
+    const { data: employees, error: empError } = employeeIds.length
+      ? await adminClient.from('employees').select('employee_id, name, linked_user_id').in('employee_id', employeeIds)
+      : { data: [] as { employee_id: number; name: string; linked_user_id: number | null }[], error: null };
+    if (empError) return { status: 500, body: { error: empError.message } };
+
+    const linkedUserIds = Array.from(new Set((employees ?? []).map((e) => e.linked_user_id).filter((id): id is number => !!id)));
+    const { data: linkedUsers, error: userError } = linkedUserIds.length
+      ? await adminClient.from('users').select('user_id, avatar_url').in('user_id', linkedUserIds)
+      : { data: [] as { user_id: number; avatar_url: string | null }[], error: null };
+    if (userError) return { status: 500, body: { error: userError.message } };
+    const avatarByUserId = new Map((linkedUsers ?? []).map((u) => [u.user_id, u.avatar_url]));
+    const employeeById = new Map((employees ?? []).map((e) => [e.employee_id, e]));
+
+    const pelaksanaByWoId = new Map<number, Pelaksana[]>();
+    for (const a of assignRes.data ?? []) {
+      // 'absent' dan 'replaced' TIDAK ditampilkan: keduanya berarti orangnya justru
+      // TIDAK jadi mengerjakan. Menampilkannya akan menjawab pertanyaan "siapa
+      // mengerjakan" dengan nama orang yang tidak hadir.
+      if (a.status === 'absent' || a.status === 'replaced') continue;
+      const emp = employeeById.get(a.employee_id);
+      if (!emp) continue;
+      const list = pelaksanaByWoId.get(a.work_order_id) ?? [];
+      if (list.some((x) => x.employee_id === emp.employee_id)) continue;
+      list.push({
+        employee_id: emp.employee_id,
+        name: emp.name,
+        avatar_url: emp.linked_user_id ? (avatarByUserId.get(emp.linked_user_id) ?? null) : null,
+        step_id: a.routing_step_id
+      });
+      pelaksanaByWoId.set(a.work_order_id, list);
+    }
+
+    const progressByKey = new Map<string, string>();
+    for (const pr of progressRes.data ?? []) progressByKey.set(`${pr.work_order_id}_${pr.routing_step_id}`, pr.status);
+
+    const soLineIds = Array.from(new Set((woRes.data ?? []).map((wo) => wo.sales_order_line_id).filter((id): id is number => !!id)));
+    const { data: soLines, error: soLineError } = soLineIds.length
+      ? await adminClient.from('sales_order_lines').select('sales_order_line_id, sales_order_id').in('sales_order_line_id', soLineIds)
+      : { data: [] as { sales_order_line_id: number; sales_order_id: number }[], error: null };
+    if (soLineError) return { status: 500, body: { error: soLineError.message } };
+    const soIds = Array.from(new Set((soLines ?? []).map((l) => l.sales_order_id)));
+    const { data: salesOrders, error: soError } = soIds.length
+      ? await adminClient.from('sales_orders').select('sales_order_id, so_number').in('sales_order_id', soIds)
+      : { data: [] as { sales_order_id: number; so_number: string | null }[], error: null };
+    if (soError) return { status: 500, body: { error: soError.message } };
+    const soNumberByLineId = new Map<number, string | null>();
+    const soById = new Map((salesOrders ?? []).map((so) => [so.sales_order_id, so.so_number]));
+    for (const l of soLines ?? []) soNumberByLineId.set(l.sales_order_line_id, soById.get(l.sales_order_id) ?? null);
 
     const itemsById = new Map((itemsRes.data ?? []).map((i) => [i.item_id, i]));
     const stepsByRoutingId = new Map<number, RoutingStep[]>();
@@ -188,6 +283,11 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
       duration_minutes: number;
       day_offset: number;
       minute_of_day: number;
+      work_order_id: number;
+      // 'pending' | 'in_progress' | 'completed' | null. NULL berarti BELUM ADA BARIS
+      // kemajuannya sama sekali — itu berbeda artinya dari 'pending' (ada barisnya,
+      // dinyatakan belum mulai). Papan menampilkan keduanya berbeda.
+      progress_status: string | null;
     }[] = [];
     const unscheduled: {
       production_batch_id: number;
@@ -255,7 +355,9 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
             sequence_no: step.sequence_no,
             duration_minutes: effectiveActiveMinutes,
             day_offset: dayOffset,
-            minute_of_day: minuteOfDay
+            minute_of_day: minuteOfDay,
+            work_order_id: batch.work_order_id,
+            progress_status: progressByKey.get(`${batch.work_order_id}_${step.routing_step_id}`) ?? null
           });
         }
         // Kumulatif (posisi) tetap jalan biar urutan step berikutnya tetap benar,
@@ -265,6 +367,53 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
         cumulativeMinutes += effectiveActiveMinutes + (step.wait_duration_minutes ?? 0);
       }
     }
+
+    // === POHON Work Order -> Batch (DS-19) ==============================================
+    // Disusun dari blok yang BENAR-BENAR masuk rentang yang dilihat, bukan dari seluruh
+    // batch aktif — supaya daftar di kiri papan tidak memuat baris yang batangnya tidak
+    // ada di kanan. Baris tanpa batang adalah baris yang tidak bisa dijelaskan.
+    const batchIdsTampil = new Set(blocks.map((b) => b.production_batch_id));
+    const woIdsTampil = new Set(blocks.map((b) => b.work_order_id));
+
+    const ganttBatches = (batches ?? [])
+      .filter((b) => batchIdsTampil.has(b.production_batch_id))
+      .map((b) => ({
+        production_batch_id: b.production_batch_id,
+        work_order_id: b.work_order_id,
+        batch_number: b.batch_number,
+        status: b.status,
+        planned_date: b.planned_date,
+        planned_qty: b.planned_qty,
+        uom: b.uom
+      }));
+
+    const ganttWorkOrders = (woRes.data ?? [])
+      .filter((wo) => woIdsTampil.has(wo.work_order_id))
+      .map((wo) => {
+        const item = itemsById.get(wo.item_id);
+        const langkahWo = wo.routing_id ? (stepsByRoutingId.get(wo.routing_id) ?? []) : [];
+        const totalTahap = langkahWo.length;
+        const tahapSelesai = langkahWo.filter((st) => progressByKey.get(`${wo.work_order_id}_${st.routing_step_id}`) === 'completed').length;
+        return {
+          work_order_id: wo.work_order_id,
+          item_code: item?.item_code ?? null,
+          item_name: item?.name ?? null,
+          planned_qty: wo.planned_qty,
+          status: wo.status,
+          priority: wo.priority,
+          scheduled_start: wo.scheduled_start,
+          scheduled_end: wo.scheduled_end,
+          actual_start_at: wo.actual_start_at,
+          actual_completed_at: wo.actual_completed_at,
+          so_number: wo.sales_order_line_id ? (soNumberByLineId.get(wo.sales_order_line_id) ?? null) : null,
+          // NULL, bukan 0, saat routing-nya belum punya tahap sama sekali: "0%" berarti
+          // sudah diukur dan hasilnya nol; null berarti belum ada yang bisa diukur.
+          progress_pct: totalTahap > 0 ? Math.round((tahapSelesai / totalTahap) * 100) : null,
+          total_steps: totalTahap,
+          completed_steps: tahapSelesai,
+          assignees: pelaksanaByWoId.get(wo.work_order_id) ?? []
+        };
+      });
 
     if (view === 'monthly') {
       // Bulanan: TIDAK menampilkan blok tahap detail (tidak terbaca di skala
@@ -311,6 +460,8 @@ export async function getWorkCenterGantt(request: NextRequest): Promise<ApiResul
         days,
         workCenters: workCenters ?? [],
         blocks,
+        workOrders: ganttWorkOrders,
+        batches: ganttBatches,
         unscheduled
       }
     };

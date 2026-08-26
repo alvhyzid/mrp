@@ -35,24 +35,53 @@
   gap: $spacing-03;
 }
 
+// SEBAB SEBENARNYA teks satuan tertutup, DIUKUR di peramban 26 Agu 2026 (bukan diduga):
+// Carbon memberi `input` di dalam NumberInput `min-width: 150px`. Pembungkusnya menyusut
+// menurut kelas kita (80px), inputnya TIDAK — ia meluber 70px keluar dan menutupi tulisan
+// di sebelahnya. Jadi membatasi pembungkus saja tidak pernah cukup.
+//
+// Ini juga keterangan yang jujur tentang Carbon: NumberInput memang tidak dirancang untuk
+// dipakai sesempit ini di dalam sel tabel. Kita menyempitkannya dengan sadar.
+//
+// KEKHUSUSAN (specificity) HARUS DILAWAN DENGAN KEKHUSUSAN. Percobaan pertama menulis
+// `.ppic-kapasitas input` (0,1,1) melawan aturan Carbon `.cds--number input[type='number']`
+// (0,2,1) — kalah, dan TIDAK BERUBAH APA PUN. Yang menangkapnya bukan membaca kode
+// melainkan MENGUKUR ULANG lebar inputnya di peramban: tetap 150px sesudah "diperbaiki".
+// Ini contoh lain dari kelas "berhasil tanpa berlaku" yang sudah tercatat di CLAUDE.md.
+.ppic-kapasitas .cds--number input[type='number'] {
+  min-inline-size: 0;
+  padding-inline: $spacing-03;
+}
+
+// flex-basis tetap, BUKAN hanya max-inline-size: kotak angka pun ikut diperas kalau
+// hanya diberi batas atas, dan angkanya jadi terpotong di kolom yang sempit.
 .ppic-kapasitas-jam {
-  max-inline-size: 7rem;
+  flex: 0 0 5rem;
+  max-inline-size: 5rem;
 }
 
 .ppic-kapasitas-unit {
-  max-inline-size: 6rem;
+  flex: 0 0 4.5rem;
+  max-inline-size: 4.5rem;
 }
 
 // Satuan yang terlihat: sengaja redup supaya angkanya tetap yang paling menonjol.
+//
+// flex: 0 0 auto WAJIB. Tanpa itu, bawaan flex-shrink:1 membuat teks satuan diperas oleh
+// kotak angka di sebelahnya, dan yang terbaca di layar adalah potongan seperti "nit ×"
+// dan "3 jam/hari". Terlihat pada tangkapan layar 26 Agu 2026 — bukan dugaan.
 .ppic-kapasitas__satuan {
   @include type.type-style('label-01');
 
+  flex: 0 0 auto;
   color: theme.$text-secondary;
+  white-space: nowrap;
 }
 
 .ppic-kapasitas__kali {
   @include type.type-style('body-compact-01');
 
+  flex: 0 0 auto;
   color: theme.$text-secondary;
 }
 
@@ -60,8 +89,10 @@
 .ppic-kapasitas__hasil {
   @include type.type-style('body-compact-01');
 
+  flex: 0 0 auto;
   margin-inline-end: $spacing-03;
   color: theme.$text-primary;
+  white-space: nowrap;
 }
 
 .ppic-form {
@@ -195,4 +226,15 @@
 
 .ppic-jarak-atas {
   margin-block-start: $spacing-04;
+}
+
+// Bayangan batang yang sedang diseret (DragOverlay dnd-kit).
+.ppic-bayang-seret {
+  @include type.type-style('label-01');
+
+  padding: $spacing-02 $spacing-03;
+  color: theme.$text-primary;
+  background: theme.$layer-01;
+  border-inline-start: 2px solid theme.$border-interactive;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 20%);
 }

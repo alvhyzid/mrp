@@ -18,6 +18,7 @@ import {
   ModalFooter,
   ModalHeader,
   NumberInput,
+  Search,
   Switch,
   Table,
   TableBody,
@@ -33,6 +34,8 @@ import {
   TextInput
 } from '@carbon/react';
 import { KepalaHalaman } from '@/components/ui/kepala-halaman';
+import PapanGantt from '../components/PapanGantt';
+import type { BlokGantt, WorkOrderGantt, BatchGantt } from '../components/PapanGantt';
 
 // DASHBOARD PPIC — dimigrasikan ke Carbon 26 Agu 2026 (DS-09), cetakan Master Item.
 //
@@ -88,21 +91,10 @@ function utilizationWarnaTag(pct: number): 'green' | 'magenta' | 'red' {
 }
 
 type GanttWorkCenter = { work_center_id: number; name: string; code: string | null; capacity_hours_per_day: number | null };
-type GanttBlock = {
-  work_center_id: number;
-  date: string;
-  production_batch_id: number;
-  batch_number: string;
-  batch_status: string;
-  item_code: string | null;
-  item_name: string | null;
-  routing_step_id: number;
-  step_name: string;
-  sequence_no: number;
-  duration_minutes: number;
-  day_offset: number;
-  minute_of_day: number;
-};
+// Bentuk blok Gantt hidup di SATU tempat (komponen papannya) dan dipakai bersama di
+// sini. Menyalinnya jadi dua definisi adalah kelas "dua jalur hidup" yang sudah
+// berulang kali menggigit proyek ini: yang satu diperbaiki, yang lain tidak ikut.
+type GanttBlock = BlokGantt;
 type MonthlySummaryEntry = { work_center_id: number; date: string; batch_count: number; active_minutes: number };
 type GanttView = 'weekly' | 'daily' | 'monthly';
 
@@ -240,34 +232,6 @@ type DragData =
   | { type: 'block'; production_batch_id: number; batch_number: string; work_center_id: number; day_offset: number }
   | { type: 'unscheduled'; production_batch_id: number; batch_number: string; primary_work_center_id: number | null };
 
-function DraggableBlock({ block, canDrag, onOpenDetail }: { block: GanttBlock; canDrag: boolean; onOpenDetail: (block: GanttBlock) => void }) {
-  const draggable = canDrag && block.batch_status === 'planned';
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `block-${block.production_batch_id}-${block.sequence_no}-${block.date}`,
-    data: { type: 'block', production_batch_id: block.production_batch_id, batch_number: block.batch_number, work_center_id: block.work_center_id, day_offset: block.day_offset } satisfies DragData,
-    disabled: !draggable
-  });
-  return (
-    <div
-      ref={setNodeRef}
-      {...(draggable ? listeners : {})}
-      {...(draggable ? attributes : {})}
-      onClick={() => onOpenDetail(block)}
-      title={draggable ? 'Klik untuk detail, seret untuk jadwalkan ulang' : 'Klik untuk lihat detail tahap ini'}
-      style={draggable ? { touchAction: 'none' } : undefined}
-      className={`select-none border-l-2 border-info bg-info-subtle px-1.5 py-1 text-xs text-info-subtle-foreground ${
-        draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer opacity-70'
-      } ${isDragging ? 'opacity-30' : ''}`}
-    >
-      <div className="font-medium">{block.batch_number}</div>
-      <div className="truncate">{block.item_code ?? block.item_name}</div>
-      <div className="ppic-redup-kecil">
-        {block.step_name} · {formatNumberId(block.duration_minutes, 2)} mnt
-      </div>
-    </div>
-  );
-}
-
 function DraggableUnscheduled({ batch, canDrag }: { batch: UnscheduledBatch; canDrag: boolean }) {
   const draggable = canDrag && batch.batch_status === 'planned';
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -290,28 +254,6 @@ function DraggableUnscheduled({ batch, canDrag }: { batch: UnscheduledBatch; can
         {formatNumberId(batch.planned_qty, 2)} {batch.uom}
       </span>
     </div>
-  );
-}
-
-function DroppableCell({
-  workCenterId,
-  date,
-  restrictedRow,
-  children
-}: {
-  workCenterId: number;
-  date: string;
-  restrictedRow: boolean;
-  children: React.ReactNode;
-}) {
-  const { setNodeRef, isOver } = useDroppable({ id: `cell-${workCenterId}-${date}`, data: { work_center_id: workCenterId, date }, disabled: restrictedRow });
-  return (
-    <td
-      ref={setNodeRef}
-      className={`px-1.5 py-1.5 align-top transition-colors ${isOver && !restrictedRow ? 'bg-info-subtle/60' : ''} ${restrictedRow ? 'cursor-not-allowed' : ''}`}
-    >
-      <div className="ppic-tumpuk">{children}</div>
-    </td>
   );
 }
 
@@ -355,9 +297,17 @@ export default function PpicDashboardPage() {
   const [ganttDays, setGanttDays] = useState<string[]>([]);
   const [ganttWorkCenters, setGanttWorkCenters] = useState<GanttWorkCenter[]>([]);
   const [ganttBlocks, setGanttBlocks] = useState<GanttBlock[]>([]);
+  const [ganttWorkOrders, setGanttWorkOrders] = useState<WorkOrderGantt[]>([]);
+  const [ganttBatches, setGanttBatches] = useState<BatchGantt[]>([]);
   const [ganttMonthlySummary, setGanttMonthlySummary] = useState<MonthlySummaryEntry[]>([]);
   const [ganttUnscheduled, setGanttUnscheduled] = useState<UnscheduledBatch[]>([]);
   const [ganttError, setGanttError] = useState('');
+  // SARINGAN papan (diminta pemilik produk 26 Agu 2026). Disaring DI LAYAR, bukan lewat
+  // permintaan baru ke server: datanya sudah ada di tangan, dan menyaring lewat server
+  // berarti menunggu jaringan untuk pekerjaan yang tidak butuh data baru.
+  const [ganttCariTeks, setGanttCariTeks] = useState('');
+  const [ganttSaringWc, setGanttSaringWc] = useState<number | null>(null);
+  const [ganttSaringSo, setGanttSaringSo] = useState<string | null>(null);
   const [ganttLoading, setGanttLoading] = useState(true);
   const [activeDragWorkCenterId, setActiveDragWorkCenterId] = useState<number | null>(null);
   const [activeDragLabel, setActiveDragLabel] = useState<string | null>(null);
@@ -541,6 +491,8 @@ export default function PpicDashboardPage() {
       setGanttDays(body.days || []);
       setGanttWorkCenters(body.workCenters || []);
       setGanttBlocks(body.blocks || []);
+      setGanttWorkOrders(body.workOrders || []);
+      setGanttBatches(body.batches || []);
       setGanttMonthlySummary(body.monthlySummary || []);
       setGanttUnscheduled(body.unscheduled || []);
       setGanttError('');
@@ -726,11 +678,20 @@ export default function PpicDashboardPage() {
     setActiveDragWorkCenterId(null);
     setActiveDragLabel(null);
     const data = event.active.data.current as DragData | undefined;
-    const overData = event.over?.data.current as { work_center_id: number; date: string } | undefined;
+    const overData = event.over?.data.current as { date: string; production_batch_id: number | null } | undefined;
     if (!data || !overData) return;
 
-    if (overData.work_center_id !== (data.type === 'block' ? data.work_center_id : (data.primary_work_center_id ?? overData.work_center_id))) {
-      setDragMessage('Batch cuma bisa dijadwalkan ulang di Work Center yang sama.');
+    // PENJAGA LAMA TIDAK DICABUT, MELAINKAN DIPERKUAT DAN DIPINDAH KE BENTUKNYA.
+    //
+    // Dulu barisnya adalah Work Center, jadi sebuah batang bisa dijatuhkan ke baris mesin
+    // LAIN, dan penjaganya berupa pemeriksaan sesudahnya. Sejak papan Gantt, barisnya
+    // adalah BATCH, dan sasaran jatuh hanya digambar di dalam baris batch itu sendiri —
+    // menjatuhkan ke mesin lain bukan lagi hal yang bisa dilakukan lalu ditolak, melainkan
+    // hal yang tidak punya sasarannya sama sekali. Pemeriksaan di bawah menjaga sisanya:
+    // batch yang SAMA (lebih ketat daripada "Work Center yang sama", sebab satu batch
+    // selalu berada di satu rangkaian mesin miliknya sendiri).
+    if (data.type === 'block' && overData.production_batch_id !== data.production_batch_id) {
+      setDragMessage('Batang tahap hanya bisa digeser di baris batch-nya sendiri.');
       return;
     }
 
@@ -874,6 +835,43 @@ export default function PpicDashboardPage() {
     }
     return map;
   }, [ganttMonthlySummary]);
+
+  // Saringan bekerja atas WORK ORDER, lalu blok & batch mengikuti induknya — bukan
+  // sebaliknya. Menyaring blok lebih dulu akan menyisakan baris Work Order yang
+  // batangnya hilang sebagian tanpa keterangan apa pun kenapa.
+  const ganttWoTersaring = useMemo(() => {
+    const teks = ganttCariTeks.trim().toLowerCase();
+    const idWcPunyaWo = new Map<number, Set<number>>();
+    for (const b of ganttBlocks) {
+      const daftar = idWcPunyaWo.get(b.work_order_id) ?? new Set<number>();
+      daftar.add(b.work_center_id);
+      idWcPunyaWo.set(b.work_order_id, daftar);
+    }
+    const nomorBatchPerWo = new Map<number, string[]>();
+    for (const b of ganttBatches) {
+      const daftar = nomorBatchPerWo.get(b.work_order_id) ?? [];
+      daftar.push(b.batch_number.toLowerCase());
+      nomorBatchPerWo.set(b.work_order_id, daftar);
+    }
+    return ganttWorkOrders.filter((wo) => {
+      if (ganttSaringWc !== null && !(idWcPunyaWo.get(wo.work_order_id) ?? new Set()).has(ganttSaringWc)) return false;
+      if (ganttSaringSo !== null && wo.so_number !== ganttSaringSo) return false;
+      if (!teks) return true;
+      const sasaran = [wo.item_code ?? '', wo.item_name ?? '', wo.so_number ?? '', ...(nomorBatchPerWo.get(wo.work_order_id) ?? [])].join(' ').toLowerCase();
+      return sasaran.includes(teks);
+    });
+  }, [ganttWorkOrders, ganttBatches, ganttBlocks, ganttCariTeks, ganttSaringWc, ganttSaringSo]);
+
+  const ganttIdWoTersaring = useMemo(() => new Set(ganttWoTersaring.map((wo) => wo.work_order_id)), [ganttWoTersaring]);
+  const ganttBlokTersaring = useMemo(() => ganttBlocks.filter((b) => ganttIdWoTersaring.has(b.work_order_id)), [ganttBlocks, ganttIdWoTersaring]);
+  const ganttBatchTersaring = useMemo(() => ganttBatches.filter((b) => ganttIdWoTersaring.has(b.work_order_id)), [ganttBatches, ganttIdWoTersaring]);
+
+  // Saringan SO hanya muncul bila memang ADA Work Order yang bertaut ke SO. Kontrol yang
+  // selalu kosong mengajari orang bahwa saringan di halaman ini tidak berguna.
+  const ganttDaftarSo = useMemo(
+    () => Array.from(new Set(ganttWorkOrders.map((wo) => wo.so_number).filter((n): n is string => !!n))).sort(),
+    [ganttWorkOrders]
+  );
 
   const handleShiftDailyDate = (deltaDays: number) => setGanttDailyDate((prev) => addDaysToDateString(prev, deltaDays));
   const handleShiftMonth = (deltaMonths: number) => {
@@ -1403,55 +1401,63 @@ export default function PpicDashboardPage() {
                 onDragEnd={handleDragEnd}
                 onDragCancel={() => { setActiveDragWorkCenterId(null); setActiveDragLabel(null); }}
               >
-                <div className="overflow-x-auto rounded-md border">
-                  {/* pengawas-elemen:mulai — papan Gantt & kisi waktu PPIC. Carbon TIDAK punya
-                      komponen Gantt, dan Table Carbon membawa aturan tinggi baris yang merusak kisi
-                      ber-table-fixed yang selnya bisa dijatuhi (drag & drop). Diputuskan saat DS-09;
-                      JANGAN "diseragamkan" belakangan. */}
-                  <table className="w-full table-fixed text-data">
-                  {/* pengawas-elemen:selesai */}
-                    <thead>
-                      <tr className="border-b">
-                        <th className="h-8 w-36 px-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Work Center</th>
-                        {ganttDays.map((day, index) => (
-                          <th key={day} className="h-8 w-32 px-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                            {formatDayLabel(day, index)}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {ganttWorkCenters.map((wc) => {
-                        const restrictedRow = activeDragWorkCenterId !== null && activeDragWorkCenterId !== wc.work_center_id;
-                        return (
-                          <tr key={wc.work_center_id} className={`border-b align-top last:border-0 transition-opacity ${restrictedRow ? 'opacity-40' : ''}`}>
-                            <td className="px-3 py-2 font-medium text-foreground">
-                              {wc.name}
-                              {wc.code ? <span className="ppic-redup-kecil"> ({wc.code})</span> : null}
-                            </td>
-                            {ganttDays.map((day) => {
-                              const cellBlocks = ganttBlocksByCell.get(`${wc.work_center_id}_${day}`) ?? [];
-                              return (
-                                <DroppableCell key={day} workCenterId={wc.work_center_id} date={day} restrictedRow={restrictedRow}>
-                                  {cellBlocks.map((block, i) => (
-                                    <DraggableBlock key={`${block.production_batch_id}_${block.sequence_no}_${i}`} block={block} canDrag={canManageWorkOrder(role)} onOpenDetail={handleOpenBlockDetail} />
-                                  ))}
-                                </DroppableCell>
-                              );
-                            })}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                <div className="gantt__saringan">
+                  <Search
+                    size="lg"
+                    labelText="Cari batch, item, atau nomor SO"
+                    placeholder="Cari batch, item, atau nomor SO"
+                    className="gantt__saringan-kotak"
+                    value={ganttCariTeks}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setGanttCariTeks(e.target.value)}
+                  />
+                  {/* Butir Dropdown berupa TEKS, bukan objek — mengikuti pola yang sudah
+                      dipakai saringan lain di halaman ini. Label TETAP TERLIHAT (tanpa
+                      hideLabel): kotak saringan tanpa label yang terlihat adalah cacat yang
+                      baru saja diperbaiki di tabel Kapasitas halaman ini juga. */}
+                  <Dropdown
+                    id="gantt-saring-wc"
+                    className="gantt__saringan-kotak"
+                    titleText="Work center"
+                    label="Semua work center"
+                    size="lg"
+                    items={['semua', ...ganttWorkCenters.map((wc) => String(wc.work_center_id))]}
+                    itemToString={(v: string) =>
+                      v === 'semua' ? 'Semua work center' : (ganttWorkCenters.find((wc) => String(wc.work_center_id) === v)?.code ?? ganttWorkCenters.find((wc) => String(wc.work_center_id) === v)?.name ?? v)
+                    }
+                    selectedItem={ganttSaringWc === null ? 'semua' : String(ganttSaringWc)}
+                    onChange={({ selectedItem }: { selectedItem: string | null }) => setGanttSaringWc(!selectedItem || selectedItem === 'semua' ? null : Number(selectedItem))}
+                  />
+                  {ganttDaftarSo.length > 0 ? (
+                    <Dropdown
+                      id="gantt-saring-so"
+                      className="gantt__saringan-kotak"
+                      titleText="Sales order"
+                      label="Semua SO"
+                      size="lg"
+                      items={['semua', ...ganttDaftarSo]}
+                      itemToString={(v: string) => (v === 'semua' ? 'Semua SO' : v)}
+                      selectedItem={ganttSaringSo ?? 'semua'}
+                      onChange={({ selectedItem }: { selectedItem: string | null }) => setGanttSaringSo(!selectedItem || selectedItem === 'semua' ? null : selectedItem)}
+                    />
+                  ) : null}
                 </div>
 
-                <div>
-                  <p className="mb-2 mt-3 text-sm font-medium text-foreground">Belum Dijadwalkan (planned_date kosong)</p>
+                <PapanGantt
+                  hari={ganttDays}
+                  blok={ganttBlokTersaring}
+                  workOrders={ganttWoTersaring}
+                  batches={ganttBatchTersaring}
+                  workCenters={ganttWorkCenters}
+                  bisaSeret={canManageWorkOrder(role)}
+                  onBukaDetail={handleOpenBlockDetail}
+                />
+
+                <div className="ppic-jarak-atas">
+                  <p className="ppic-label">Belum dijadwalkan (tanggal rencana masih kosong)</p>
                   {ganttUnscheduled.length === 0 ? (
                     <p className="halaman__redup">Semua batch aktif sudah punya tanggal rencana.</p>
                   ) : (
-                    <div className="flex flex-col gap-2">
+                    <div className="ppic-tumpuk">
                       {ganttUnscheduled.map((b) => (
                         <DraggableUnscheduled key={b.production_batch_id} batch={b} canDrag={canManageWorkOrder(role)} />
                       ))}
@@ -1459,7 +1465,7 @@ export default function PpicDashboardPage() {
                   )}
                 </div>
 
-                <DragOverlay>{activeDragLabel ? <div className="border-l-2 border-info bg-info-subtle px-2 py-1 text-xs font-medium text-info-subtle-foreground shadow">{activeDragLabel}</div> : null}</DragOverlay>
+                <DragOverlay>{activeDragLabel ? <div className="ppic-bayang-seret">{activeDragLabel}</div> : null}</DragOverlay>
               </DndContext>
             ) : ganttView === 'daily' ? (
               <>

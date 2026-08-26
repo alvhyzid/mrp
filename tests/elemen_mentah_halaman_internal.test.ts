@@ -39,7 +39,8 @@ import { tanpaKomentar, nomorBaris } from './util/tanpaKomentar';
 // ============================================================================
 //   - Ini pencocokan teks, bukan parser JSX. Ia tahu membedakan kode dari komentar (lewat
 //     pembantu bersama tests/util/tanpaKomentar.ts) dan tidak lebih dari itu.
-//   - Ia HANYA menyisir src/features/**/pages/*.tsx. Komponen bersama di src/components/ui
+//   - Ia menyisir src/features/**/pages/*.tsx DAN src/features/**/components/*.tsx.
+//     Komponen bersama di src/components/ui
 //     SENGAJA tidak disisir: di situlah <button> mentah memang seharusnya hidup, karena
 //     komponen bersamanya sendiri harus dibangun dari sesuatu. Utangnya dicatat terpisah —
 //     provenance-info-button.tsx menulis <button> ber-Tailwind tulis tangan, bukan memakai
@@ -63,13 +64,30 @@ const PENANDA_SELESAI = /pengawas-elemen:selesai/;
 
 const BERKAS_BOLEH_MENANDAI = new Set([
   'src/features/ppic/pages/PpicDashboardPage.tsx',
-  'src/features/documents/pages/DocumentsPage.tsx'
+  'src/features/documents/pages/DocumentsPage.tsx',
+  // Papan Gantt: batang jadwal tidak punya komponen Carbon (dinyatakan halaman
+  // spesifikasi Carbon-nya sendiri), dan Button Carbon justru harus ditimpa seluruhnya.
+  'src/features/ppic/components/PapanGantt.tsx',
+  // Tabel cetak surat jalan: dokumen kertas, bukan layar.
+  'src/features/mrp/components/SuratJalanPreview.tsx'
 ]);
 
 /// Utang yang SUDAH TERCATAT sebagai task dan belum dibereskan. Daftar ini HANYA BOLEH
 /// MENYUSUT: bila sebuah entri tidak lagi ditemukan, test ini GAGAL dan menyuruh entrinya
 /// dihapus. Tanpa aturan itu, daftar utang berubah jadi tempat menyembunyikan pelanggaran.
-const UTANG: { berkas: string; tag: string; jumlah: number; task: string }[] = [];
+// `jenis` WAJIB persis sama dengan kalimat yang dicetak pengawas ini (mis. "<button>
+// mentah"), sebab itulah kunci yang dipakai mencocokkan. Sampai 26 Agu 2026 bidang ini
+// bernama `tag` dan diisi 'button', sementara pencocokannya memakai kalimat lengkap —
+// jadi jatah utang TIDAK PERNAH BERLAKU. Tidak ada yang menyadarinya karena daftarnya
+// masih kosong: mekanisme yang belum pernah dipakai belum pernah terbukti bekerja.
+const UTANG: { berkas: string; jenis: string; jumlah: number; task: string }[] = [
+  // Ketiganya DITEMUKAN 26 Agu 2026 oleh pengawas ini sendiri, tepat pada giliran ia
+  // diperluas menyisir src/features/**/components/. Selama ia hanya menyisir pages/,
+  // ketiganya tidak pernah terlihat — bukan lolos, melainkan tidak pernah diperiksa.
+  // Tercatat sebagai DS-20; TIDAK dikerjakan di giliran DS-19 (aturan fokus satu task).
+  { berkas: 'src/features/mrp/components/NotificationBell.tsx', jenis: '<button> mentah', jumlah: 2, task: 'DS-20' },
+  { berkas: 'src/features/signatures/components/ConfirmAndSignModal.tsx', jenis: '<input> mentah', jumlah: 1, task: 'DS-20' }
+];
 
 interface Temuan {
   berkas: string;
@@ -83,7 +101,11 @@ function berkasHalaman(dir: string): string[] {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name);
     if (e.isDirectory()) out.push(...berkasHalaman(p));
-    else if (e.isFile() && p.includes(`${sep}pages${sep}`) && p.endsWith('.tsx')) out.push(p);
+    // pages/ DAN components/ di dalam src/features. components/ ditambahkan 26 Agu 2026
+    // saat papan Gantt dipindahkan ke src/features/ppic/components/: memindahkan kode
+    // keluar dari pages/ akan MEMBUNGKAM pengawas ini tanpa ada yang memutuskannya —
+    // bentuk paling licin dari "pengaman hilang tanpa berbunyi".
+    else if (e.isFile() && (p.includes(`${sep}pages${sep}`) || p.includes(`${sep}components${sep}`)) && p.endsWith('.tsx')) out.push(p);
   }
   return out;
 }
@@ -229,7 +251,7 @@ describe('DS-16 — pengawas elemen mentah & tabel non-responsif di halaman inte
     // Versi pertama memakai Set dan diam-diam menciutkan tiga jadi satu — persis kelas cacat
     // "alat ukur melapor terbalik" yang sudah lima kali terjadi di proyek ini.
     const sisaJatah = new Map<string, number>();
-    for (const u of UTANG) sisaJatah.set(`${u.berkas}|${u.tag}`, (sisaJatah.get(`${u.berkas}|${u.tag}`) ?? 0) + u.jumlah);
+    for (const u of UTANG) sisaJatah.set(`${u.berkas}|${u.jenis}`, (sisaJatah.get(`${u.berkas}|${u.jenis}`) ?? 0) + u.jumlah);
 
     const tersisa = temuan.filter((t) => {
       const kunci = `${t.berkas}|${t.jenis}`;
@@ -253,10 +275,10 @@ describe('DS-16 — pengawas elemen mentah & tabel non-responsif di halaman inte
   it('daftar UTANG hanya boleh MENYUSUT — entri yang sudah beres wajib dihapus', () => {
     const temuan = sisirSemua();
     const basi = UTANG.filter(
-      (u) => temuan.filter((t) => t.berkas === u.berkas && t.jenis === u.tag).length < u.jumlah
+      (u) => temuan.filter((t) => t.berkas === u.berkas && t.jenis === u.jenis).length < u.jumlah
     );
     if (basi.length > 0) {
-      const pesan = basi.map((u) => `  ${u.berkas} ${u.tag} (${u.task})`).join('\n');
+      const pesan = basi.map((u) => `  ${u.berkas} ${u.jenis} (${u.task})`).join('\n');
       throw new Error(
         `Entri UTANG berikut sudah tidak ditemukan lagi — hapus dari daftarnya:\n${pesan}\n\n` +
           'Daftar utang yang tidak menyusut berubah jadi tempat menyembunyikan pelanggaran.'

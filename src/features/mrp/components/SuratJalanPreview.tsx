@@ -123,7 +123,12 @@ export default function SuratJalanPreview({
         </div>
       </div>
 
+      {/* pengawas-elemen:mulai — TABEL CETAK SURAT JALAN. Ini dokumen kertas, bukan layar:
+          ia dicetak apa adanya, tidak boleh berubah jadi kartu di layar sempit, dan tidak
+          boleh membawa gaya interaktif Carbon. CLAUDE.md menyebut tabel ini sebagai contoh
+          pengecualian yang sah saat aturan pengawasnya ditulis. */}
       <table className="mt-4 w-full border-collapse border border-neutral-400 text-xs">
+      {/* pengawas-elemen:selesai */}
         <thead>
           <tr className="bg-neutral-100">
             <th className="border border-neutral-400 px-2 py-1 text-left">Kode Item</th>

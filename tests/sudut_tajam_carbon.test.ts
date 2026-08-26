@@ -137,7 +137,12 @@ describe('DS-01 — sudut tajam Carbon dijaga dari CSS yang benar-benar dipancar
       // fotonya dipindah ke kelas bersama `.profil-foto__lingkaran`, satu-satunya tempat
       // yang menyatakan "ini bulat" tinggal SATU berkas. Satu tempat lebih mudah dijaga
       // daripada dua.
-      'app/(shell)/shell.scss (border-radius di SCSS)'
+      'app/(shell)/shell.scss (border-radius di SCSS)',
+      // Papan Gantt: lingkaran foto pelaksana di kartu kiri dan di dalam batang, serta
+      // titik warna Work Center di legenda. Ketiganya memang bulat pada spesifikasi Gantt
+      // Carbon sendiri (gambar "Card component" dan "Task component"), dan tidak satu pun
+      // di antaranya kontrol yang bisa ditekan — jadi ini bukan tombol berbentuk pil.
+      'src/features/ppic/components/papan-gantt.scss (border-radius di SCSS)'
     ]);
   });
 });

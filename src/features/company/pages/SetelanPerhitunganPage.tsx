@@ -168,7 +168,7 @@ export default function SetelanPerhitunganPage() {
 
   if (memuat) {
     return (
-      <div className="setelan-halaman">
+      <div className="halaman setelan-halaman">
         <SkeletonText heading width="20rem" />
         <SkeletonText paragraph lineCount={8} />
       </div>
@@ -176,7 +176,7 @@ export default function SetelanPerhitunganPage() {
   }
 
   return (
-    <div className="setelan-halaman">
+    <div className="halaman setelan-halaman">
       <KepalaHalaman
         remah={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Settings' }, { label: 'Calculation Settings' }]}
         judul="Setelan perhitungan"

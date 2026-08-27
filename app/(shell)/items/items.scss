@@ -6,12 +6,13 @@
 @use '@carbon/react/scss/theme';
 @use '@carbon/react/scss/type';
 
-.item-halaman {
-  padding: spacing.$spacing-06 spacing.$spacing-05 spacing.$spacing-09;
-  display: flex;
-  flex-direction: column;
-  gap: spacing.$spacing-05;
-}
+// `.item-halaman` DIHAPUS 27 Agu 2026 (DS-09). Isinya SALINAN PERSIS `.halaman` di
+// src/styles/carbon.scss -- padding, flex kolom, dan gap yang sama nilainya.
+//
+// Kenapa itu berbahaya padahal nilainya benar: ia benar karena DISALIN, bukan karena satu
+// sumber. Begitu `.halaman` disetel ulang, halaman INI -- layar acuan yang sudah disetujui
+// pemilik produk -- diam-diam berhenti cocok dengan seluruh layar lain, dan tidak ada yang
+// berbunyi. Penjaganya: tests/kerangka_halaman_bersama.test.ts.
 
 // Breadcrumb menggantikan baris "MASTER DATA" yang dulu hanya hiasan: ia memberi tahu POSISI
 // dan menyediakan jalan kembali.

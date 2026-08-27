@@ -82,8 +82,18 @@
   flex-wrap: wrap;
 }
 
+// Padding DIHAPUS 27 Agu 2026 (DS-09): kerangka -- padding, flex, jarak antar-blok --
+// datang dari `.halaman` bersama, dan halaman ini sekarang memakainya.
+//
+// Sebelumnya kelas ini MENGGANTIKAN kerangka bersama dengan padding $spacing-05 dan TANPA
+// `gap`. Akibatnya terukur di peramban: remah rotinya 8px lebih tinggi dan judulnya 24px
+// lebih tinggi daripada 18 layar lainnya.
+//
+// `max-width` DIPERTAHANKAN karena memang khas halaman ini (formulir setelan, bukan tabel
+// padat data). Perlu dicatat: ia satu-satunya batas lebar yang tersisa setelah keputusan
+// "LEBAR PENUH" 25 Agu 2026, jadi keputusan mempertahankan atau mencabutnya milik pemilik
+// produk -- bukan diputuskan di sini.
 .setelan-halaman {
-  padding: spacing.$spacing-05;
   max-width: 60rem;
 }
 

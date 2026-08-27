@@ -954,7 +954,7 @@ export default function ItemsPage() {
 
   if (checkingAccess) {
     return (
-      <div className="item-halaman">
+      <div className="halaman">
         <DataTableSkeleton columnCount={7} rowCount={8} showHeader showToolbar />
       </div>
     );
@@ -962,7 +962,7 @@ export default function ItemsPage() {
 
   if (accessDenied) {
     return (
-      <div className="item-halaman">
+      <div className="halaman">
         <KepalaHalaman remah={[]} judul="Daftar item" />
         <InlineNotification
           kind="error"
@@ -979,7 +979,7 @@ export default function ItemsPage() {
   }
 
   return (
-    <div className="item-halaman">
+    <div className="halaman">
       {/*
         SATU judul saja, dan letaknya di ATAS tabel — bukan dua.
 

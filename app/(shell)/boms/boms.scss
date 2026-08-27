@@ -85,22 +85,45 @@
   gap: $spacing-04;
 }
 
+// DS-22 — JUMLAH KOLOM DITURUNKAN DARI LEBAR YANG BENAR-BENAR TERSEDIA.
+//
+// ============================================================================
+// KENAPA BREAKPOINT LEBAR LAYAR DICABUT
+// ============================================================================
+// Versi sebelumnya menaikkan kolom 1 -> 2 di `md` (672px) -> 4 di `lg` (1056px), memakai
+// lebar LAYAR. Tetapi baris ini hidup DI DALAM modal, dan modal Carbon justru MENYEMPIT
+// saat layar melebar (_modal.scss: 84% -> 60% mulai 1056px -> 48% mulai 1312px).
+//
+// Dua perubahan berlawanan arah bertemu di SATU piksel viewport, dan hasilnya terukur:
+//   viewport 1055px -> wadah 886px -> 2 kolom -> 402px per kontrol -> helper 2 baris
+//   viewport 1056px -> wadah 634px -> 4 kolom -> 130px per kontrol -> helper 5 baris
+//   viewport 1312px -> wadah 630px -> 4 kolom -> 129px per kontrol -> helper 5 baris
+// Kolom TERSEMPIT di seluruh rentang justru ada di DESKTOP, bukan di ponsel.
+//
+// `auto-fit` membaca lebar wadahnya sendiri, jadi kedua ambang itu tidak diperlukan lagi
+// dan tidak bisa lagi bertentangan dengan lebar modal.
+//
+// ============================================================================
+// KENAPA min(15rem, 100%) DAN BUKAN 15rem SAJA
+// ============================================================================
+// `minmax(15rem, 1fr)` MELUBER begitu wadahnya lebih sempit dari 15rem — kolomnya menolak
+// menyusut di bawah lantainya sendiri. Itu persis kelas cacat yang sedang diperbaiki batch
+// ini pada penanda langkah (DS-21). `min(15rem, 100%)` membuat lantainya menyerah pada
+// wadah yang lebih sempit, sehingga aturan ini tidak bisa melahirkan gulir menyamping baru.
+//
+// 15rem = 240px dipilih dari angka terukur: 130px adalah lebar yang terbukti merusak
+// (keterangan bantuan membungkus jadi lima baris), dan 240px masih memuat DUA kolom di
+// wadah tersempit yang punya lebih dari satu kolom (498px di viewport 672px).
 .bom-komponen__baris {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr));
   gap: $spacing-05;
   padding: $spacing-05;
   background-color: $layer-01;
   border: 1px solid $border-subtle-01;
 
-  @include breakpoint('md') {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  @include breakpoint('lg') {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
+  // Aksi merusak menempati barisnya sendiri dan didorong ke ujung — aturan CLAUDE.md
+  // nomor 9. Disengaja, bukan sisa tata letak.
   .cds--btn--danger--tertiary {
     grid-column: 1 / -1;
     justify-self: end;

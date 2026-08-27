@@ -175,8 +175,19 @@ export default function SetelanPerhitunganPage() {
     );
   }
 
+  // CETAKAN HALAMAN FORMULIR PENUH (D-A). Elemen <form> BUKAN formalitas: tanpanya
+  // menekan Enter tidak menyimpan, atribut `required` HTML tidak berlaku, dan tidak ada
+  // satu titik pun untuk validasi tingkat formulir. Halaman ini sebelumnya berpembungkus
+  // <div> dan menyimpan lewat onClick lepas.
+  const kirim = (e: React.FormEvent) => {
+    // Menahan perilaku bawaan peramban. Tanpa ini, Enter memuat ulang halaman dan
+    // seluruh draf yang belum tersimpan hilang tanpa peringatan.
+    e.preventDefault();
+    void simpan();
+  };
+
   return (
-    <div className="halaman setelan-halaman">
+    <form className="halaman setelan-halaman" onSubmit={kirim} noValidate={false}>
       <KepalaHalaman
         remah={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Settings' }, { label: 'Calculation Settings' }]}
         judul="Setelan perhitungan"
@@ -341,10 +352,18 @@ export default function SetelanPerhitunganPage() {
                 }
               }}
             >
+              {/* POLA VALIDASI WAJIB DISELARASKAN DENGAN dateFormat DI ATAS.
+                  Bawaan Carbon untuk `pattern` adalah format Amerika
+                  (\d{1,2}/\d{1,2}/\d{4}), sedangkan picker ini disetel `Y-m-d` sehingga
+                  nilainya berbentuk 2026-08-28. Ketidakcocokan itu membuat
+                  form.checkValidity() bernilai false, dan peramban MEMBLOKIR submit
+                  DIAM-DIAM: nol permintaan terkirim, nol pesan, nol galat konsol.
+                  Terukur di peramban, bukan diduga. */}
               <DatePickerInput
                 id="berlaku-sejak"
                 labelText="Berlaku sejak"
                 placeholder="tahun-bulan-tanggal"
+                pattern="\d{4}-\d{2}-\d{2}"
               />
             </DatePicker>
 
@@ -359,11 +378,15 @@ export default function SetelanPerhitunganPage() {
           </div>
 
           <div className="setelan-aksi">
-            <Button onClick={() => void simpan()} disabled={menyimpan}>
+            <Button type="submit" disabled={menyimpan}>
               {menyimpan ? 'Menyimpan…' : 'Simpan perubahan'}
             </Button>
+            {/* SEKUNDER, bukan ghost. Ghost adalah penekanan TERENDAH; "Batalkan
+                perubahan" membuang suntingan pengguna, jadi ia aksi sekunder sungguhan.
+                `type="button"` wajib — di dalam <form>, tombol tanpa type ikut mengirim. */}
             <Button
-              kind="ghost"
+              kind="secondary"
+              type="button"
               disabled={menyimpan}
               onClick={() => setDraf(Object.fromEntries(setelan.map((s) => [s.kunci, s.nilai])))}
             >
@@ -409,6 +432,6 @@ export default function SetelanPerhitunganPage() {
           </div>
         )}
       </Tile>
-    </div>
+    </form>
   );
 }

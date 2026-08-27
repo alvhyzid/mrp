@@ -42,12 +42,28 @@ export async function createWorkOrder(request: NextRequest): Promise<ApiResult> 
 
     const { data: bom, error: bomError } = await adminClient
       .from('boms')
-      .select('bom_id, company_id, parent_item_id')
+      .select('bom_id, company_id, parent_item_id, archived_at')
       .eq('bom_id', input.bom_id)
       .maybeSingle();
     if (bomError) return { status: 500, body: { error: bomError.message } };
     if (!bom || bom.company_id !== appUser.company_id) {
       return { status: 400, body: { error: 'BOM tidak ditemukan di perusahaan Anda.' } };
+    }
+    // DS-17 — BOM YANG DIARSIPKAN TIDAK BOLEH DIPAKAI PEKERJAAN BARU.
+    //
+    // Sebelum 27 Agu 2026 pemeriksaan ini TIDAK ADA: `boms.status` bisa diubah jadi
+    // 'archived' lewat layar, dan Work Order baru tetap bisa dibuat di atasnya. Statusnya
+    // ada, ditampilkan, dan tidak berakibat apa-apa — persis kelas cacat "status tanpa
+    // pemicu" yang sudah tercatat di CLAUDE.md.
+    //
+    // Yang diperiksa `archived_at`, BUKAN `status`: pengarsipan mengisi keduanya, tetapi
+    // hanya `archived_at` yang punya jejak SIAPA dan KAPAN. Memakai `status` saja akan
+    // meloloskan baris yang statusnya diubah tangan tanpa jejak.
+    if (bom.archived_at) {
+      return {
+        status: 400,
+        body: { error: 'BOM ini sudah diarsipkan dan tidak bisa dipakai untuk Work Order baru. Pulihkan dulu BOM-nya bila memang masih dipakai.' }
+      };
     }
 
     let itemId = bom.parent_item_id;

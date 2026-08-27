@@ -18,11 +18,22 @@ export async function listBoms(request: NextRequest): Promise<ApiResult> {
     const adminClient = getAdminClient();
     const canSeeCost = canViewFinancialData(appUser.role);
 
-    const { data: boms, error: bomsError } = await adminClient
+    // DS-17 — BOM yang DIARSIPKAN disembunyikan secara bawaan, dan penyaringannya
+    // dilakukan DI SERVER, bukan di peramban. Menyaring di peramban berarti barisnya tetap
+    // dikirim ke layar: siapa pun yang membuka alat pengembang tetap melihatnya, dan lebih
+    // penting lagi, pemanggil API mana pun tetap menerimanya sebagai pilihan yang sah.
+    //
+    // `includeArchived=true` menampilkannya kembali — dipakai layar saat pengguna memilih
+    // "tampilkan yang diarsipkan", dan itulah satu-satunya jalan memulihkannya.
+    const includeArchived = request.nextUrl.searchParams.get('includeArchived') === 'true';
+
+    let bomQuery = adminClient
       .from('boms')
-      .select('bom_id, parent_item_id, version, standard_yield_qty, standard_yield_uom, status, buffer_percentage, created_at, standard_yield_basis_note, standard_yield_source')
-      .eq('company_id', appUser.company_id)
-      .order('created_at', { ascending: false });
+      .select('bom_id, parent_item_id, version, standard_yield_qty, standard_yield_uom, status, buffer_percentage, created_at, standard_yield_basis_note, standard_yield_source, archived_at')
+      .eq('company_id', appUser.company_id);
+    if (!includeArchived) bomQuery = bomQuery.is('archived_at', null);
+
+    const { data: boms, error: bomsError } = await bomQuery.order('created_at', { ascending: false });
 
     if (bomsError) {
       return { status: 500, body: { error: bomsError.message } };
@@ -89,6 +100,11 @@ export async function listBoms(request: NextRequest): Promise<ApiResult> {
         standard_yield_basis_note: bom.standard_yield_basis_note,
         standard_yield_source: bom.standard_yield_source,
         status: bom.status,
+        // WAJIB IKUT TERKIRIM, bukan hanya ikut disaring. Diukur di peramban 27 Agu 2026:
+        // baris yang diarsipkan tetap menampilkan "Ubah + Hapus" karena layar tidak pernah
+        // menerima kolom ini — kueri-nya sudah benar, objek jawabannya yang menjatuhkannya.
+        // Penjaganya ditambahkan di tests/bom_lifecycle.test.ts.
+        archived_at: bom.archived_at,
         buffer_percentage: bom.buffer_percentage,
         created_at: bom.created_at,
         lines: bomLines

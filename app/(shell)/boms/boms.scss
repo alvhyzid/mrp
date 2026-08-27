@@ -117,3 +117,39 @@
 .bom-form__langkah {
   margin-block-end: $spacing-06;
 }
+
+// DS-17 — aksi siklus hidup di kolom Aksi.
+//
+// `margin-inline-start: auto` pada aksi merusak BUKAN pilihan estetika: aturan modal
+// nomor 9 proyek ini mewajibkan Hapus/Arsipkan berjauhan dari Ubah, karena di layar
+// sentuh jari jauh lebih besar daripada kursor dan tindakan yang tidak bisa dibatalkan
+// tidak boleh berjarak satu jari dari aksi sehari-hari.
+.bom-aksi {
+  display: flex;
+  // TIDAK membungkus. Versi pertama memakai `flex-wrap: wrap`, dan diukur di peramban
+  // hasilnya justru kebalikan dari yang dituju: di 672–1440px kedua tombol turun jadi
+  // dua baris dan BERTUMPUK RAPAT secara vertikal — jarak Ubah↔Hapus terukur NEGATIF.
+  // Membungkus di sel tabel selalu berarti "menempel", karena tidak ada ruang tersisa
+  // untuk memisahkan.
+  flex-wrap: nowrap;
+  // Jarak tetap, bukan hanya `auto`. `margin-inline-start: auto` hanya bekerja bila selnya
+  // LEBIH LEBAR daripada isinya; sel tabel menyusut mengikuti isi, jadi auto sering
+  // bernilai nol. Jarak tetap ini yang menjamin pemisahannya ada di lebar mana pun.
+  gap: $spacing-07;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.bom-aksi__merusak {
+  // Bila selnya kebetulan lebih lebar (layar lebar), aksi merusak didorong sejauh mungkin.
+  margin-inline-start: auto;
+}
+
+// Dua cabang di modal berbahaya WAJIB terbaca sebagai DUA hal.
+//
+// Diukur di peramban: tanpa jarak, kalimat "kalau belum dipakai → dihapus" dan
+// "kalau sudah dipakai → diarsipkan" menempel jadi satu paragraf panjang, dan pembacanya
+// gampang berhenti di kalimat pertama lalu mengira jawabannya cuma satu.
+.bom-modal-siklus p + p {
+  margin-block-start: $spacing-05;
+}

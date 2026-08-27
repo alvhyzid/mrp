@@ -10,6 +10,7 @@ import {
   DataTableSkeleton,
   Dropdown,
   InlineNotification,
+  Modal,
   ModalBody,
   ModalHeader,
   NumberInput,
@@ -85,6 +86,7 @@ type Bom = {
   standard_yield_source: string | null;
   status: string;
   buffer_percentage: number | null;
+  archived_at: string | null;
   lines: BomLine[];
 };
 
@@ -165,6 +167,13 @@ export default function BomsPage() {
   }, []);
   const tutupNotifikasi = useCallback((id: string) => setNotifikasi((lama) => lama.filter((n) => n.id !== id)), []);
 
+  // DS-17 — siklus hidup. `tampilkanArsip` menyaring DI SERVER (parameter kueri), bukan di
+  // peramban: menyaring di peramban berarti barisnya tetap terkirim ke layar.
+  const [tampilkanArsip, setTampilkanArsip] = useState(false);
+  const [bomAkanDihapus, setBomAkanDihapus] = useState<Bom | null>(null);
+  const [bomAkanDipulihkan, setBomAkanDipulihkan] = useState<Bom | null>(null);
+  const [siklusSibuk, setSiklusSibuk] = useState(false);
+
 
   // Pencarian, saringan, dan pembagian halaman: Carbon DataTable tidak membawanya.
   const [cari, setCari] = useState('');
@@ -184,7 +193,7 @@ export default function BomsPage() {
     if (!accessToken) return;
 
     setBomsLoading(true);
-    const response = await fetch('/api/boms', {
+    const response = await fetch(`/api/boms${tampilkanArsip ? '?includeArchived=true' : ''}`, {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
     const data = await response.json();
@@ -198,7 +207,7 @@ export default function BomsPage() {
     setBoms(data.boms || []);
     setBomsError('');
     setBomsLoading(false);
-  }, [getAccessToken]);
+  }, [getAccessToken, tampilkanArsip]);
 
   const loadItems = useCallback(async () => {
     const accessToken = await getAccessToken();
@@ -260,6 +269,59 @@ export default function BomsPage() {
 
     checkAccessAndLoad();
   }, [router, loadBoms, loadItems, loadRoutings]);
+
+  // ==========================================================================
+  // DS-17 — SIKLUS HIDUP. Layar TIDAK memutuskan hapus-vs-arsip.
+  //
+  // Tombolnya satu: "Hapus". Server memeriksa pemakaian lalu menghapus atau mengarsipkan,
+  // dan layar MELAPORKAN apa yang sebenarnya terjadi lewat notifikasi. Alasannya aturan
+  // proyek yang sudah ada: pengguna tidak bisa tahu dari layar apakah BOM ini pernah
+  // dipakai Work Order tiga bulan lalu, jadi menawarkan pilihan berarti meminta keputusan
+  // dari orang yang tidak punya informasinya.
+  // ==========================================================================
+  const handleHapusAtauArsip = async () => {
+    if (!bomAkanDihapus) return;
+    const accessToken = await getAccessToken();
+    if (!accessToken) return;
+
+    setSiklusSibuk(true);
+    const response = await fetch(`/api/boms/${bomAkanDihapus.bom_id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const data = await response.json();
+    setSiklusSibuk(false);
+
+    if (!response.ok) {
+      beriTahu('error', 'Gagal memproses BOM', data.error || 'Terjadi kesalahan.');
+      return;
+    }
+    setBomAkanDihapus(null);
+    beriTahu('success', data.action === 'diarsipkan' ? 'BOM diarsipkan' : 'BOM dihapus', String(data.message ?? ''));
+    await loadBoms();
+  };
+
+  const handlePulihkan = async () => {
+    if (!bomAkanDipulihkan) return;
+    const accessToken = await getAccessToken();
+    if (!accessToken) return;
+
+    setSiklusSibuk(true);
+    const response = await fetch(`/api/boms/${bomAkanDipulihkan.bom_id}/restore`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const data = await response.json();
+    setSiklusSibuk(false);
+
+    if (!response.ok) {
+      beriTahu('error', 'Gagal memulihkan BOM', data.error || 'Terjadi kesalahan.');
+      return;
+    }
+    setBomAkanDipulihkan(null);
+    beriTahu('success', 'BOM dipulihkan', String(data.message ?? ''));
+    await loadBoms();
+  };
 
   const itemsById = useMemo(() => new Map(items.map((item) => [item.item_id, item])), [items]);
   const routingByItemId = useMemo(() => new Map(routings.map((r) => [r.item_id, r])), [routings]);
@@ -480,12 +542,27 @@ export default function BomsPage() {
       case 'line_count':
         return b.lines.length;
       case 'aksi':
-        return canManage ? (
-          <Button kind="ghost" size="sm" onClick={() => startEdit(b)}>
-            Ubah
-          </Button>
-        ) : (
-          <span className="halaman__redup">—</span>
+        if (!canManage) return <span className="halaman__redup">—</span>;
+        // AKSI MERUSAK DIDORONG MENJAUH dari aksi sehari-hari (aturan modal nomor 9):
+        // di layar sentuh, jari jauh lebih besar daripada kursor, dan tindakan yang tidak
+        // bisa dibatalkan tidak boleh berjarak satu jari dari "Ubah".
+        return (
+          <div className="bom-aksi">
+            {b.archived_at ? (
+              <Button kind="tertiary" size="md" onClick={() => setBomAkanDipulihkan(b)}>
+                Pulihkan
+              </Button>
+            ) : (
+              <>
+                <Button kind="ghost" size="md" onClick={() => startEdit(b)}>
+                  Ubah
+                </Button>
+                <Button kind="danger--ghost" size="md" className="bom-aksi__merusak" renderIcon={TrashCan} onClick={() => setBomAkanDihapus(b)}>
+                  Hapus
+                </Button>
+              </>
+            )}
+          </div>
         );
       default:
         return null;
@@ -647,6 +724,19 @@ export default function BomsPage() {
                         setHalaman(1);
                       }}
                     />
+                    {/* Satu-satunya jalan melihat BOM yang diarsipkan — dan karena itu
+                        satu-satunya jalan memulihkannya. Menyaringnya di server, bukan di
+                        peramban: lihat catatan di listBoms. */}
+                    <Button
+                      kind="ghost"
+                      size="lg"
+                      onClick={() => {
+                        setTampilkanArsip((v) => !v);
+                        setHalaman(1);
+                      }}
+                    >
+                      {tampilkanArsip ? 'Sembunyikan yang diarsipkan' : 'Tampilkan yang diarsipkan'}
+                    </Button>
                     {canManage ? (
                       <Button size="lg" renderIcon={Add} onClick={startCreate}>
                         Tambah BOM
@@ -947,6 +1037,56 @@ export default function BomsPage() {
 
       {/* Ditempatkan SEKALI di kaki halaman; posisinya (kanan atas, di bawah header)
           diatur komponennya sendiri. */}
+      {/* MODAL BERBAHAYA CARBON, bukan window.confirm.
+          Bukan soal rupa: window.confirm memblokir seluruh peramban, tidak bisa memuat
+          penekanan pada nama barisnya, tidak bisa diuji dari kode, dan tidak bisa
+          menjelaskan KONSEKUENSI. Carbon menyediakan varian `danger` justru untuk ini.
+
+          Ukuran sm, bukan md: Carbon menyatakan modal berisi teks pendek dan SATU
+          keputusan sebaiknya xs/sm supaya barisnya tidak terlalu panjang untuk dibaca
+          sekali lihat. */}
+      <Modal
+        open={bomAkanDihapus !== null}
+        danger
+        size="sm"
+        modalHeading={`Hapus BOM "${bomAkanDihapus?.parent_item_code ?? bomAkanDihapus?.parent_item_name ?? ''}" v${bomAkanDihapus?.version ?? ''}?`}
+        modalLabel="Master data"
+        primaryButtonText={siklusSibuk ? 'Memproses…' : 'Ya, proses'}
+        secondaryButtonText="Batal"
+        primaryButtonDisabled={siklusSibuk}
+        onRequestClose={() => setBomAkanDihapus(null)}
+        onSecondarySubmit={() => setBomAkanDihapus(null)}
+        onRequestSubmit={handleHapusAtauArsip}
+        className="bom-modal-siklus"
+      >
+        <p>
+          Bila BOM ini <strong>belum pernah dipakai</strong> Work Order maupun batch produksi, ia akan{' '}
+          <strong>dihapus permanen</strong> beserta seluruh baris komponennya.
+        </p>
+        <p className="halaman__redup">
+          Bila ternyata <strong>sudah dipakai</strong>, ia TIDAK dihapus melainkan <strong>diarsipkan</strong> — angka batch
+          yang sudah berjalan tidak berubah, dan BOM ini berhenti muncul sebagai pilihan untuk Work Order baru.
+          Server yang memeriksanya, dan hasilnya akan diberitahukan setelah ini.
+        </p>
+      </Modal>
+
+      <Modal
+        open={bomAkanDipulihkan !== null}
+        size="sm"
+        modalHeading={`Pulihkan BOM "${bomAkanDipulihkan?.parent_item_code ?? bomAkanDipulihkan?.parent_item_name ?? ''}" v${bomAkanDipulihkan?.version ?? ''}?`}
+        modalLabel="Master data"
+        primaryButtonText={siklusSibuk ? 'Memproses…' : 'Pulihkan'}
+        secondaryButtonText="Batal"
+        primaryButtonDisabled={siklusSibuk}
+        onRequestClose={() => setBomAkanDipulihkan(null)}
+        onSecondarySubmit={() => setBomAkanDipulihkan(null)}
+        onRequestSubmit={handlePulihkan}
+        className="bom-modal-siklus"
+      >
+        <p>BOM ini akan aktif kembali dan bisa dipilih untuk Work Order baru.</p>
+        <p className="halaman__redup">Riwayat produksi tidak berubah — pemulihan hanya membuka kembali pemakaian ke depan.</p>
+      </Modal>
+
       <AreaNotifikasi daftar={notifikasi} onTutup={tutupNotifikasi} />
     </div>
   );

@@ -4,6 +4,7 @@ export * from './updateItem';
 export * from './itemValidation';
 export * from './listBoms';
 export * from './createBom';
+export * from './deleteOrArchiveBom';
 export * from './updateBom';
 export * from './bomValidation';
 export * from './bomCycleCheck';

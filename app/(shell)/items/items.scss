@@ -149,7 +149,25 @@
   }
 }
 
-@media (min-width: 66rem) {
+// KOLOM KETIGA MULAI 82rem (breakpoint xlg Carbon), BUKAN 66rem (lg) — dan angka ini
+// dipilih dari pengukuran, bukan dari selera.
+//
+// Di 66rem TIGA hal terjadi pada piksel yang sama: navigasi samping terbuka (memakan
+// ~256px), tabel keluar dari mode kartu, dan kolom jadi tiga. Diukur di peramban:
+//   1055px -> 2 kolom, sel 444px
+//   1056px -> 3 kolom, sel 225px   <-- separuhnya, seketika
+//   1100px -> 3 kolom, sel 225px
+// Sel 225px terlalu sempit untuk nilai seperti "Belum ada ambang — item ini tidak akan
+// pernah memicu peringatan stok."
+//
+// Yang membuatnya berbahaya: 1056px BUKAN salah satu dari enam lebar wajib
+// (360/672/768/1280/1440/1920), jadi titik perubahan ini tidak pernah difoto siapa pun.
+// Aturan CLAUDE.md sendiri menyebutnya: daftar lebar wajib harus mencakup TITIK PERUBAHAN,
+// bukan hanya lebar yang lazim.
+//
+// KONSEKUENSI YANG PERLU DISADARI: di 1280px layarnya kini 2 kolom, bukan 3. Dengan
+// navigasi terbuka, ruang isinya memang hanya ~1024px di situ.
+@media (min-width: 82rem) {
   .item-detail__daftar {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -232,20 +250,74 @@
   background-color: theme.$layer;
 }
 
+// ALUR UNGGAH SEBAGAI SATU BLOK, bukan dua tombol besar yang terpisah.
+// Diukur sebelum diubah: "Pilih berkas" dan "Unggah dokumen" KEDUANYA bervarian primary
+// (2 tombol primary di satu blok), berjarak 32px tegak dengan area nama berkas di
+// antaranya — dua ajakan bertindak yang sama kuat, tanpa urutan yang terbaca.
+//
+// Sekarang: satu blok, dengan aksi utama didorong ke kanan supaya terbaca sebagai LANGKAH
+// TERAKHIR setelah berkasnya dipilih. "Pilih berkas" diturunkan jadi tertiary lewat
+// properti `buttonKind` bawaan Carbon (diverifikasi di paket terpasang: FileUploader
+// meneruskan buttonKind ke FileUploaderButton).
+.item-lampir__berkas {
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-05;
+  max-inline-size: 64rem;
+}
+
 .item-lampir__aksi {
   display: flex;
   gap: spacing.$spacing-03;
+  // Kanan di layar lega; tetap dari kiri di layar sempit supaya jempol mudah menjangkaunya.
+  justify-content: flex-start;
 }
 
-.item-kisi,
+@media (min-width: 42rem) {
+  .item-lampir__aksi {
+    justify-content: flex-end;
+  }
+}
+
 // SATU KOLOM (DS-18, 26 Agu 2026). Sebelumnya kolomnya tumbuh sendiri lewat auto-fit —
-// susunan yang cerdik dan tetap salah untuk modal: Carbon menyebut "form inputs and other
+// susunan yang cerdik dan tetap salah untuk MODAL: Carbon menyebut "form inputs and other
 // components expand the entire width of a modal". Kolom kedua dipakai untuk memuatkan field
 // yang kebanyakan, dan jawabannya memecah formulirnya jadi langkah (lihat LANGKAH_ITEM).
+//
+// `.item-kisi` DIKELUARKAN dari aturan ini 27 Agu 2026, dan itu BUKAN pencabutan DS-18.
+// Alasan DS-18 adalah kalimat Carbon tentang MODAL, dan `.item-kisi` tidak pernah dipakai di
+// modal: kedua pemakaiannya (formulir Dokumen dan formulir Supplier) hidup di dalam baris
+// tabel yang dimekarkan, bukan di dalam modal. Ia ikut terkena hanya karena berbagi satu
+// pemilih berkoma. Aturan modalnya sendiri tetap utuh di `.item-form` di bawah.
 .item-form {
   display: flex;
   flex-direction: column;
   gap: spacing.$spacing-07;
+}
+
+// ============================================================================
+// KISI FORMULIR DI DALAM PANEL DETAIL (revisi DS-09, 27 Agu 2026)
+// ============================================================================
+// DIUKUR SEBELUM DIUBAH, di peramban: satu kolom di semua lebar, dan karena panelnya
+// selebar layar, satu field "Nomor dokumen" terentang 1016px di 1440px dan 1496px di
+// 1920px. Isian sependek nomor dokumen tidak butuh satu setengah meter, dan formulirnya
+// jadi 686px tinggi hanya untuk empat field.
+.item-kisi {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: spacing.$spacing-05;
+}
+
+@media (min-width: 42rem) {
+  .item-kisi {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    // BATAS LEBAR, bukan hiasan: tanpa ini dua kolom di 1920px masih memberi ~740px per
+    // field. Angkanya dipilih supaya satu field mendarat di kisaran 480-500px pada layar
+    // lebar — lebar baca yang wajar untuk isian pendek. Ini membatasi FORMULIR, bukan
+    // tabel; keputusan "lebar penuh" 25 Agu 2026 melindungi tabel padat data agar kolomnya
+    // tidak terpotong, dan tidak berlaku untuk isian teks pendek.
+    max-inline-size: 64rem;
+  }
 }
 
 .item-form__bagian {

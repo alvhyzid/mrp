@@ -841,24 +841,41 @@ export default function ItemsPage() {
             />
           </div>
 
-          <FileUploader
-            size="lg"
-            labelTitle="Berkas"
-            labelDescription="PDF, PNG, JPG, WEBP, XLSX, atau DOCX. Maksimal 20 MB."
-            buttonLabel="Pilih berkas"
-            accept={['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.xlsx', '.docx']}
-            filenameStatus={docFile ? 'edit' : 'uploading'}
-            iconDescription="Hapus berkas"
-            onChange={(event: React.SyntheticEvent<HTMLElement>) =>
-              setDocFile((event.currentTarget as HTMLInputElement).files?.[0] ?? null)
-            }
-            onDelete={() => setDocFile(null)}
-          />
+          {/* MEMILIH BERKAS DAN MENGUNGGAHNYA ADALAH SATU ALUR, jadi keduanya hidup di satu
+              blok. Sebelumnya keduanya berdiri sendiri-sendiri dan -- diukur di peramban --
+              KEDUANYA bervarian primary: dua ajakan bertindak yang sama kuat, tanpa urutan
+              yang terbaca.
 
-          <div className="item-lampir__aksi">
-            <Button size="md" disabled={docStatus === 'uploading'} onClick={() => handleUploadItemDoc(item)}>
-              {docStatus === 'uploading' ? 'Mengunggah…' : 'Unggah dokumen'}
-            </Button>
+              `buttonKind="tertiary"` adalah properti BAWAAN Carbon, bukan penimpaan CSS:
+              FileUploader meneruskannya ke FileUploaderButton (diverifikasi di paket
+              terpasang, FileUploader.js baris 217, PropTypes baris 271; bawaannya "primary").
+              Jadi hierarkinya diselesaikan lewat jalur Carbon sendiri. */}
+          <div className="item-lampir__berkas">
+            <FileUploader
+              size="lg"
+              labelTitle="Berkas"
+              labelDescription="PDF, PNG, JPG, WEBP, XLSX, atau DOCX. Maksimal 20 MB."
+              buttonLabel="Pilih berkas"
+              buttonKind="tertiary"
+              accept={['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.xlsx', '.docx']}
+              filenameStatus={docFile ? 'edit' : 'uploading'}
+              iconDescription="Hapus berkas"
+              onChange={(event: React.SyntheticEvent<HTMLElement>) =>
+                setDocFile((event.currentTarget as HTMLInputElement).files?.[0] ?? null)
+              }
+              onDelete={() => setDocFile(null)}
+            />
+
+            {/* TOMBOL TIDAK DINONAKTIFKAN sebelum berkas dipilih, dan itu keputusan sadar:
+                handleUploadItemDoc SUDAH memeriksanya dan menjawab "Pilih berkas dokumennya
+                dulu." Menonaktifkannya akan MENGHILANGKAN kalimat itu dan menggantinya dengan
+                tombol mati tanpa keterangan -- mengubah perilaku yang ada, bukan hanya
+                tampilannya. */}
+            <div className="item-lampir__aksi">
+              <Button size="md" disabled={docStatus === 'uploading'} onClick={() => handleUploadItemDoc(item)}>
+                {docStatus === 'uploading' ? 'Mengunggah…' : 'Unggah dokumen'}
+              </Button>
+            </div>
           </div>
 
           {docMessage ? (

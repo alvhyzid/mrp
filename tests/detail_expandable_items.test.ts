@@ -48,7 +48,7 @@ describe('DS-09 — detail baris yang dimekarkan di /items', () => {
   const scss = readFileSync(SCSS, 'utf8');
   const scssBersih = tanpaKomentar(scss);
 
-  it('(a) kisi detail: 1 kolom bawaan, 2 kolom di 42rem, 3 kolom di 66rem', () => {
+  it('(a) kisi detail: 1 kolom bawaan, 2 kolom di 42rem, 3 kolom di 82rem', () => {
     const dasar = blok(scssBersih, '.item-detail__daftar');
     expect(dasar, 'blok .item-detail__daftar tidak ditemukan').not.toBeNull();
     expect(dasar!).toMatch(/display:\s*grid/);
@@ -57,12 +57,15 @@ describe('DS-09 — detail baris yang dimekarkan di /items', () => {
     // Dua breakpoint yang SUDAH dipakai repo ini (42rem = Carbon md, 66rem = Carbon lg),
     // bukan angka baru. Bila kelak breakpoint-nya berubah, uji ini ikut menahannya.
     const media42 = scssBersih.match(/@media \(min-width: 42rem\) \{[\s\S]*?\n\}/g) || [];
-    const media66 = scssBersih.match(/@media \(min-width: 66rem\) \{[\s\S]*?\n\}/g) || [];
+    const media82 = scssBersih.match(/@media \(min-width: 82rem\) \{[\s\S]*?\n\}/g) || [];
     const punya = (blokMedia: string[], kolom: number) =>
       blokMedia.some((b) => b.includes('.item-detail__daftar') && new RegExp(`repeat\\(${kolom},`).test(b));
 
     expect(punya(media42, 2), 'di 42rem (tablet) kisi detail harus 2 kolom').toBe(true);
-    expect(punya(media66, 3), 'di 66rem (desktop) kisi detail harus 3 kolom').toBe(true);
+    // 82rem (xlg Carbon), BUKAN 66rem: diukur di peramban, pada 66rem sel detail jatuh dari
+    // 444px ke 225px karena navigasi samping terbuka di ambang yang sama. 66rem juga bukan
+    // salah satu dari enam lebar wajib, jadi titik perubahan itu tak pernah difoto.
+    expect(punya(media82, 3), 'di 82rem (desktop besar) kisi detail harus 3 kolom').toBe(true);
   });
 
   it('(b) sel kisi tidak boleh melebar mengikuti isinya', () => {
@@ -118,5 +121,71 @@ describe('DS-09 — detail baris yang dimekarkan di /items', () => {
     expect(tsx).toMatch(/className="item-detail__hapus"[\s\S]{0,220}Hapus/);
     // Dan penghapusan tetap lewat modal berbahaya Carbon, bukan kotak peramban.
     expect((tsx.match(/window\.confirm\s*\(/g) || []).length).toBe(0);
+  });
+});
+
+describe('DS-09 — formulir Dokumen di dalam panel detail /items', () => {
+  const scss = tanpaKomentar(readFileSync(SCSS, 'utf8'));
+  const tsx = tanpaKomentar(readFileSync(HALAMAN, 'utf8'));
+
+  it('(g) kisi formulir: 1 kolom bawaan, 2 kolom mulai 42rem', () => {
+    const dasar = blok(scss, '.item-kisi');
+    expect(dasar, 'blok .item-kisi tidak ditemukan').not.toBeNull();
+    expect(dasar!).toMatch(/display:\s*grid/);
+    expect(dasar!, 'ponsel harus satu kolom').toMatch(/grid-template-columns:\s*1fr/);
+
+    const media42 = scss.match(/@media \(min-width: 42rem\) \{[\s\S]*?\n\}/g) || [];
+    const duaKolom = media42.some(
+      (b) => b.includes('.item-kisi') && /repeat\(2,\s*minmax\(0,\s*1fr\)\)/.test(b)
+    );
+    expect(duaKolom, 'di 42rem formulir Dokumen harus 2 kolom').toBe(true);
+  });
+
+  it('(h) lebar field dibatasi — isian pendek tidak boleh selebar layar', () => {
+    // Diukur sebelum diperbaiki: satu field terentang 1016px di 1440px dan 1496px di 1920px.
+    // Batas lebar inilah yang menahannya; tanpa itu dua kolom pun masih memberi ~740px.
+    const media42 = scss.match(/@media \(min-width: 42rem\) \{[\s\S]*?\n\}/g) || [];
+    const dibatasi = media42.some((b) => b.includes('.item-kisi') && /max-inline-size:/.test(b));
+    expect(dibatasi, '.item-kisi wajib punya batas lebar di layar lega').toBe(true);
+  });
+
+  it('(i) aturan SATU KOLOM milik DS-18 tetap berlaku untuk modal', () => {
+    // DS-18 menetapkan formulir MODAL satu kolom, dengan kutipan Carbon tentang modal.
+    // `.item-kisi` dikeluarkan dari aturan itu karena ia tidak pernah dipakai di modal --
+    // tapi `.item-form`, yang MEMANG modal, tidak boleh ikut berubah.
+    const form = blok(scss, '.item-form');
+    expect(form, 'blok .item-form tidak ditemukan').not.toBeNull();
+    expect(form!, 'formulir modal harus tetap satu kolom (flex column)').toMatch(/flex-direction:\s*column/);
+    expect(form!, 'formulir modal tidak boleh jadi kisi berkolom').not.toMatch(/grid-template-columns:\s*repeat/);
+  });
+
+  it('(j) hanya SATU tombol primary di blok lampiran', () => {
+    // Diukur sebelum diperbaiki: "Pilih berkas" DAN "Unggah dokumen" dua-duanya primary.
+    // Perbaikannya lewat properti Carbon sendiri, bukan penimpaan CSS: FileUploader
+    // meneruskan buttonKind ke FileUploaderButton (bawaannya "primary").
+    expect(tsx, 'FileUploader harus menurunkan tombolnya jadi tertiary').toMatch(/buttonKind="tertiary"/);
+    // Tombol unggah tetap aksi utama: tanpa kind eksplisit, Carbon memberinya primary.
+    expect(tsx).toMatch(/Unggah dokumen/);
+  });
+
+  it('(k) memilih berkas dan mengunggah hidup di SATU blok', () => {
+    expect(scss, 'kelas blok berkas harus ada').toMatch(/\.item-lampir__berkas/);
+    const iBlok = tsx.indexOf('item-lampir__berkas');
+    const iUploader = tsx.indexOf('<FileUploader');
+    const iAksi = tsx.indexOf('item-lampir__aksi');
+    expect(iBlok, 'blok berkas tidak ditemukan di halaman').toBeGreaterThan(-1);
+    expect(iUploader, 'FileUploader harus berada DI DALAM blok berkas').toBeGreaterThan(iBlok);
+    expect(iAksi, 'aksi unggah harus berada DI DALAM blok berkas').toBeGreaterThan(iUploader);
+  });
+
+  it('(l) perilaku unggah TIDAK berubah — tombol tidak dimatikan oleh ketiadaan berkas', () => {
+    // handleUploadItemDoc sudah memeriksa dan menjawab "Pilih berkas dokumennya dulu.".
+    // Mematikan tombolnya akan MENGHILANGKAN kalimat itu -- mengubah perilaku, bukan
+    // hanya tampilan. Penjaga ini menahan perubahan itu terjadi diam-diam.
+    expect(tsx, 'pemeriksaan berkas di handler wajib tetap ada').toMatch(/if \(!docFile\)/);
+    expect(tsx).toMatch(/Pilih berkas dokumennya dulu/);
+    // Satu-satunya alasan tombol dimatikan adalah proses unggah yang sedang berjalan.
+    expect(tsx).toMatch(/disabled=\{docStatus === 'uploading'\}/);
+    expect(tsx, 'tombol tidak boleh dimatikan hanya karena berkas belum dipilih').not.toMatch(/disabled=\{!docFile/);
   });
 });

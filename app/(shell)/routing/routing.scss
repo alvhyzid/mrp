@@ -84,28 +84,34 @@
   gap: $spacing-04;
 }
 
-// SATU KOLOM di layar sempit, tujuh kolom di layar lebar. Versi sebelumnya memakai kisi
-// tetap 7 kolom di semua lebar, jadi di HP kolomnya terjepit sampai tidak terbaca —
-// persis kelas cacat "kolom terpotong diam-diam" yang sudah dua kali dicatat.
+// BARIS TAHAP — JUMLAH KOLOM DITURUNKAN DARI LEBAR WADAH, BUKAN LEBAR LAYAR.
+//
+// ============================================================================
+// KENAPA BREAKPOINT LEBAR LAYAR DICABUT
+// ============================================================================
+// Versi sebelumnya menaikkan kolom 1 -> 2 di `md` -> 3 di `lg`, memakai lebar LAYAR.
+// Tetapi baris ini hidup DI DALAM modal, dan modal Carbon justru MENYEMPIT saat layar
+// melebar. Diukur di peramban sebelum perbaikan:
+//
+//   viewport 1280px -> modal 768px -> 3 kolom -> 223px per kontrol
+//   viewport 1440px -> modal 691px -> 3 kolom -> 197px per kontrol
+//
+// Layar MELEBAR, kontrolnya justru MENYEMPIT. Itu bukan kebetulan: ambang `md` Carbon
+// menurunkan lebar modal dari 60% ke 48% pada 1312px, sementara jumlah kolomnya tidak
+// ikut turun. Kelas yang sama sudah diperbaiki di baris komponen BOM (DS-22).
+//
+// `auto-fit` membaca lebar wadahnya sendiri, jadi kedua ambang itu tidak diperlukan lagi
+// dan tidak bisa lagi bertentangan dengan lebar modal.
+//
+// `min(15rem, 100%)` — BUKAN `15rem` saja: minmax dengan lantai telanjang MELUBER begitu
+// wadahnya lebih sempit dari lantainya.
 .routing-tahap__baris {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr));
   gap: $spacing-05;
   padding: $spacing-05;
   background-color: $layer-01;
   border: 1px solid $border-subtle-01;
-
-  // TIGA kolom, BUKAN tujuh. Tujuh kolom diukur di dalam modal lebar `lg` dan hasilnya
-  // terjepit: placeholder terpotong jadi "mis. Mi:" dan tombolnya jadi "Hapus tahap" tanpa
-  // ruang. Tiga kolom juga menempatkan "Durasi aktif" tepat di sebelah "Laju" — dan itu
-  // memang dua field yang saling membatalkan, jadi keduanya harus terlihat bersamaan.
-  @include breakpoint('md') {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  @include breakpoint('lg') {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 
 // Tombol hapus tahap mengambil barisnya sendiri dan rata kanan — terpisah dari isian,

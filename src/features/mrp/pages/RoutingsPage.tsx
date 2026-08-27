@@ -10,6 +10,7 @@ import {
   DataTableSkeleton,
   Dropdown,
   InlineNotification,
+  Modal,
   ModalBody,
   ModalFooter,
   ModalHeader,
@@ -114,6 +115,12 @@ export default function RoutingsPage() {
   // Yang diarsipkan hanya perlu diambil dari server bila saringannya memintanya.
   const showArchived = saringStatus !== 'aktif';
   const [archiveActionStatus, setArchiveActionStatus] = useState<{ routingId: number; message: string; kind: 'error' | 'success' } | null>(null);
+  // Konfirmasi hapus permanen. Sebelumnya window.confirm, yang dilarang standar aksi
+  // merusak proyek ini -- bukan soal rupa: window.confirm memblokir seluruh peramban,
+  // tidak bisa menekankan NAMA barisnya, tidak bisa diuji dari kode, dan tidak bisa
+  // menjelaskan KONSEKUENSI. Pola penggantinya sudah terbukti di DS-17 (halaman BOM).
+  const [routingAkanDihapus, setRoutingAkanDihapus] = useState<Routing | null>(null);
+  const [hapusSibuk, setHapusSibuk] = useState(false);
 
   const [items, setItems] = useState<ItemOption[]>([]);
   const [workCenters, setWorkCenters] = useState<WorkCenterOption[]>([]);
@@ -329,20 +336,22 @@ export default function RoutingsPage() {
   // dan hapus vs tolak arsip (archiveRouting), layar hanya menampilkan tombol
   // sesuai can_delete/archived_at yang sudah dihitung server (listRoutings).
   const handleDeleteRouting = async (routing: Routing) => {
-    const confirmed = window.confirm(`Hapus permanen Routing "${routing.item_code} v${routing.version}"? Tindakan ini tidak bisa dibatalkan.`);
-    if (!confirmed) return;
-
     const accessToken = await getAccessToken();
     if (!accessToken) return;
+
+    setHapusSibuk(true);
 
     const response = await fetch(`/api/routings/${routing.routing_id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } });
     const data = await response.json();
 
     if (!response.ok) {
+      setHapusSibuk(false);
       setArchiveActionStatus({ routingId: routing.routing_id, message: data.error || 'Gagal menghapus Routing.', kind: 'error' });
       return;
     }
 
+    setHapusSibuk(false);
+    setRoutingAkanDihapus(null);
     setArchiveActionStatus(null);
     await loadRoutings(showArchived);
   };
@@ -479,7 +488,7 @@ export default function RoutingsPage() {
             {canManage && !r.archived_at ? (
               <div className="routing-aksi__merusak">
                 {r.can_delete ? (
-                  <Button kind="danger--tertiary" size="sm" onClick={() => handleDeleteRouting(r)}>
+                  <Button kind="danger--tertiary" size="sm" onClick={() => setRoutingAkanDihapus(r)}>
                     Hapus
                   </Button>
                 ) : (
@@ -873,6 +882,37 @@ export default function RoutingsPage() {
           </ModalFooter>
         </ComposedModal>
       ) : null}
+      {/* KONFIRMASI HAPUS PERMANEN — Modal Carbon varian danger, bukan window.confirm.
+          Kalimatnya menyebut NAMA dan VERSI routing-nya: konfirmasi yang cuma bertanya
+          "yakin hapus?" tidak menolong orang yang salah menekan baris.
+
+          Ukuran sm, bukan md bawaan: Carbon menyediakan xs/sm justru untuk teks pendek
+          dan SATU keputusan, supaya barisnya tidak terlalu panjang dibaca sekali lihat. */}
+      <Modal
+        open={routingAkanDihapus !== null}
+        danger
+        size="sm"
+        modalHeading={`Hapus permanen Routing "${routingAkanDihapus?.item_code ?? ''} v${routingAkanDihapus?.version ?? ''}"?`}
+        modalLabel="Master data"
+        primaryButtonText={hapusSibuk ? 'Menghapus…' : 'Ya, hapus permanen'}
+        secondaryButtonText="Batal"
+        primaryButtonDisabled={hapusSibuk}
+        onRequestClose={() => setRoutingAkanDihapus(null)}
+        onSecondarySubmit={() => setRoutingAkanDihapus(null)}
+        onRequestSubmit={() => {
+          if (routingAkanDihapus) void handleDeleteRouting(routingAkanDihapus);
+        }}
+      >
+        <p>
+          Routing ini beserta <strong>seluruh tahapnya</strong> akan dihapus permanen, dan
+          tindakan ini <strong>tidak bisa dibatalkan</strong>.
+        </p>
+        <p className="halaman__redup">
+          Bila Routing ini ternyata sudah dipakai, server akan menolak penghapusan dan
+          menyarankan mengarsipkannya — angka batch yang sudah berjalan tidak akan berubah.
+        </p>
+      </Modal>
+
     </div>
   );
 }

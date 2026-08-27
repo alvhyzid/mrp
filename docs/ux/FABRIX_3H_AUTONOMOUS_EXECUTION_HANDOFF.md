@@ -58,9 +58,20 @@ git log --oneline -3                                # commit terakhir
 ---
 
 ## 1. Execution Window
-- **Mulai**: 14:45 WIB, 27 Agustus 2026
-- **Selesai**: 15:20 WIB (2 jam 35 menit dari 3 jam yang tersedia)
-- **Berhenti karena**: seluruh pekerjaan READY yang aman sudah tuntas — bukan karena waktu habis.
+- **Perintah jendela 3 jam masuk**: 14:45 WIB, 27 Agustus 2026
+- **Selesai**: 15:14 WIB — **29 menit**, bukan 3 jam
+- **Berhenti karena**: seluruh pekerjaan READY yang aman sudah tuntas. **Bukan** karena waktu habis.
+
+> **Catatan kejujuran waktu, karena ini mudah salah dibaca.** UX-D1 **sudah berjalan sebelum
+> jendela ini dibuka** — perintah 3 jam datang di tengah pekerjaan, saat pemeriksaan AS-IS,
+> implementasi pertama, dan perbaikan Carbon sudah selesai. Yang terjadi **di dalam** jendela
+> 14:45–15:14 adalah: penjaga regresi, pembuktian dua arah, perbaikan lint yang saya sendiri
+> sebabkan, build, suite penuh, commit, dan dokumen ini.
+>
+> Penanda `[00:xx]` di work log di bawah adalah **urutan pekerjaan**, bukan jam dinding.
+> Jam dinding sungguhan yang tercatat: **14:45:42** mulai · **14:57:07–14:57:18** build ·
+> **14:57:27–15:12:39** suite penuh (911,7 detik) · **15:13:45** kedua commit selesai,
+> pohon kerja bersih.
 
 ## 2. Starting Baseline
 - **HEAD**: `04c99cb`
@@ -478,9 +489,12 @@ NEXT READY TASK (butuh keputusan Anda dulu)
 01:32  uji (f) merah — fixture saya sendiri gagal diam-diam, diperbaiki
 01:40  penjaga terbukti berbunyi DUA ARAH
 01:50  lint naik 28→29 karena perubahan saya — direstrukturisasi sampai kembali 28
-02:12  build ✓ · suite penuh
-02:27  suite penuh HIJAU · commit 3ec149d
-02:35  handoff ditulis · pohon kerja bersih · STOP
+       (empat langkah di atas terjadi SEBELUM jendela 3 jam dibuka)
+— batas jendela 3 jam dibuka di sini (14:45 jam dinding) —
+14:57  build ✓ Compiled successfully
+15:12  suite penuh HIJAU: 67 berkas · 421 lulus · 7 dilewati · 0 gagal
+15:13  commit 3ec149d (UX-D1) + d36bc66 (dokumentasi) · pohon kerja bersih
+15:14  STOP — bukan karena waktu habis, tapi karena tidak ada task lain yang READY
 ```
 
 ---

@@ -35,12 +35,25 @@ buatan sendiri, nol `AlertDialog` — tidak ada satu pun sistem overlay tandinga
 
 ## 2. Carbon Sources
 
-**Pengakuan keterbatasan, disebut lebih dulu:** upaya mengambil
-`carbondesignsystem.com/components/modal/usage/` lewat WebFetch **GAGAL** — halamannya
-kembali kosong/terpotong dua kali. Karena itu bagian "apa kata Carbon" di laporan ini
-bersumber dari **paket yang terpasang**, yang menurut aturan proyek ini justru
-**lebih tinggi otoritasnya** daripada dokumentasi ("Nomor 4 SELALU MENANG bila bertentangan"
-— CLAUDE.md, Urutan Pemeriksaan Carbon).
+> **KOREKSI TERHADAP VERSI PERTAMA LAPORAN INI.** Versi pertama menyatakan halaman Carbon
+> **tidak berhasil diambil**. Itu **hanya benar untuk WebFetch**. Halamannya **BISA** diambil
+> lewat `curl`, dan kelimanya terbaca penuh — bertanda versi yang sama di kaki halaman:
+> *"React Components version ^1.114.0 · Last updated 24 August 2026"*, cocok dengan paket
+> yang terpasang di repo ini.
+>
+> Menyimpulkan "tidak bisa diambil" dari satu alat yang gagal adalah kesimpulan yang terlalu
+> luas — kelas kesalahan yang sama dengan "memeriksa yang tertulis tidak bisa menemukan yang
+> tidak tertulis" di CLAUDE.md. Bagian ini ditulis ulang dengan sumber yang sebenarnya.
+
+**Lima halaman resmi yang benar-benar dibaca:**
+
+1. `https://carbondesignsystem.com/components/modal/usage/`
+2. `https://carbondesignsystem.com/components/modal/accessibility/`
+3. `https://carbondesignsystem.com/patterns/dialog-pattern/`
+4. `https://carbondesignsystem.com/patterns/forms-pattern/`
+5. `https://carbondesignsystem.com/components/button/usage/`
+
+Ditambah paket terpasang, yang menurut aturan proyek menang bila bertentangan:
 
 | Fakta Carbon | Berkas sumber di `node_modules` |
 |---|---|
@@ -66,8 +79,41 @@ bersumber dari **paket yang terpasang**, yang menurut aturan proyek ini justru
 
 Di bawah 672px **seluruh** ukuran 100% lebar — perilaku Carbon sendiri, bukan tambahan FABRIX.
 
-**Carbon TIDAK menyebutkan** ambang jumlah field. Setiap angka field di standar usulan adalah
-**tafsiran FABRIX**, ditandai tegas di dokumen itu.
+### KOREKSI KEDUA — Carbon MEMANG menyebut ambang jumlah field
+
+Versi pertama laporan ini menyatakan **"Carbon TIDAK menyebutkan ambang jumlah field"**.
+**Itu keliru.** Angkanya ada, di halaman **pola formulir** — bukan di halaman komponen Modal
+yang saya periksa:
+
+> *"Use a dialog form when dealing with **less than five inputs**."*
+> *"Use a side panel form when dealing with **more than five inputs**."*
+> *"Dedicated page — For more complex, lengthier or multistep requests for user input."*
+> — `https://carbondesignsystem.com/patterns/forms-pattern/`
+
+Ini persis kesalahan yang dicegah aturan **"Urutan Pemeriksaan Carbon"** di CLAUDE.md:
+**pola dulu, komponen kemudian**. Saya membaca komponen dan paketnya, lalu menyimpulkan
+tentang sesuatu yang jawabannya ada di halaman pola.
+
+**Larangan tegas lain yang ikut ditemukan:**
+
+> *"Don't use to display complex or large amounts of data."*
+> *"**Don't recreate a full app or page in a dialog.**"*
+> *"**One modal should never trigger another modal.**"*
+> *"Modal content should never scroll horizontally; instead, use a larger size modal."*
+
+**Fokus awal**: tiga halaman resmi Carbon memberi **tiga aturan berbeda**, dan ketiganya
+tidak bisa dipatuhi sekaligus. Pada modal hapus tanpa isian, salah satunya menaruh fokus di
+tombol **HAPUS**. Rinciannya di standar §15.
+
+### Akibat angka Carbon terhadap FABRIX
+
+Dengan ambang Carbon (< 5 isian → dialog), hanya **2 dari 15 modal formulir** yang patuh:
+Undang anggota (2 field) dan Catat gangguan produksi (4 field). **Tiga belas sisanya**,
+menurut Carbon, seharusnya panel samping atau halaman penuh.
+
+**TETAPI** pemilik produk sudah memutuskan sebaliknya pada 26 Agu 2026 — lihat KONFLIK-A di
+bagian 20. Angka ini karena itu **bukan vonis**, melainkan salah satu sisi dari konflik yang
+harus diputuskan.
 
 ---
 
@@ -261,13 +307,37 @@ kelas cacat yang menyeluruh: fokus awal (26/26) dan konfirmasi merusak (6/9).
 
 ## 20. Product Decisions Required
 
+### KONFLIK-A — DUA DOKUMEN MENGIKAT SALING BERTENTANGAN *(paling mendesak)*
+
+| Sumber | Status | Isinya |
+|---|---|---|
+| `docs/FABRIX_CARBON_DESIGN_GOVERNANCE.md` §20 (baris 836-847) | **"Mandatory / Project-wide"**, baseline 24 Agu 2026 | **"long forms"**, "complete ERP records", "complex workflows" = **Bad examples** untuk modal; *"prefer a page or side panel/drawer"* |
+| `docs/governance/cetakan-halaman-data.md` §6e-2 (baris 303-306) | **Keputusan pemilik produk, 26 Agu 2026** | *"formulir yang terlalu panjang **dipecah menjadi beberapa bagian**, bukan dijadikan halaman penuh"* |
+
+Keputusan pemilik produk lebih baru dan berperingkat 1 di `FABRIX_CONSTITUTION.md`, tetapi
+§20 **tidak pernah dicabut**. **Saya tidak memilih di antara keduanya.**
+
+Carbon sendiri berpihak pada §20 (< 5 isian → dialog). Itu memperkuat konfliknya, bukan
+menyelesaikannya — keputusan pemilik produk boleh menyimpang dari Carbon, asal tercatat.
+
+### KONFLIK-B — panel samping diwajibkan tapi tidak pernah dibangun
+
+`FABRIX_CARBON_DESIGN_GOVERNANCE.md` §21 dan tabel pemetaan kanonik (baris 1884) mewajibkan
+panel samping untuk "contextual editing", dengan contoh eksplisit. **Terukur: nol di seluruh
+kode.** Kewajiban yang komponennya belum ada bukan aturan — ia utang yang berpakaian aturan.
+
+### Keputusan lain
+
 1. **PO Klien (19 field, bertingkat, baris berulang) → halaman penuh?**
    Ini modal terbesar di aplikasi. Memindahkannya mengubah alur kerja harian.
 2. **BOM (12 field, bertingkat, baris berulang) → halaman penuh?**
 3. **Master Item (14) dan HR (15) → tetap modal bertahap, atau halaman penuh?**
 4. **Bangun panel samping?** Hari ini nol. Tanpa itu, "perlu konteks halaman" hanya punya dua
    jawaban.
-5. **Ambang field 4/8/12 di standar usulan** — angka tafsiran FABRIX, bukan Carbon. Disetujui?
+5. **Ambang field**: Carbon berkata **< 5**; standar usulan saya menulis 4/8/12; pemilik
+   produk memutuskan "pecah jadi langkah, jangan halaman penuh". **Tiga angka, tiga sumber.**
+6. **Fokus awal modal berbahaya**: Carbon memberi tiga aturan yang bertentangan. Mana yang
+   dipakai FABRIX?
 
 ---
 
@@ -366,9 +436,9 @@ bawah DS-09, dan menutup kelas cacat "benarnya kebetulan" yang sudah berulang di
 
 # Lampiran E — Rujukan Carbon
 
-Halaman resmi **tidak berhasil diambil** lewat WebFetch (dua kali, isi kosong/terpotong).
-Rujukan yang dipakai adalah paket terpasang — lihat §2. Alamat katalog untuk perbandingan
-berdampingan oleh pemilik produk:
+Kelima halaman **berhasil dibaca** lewat `curl` (WebFetch gagal dua kali; lihat koreksi di
+§2). Kelimanya bertanda *"React Components version ^1.114.0 · Last updated 24 August 2026"*.
+Alamat untuk perbandingan berdampingan oleh pemilik produk:
 
 - https://carbondesignsystem.com/components/modal/usage/
 - https://carbondesignsystem.com/components/modal/accessibility/

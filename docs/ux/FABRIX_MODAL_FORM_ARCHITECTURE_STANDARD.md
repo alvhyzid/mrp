@@ -7,7 +7,37 @@
 -->
 
 # FABRIX Modal & Form Architecture Standard
-**Status: PROPOSED STANDARD** · 27 Agustus 2026 · belum kanonik
+**Status: PROPOSED STANDARD — TERTAHAN PADA DUA KONFLIK** · 27 Agustus 2026
+
+---
+
+## 0. BERHENTI DULU — DUA KONFLIK GOVERNANCE
+
+Audit ini menemukan **dua pertentangan langsung antar dokumen yang sama-sama mengikat**.
+Perintah audit menyuruh berhenti dan melaporkannya, bukan memilih sendiri. Bagian 4 dan 10
+dokumen ini **TIDAK BOLEH dipakai** sebelum keduanya diputuskan.
+
+### KONFLIK-A — formulir panjang: modal bertahap, atau halaman penuh?
+
+| Sumber | Status | Isinya |
+|---|---|---|
+| `docs/FABRIX_CARBON_DESIGN_GOVERNANCE.md` §20, baris 836-847 | **"Mandatory / Project-wide"**, baseline 24 Agu 2026 | Menyebut **"long forms"**, "complete ERP records", "complex workflows" sebagai **Bad examples** untuk modal, dan: *"For complex contextual editing, prefer a page or side panel/drawer"* |
+| `docs/governance/cetakan-halaman-data.md` §6e-2, baris 303-306 | **Keputusan pemilik produk, 26 Agu 2026** | *"formulir yang terlalu panjang **dipecah menjadi beberapa bagian**, bukan dijadikan halaman penuh dan bukan dijadikan dua kolom"* |
+
+Keduanya berlaku menurut ketentuannya masing-masing. Keputusan pemilik produk lebih baru dan
+menempati peringkat 1 di `FABRIX_CONSTITUTION.md`, tetapi §20 **tidak pernah dicabut**.
+
+**Yang dibutuhkan**: satu kalimat dari pemilik produk — §20 dicabut untuk formulir panjang,
+atau keputusan 26 Agu dipersempit.
+
+### KONFLIK-B — panel samping diwajibkan, tapi tidak ada
+
+`FABRIX_CARBON_DESIGN_GOVERNANCE.md` §21 (baris 851-863) dan tabel pemetaan kanonik (baris
+1884) **mewajibkan** panel samping untuk "contextual editing", dengan contoh eksplisit: detail
+Work Order, detail bahan, detail pengecualian MRP.
+
+**Terukur**: nol `SidePanel`, nol `Drawer`, nol `Popover` di seluruh kode. Sebuah kewajiban
+yang komponennya belum pernah dibangun bukan aturan — ia utang yang berpakaian aturan.
 
 ---
 
@@ -62,15 +92,41 @@ Dokumen ini lahir dari audit 26 overlay yang benar-benar ada di aplikasi, bukan 
 > lebar**. Aturan FABRIX "modal lebar → layar penuh di HP" bukan tambahan kita; itu perilaku
 > Carbon sendiri. Yang perlu kita jaga hanyalah agar isinya tetap terbaca di situ.
 
-### Tafsiran FABRIX
+### KOREKSI PENTING — Carbon MEMANG menyebut angkanya
 
-Carbon **tidak** menyebutkan angka batas jumlah field. Angka di bawah adalah **tafsiran
-FABRIX**, diturunkan dari pengukuran 26 overlay yang ada — ditandai tegas supaya tidak dikira
-kutipan Carbon.
+> **Versi pertama dokumen ini menyatakan "Carbon tidak menyebutkan angka batas jumlah field".
+> Itu KELIRU.** Angkanya ada, hanya saja hidup di halaman **POLA FORMULIR**, bukan di halaman
+> komponen Modal — persis kesalahan yang dicegah aturan "Urutan Pemeriksaan Carbon" di
+> CLAUDE.md: **pola dulu, komponen kemudian.** Saya memeriksa komponen dan paketnya, lalu
+> menyimpulkan terlalu jauh.
+
+**CARBON MENYATAKAN**, kutipan harfiah dari
+`https://carbondesignsystem.com/patterns/forms-pattern/` bagian *Variants*:
+
+> *"Use a dialog form when dealing with **less than five inputs**."*
+> *"Use a side panel form when dealing with **more than five inputs**."*
+> *"Dedicated page — For more complex, lengthier or multistep requests for user input."*
+
+Dan dari `https://carbondesignsystem.com/patterns/dialog-pattern/`:
+
+> *"Don't use to display complex or large amounts of data."*
+> *"**Don't recreate a full app or page in a dialog.**"*
+> *"**One modal should never trigger another modal.**"*
+
+**Akibatnya untuk FABRIX, dan ini keras**: dengan ambang Carbon (< 5 isian), hanya **2 dari 15
+modal formulir** yang patuh — Undang anggota (2 field) dan Catat gangguan (4 field). Tiga
+belas sisanya, menurut Carbon, seharusnya panel samping atau halaman penuh.
+
+**TAPI** keputusan pemilik produk 26 Agu 2026 menetapkan sebaliknya (KONFLIK-A di bagian 0).
+Karena itu tabel di bawah **TERTAHAN** dan tidak boleh dipakai sampai konfliknya diputuskan.
 
 ---
 
-## 4. Create Decision Rules
+## 4. Create Decision Rules — **TERTAHAN OLEH KONFLIK-A**
+
+> Angka 4/8/12 di bawah adalah **tafsiran FABRIX** yang saya turunkan sebelum menemukan
+> ambang Carbon yang sebenarnya (< 5). Ia **lebih longgar** daripada Carbon dan **lebih ketat**
+> daripada keputusan pemilik produk 26 Agu. Jangan dipakai sebelum KONFLIK-A diputuskan.
 
 | Kompleksitas | Ukuran | Bentuk | Alasan |
 |---|---|---|---|
@@ -194,10 +250,26 @@ pun kode yang menjamin itu**.
 
 ---
 
-## 15. Focus Rules
+## 15. Focus Rules — **CARBON SENDIRI TIDAK SATU SUARA**
 
-Modal berbahaya **WAJIB** menetapkan fokus awal ke tombol sekunder, secara eksplisit.
-Mengandalkan bawaan berarti bergantung pada sesuatu yang tidak dinyatakan di mana pun.
+Tiga halaman resmi Carbon memberi **tiga aturan berbeda** untuk fokus awal, dan ketiganya
+tidak bisa dipatuhi sekaligus:
+
+1. `components/modal/usage/` — *"set the initial focus to the first location that accepts user
+   input… If it is a transactional modal without form inputs… the first focus should be on the
+   **primary button**."*
+2. `components/modal/accessibility/` — fokus ke tombol **batal** untuk dialog berbahaya.
+3. Aturan umum dialog — fokus ke elemen **fokusable pertama**, yang pada anatomi modal Carbon
+   justru ikon tutup (×) di header.
+
+Pada modal hapus tanpa isian, aturan (1) menaruh fokus di tombol **HAPUS**.
+
+**Usulan FABRIX**: ikuti aturan (2) — fokus ke tombol sekunder untuk modal berbahaya —
+dan tetapkan **eksplisit** lewat `selectorPrimaryFocus`. Mengandalkan bawaan berarti
+bergantung pada sesuatu yang tidak dinyatakan di mana pun, dan yang Carbon sendiri
+perselisihkan.
+
+**Ini butuh keputusan Anda**, karena memilih di antara tiga aturan Carbon bukan wewenang saya.
 
 ---
 
@@ -245,6 +317,9 @@ MULAI
 5. Fokus awal di tombol merusak.
 6. Menonaktifkan tombol tanpa menjelaskan sebabnya.
 7. Angka `0` untuk data yang gagal dimuat.
+8. **Modal memicu modal lain** — Carbon: *"One modal should never trigger another modal."*
+9. **Membangun ulang halaman di dalam dialog** — Carbon: *"Don't recreate a full app or page
+   in a dialog."*
 
 ---
 

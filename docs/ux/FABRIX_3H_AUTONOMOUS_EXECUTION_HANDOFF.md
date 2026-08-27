@@ -25,8 +25,13 @@ pisah (bukan angka nol palsu), dan ada tombol **"Muat ulang ringkasan"** di dala
 galatnya. Kerangka abu-abu yang berputar selamanya sudah tidak mungkin terjadi lagi.
 
 ### 4. Yang belum selesai
-Tidak ada bagian UX-D1 yang menggantung. Temuan lain yang **sengaja tidak dikerjakan**
-tercatat di bagian "Explicitly NOT Done".
+Tidak ada bagian UX-D1 yang menggantung.
+
+**Satu hal yang menunggu keputusan Anda, dan mudah**: **KRM-05** ternyata **sudah terpenuhi** —
+seluruh target sentuh halaman POD terukur 48/48/48/44px terhadap standar 44px. Task-nya masih
+terbuka karena saya dilarang mengubah `build_tasks`. Layak Anda tutup.
+
+Temuan lain yang **sengaja tidak dikerjakan** tercatat di bagian 11 dan "Explicitly NOT Done".
 
 ### 5. Keputusan yang dibutuhkan dari Anda
 Lima keputusan dari UX-01 masih terbuka (tidak bertambah selama jendela ini). Rinciannya di
@@ -323,26 +328,86 @@ Perubahan UX-D1 **tidak** mengambil alih task mana pun:
 
 ---
 
-## 11. Secondary Task — TIDAK DIMULAI
+## 11. Secondary Task — DIAUDIT, TIDAK ADA YANG DIIMPLEMENTASIKAN
 
-**Alasannya, dan ini keputusan sadar:** perintah menuntut task sekunder yang punya **ID
-kanonik**, **READY**, **tanpa keputusan bisnis**, **tanpa keputusan arsitektur**, **tidak
-terhalang**, dan **bisa tuntas end-to-end**. Dari peta prioritas UX-01, kandidat yang siap
-seluruhnya gagal di salah satu syarat:
+> **KOREKSI TERHADAP VERSI PERTAMA DOKUMEN INI.** Versi pertama menyatakan "tidak ada task
+> sekunder yang memenuhi syarat" berdasarkan peta prioritas UX-01 — **tanpa membaca
+> `build_tasks` sungguhan**. Itu klaim prematur. Setelah dibaca, **empat kandidat yang tidak
+> pernah saya evaluasi** ternyata ada: KRM-05, DS-10, DOC-03, KPI-03. Bagian ini menggantikan
+> klaim itu dengan evaluasi yang benar-benar dilakukan.
 
-| Kandidat | Kenapa tidak diambil |
-|---|---|
-| **SEC-04** (gerbang halaman debug) | Keamanan/hak akses — **siapa boleh membuka** adalah kebijakan akses, wilayah keputusan pemilik produk menurut CLAUDE.md |
-| **DS-20** (pengawas elemen mentah di komponen) | Pengawas baru butuh **daftar pengecualian yang diputuskan**; menebaknya berarti melahirkan pengawas yang salah tuduh |
-| **AUD-37 / PLT-06** | Perintah **melarang** mengambil alih keduanya |
-| **DS-09** | Terhalang **DS-03**, dan DS-03 adalah keputusan Anda |
-| **DS-06** | Terhalang DS-09 per halaman |
-| **NAV-04** (nama merek bertumpuk 360px) | **Tidak terhalang dan kecil** — tapi butuh keputusan tampilan (potong, ringkas, atau pindah) yang mengubah identitas di header |
+### KRM-05 — DIAUDIT, TERNYATA SUDAH TERPENUHI → **SKIPPED**
 
-Sesuai aturan **"satu task selesai penuh > banyak task setengah jadi"**, jendela ini
-diakhiri dengan UX-D1 tuntas, bukan dengan task kedua yang dimulai lalu tersangkut.
+Task ini berbunyi: *"seluruh elemen interaktif (tombol, input file, input teks, label
+checkbox) tingginya HANYA 32px atau kurang — di bawah standar 44×44px"* (dicatat 26 Agu 2026).
 
----
+**Diukur ulang 27 Agu 2026 di enam lebar. Catatan itu sudah usang** — halaman POD sejak itu
+memakai `size="lg"`:
+
+| Elemen | Tinggi | Standar 44px |
+|---|---:|---|
+| Tombol "Barang sudah diterima" | **48px** | terpenuhi |
+| Tombol "Pilih atau ambil foto" | **48px** | terpenuhi |
+| Input teks nama penerima | **48px** | terpenuhi |
+| Label checkbox (target klik sungguhan) | **44px** | terpenuhi, tepat di batas |
+
+Dua elemen sempat dilaporkan "di bawah 44px" oleh pengukur saya, dan **keduanya salah tuduh** —
+dibuktikan dengan **klik tetikus sungguhan**, bukan disimpulkan:
+- `input.cds--checkbox` 1×1px → itu kotak centang asli yang **sengaja disembunyikan** Carbon;
+  target kliknya label 44px. Diklik di **tepi bawah** label → centangnya **berubah** ✓
+- `label "Nama yang menerima"` 16px → itu **label field**, bukan aksi. Diklik → fokus pindah
+  ke input yang tingginya **48px** ✓
+
+Enam lebar juga bersih: nol gulir menyamping, nol elemen keluar tepi kanan maupun kiri.
+
+**Fixture: NOL baris dibuat.** Jawaban API disadap lewat penyadapan jaringan, jadi halamannya
+merender formulir penuh tanpa menyentuh basis data sama sekali.
+
+**KRM-05 layak ditutup, tetapi saya TIDAK menutupnya** — perintah melarang mengubah
+`build_tasks`. Keputusan menutupnya milik Anda.
+
+### DS-10 — **BLOCKED**, cakupannya jauh lebih luas dari judulnya
+
+Judulnya menyebut "tombol mentah". Yang sebenarnya ada di
+`src/components/ui/provenance-info-button.tsx`: **tiga** `<button>` mentah, `Dialog`/
+`DialogContent`/`DialogHeader`/`DialogTitle` **shadcn lama**, `Badge` shadcn, bilah tab
+**rakitan tangan** (bukan `Tabs` Carbon), dan kelas Tailwind di sepanjang berkas.
+
+Komponen ini dirender di **20 halaman**. Memigrasikannya berarti mengubah tampilan 20 layar
+sekaligus — dan CLAUDE.md aturan modal nomor 8 memperingatkan persis kelas ini:
+*"seluruh modal lama akan berpadding dobel sekaligus — puluhan layar rusak dalam satu
+perubahan yang niatnya merapikan."*
+
+Selain itu **DS-RULES A.1 mengikat**: rencana Carbon harus diserahkan sebelum satu baris kode
+ditulis, termasuk memilih varian modal (C.2). Memilih sendiri = keputusan desain yang belum
+ditetapkan. **Dihentikan sesuai aturan, bukan karena waktu.**
+
+### DOC-03 — **SKIPPED**, memaparkan kemampuan menghapus permanen
+
+Backend (`hardDeleteOrphanDocument.ts`) sudah lengkap; yang kurang tombolnya. Tapi ini
+memaparkan **penghapusan permanen dokumen** ke layar. Siapa yang boleh menghapus adalah
+**kebijakan hak akses** — wilayah keputusan pemilik produk menurut CLAUDE.md, bukan wilayah
+saya.
+
+### KPI-03 — **SKIPPED**, butuh gerbang rencana Carbon
+
+Backend (`updateKpiTarget`, `updateKpiVisibility`) sudah lengkap. Tapi `/kpi` adalah salah
+satu halaman yang **belum memakai `DataTable` Carbon**, dan menambahkan formulir + tombol
+arsip di sana adalah membangun UI baru di layar yang belum dimigrasikan — kembali ke gerbang
+DS-RULES A.1.
+
+### NAV-03 — **SKIPPED**, bertabrakan dengan SEC-04
+
+Memindahkan `/debug` dan `/test-tenant` ke dalam kerangka aplikasi itu murni struktur. Tapi
+kedua halaman itu **belum punya gerbang peran** (SEC-04, terbuka). Membuatnya lebih mudah
+ditemukan sebelum digerbangi adalah langkah mundur kecil di sisi keamanan. Dua task saling
+menyentuh → dihentikan.
+
+### Kesimpulan
+
+Sesuai aturan **"satu task selesai penuh > banyak task setengah jadi"**, jendela ini berakhir
+dengan **UX-D1 tuntas** dan **KRM-05 terbukti sudah terpenuhi**. Tidak ada task kedua yang
+dimulai lalu ditinggalkan setengah jalan.
 
 ## 12. Blockers
 
@@ -369,6 +434,9 @@ terbuka — lihat `FABRIX_UX_01_ASIS_APPLICATION_SHELL_AUDIT.md` bagian 19.
 | D-6 | UX DEBT | Nama merek & nama perusahaan bertumpuk di header 360px | tangkapan layar `galat-0360.png` | Terbaca berantakan di HP | UI/UX | **NAV-04** | **ALREADY OWNED** | Terbuka |
 | D-7 | GOVERNANCE | Pekerjaan UX-D1 **tidak menaikkan** angka roadmap karena tidak punya ID kanonik | roadmap tetap 111/285 | Roadmap melaporkan lebih rendah dari kenyataan | Governance | **AUD-24** | **DOCUMENTED** | Terbuka |
 | D-8 | INFORMATIONAL | Carbon melarang anak interaktif di `InlineNotification` | `useNoInteractiveChildren` | Melanggarnya **merusak render**, bukan sekadar gaya | UI/UX | — | **FIXED** | Selesai |
+| D-9 | GOVERNANCE | **KRM-05 cakupannya sudah terpenuhi** tapi task-nya masih terbuka — diukur 48/48/48/44px, standarnya 44px | `scratchpad/e2e/krm05-asis.js` + klik nyata | Task terbuka yang sebenarnya selesai; kelas sama dengan RSP-02 & DS-19 | Governance | **AUD-24** | **DOCUMENTED** | Layak ditutup |
+| D-10 | UX DEBT | **DS-10 jauh lebih luas dari judulnya**: 3 `<button>` mentah + `Dialog` shadcn + `Badge` shadcn + tab rakitan tangan, dirender di **20 halaman** | `src/components/ui/provenance-info-button.tsx` | Migrasi menyentuh 20 layar sekaligus | UI/UX | **DS-10** | **BLOCKED** — butuh rencana Carbon (DS-RULES A.1) | Terbuka |
+| D-11 | INFORMATIONAL | Pengukur target sentuh saya **salah tuduh dua kali** — kotak centang tersembunyi Carbon & label field | dibuktikan lewat klik tetikus sungguhan | Angka mentahnya bisa salah dibaca sebagai pelanggaran | — | — | **DOCUMENTED** | Dikoreksi di laporan |
 
 ---
 
@@ -394,6 +462,11 @@ terbuka — lihat `FABRIX_UX_01_ASIS_APPLICATION_SHELL_AUDIT.md` bagian 19.
 | SEC-04 | **SKIPPED** — butuh keputusan kebijakan akses |
 | DS-20 | **SKIPPED** — butuh daftar pengecualian yang diputuskan |
 | NAV-04 | **SKIPPED** — butuh keputusan tampilan identitas header |
+| KRM-05 | **SKIPPED** — diaudit, cakupannya SUDAH terpenuhi (layak ditutup) |
+| DS-10 | **BLOCKED** — butuh rencana Carbon; menyentuh 20 halaman |
+| DOC-03 | **SKIPPED** — memaparkan hapus permanen; butuh kebijakan hak akses |
+| KPI-03 | **SKIPPED** — membangun UI di layar yang belum dimigrasikan |
+| NAV-03 | **SKIPPED** — bertabrakan dengan SEC-04 yang masih terbuka |
 | AUD-37 / PLT-06 | **NOT STARTED** — dilarang perintah |
 | DS-03 / DS-09 / DS-06 | **BLOCKED** — menunggu keputusan urutan |
 
@@ -502,4 +575,5 @@ NEXT READY TASK (butuh keputusan Anda dulu)
 ## 18. FINAL STATUS
 
 - **UX-D1**: `**CLOSED**`
-- **Task sekunder**: **NOT STARTED** — tidak ada yang memenuhi seluruh syarat READY
+- **Task sekunder**: **NOT STARTED** — lima kandidat diaudit satu per satu (bagian 11);
+  satu di antaranya (**KRM-05**) terbukti **cakupannya sudah terpenuhi** dan layak Anda tutup

@@ -39,6 +39,7 @@ import { canAccessHrDashboard, canManageHr } from '@/lib/roles';
 // Cetakannya mengikuti MASTER ITEM, layar yang sudah disetujui pemilik produk.
 import { formatCurrency } from '@/lib/currency';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
+import { hitungHadirHariIni, labelAbsensi, warnaAbsensi } from '@/features/attendance';
 
 const wageTypeLabels: Record<string, string> = {
   hourly: 'Per Jam',
@@ -85,24 +86,11 @@ const employmentStatusLabels: Record<string, string> = {
   freelance: 'Freelance'
 };
 
-const attendanceStatusLabels: Record<string, string> = {
-  present: 'Hadir',
-  late: 'Terlambat',
-  absent: 'Tidak hadir',
-  on_leave: 'Cuti',
-  sick: 'Sakit'
-};
-/// Warna Tag mengikuti ARTI. "Tidak hadir" merah karena ia satu-satunya yang berarti
-/// KEHILANGAN jam kerja tanpa pemberitahuan; cuti dan sakit BUKAN merah — keduanya
-/// ketidakhadiran yang sah, dan mewarnainya merah membuat hak karyawan terlihat seperti
-/// pelanggaran.
-const attendanceWarnaTag: Record<string, 'green' | 'magenta' | 'red' | 'blue' | 'gray'> = {
-  present: 'green',
-  late: 'magenta',
-  absent: 'red',
-  on_leave: 'blue',
-  sick: 'blue'
-};
+// Peta label dan warna status absensi hidup di SATU tempat bersama
+// (src/features/attendance/statusAbsensi.ts). Sebelumnya halaman ini punya
+// salinannya sendiri yang HANYA memuat lima kunci huruf kecil, sementara sistem
+// absensi menulis huruf besar — sehingga kartu "Hadir hari ini" selalu 0 dan kolom
+// Status menampilkan slug mentah.
 
 type Employee = {
   employee_id: number;
@@ -357,7 +345,7 @@ export default function HrDashboardPage() {
 
   const activeCount = employees.filter((e) => e.is_active).length;
   const inactiveCount = employees.length - activeCount;
-  const presentToday = attendance.filter((a) => a.status === 'present' || a.status === 'late').length;
+  const presentToday = hitungHadirHariIni(attendance);
 
 
   // ==========================================================================
@@ -542,7 +530,7 @@ export default function HrDashboardPage() {
                   <TableCell data-label={kolomAbsensi[0].header}>{a.employee_name}</TableCell>
                   <TableCell data-label={kolomAbsensi[1].header}>{a.employee_department ? departmentLabels[a.employee_department] ?? a.employee_department : '—'}</TableCell>
                   <TableCell data-label={kolomAbsensi[2].header}>
-                    <Tag type={attendanceWarnaTag[a.status] ?? 'gray'}>{attendanceStatusLabels[a.status] ?? a.status}</Tag>
+                    <Tag type={warnaAbsensi(a.status)}>{labelAbsensi(a.status)}</Tag>
                   </TableCell>
                   <TableCell data-label={kolomAbsensi[3].header}>{jam(a.check_in_at)}</TableCell>
                   <TableCell data-label={kolomAbsensi[4].header}>{jam(a.check_out_at)}</TableCell>

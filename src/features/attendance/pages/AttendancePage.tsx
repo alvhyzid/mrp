@@ -8,6 +8,7 @@ import { KepalaHalaman } from '@/components/ui/kepala-halaman';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 import { formatNumberId } from '@/lib/currency';
 import { ATTENDANCE_EVENT_TYPE_LABELS } from '@/lib/glossary';
+import { labelAbsensi, warnaAbsensi } from '../statusAbsensi';
 
 const leaveTypeLabels: Record<string, string> = { IZIN: 'Izin', SAKIT: 'Sakit', CUTI: 'Cuti' };
 
@@ -31,35 +32,11 @@ type CorrectionRow = { attendance_correction_id: number; employee_name: string |
 type LeaveRow = { leave_request_id: number; employee_name: string | null; leave_type: string; start_date: string; end_date: string; reason: string | null };
 type Employee = { employee_id: number; name: string; is_active: boolean };
 
-const statusLabels: Record<string, string> = {
-  HADIR: 'Hadir',
-  TERLAMBAT: 'Terlambat',
-  PULANG: 'Pulang',
-  DI_LUAR_AREA: 'Di Luar Area (perlu ditinjau)',
-  ALPA: 'Alpa',
-  IZIN: 'Izin',
-  SAKIT: 'Sakit',
-  CUTI: 'Cuti',
-  present: 'Hadir',
-  late: 'Terlambat',
-  absent: 'Tidak Hadir',
-  on_leave: 'Cuti',
-  sick: 'Sakit'
-};
-// Warna Tag mengikuti ARTI, bukan selera: hijau = hadir sesuai aturan, magenta = perlu
-// diperiksa manusia, merah = tidak hadir tanpa keterangan, biru = tidak hadir DENGAN
-// keterangan yang sah. Membedakan dua yang terakhir penting -- keduanya "tidak masuk", dan
-// hanya satu yang jadi masalah.
-const tagStatusAbsensi: Record<string, 'green' | 'magenta' | 'red' | 'blue' | 'gray'> = {
-  HADIR: 'green',
-  PULANG: 'green',
-  TERLAMBAT: 'magenta',
-  DI_LUAR_AREA: 'magenta',
-  ALPA: 'red',
-  IZIN: 'blue',
-  SAKIT: 'blue',
-  CUTI: 'blue'
-};
+// Peta label dan warna status absensi dipindahkan ke SATU tempat bersama
+// (../statusAbsensi.ts). Peta di berkas ini dulunya yang paling LENGKAP di repo —
+// memuat kedua kosakata — sementara dasbor HRD punya salinan yang hanya memuat lima
+// kunci huruf kecil. Pengetahuannya sudah benar di sini; yang tidak ada adalah
+// pemakaian bersamanya.
 
 export default function AttendancePage() {
   const router = useRouter();
@@ -295,7 +272,7 @@ export default function AttendancePage() {
                     />
                   </p>
                 </div>
-                <Tag type={tagStatusAbsensi[row.status] ?? 'gray'}>{statusLabels[row.status] ?? row.status}</Tag>
+                <Tag type={warnaAbsensi(row.status)}>{labelAbsensi(row.status)}</Tag>
               </div>
             ))}
           </div>

@@ -40,6 +40,7 @@ import { Add, TrashCan } from '@carbon/icons-react';
 import { KepalaHalaman } from '@/components/ui/kepala-halaman';
 import { formatCurrency, formatNumberId } from '@/lib/currency';
 import { canManagePurchasing } from '@/lib/roles';
+import { AreaNotifikasi, type Notifikasi } from '@/components/ui/notifikasi';
 
 type Supplier = {
   supplier_id: number;
@@ -135,6 +136,19 @@ export default function PurchasingPage() {
   const [poError, setPoError] = useState('');
 
   const [supplierForm, setSupplierForm] = useState(emptySupplierForm);
+  // NOTIFIKASI BERSAMA. Aturan proyek: modal untuk MEMUTUSKAN, notifikasi untuk
+  // MEMBERI TAHU. Sebelumnya hasil berhasil maupun gagal sama-sama dijejalkan ke satu
+  // kotak DI DALAM modal yang judulnya dipaku mati "Gagal" -- sehingga penyimpanan yang
+  // BERHASIL terbaca sebagai kegagalan.
+  const [notifikasi, setNotifikasi] = useState<Notifikasi[]>([]);
+  const beriTahu = useCallback((jenis: Notifikasi['jenis'], judul: string, rincian?: string) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setNotifikasi((prev) => [...prev, { id, jenis, judul, rincian }]);
+  }, []);
+  const tutupNotifikasi = useCallback((id: string) => {
+    setNotifikasi((prev) => prev.filter((n) => n.id !== id));
+  }, []);
+
   const [supplierFormStatus, setSupplierFormStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [supplierFormMessage, setSupplierFormMessage] = useState('');
   const [editingSupplierId, setEditingSupplierId] = useState<number | null>(null);
@@ -360,11 +374,14 @@ export default function PurchasingPage() {
       setSupplierFormMessage(body.error || 'Gagal menyimpan supplier.');
       return;
     }
+    // BERHASIL: tutup modal, bersihkan pesan, dan laporkan lewat notifikasi.
+    // Pesannya WAJIB dibersihkan -- bila ditinggalkan, ia muncul lagi sebagai kotak
+    // galat saat modal dibuka berikutnya, untuk penyimpanan yang sudah lama selesai.
+    const memperbarui = editingSupplierId !== null;
     setSupplierFormStatus('success');
-    setSupplierFormMessage(editingSupplierId ? 'Supplier berhasil diperbarui.' : 'Supplier baru berhasil ditambahkan.');
-    setTahapSupplier('isian');
-    setEditingSupplierId(null);
-    setSupplierForm(emptySupplierForm);
+    setSupplierFormMessage('');
+    tutupSupplierModal();
+    beriTahu('success', memperbarui ? 'Supplier diperbarui' : 'Supplier baru ditambahkan', supplierForm.name);
     await loadSuppliers(showArchivedSuppliers);
   };
 
@@ -475,10 +492,11 @@ export default function PurchasingPage() {
       return;
     }
     setPriceFormStatus('success');
-    setPriceFormMessage('Bahan yang dipasok berhasil disimpan.');
+    setPriceFormMessage('');
     setEditingPriceId(null);
     setPriceForm(emptySupplierPriceForm);
     setIsPriceModalOpen(false);
+    beriTahu('success', 'Bahan yang dipasok disimpan');
     await loadSupplierPrices(expandedSupplierId);
     await loadSuppliers(showArchivedSuppliers);
   };
@@ -529,9 +547,10 @@ export default function PurchasingPage() {
       return;
     }
     setPoFormStatus('success');
-    setPoFormMessage(`PO baru berhasil dibuat (ID ${body.purchase_order_id}).`);
+    setPoFormMessage('');
     setPoForm(emptyPoForm);
     setIsPoModalOpen(false);
+    beriTahu('success', 'PO baru dibuat', `ID ${body.purchase_order_id}`);
     await loadPurchaseOrders();
   };
 
@@ -1172,9 +1191,9 @@ export default function PurchasingPage() {
                   value={supplierForm.contact_info}
                   onChange={(e) => setSupplierForm((prev) => ({ ...prev, contact_info: e.target.value }))}
                 />
-                {supplierFormMessage ? (
+                {supplierFormStatus === 'error' && supplierFormMessage ? (
                   <div className="beli-form__lebar-penuh">
-                    <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal" subtitle={supplierFormMessage} />
+                    <InlineNotification kind="error" lowContrast hideCloseButton title="Tidak bisa disimpan" subtitle={supplierFormMessage} />
                   </div>
                 ) : null}
               </div>
@@ -1287,9 +1306,9 @@ export default function PurchasingPage() {
                 value={priceForm.notes}
                 onChange={(e) => setPriceForm((prev) => ({ ...prev, notes: e.target.value }))}
               />
-              {priceFormMessage ? (
+              {priceFormStatus === 'error' && priceFormMessage ? (
                 <div className="beli-form__lebar-penuh">
-                  <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal" subtitle={priceFormMessage} />
+                  <InlineNotification kind="error" lowContrast hideCloseButton title="Tidak bisa disimpan" subtitle={priceFormMessage} />
                 </div>
               ) : null}
             </div>
@@ -1390,7 +1409,9 @@ export default function PurchasingPage() {
               })}
             </div>
 
-            {poFormMessage ? <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal" subtitle={poFormMessage} /> : null}
+            {poFormStatus === 'error' && poFormMessage ? (
+              <InlineNotification kind="error" lowContrast hideCloseButton title="Tidak bisa disimpan" subtitle={poFormMessage} />
+            ) : null}
           </ModalBody>
           <ModalFooter>
             <Button kind="secondary" onClick={() => setIsPoModalOpen(false)}>
@@ -1402,6 +1423,8 @@ export default function PurchasingPage() {
           </ModalFooter>
         </ComposedModal>
       ) : null}
+
+      <AreaNotifikasi daftar={notifikasi} onTutup={tutupNotifikasi} />
     </div>
   );
 }

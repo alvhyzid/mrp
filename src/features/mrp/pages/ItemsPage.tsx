@@ -731,7 +731,7 @@ export default function ItemsPage() {
           {/* Aksi merusak ditempatkan TERPISAH dan BERJAUHAN dari aksi biasa (aturan tetap
               proyek). Di layar sentuh jari jauh lebih besar daripada kursor, dan aksi yang
               tidak bisa dibatalkan tidak boleh berjarak satu jari dari aksi sehari-hari. */}
-          <Button size="md" kind="danger--tertiary" className="item-detail__hapus" onClick={() => setItemAkanDihapus(item)}>
+          <Button size="md" kind="danger--ghost" className="item-detail__hapus" onClick={() => setItemAkanDihapus(item)}>
             Hapus
           </Button>
         </div>

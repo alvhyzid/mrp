@@ -74,26 +74,62 @@
 // ============================================================================
 // PANEL DETAIL (MST-16) — satu pintu masuk, seluruh aksi di dalamnya
 // ============================================================================
+// ============================================================================
+// DETAIL BARIS YANG DIMEKARKAN (revisi DS-09, 27 Agu 2026)
+// ============================================================================
+// SEBELUMNYA: satu kolom label|nilai bertumpuk, 12 baris berurutan ke bawah.
+// Diukur di peramban: panelnya setinggi 1503px di 1440px dan 1956px di 360px --
+// pembacanya harus menggulir jauh untuk membandingkan dua angka yang bersebelahan
+// secara makna.
+//
+// SEKARANG: kisi 1 / 2 / 3 kolom, memakai breakpoint yang SUDAH dipakai repo ini
+// (42rem dan 66rem, dua-duanya breakpoint Carbon md dan lg) dan bentuk yang sama
+// dengan `.kisi-metrik` di src/styles/carbon.scss. Bukan sistem baru.
 .item-detail {
   display: flex;
   flex-direction: column;
   gap: spacing.$spacing-06;
-  padding: spacing.$spacing-05 0;
+  // Lapisan terang yang MENETAP, bukan lapisan hover. Lihat blok berikutnya.
+  //
+  // `$layer-02`, BUKAN `$layer-01` -- dan ini DIUKUR, bukan dipilih dari namanya. Di tema
+  // g10 yang dipakai aplikasi ini, `--cds-layer-01` bernilai PUTIH dan `--cds-layer-02`
+  // bernilai #f4f4f4 (Gray 10). Percobaan pertama memakai `$layer-01`, dan hasilnya panel
+  // PUTIH -- tidak terbedakan dari baris tabel biasa, persis kebalikan dari yang dituju.
+  //
+  // Nilai token dibaca dari PERAMBAN di titik elemen ini, karena token Carbon dipetakan
+  // ulang mengikuti konteks lapisan. Membacanya lewat Sass di luar aplikasi memberi nilai
+  // CADANGAN tema White (layer-01 #f4f4f4), bukan nilai g10 yang benar-benar berlaku --
+  // dan itulah yang sempat menyesatkan.
+  background-color: theme.$layer-02;
+  padding: spacing.$spacing-06 spacing.$spacing-05;
 }
 
 .item-detail__judul {
   @include type.type-style('productive-heading-03');
 }
 
+// KISI DETAIL. Label kecil DI ATAS nilai -- bukan label di kolom kiri -- supaya tiap sel
+// berdiri sendiri dan bisa dipindai turun-kanan, dan supaya nilai panjang tidak terjepit
+// sisa lebar setelah kolom label tetap.
 .item-detail__daftar {
-  border-block-start: 1px solid theme.$border-subtle;
+  display: grid;
+  grid-template-columns: 1fr;
+  column-gap: spacing.$spacing-07;
+  row-gap: 0;
 }
 
 .item-detail__baris {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: spacing.$spacing-02;
-  padding: spacing.$spacing-04 0;
-  border-block-end: 1px solid theme.$border-subtle;
+  padding-block: spacing.$spacing-05;
+  // Garis di ATAS tiap sel, bukan di bawah: pada kisi berkolom, garis-atas menyambung
+  // membentuk baris mendatar yang utuh, sementara garis-bawah menyisakan potongan
+  // menggantung di kolom terakhir yang tidak penuh.
+  border-block-start: 1px solid theme.$border-subtle;
+  // Sel kisi TIDAK boleh melebar mengikuti isinya; tanpa ini satu nilai panjang
+  // mendorong kolom lain menyempit dan kisinya berhenti seragam.
+  min-inline-size: 0;
 }
 
 .item-detail__baris dt {
@@ -108,9 +144,14 @@
 }
 
 @media (min-width: 42rem) {
-  .item-detail__baris {
-    grid-template-columns: 14rem 1fr;
-    gap: spacing.$spacing-05;
+  .item-detail__daftar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 66rem) {
+  .item-detail__daftar {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -119,14 +160,17 @@
 // tidak boleh berjarak satu jari dari aksi sehari-hari.
 .item-detail__aksi {
   display: flex;
-  flex-wrap: wrap;
-  gap: spacing.$spacing-03;
+  flex-wrap: nowrap;
+  // Jarak DASAR, bukan hanya `auto`. Diukur 27 Agu 2026: `margin-inline-start: auto`
+  // sebelumnya hanya berlaku mulai 42rem, sehingga di 360px kedua tombol berjarak
+  // HANYA 8px -- justru di layar tempat jari paling besar, aksi merusak paling dekat.
+  gap: spacing.$spacing-07;
+  align-items: center;
 }
 
-@media (min-width: 42rem) {
-  .item-detail__hapus {
-    margin-inline-start: auto;
-  }
+// Berlaku di SEMUA lebar sekarang, bukan hanya >= 42rem.
+.item-detail__hapus {
+  margin-inline-start: auto;
 }
 
 .item-bagian {
@@ -273,4 +317,29 @@
   @include type.type-style('label-01');
   color: theme.$text-secondary;
   margin-block-start: spacing.$spacing-03;
+}
+
+// ============================================================================
+// LAPISAN LATAR BARIS ANAK — DEVIASI SADAR DARI BAWAAN CARBON
+// ============================================================================
+// APA YANG CARBON LAKUKAN, dibaca dari paket terpasang @carbon/styles
+// (scss/components/data-table/expandable/_data-table-expandable.scss, baris 150-186):
+// menghover baris induk MAUPUN baris anak memberi KEDUANYA `$layer-hover`. Di tema g10
+// nilainya #e8e8e8 -- diukur dengan menjalankan Sass, bukan dari ingatan.
+//
+// KENAPA ITU MASALAH DI SINI, dan kenapa ini bukan soal selera:
+// baris anak di halaman ini adalah PANEL BACA setinggi ~1500px, bukan baris ringkas yang
+// hendak diklik. Selama pembacanya membaca, kursornya hampir pasti berada di atasnya --
+// jadi umpan balik hover yang dirancang untuk sekejap berubah jadi latar yang MENETAP
+// gelap. Diukur: dengan kursor di atas panel #e8e8e8; dengan kursor dijauhkan, seluruh
+// elemennya transparan. Yang terlihat "gelap" memang keadaan hover, bukan latar diamnya.
+//
+// YANG DIUBAH: baris anak diberi `$layer-02` (#f4f4f4 di g10) yang MENETAP -- cukup untuk
+// membedakannya dari baris biasa, tanpa berubah-ubah mengikuti kursor.
+// YANG TIDAK DIUBAH: hover pada baris INDUK dibiarkan apa adanya. Baris itu memang bisa
+// diklik, dan umpan baliknya benar.
+.tabel-responsif--lebar tr[data-child-row] td,
+.tabel-responsif--lebar tr.cds--parent-row.cds--expandable-row:hover + tr[data-child-row] td,
+.tabel-responsif--lebar tr.cds--expandable-row--hover + tr[data-child-row] td {
+  background-color: theme.$layer-02;
 }

@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
 import { canManageCustomerPo } from '@/lib/roles';
-import { parseCustomerPoInput } from './customerPurchaseOrderValidation';
+import { parseCustomerPoInput, galatFieldPoKlien } from './customerPurchaseOrderValidation';
 
 interface ApiResult {
   status: number;
@@ -21,9 +21,11 @@ export async function createCustomerPurchaseOrder(request: NextRequest): Promise
     }
 
     const body = await request.json();
-    const { input, error } = parseCustomerPoInput(body);
+    const { input, error, field, line } = parseCustomerPoInput(body);
     if (error || !input) {
-      return { status: 400, body: { error } };
+      // `field`/`line` diteruskan APA ADANYA. Ketiadaannya bermakna "bukan galat satu
+      // isian", dan halaman menampilkannya di tingkat formulir — STANDAR VALIDASI FABRIX §3.
+      return { status: 400, body: field ? galatFieldPoKlien(error ?? 'Input tidak valid.', field, line) : { error } };
     }
 
     const adminClient = getAdminClient();
@@ -56,7 +58,7 @@ export async function createCustomerPurchaseOrder(request: NextRequest): Promise
       return { status: 500, body: { error: customerError.message } };
     }
     if (!customer) {
-      return { status: 400, body: { error: 'Client tidak ditemukan di perusahaan Anda.' } };
+      return { status: 400, body: galatFieldPoKlien('Client tidak ditemukan di perusahaan Anda.', 'customer_id') };
     }
 
     const itemIds = input.lines.map((line) => line.item_id);
@@ -73,7 +75,11 @@ export async function createCustomerPurchaseOrder(request: NextRequest): Promise
     const validItemIds = new Set((items ?? []).map((item) => item.item_id));
     for (const itemId of itemIds) {
       if (!validItemIds.has(itemId)) {
-        return { status: 400, body: { error: 'Salah satu item di baris PO tidak ditemukan di perusahaan Anda.' } };
+        // Barisnya DICARI, bukan dibiarkan jadi "salah satu baris": pemeriksaannya memang
+        // dilakukan sekaligus demi satu query, dan menyebut barisnya hanya butuh satu
+        // pencarian ulang di memori.
+        const indeks = input.lines.findIndex((l) => !validItemIds.has(l.item_id));
+        return { status: 400, body: galatFieldPoKlien('Salah satu item di baris PO tidak ditemukan di perusahaan Anda.', 'item_id', indeks >= 0 ? indeks : undefined) };
       }
     }
 
@@ -125,7 +131,7 @@ export async function createCustomerPurchaseOrder(request: NextRequest): Promise
             return { status: 200, body: { success: true, customer_purchase_order_id: winnerPo.customer_purchase_order_id, replayed: true } };
           }
         }
-        return { status: 409, body: { error: `Nomor PO client "${input.po_number}" sudah dipakai — coba nomor lain.` } };
+        return { status: 409, body: galatFieldPoKlien(`Nomor PO client "${input.po_number}" sudah dipakai — coba nomor lain.`, 'po_number') };
       }
       return { status: 500, body: { error: poInsertError?.message ?? 'Gagal membuat PO client.' } };
     }

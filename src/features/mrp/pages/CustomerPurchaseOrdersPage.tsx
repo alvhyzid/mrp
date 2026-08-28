@@ -43,7 +43,15 @@ import { FooterBertahap, PenandaLangkah, type LangkahModal } from '@/components/
 import { canManageCustomerPo, canApproveDepartment, isCompanyLeadership } from '@/lib/roles';
 import { formatCurrency, formatNumberId } from '@/lib/currency';
 
-const paymentTermsOptions = ['full', 'tempo'];
+// Daftar syarat bayar SEBELUMNYA disalin di sini, berdampingan dengan salinan di
+// customerPurchaseOrderValidation.ts. Dua salinan untuk satu daftar adalah kelas "dua jalur
+// hidup": menambah pilihan di satu tempat membuat server dan layar tidak sepakat, dan tidak
+// ada yang berbunyi. Sekarang satu sumber.
+import {
+  paymentTermsOptions,
+  petakanGalatPoKlien,
+  type FieldPoKlien
+} from '../server/customerPurchaseOrderValidation';
 const customerTypes = ['company', 'individual'];
 
 // Tipe item — disalin nilainya dari itemValidation.ts di sisi server, yang jadi penentu sah
@@ -199,6 +207,34 @@ export default function CustomerPurchaseOrdersPage() {
   const tutupNotifikasi = useCallback((id: string) => setNotifikasi((lama) => lama.filter((n) => n.id !== id)), []);
   const [formStatus, setFormStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [formMessage, setFormMessage] = useState('');
+  // GALAT TINGKAT FIELD (DS-25). DAFTAR, bukan satu nilai: §5.1 mewajibkan seluruh isian
+  // yang salah ditandai sekaligus.
+  //
+  // KENAPA INI LEBIH PENTING DI MODAL BERTAHAP daripada di dua pilot sebelumnya: kalimat di
+  // dasar modal bisa berada di LANGKAH YANG BERBEDA dari isian yang salah. Pengguna membaca
+  // "Jumlah dipesan harus lebih besar dari 0" di langkah terakhir sementara isiannya ada di
+  // langkah lain -- dan tidak ada apa pun yang menunjukkan langkah mana.
+  const [poFieldError, setPoFieldError] = useState<{ field: FieldPoKlien; line?: number; message: string }[]>([]);
+  /// LANGKAH TEMPAT TIAP ISIAN HIDUP. Diperlukan karena menandai isian di langkah yang sedang
+  /// TERSEMBUNYI membuat galatnya tidak terlihat sama sekali — dan notifikasi formulir ikut
+  /// digerbang mati karena "sudah ada galat field". Ditemukan lewat MENJALANKAN: jawaban 409
+  /// untuk `po_number` (langkah 0) dikirim saat modal berada di langkah 3, dan layar tidak
+  /// menampilkan apa pun.
+  const LANGKAH_FIELD: Record<FieldPoKlien, number> = {
+    customer_id: 0,
+    po_number: 0,
+    payment_terms: 2,
+    item_id: 3,
+    qty_ordered: 3,
+    unit_price: 3
+  };
+  const galatPoKlien = (field: FieldPoKlien, line?: number) =>
+    poFieldError.find((g) => g.field === field && g.line === line)?.message;
+  /// SATU PINTU untuk isian tingkat atas: menyimpan nilai DAN mencabut tandanya (§5.3).
+  const ubahFieldPo = (field: FieldPoKlien, nilai: string) => {
+    setPoFieldError((prev) => prev.filter((g) => g.field !== field));
+    setForm((prev) => ({ ...prev, [field]: nilai }));
+  };
   // Stabil untuk 1 percobaan submit (dipakai server buat cegah dokumen duplikat kalau
   // tombol submit ke-double-click/request keulang) — baru diganti begitu submit SUKSES,
   // supaya double-click tetap kirim key yang SAMA persis.
@@ -312,10 +348,18 @@ export default function CustomerPurchaseOrdersPage() {
   };
 
   const updateLine = (index: number, patch: Partial<FormLine>) => {
+    // §5.3 — tanda dicabut begitu isiannya diperbaiki.
+    const kunci = Object.keys(patch) as FieldPoKlien[];
+    setPoFieldError((prev) => prev.filter((g) => !(g.line === index && kunci.includes(g.field))));
     setForm((prev) => ({ ...prev, lines: prev.lines.map((line, i) => (i === index ? { ...line, ...patch } : line)) }));
   };
   const addLine = () => setForm((prev) => ({ ...prev, lines: [...prev.lines, { ...emptyFormLine }] }));
-  const removeLine = (index: number) => setForm((prev) => ({ ...prev, lines: prev.lines.filter((_, i) => i !== index) }));
+  const removeLine = (index: number) => {
+    // §5.4 — indeks baris bergeser setelah penghapusan; tanda yang tertinggal akan menunjuk
+    // baris yang salah.
+    setPoFieldError([]);
+    setForm((prev) => ({ ...prev, lines: prev.lines.filter((_, i) => i !== index) }));
+  };
 
   const handleCreateCustomer = async () => {
     setNewCustomerStatus('pending');
@@ -382,6 +426,7 @@ export default function CustomerPurchaseOrdersPage() {
   const handleSubmit = async () => {
     setFormStatus('pending');
     setFormMessage('');
+    setPoFieldError([]);
 
     const payload = {
       ...form,
@@ -392,8 +437,21 @@ export default function CustomerPurchaseOrdersPage() {
 
     const { ok, body } = await authedFetch('/api/customer-purchase-orders', { method: 'POST', body: JSON.stringify(payload) });
     if (!ok) {
+      // Pemetaan lewat SATU pintu bersama — halaman tidak membaca `body.field` sendiri.
+      // Nama yang salah ketik akan cocok dengan nol kontrol, notifikasi formulir ikut
+      // digerbang mati, dan galatnya HILANG tanpa satu pun test merah.
+      const terpetakan = petakanGalatPoKlien(body as Record<string, unknown>, form.lines.length);
+      if (terpetakan.jenis === 'field') {
+        setPoFieldError([{ field: terpetakan.field, line: terpetakan.line, message: terpetakan.pesan }]);
+        // Pindah ke langkah tempat isian itu berada. Tanpa ini, galat yang benar menempel di
+        // kontrol yang benar tetapi berada di langkah yang tidak sedang terlihat.
+        setLangkah(LANGKAH_FIELD[terpetakan.field]);
+        setFormStatus('idle');
+        setFormMessage('');
+        return;
+      }
       setFormStatus('error');
-      setFormMessage(body.error || 'Gagal membuat PO client.');
+      setFormMessage(terpetakan.pesan);
       return;
     }
 
@@ -844,12 +902,14 @@ export default function CustomerPurchaseOrdersPage() {
                       id="po-klien"
                       size="lg"
                       titleText="Klien"
+                      invalid={Boolean(galatPoKlien('customer_id'))}
+                      invalidText={galatPoKlien('customer_id')}
                       label="Pilih klien..."
                       items={customers}
                       itemToString={(c: Customer | null) => (c ? `${c.name} (${c.customer_type === 'individual' ? 'Perorangan' : 'Perusahaan'})` : '')}
                       selectedItem={customers.find((c) => String(c.customer_id) === form.customer_id) ?? null}
                       onChange={({ selectedItem }: { selectedItem: Customer | null }) =>
-                        setForm((prev) => ({ ...prev, customer_id: selectedItem ? String(selectedItem.customer_id) : '' }))
+                        ubahFieldPo('customer_id', selectedItem ? String(selectedItem.customer_id) : '')
                       }
                     />
                     <Button kind="tertiary" size="lg" onClick={() => setShowNewCustomer((v) => !v)}>
@@ -861,9 +921,11 @@ export default function CustomerPurchaseOrdersPage() {
                     id="po-nomor"
                     size="lg"
                     labelText="Nomor PO klien"
+                    invalid={Boolean(galatPoKlien('po_number'))}
+                    invalidText={galatPoKlien('po_number')}
                     helperText="Nomor milik pelanggan — diketik apa adanya, bukan dibuat sistem."
                     value={form.po_number}
-                    onChange={(event) => setForm((prev) => ({ ...prev, po_number: event.target.value }))}
+                    onChange={(event) => ubahFieldPo('po_number', event.target.value)}
                   />
 
                   {showNewCustomer ? (
@@ -961,11 +1023,13 @@ export default function CustomerPurchaseOrdersPage() {
                     id="po-syarat-bayar"
                     size="lg"
                     titleText="Syarat pembayaran"
+                    invalid={Boolean(galatPoKlien('payment_terms'))}
+                    invalidText={galatPoKlien('payment_terms')}
                     label="Pilih syarat"
                     items={paymentTermsOptions}
                     itemToString={(o: string) => (o === 'full' ? 'Lunas di muka' : 'Tempo')}
                     selectedItem={form.payment_terms}
-                    onChange={({ selectedItem }: { selectedItem: string | null }) => setForm((prev) => ({ ...prev, payment_terms: selectedItem ?? 'full' }))}
+                    onChange={({ selectedItem }: { selectedItem: string | null }) => ubahFieldPo('payment_terms', selectedItem ?? 'full')}
                   />
                 </div>
               ) : null}
@@ -1050,6 +1114,8 @@ export default function CustomerPurchaseOrdersPage() {
                         id={`po-item-${index}`}
                         size="lg"
                         titleText="Item"
+                        invalid={Boolean(galatPoKlien('item_id', index))}
+                        invalidText={galatPoKlien('item_id', index)}
                         label="Pilih item..."
                         items={items}
                         itemToString={(i: ItemOption | null) => (i ? `${i.item_code} — ${i.name}` : '')}
@@ -1059,6 +1125,8 @@ export default function CustomerPurchaseOrdersPage() {
                       <NumberInput
                         id={`po-qty-${index}`}
                         label="Qty"
+                        invalid={Boolean(galatPoKlien('qty_ordered', index))}
+                        invalidText={galatPoKlien('qty_ordered', index) ?? ''}
                         min={0}
                         allowEmpty
                         hideSteppers
@@ -1068,6 +1136,8 @@ export default function CustomerPurchaseOrdersPage() {
                       <NumberInput
                         id={`po-harga-${index}`}
                         label="Harga satuan"
+                        invalid={Boolean(galatPoKlien('unit_price', index))}
+                        invalidText={galatPoKlien('unit_price', index) ?? ''}
                         min={0}
                         allowEmpty
                         hideSteppers
@@ -1085,7 +1155,7 @@ export default function CustomerPurchaseOrdersPage() {
               {/* Pesan hasil TIDAK ikut dilangkahkan: ia menyangkut seluruh formulir, dan
                   menyembunyikannya di langkah lain berarti pengguna bisa kehilangan alasan
                   kegagalan hanya karena berpindah langkah. */}
-              {formMessage ? (
+              {formMessage && poFieldError.length === 0 ? (
                 <InlineNotification
                   kind={formStatus === 'success' ? 'success' : 'error'}
                   lowContrast

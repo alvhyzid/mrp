@@ -37,6 +37,10 @@ import { typeLabels } from '@/features/mrp';
 // GUDANG — dimigrasikan ke Carbon 26 Agu 2026 (DS-09), cetakan Master Item.
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 import { formatNumberId } from '@/lib/currency';
+import {
+  petakanGalatPenyesuaian,
+  type FieldPenyesuaian
+} from '../../mrp/server/recordStockAdjustment';
 
 // `material_shortage` TETAP di daftar ini SENGAJA, meski tidak ada lagi kode yang membuatnya
 // (GDG-10, 25 Agu 2026). Alasannya: baris LAMA yang sudah tercatat masih perlu punya label
@@ -157,6 +161,22 @@ export default function WarehouseDashboardPage() {
 
   const [lots, setLots] = useState<LotOption[]>([]);
   const [adjustmentForm, setAdjustmentForm] = useState({ lot_id: '', qty_delta: '', reason_code: '', notes: '' });
+  // GALAT TINGKAT FIELD (DS-25). Sebuah DAFTAR, bukan satu nilai: §5.1 mewajibkan seluruh
+  // isian yang salah ditandai sekaligus.
+  const [penyesuaianFieldError, setPenyesuaianFieldError] = useState<{ field: FieldPenyesuaian; message: string }[]>([]);
+  const galatPenyesuaian = (field: FieldPenyesuaian) =>
+    penyesuaianFieldError.find((g) => g.field === field)?.message;
+  /// SATU PINTU: menyimpan nilai DAN mencabut tanda field itu (§5.3).
+  ///
+  /// `notes` ikut dicabut saat ALASANNYA berubah, karena kewajibannya BERSYARAT — ia hanya
+  /// wajib saat alasannya "Lainnya". Tanpa ini, mengganti alasan meninggalkan tanda pada
+  /// isian yang sudah tidak wajib lagi (§5.4: galat yatim tidak bisa diperbaiki siapa pun).
+  const ubahFieldPenyesuaian = (field: FieldPenyesuaian, nilai: string) => {
+    setPenyesuaianFieldError((prev) =>
+      prev.filter((g) => g.field !== field && !(field === 'reason_code' && g.field === 'notes'))
+    );
+    setAdjustmentForm((prev) => ({ ...prev, [field]: nilai }));
+  };
   const [adjustmentStatus, setAdjustmentStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [adjustmentMessage, setAdjustmentMessage] = useState('');
 
@@ -244,24 +264,24 @@ export default function WarehouseDashboardPage() {
 
   const handleSubmitAdjustment = async () => {
     const qtyDelta = Number(adjustmentForm.qty_delta);
-    if (!adjustmentForm.lot_id) {
-      setAdjustmentStatus('error');
-      setAdjustmentMessage('Pilih lot dulu.');
-      return;
-    }
+    setPenyesuaianFieldError([]);
+    // SEBELUMNYA empat pemeriksaan yang masing-masing berhenti di yang pertama dan menaruh
+    // kalimatnya di dasar formulir. Sekarang SELURUHNYA dikumpulkan lalu ditandai sekaligus
+    // (§5.1) — berhenti di yang pertama memaksa orang menyimpan berulang kali untuk menemukan
+    // sisanya. KALIMATNYA TIDAK DIUBAH SATU PUN (§6 butir 5).
+    const kurang: { field: FieldPenyesuaian; message: string }[] = [];
+    if (!adjustmentForm.lot_id) kurang.push({ field: 'lot_id', message: 'Pilih lot dulu.' });
     if (!Number.isFinite(qtyDelta) || qtyDelta === 0) {
-      setAdjustmentStatus('error');
-      setAdjustmentMessage('Isi jumlah penyesuaian (boleh negatif untuk mengurangi), tidak boleh 0.');
-      return;
+      kurang.push({ field: 'qty_delta', message: 'Isi jumlah penyesuaian (boleh negatif untuk mengurangi), tidak boleh 0.' });
     }
-    if (!adjustmentForm.reason_code) {
-      setAdjustmentStatus('error');
-      setAdjustmentMessage('Pilih alasan penyesuaian.');
-      return;
-    }
+    if (!adjustmentForm.reason_code) kurang.push({ field: 'reason_code', message: 'Pilih alasan penyesuaian.' });
     if (adjustmentForm.reason_code === 'other' && !adjustmentForm.notes.trim()) {
-      setAdjustmentStatus('error');
-      setAdjustmentMessage('Alasan "Lainnya" wajib diisi catatan bebasnya.');
+      kurang.push({ field: 'notes', message: 'Alasan "Lainnya" wajib diisi catatan bebasnya.' });
+    }
+    if (kurang.length > 0) {
+      setPenyesuaianFieldError(kurang);
+      setAdjustmentStatus('idle');
+      setAdjustmentMessage('');
       return;
     }
 
@@ -277,13 +297,23 @@ export default function WarehouseDashboardPage() {
       })
     });
     if (!ok) {
+      // Pemetaan lewat pintu bersama — halaman TIDAK membaca `body.field` sendiri. Jumlah
+      // baris 0 karena formulir ini memang tidak punya baris berulang.
+      const terpetakan = petakanGalatPenyesuaian(body as Record<string, unknown>, 0);
+      if (terpetakan.jenis === 'field') {
+        setPenyesuaianFieldError([{ field: terpetakan.field, message: terpetakan.pesan }]);
+        setAdjustmentStatus('idle');
+        setAdjustmentMessage('');
+        return;
+      }
       setAdjustmentStatus('error');
-      setAdjustmentMessage(body.error || 'Gagal mencatat penyesuaian stok.');
+      setAdjustmentMessage(terpetakan.pesan);
       return;
     }
     setAdjustmentStatus('success');
     setAdjustmentMessage(`Penyesuaian tercatat — stok lot ini sekarang ${formatNumberId(body.quantity_on_hand, 2)}.`);
     setAdjustmentForm({ lot_id: '', qty_delta: '', reason_code: '', notes: '' });
+    setPenyesuaianFieldError([]);
     await Promise.all([loadStock(), loadLots()]);
   };
 
@@ -769,6 +799,8 @@ export default function WarehouseDashboardPage() {
                     id="gudang-lot"
                     size="lg"
                     titleText="Lot"
+                    invalid={Boolean(galatPenyesuaian('lot_id'))}
+                    invalidText={galatPenyesuaian('lot_id')}
                     label="Pilih lot..."
                     items={lots}
                     itemToString={(l: LotOption | null) =>
@@ -776,37 +808,43 @@ export default function WarehouseDashboardPage() {
                     }
                     selectedItem={lots.find((l) => String(l.lot_id) === adjustmentForm.lot_id) ?? null}
                     onChange={({ selectedItem }: { selectedItem: LotOption | null }) =>
-                      setAdjustmentForm((prev) => ({ ...prev, lot_id: selectedItem ? String(selectedItem.lot_id) : '' }))
+                      ubahFieldPenyesuaian('lot_id', selectedItem ? String(selectedItem.lot_id) : '')
                     }
                   />
                   <NumberInput
                     id="gudang-delta"
                     label="Jumlah penyesuaian (+/−)"
+                    invalid={Boolean(galatPenyesuaian('qty_delta'))}
+                    invalidText={galatPenyesuaian('qty_delta') ?? ''}
                     allowEmpty
                     hideSteppers
                     helperText="Angka negatif mengurangi, positif menambah. mis. −5 atau 5."
                     value={adjustmentForm.qty_delta === '' ? '' : Number(adjustmentForm.qty_delta)}
-                    onChange={(_e: unknown, { value }: { value: number | string }) => setAdjustmentForm((prev) => ({ ...prev, qty_delta: String(value ?? '') }))}
+                    onChange={(_e: unknown, { value }: { value: number | string }) => ubahFieldPenyesuaian('qty_delta', String(value ?? ''))}
                   />
                   <Dropdown
                     id="gudang-alasan"
                     size="lg"
                     titleText="Alasan"
+                    invalid={Boolean(galatPenyesuaian('reason_code'))}
+                    invalidText={galatPenyesuaian('reason_code')}
                     label="Pilih alasan..."
                     items={Object.keys(adjustmentReasonLabels)}
                     itemToString={(v: string) => adjustmentReasonLabels[v] ?? v}
                     selectedItem={adjustmentForm.reason_code || null}
-                    onChange={({ selectedItem }: { selectedItem: string | null }) => setAdjustmentForm((prev) => ({ ...prev, reason_code: selectedItem ?? '' }))}
+                    onChange={({ selectedItem }: { selectedItem: string | null }) => ubahFieldPenyesuaian('reason_code', selectedItem ?? '')}
                   />
                   <TextInput
                     id="gudang-catatan"
                     size="lg"
+                    invalid={Boolean(galatPenyesuaian('notes'))}
+                    invalidText={galatPenyesuaian('notes')}
                     labelText={`Catatan${adjustmentForm.reason_code === 'other' ? ' (wajib)' : ' (opsional)'}`}
                     placeholder="mis. hasil stok opname 15 Agustus, selisih −5 kg"
                     value={adjustmentForm.notes}
-                    onChange={(event) => setAdjustmentForm((prev) => ({ ...prev, notes: event.target.value }))}
+                    onChange={(event) => ubahFieldPenyesuaian('notes', event.target.value)}
                   />
-                  {adjustmentMessage ? (
+                  {adjustmentMessage && penyesuaianFieldError.length === 0 ? (
                     <div className="gudang-form__lebar-penuh">
                       <InlineNotification
                         kind={adjustmentStatus === 'success' ? 'success' : 'error'}

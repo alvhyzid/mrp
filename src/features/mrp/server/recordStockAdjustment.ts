@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
 import { canAdjustStock } from '@/lib/roles';
+import { buatKontrakGalatField } from '@/lib/kontrakGalatField';
 
 interface ApiResult {
   status: number;
@@ -8,6 +9,20 @@ interface ApiResult {
 }
 
 const reasonCodes = ['stock_opname_variance', 'damaged', 'other'];
+
+// KONTRAK GALAT FIELD modul ini (DS-25 / T-V5). Namanya SAMA PERSIS dengan kunci
+// `adjustmentForm` di layar Gudang — itulah yang membuat pemetaannya bisa dijamin, bukan
+// sekadar diharapkan.
+//
+// DAFTAR BARIS SENGAJA KOSONG: formulir ini tidak punya baris berulang. Tidak ada perlakuan
+// khusus yang perlu ditulis di sini — kontrak bersamalah yang menolak `line` apa pun, dan
+// itulah bukti bahwa mekanismenya memang satu, bukan dua yang kebetulan mirip.
+export const FIELD_PENYESUAIAN = ['lot_id', 'qty_delta', 'reason_code', 'notes'] as const;
+export type FieldPenyesuaian = (typeof FIELD_PENYESUAIAN)[number];
+
+const kontrak = buatKontrakGalatField(FIELD_PENYESUAIAN, [] as const);
+export const galatFieldPenyesuaian = kontrak.galatField;
+export const petakanGalatPenyesuaian = kontrak.petakan;
 
 // Penyesuaian stok manual — akses sengaja lebih sempit dari dashboard Warehouse
 // biasa (canAdjustStock, bukan canAccessWarehouseDashboard), lihat catatan di
@@ -32,16 +47,16 @@ export async function recordStockAdjustment(request: NextRequest): Promise<ApiRe
     const notes = body.notes ? String(body.notes).trim() : null;
 
     if (!lotId) {
-      return { status: 400, body: { error: 'Lot wajib dipilih.' } };
+      return { status: 400, body: galatFieldPenyesuaian('Lot wajib dipilih.', 'lot_id') };
     }
     if (!Number.isFinite(qtyDelta) || qtyDelta === 0) {
-      return { status: 400, body: { error: 'Jumlah penyesuaian wajib diisi dan tidak boleh 0.' } };
+      return { status: 400, body: galatFieldPenyesuaian('Jumlah penyesuaian wajib diisi dan tidak boleh 0.', 'qty_delta') };
     }
     if (!reasonCodes.includes(reasonCode)) {
-      return { status: 400, body: { error: 'Alasan penyesuaian wajib dipilih.' } };
+      return { status: 400, body: galatFieldPenyesuaian('Alasan penyesuaian wajib dipilih.', 'reason_code') };
     }
     if (reasonCode === 'other' && !notes) {
-      return { status: 400, body: { error: 'Alasan "Lainnya" wajib diisi catatan bebasnya.' } };
+      return { status: 400, body: galatFieldPenyesuaian('Alasan "Lainnya" wajib diisi catatan bebasnya.', 'notes') };
     }
 
     const adminClient = getAdminClient();
@@ -53,10 +68,14 @@ export async function recordStockAdjustment(request: NextRequest): Promise<ApiRe
       .maybeSingle();
     if (lotError) return { status: 500, body: { error: lotError.message } };
     if (!lot || lot.company_id !== appUser.company_id) {
-      return { status: 404, body: { error: 'Lot tidak ditemukan di perusahaan Anda.' } };
+      return { status: 404, body: galatFieldPenyesuaian('Lot tidak ditemukan di perusahaan Anda.', 'lot_id') };
     }
     if (lot.status !== 'available') {
-      return { status: 400, body: { error: 'Lot ini berstatus tidak tersedia (bukan available) — tidak bisa disesuaikan.' } };
+      // GOLONGAN A, dan ini diverifikasi bukan diduga: listLots.ts mengembalikan lot ber-status
+      // 'available' DAN 'expired', jadi daftar pilihan MEMANG memuat lot yang akan ditolak di
+      // sini. Penggunanya bisa memperbaikinya dengan memilih lot lain — persis definisi
+      // golongan A, jadi tandanya menempel di kontrol lot.
+      return { status: 400, body: galatFieldPenyesuaian('Lot ini berstatus tidak tersedia (bukan available) — tidak bisa disesuaikan.', 'lot_id') };
     }
 
     const { data: result, error: rpcError } = await adminClient

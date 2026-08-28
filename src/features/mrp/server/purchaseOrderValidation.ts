@@ -1,3 +1,5 @@
+import { buatKontrakGalatField } from '@/lib/kontrakGalatField';
+
 // ============================================================================================
 // T-V4 — KONTRAK NAMA FIELD DI BATAS SERVER -> KLIEN
 // ============================================================================================
@@ -19,60 +21,23 @@ export const FIELD_PO_BARIS = ['item_id', 'qty_ordered', 'unit_price'] as const;
 
 export type FieldPo = (typeof FIELD_PO)[number] | (typeof FIELD_PO_BARIS)[number];
 
-function fieldBaris(nilai: unknown): nilai is (typeof FIELD_PO_BARIS)[number] {
-  return typeof nilai === 'string' && (FIELD_PO_BARIS as readonly string[]).includes(nilai);
-}
+// T-V5 — MEKANISMENYA TIDAK LAGI HIDUP DI SINI. Yang tinggal di modul ini hanyalah DAFTAR
+// NAMA-nya; pemeriksaan nama, pemeriksaan indeks baris, dan keputusan field-atau-formulir
+// datang dari kontrak bersama. Menyalinnya ke modul kedua akan melahirkan dua pintu yang
+// menyimpang — kelas "dua jalur hidup" yang justru sedang diberantas.
+//
+// Perilakunya TIDAK berubah sedikit pun: kesembilan penjaga T-V4 tetap hijau tanpa disunting.
+const kontrak = buatKontrakGalatField(FIELD_PO, FIELD_PO_BARIS);
 
-function fieldDikenal(nilai: unknown): nilai is FieldPo {
-  return typeof nilai === 'string' && [...FIELD_PO, ...FIELD_PO_BARIS].includes(nilai as FieldPo);
-}
+/// Lihat `KontrakGalatField.galatField`. Dipertahankan namanya supaya pemanggil tidak ikut
+/// berubah saat mekanismenya dipindahkan.
+export const galatFieldPo = kontrak.galatField;
 
-/// Hasil pemetaan galat server. `formulir` berarti: tampilkan di tingkat formulir dengan
-/// kalimat ASLINYA — galatnya tidak boleh hilang hanya karena pemetaannya tidak bisa dilakukan.
-export type GalatPoTerpetakan =
-  | { jenis: 'field'; field: FieldPo; line: number | undefined; pesan: string }
-  | { jenis: 'formulir'; pesan: string };
+/// Lihat `KontrakGalatField.petakan`. SEMANTIK `line`: indeks BERBASIS NOL, hanya bermakna
+/// untuk nama di `FIELD_PO_BARIS`.
+export const petakanGalatServerPo = kontrak.petakan;
 
-/// PEMBANGUN BADAN JAWABAN untuk galat golongan A.
-///
-/// KENAPA INI ADA, dan ini ditemukan lewat MENJALANKAN mutasi, bukan lewat membaca: lapisan
-/// tipe pada hasil validator TIDAK berlaku di `createPurchaseOrder`, karena `ApiResult.body`
-/// di sana bertipe `Record<string, unknown>`. Menyalin nama field salah ketik langsung ke
-/// dalam objek itu LOLOS typecheck sepenuhnya — diuji: `field: 'supplier'` tidak menghasilkan
-/// satu pun galat kompilasi.
-///
-/// Penjaga runtime tetap menangkapnya (galatnya naik ke tingkat formulir, tidak hilang), tapi
-/// itu berarti cacatnya baru ketahuan saat dijalankan. Fungsi ini mengembalikan lapisan
-/// kompilasi ke tempat yang tadinya bolong, dengan ongkos satu pemanggilan.
-export function galatFieldPo(error: string, field: FieldPo, line?: number): Record<string, unknown> {
-  return { error, field, ...(line !== undefined ? { line } : {}) };
-}
-
-/// SEMANTIK `line`: indeks baris BERBASIS NOL, mengacu ke urutan baris di formulir SAAT
-/// jawaban diterima. Ia hanya bermakna untuk field di `FIELD_PO_BARIS`.
-///
-/// TIGA KEADAAN YANG SENGAJA DINAIKKAN KE TINGKAT FORMULIR, karena ketiganya berarti
-/// "pemetaannya tidak bisa dipercaya" dan menandai kontrol yang salah lebih buruk daripada
-/// menampilkan kalimatnya apa adanya:
-///   1. `field` tidak ada di daftar (salah ketik, nama lama, atau modul lain)
-///   2. field baris tanpa `line` yang sah — barisnya tidak bisa ditebak
-///   3. `line` di luar jangkauan baris yang sedang tampil — termasuk setelah baris dihapus
-///
-/// SATU KEADAAN yang TIDAK dinaikkan, dan ini keputusan sadar: field NON-baris yang membawa
-/// `line`. Pemetaannya tidak gagal — `supplier_id` tidak ambigu — dan yang tidak bermakna
-/// hanyalah `line`-nya. Menaikkannya justru MEMINDAHKAN galat yang sebenarnya bisa ditunjuk.
-export function petakanGalatServerPo(body: Record<string, unknown>, jumlahBaris: number): GalatPoTerpetakan {
-  const pesan = typeof body.error === 'string' && body.error ? body.error : 'Isian ini ditolak.';
-  const field = body.field;
-  if (!fieldDikenal(field)) return { jenis: 'formulir', pesan };
-
-  if (!fieldBaris(field)) return { jenis: 'field', field, line: undefined, pesan };
-
-  const line = body.line;
-  const lineSah = typeof line === 'number' && Number.isInteger(line) && line >= 0 && line < jumlahBaris;
-  if (!lineSah) return { jenis: 'formulir', pesan };
-  return { jenis: 'field', field, line, pesan };
-}
+export type GalatPoTerpetakan = ReturnType<typeof petakanGalatServerPo>;
 
 export interface PurchaseOrderLineInput {
   item_id: number;

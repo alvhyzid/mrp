@@ -1,11 +1,22 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
 import { canManageCustomerPo } from '@/lib/roles';
+import { buatKontrakGalatField } from '@/lib/kontrakGalatField';
 
 interface ApiResult {
   status: number;
   body: Record<string, unknown>;
 }
+
+// KONTRAK GALAT FIELD modul ini (DS-25 / WS-05). Namanya sama persis dengan kunci formulir
+// alamat di layar Pelanggan. Daftar baris KOSONG: formulir ini tidak punya baris berulang,
+// dan kontrak bersamalah yang menolak `line` apa pun — tanpa cabang khusus di sini.
+export const FIELD_ALAMAT = ['customer_id', 'label', 'address'] as const;
+export type FieldAlamat = (typeof FIELD_ALAMAT)[number];
+
+const kontrak = buatKontrakGalatField(FIELD_ALAMAT, [] as const);
+export const galatFieldAlamat = kontrak.galatField;
+export const petakanGalatAlamat = kontrak.petakan;
 
 // PMB-07b (22 Agu 2026) — Alamat Tujuan Kirim sebagai Daftar. LAPISAN DATA &
 // SERVER SAJA — layarnya MENUNGGU cetakan UX dari koreksi pemilik produk di
@@ -27,14 +38,14 @@ export async function createCustomerDeliveryAddress(request: NextRequest): Promi
     const picName = body.pic_name ? String(body.pic_name).trim() : null;
     const picPhone = body.pic_phone ? String(body.pic_phone).trim() : null;
 
-    if (!customerId) return { status: 400, body: { error: 'Client wajib dipilih.' } };
-    if (!label) return { status: 400, body: { error: 'Nama panggilan alamat wajib diisi.' } };
-    if (!address) return { status: 400, body: { error: 'Alamat wajib diisi.' } };
+    if (!customerId) return { status: 400, body: galatFieldAlamat('Client wajib dipilih.', 'customer_id') };
+    if (!label) return { status: 400, body: galatFieldAlamat('Nama panggilan alamat wajib diisi.', 'label') };
+    if (!address) return { status: 400, body: galatFieldAlamat('Alamat wajib diisi.', 'address') };
 
     const adminClient = getAdminClient();
     const { data: customer, error: customerError } = await adminClient.from('customers').select('customer_id, company_id').eq('customer_id', customerId).maybeSingle();
     if (customerError) return { status: 500, body: { error: customerError.message } };
-    if (!customer || customer.company_id !== appUser.company_id) return { status: 400, body: { error: 'Client tidak valid.' } };
+    if (!customer || customer.company_id !== appUser.company_id) return { status: 400, body: galatFieldAlamat('Client tidak valid.', 'customer_id') };
 
     const { data, error } = await adminClient
       .from('customer_delivery_addresses')
@@ -97,8 +108,8 @@ export async function updateCustomerDeliveryAddress(request: NextRequest): Promi
 
     const label = typeof body.label === 'string' ? body.label.trim() : '';
     const address = typeof body.address === 'string' ? body.address.trim() : '';
-    if (!label) return { status: 400, body: { error: 'Nama panggilan alamat wajib diisi.' } };
-    if (!address) return { status: 400, body: { error: 'Alamat wajib diisi.' } };
+    if (!label) return { status: 400, body: galatFieldAlamat('Nama panggilan alamat wajib diisi.', 'label') };
+    if (!address) return { status: 400, body: galatFieldAlamat('Alamat wajib diisi.', 'address') };
 
     const { error: updateError } = await adminClient
       .from('customer_delivery_addresses')

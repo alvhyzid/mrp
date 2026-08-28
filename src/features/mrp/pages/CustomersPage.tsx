@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Button,
@@ -19,6 +19,9 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TableExpandHeader,
+  TableExpandRow,
+  TableExpandedRow,
   TableHeader,
   TableRow,
   TableToolbar,
@@ -28,6 +31,10 @@ import {
   TextInput
 } from '@carbon/react';
 import { KepalaHalaman } from '@/components/ui/kepala-halaman';
+import {
+  petakanGalatAlamat,
+  type FieldAlamat
+} from '../server/customerDeliveryAddresses';
 import { Add } from '@carbon/icons-react';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import { canManageCustomerPo } from '@/lib/roles';
@@ -48,6 +55,16 @@ type Customer = {
   archived_by_name: string | null;
   purchase_order_count: number;
   can_delete: boolean;
+};
+
+type AlamatKirim = {
+  customer_delivery_address_id: number;
+  customer_id: number;
+  label: string;
+  address: string;
+  pic_name: string | null;
+  pic_phone: string | null;
+  archived_at: string | null;
 };
 
 const customerTypeLabels: Record<string, string> = { company: 'Perusahaan', individual: 'Perorangan' };
@@ -81,6 +98,27 @@ export default function CustomersPage() {
   // Pencarian & pembagian halaman dulu diurus komponen DataTable lama. Carbon DataTable
   // TIDAK mengurus keduanya, jadi keadaannya pindah ke halaman ini -- disebut supaya sesi
   // berikutnya tidak mengira Carbon kehilangan kemampuan.
+  // ALAMAT TUJUAN KIRIM (WS-05 / DEC-S09). Kapabilitasnya sudah ada di server sejak PMB-07b
+  // dan NOL layar memakainya — tiga route tanpa pemanggil. Ini melengkapi yang PARTIAL,
+  // bukan membangun yang baru.
+  const [alamatTerbuka, setAlamatTerbuka] = useState<number | null>(null);
+  const [alamatList, setAlamatList] = useState<AlamatKirim[]>([]);
+  const [alamatLoading, setAlamatLoading] = useState(false);
+  const [alamatError, setAlamatError] = useState('');
+  const [alamatModalOpen, setAlamatModalOpen] = useState(false);
+  const [alamatForm, setAlamatForm] = useState({ label: '', address: '', pic_name: '', pic_phone: '' });
+  const [alamatFieldError, setAlamatFieldError] = useState<{ field: FieldAlamat; message: string }[]>([]);
+  const [alamatFormMessage, setAlamatFormMessage] = useState('');
+  const [alamatSibuk, setAlamatSibuk] = useState(false);
+  const [alamatAkanDiarsipkan, setAlamatAkanDiarsipkan] = useState<AlamatKirim | null>(null);
+
+  const galatAlamat = (field: FieldAlamat) => alamatFieldError.find((g) => g.field === field)?.message;
+  /// SATU PINTU: menyimpan nilai DAN mencabut tandanya (§5.3).
+  const ubahFieldAlamat = (field: 'label' | 'address' | 'pic_name' | 'pic_phone', nilai: string) => {
+    setAlamatFieldError((prev) => prev.filter((g) => g.field !== field));
+    setAlamatForm((prev) => ({ ...prev, [field]: nilai }));
+  };
+
   const [cari, setCari] = useState('');
   const [halaman, setHalaman] = useState(1);
   const [perHalaman, setPerHalaman] = useState(15);
@@ -111,6 +149,68 @@ export default function CustomersPage() {
     },
     [getAccessToken]
   );
+
+  const muatAlamat = useCallback(
+    async (customerId: number) => {
+      setAlamatLoading(true);
+      setAlamatError('');
+      const { ok, body } = await authedFetch(`/api/customer-delivery-addresses?customer_id=${customerId}`);
+      if (ok) setAlamatList(body.addresses || []);
+      // Kegagalan TIDAK boleh diam: tanpa cabang ini, daftar alamat tampak kosong padahal
+      // pemuatannya gagal -- dan "kosong" berarti hal yang sangat berbeda dari "gagal dimuat".
+      else setAlamatError(body.error || 'Gagal memuat alamat tujuan kirim.');
+      setAlamatLoading(false);
+    },
+    [authedFetch]
+  );
+
+  const bukaAlamat = async (customerId: number) => {
+    if (alamatTerbuka === customerId) {
+      setAlamatTerbuka(null);
+      return;
+    }
+    setAlamatTerbuka(customerId);
+    setAlamatList([]);
+    await muatAlamat(customerId);
+  };
+
+  const simpanAlamat = async () => {
+    if (alamatTerbuka === null) return;
+    setAlamatSibuk(true);
+    setAlamatFieldError([]);
+    setAlamatFormMessage('');
+    const { ok, body } = await authedFetch('/api/customer-delivery-addresses', {
+      method: 'POST',
+      body: JSON.stringify({ customer_id: alamatTerbuka, ...alamatForm })
+    });
+    setAlamatSibuk(false);
+    if (!ok) {
+      // Pemetaan lewat pintu bersama -- halaman tidak membaca `body.field` sendiri.
+      const terpetakan = petakanGalatAlamat(body as Record<string, unknown>, 0);
+      if (terpetakan.jenis === 'field') {
+        setAlamatFieldError([{ field: terpetakan.field, message: terpetakan.pesan }]);
+        return;
+      }
+      setAlamatFormMessage(terpetakan.pesan);
+      return;
+    }
+    setAlamatModalOpen(false);
+    setAlamatForm({ label: '', address: '', pic_name: '', pic_phone: '' });
+    await muatAlamat(alamatTerbuka);
+  };
+
+  const arsipkanAlamat = async () => {
+    if (!alamatAkanDiarsipkan || alamatTerbuka === null) return;
+    setAlamatSibuk(true);
+    const { ok, body } = await authedFetch(`/api/customer-delivery-addresses/${alamatAkanDiarsipkan.customer_delivery_address_id}`, { method: 'DELETE' });
+    setAlamatSibuk(false);
+    setAlamatAkanDiarsipkan(null);
+    if (!ok) {
+      setAlamatError(body.error || 'Gagal mengarsipkan alamat.');
+      return;
+    }
+    await muatAlamat(alamatTerbuka);
+  };
 
   const loadCustomers = useCallback(
     async (includeArchived: boolean) => {
@@ -414,6 +514,7 @@ export default function CustomersPage() {
               <Table {...getTableProps()} size="lg" className="tabel-responsif">
                 <TableHead>
                   <TableRow>
+                    <TableExpandHeader aria-label="Buka alamat tujuan kirim" />
                     {headers.map((header: any) => {
                       const { key, ...sisa } = getHeaderProps({ header });
                       return (
@@ -436,11 +537,91 @@ export default function CustomersPage() {
                       const c = customers.find((x) => String(x.customer_id) === row.id)!;
                       const { key, ...sisa } = getRowProps({ row });
                       return (
-                        <TableRow key={key} {...sisa}>
-                          {row.cells.map((cell: any) => (
-                            <TableCell key={cell.id} data-label={cell.info.header}>{isiSel(c, cell.info.header)}</TableCell>
-                          ))}
-                        </TableRow>
+                        <React.Fragment key={key}>
+                          <TableExpandRow
+                            {...sisa}
+                            isExpanded={alamatTerbuka === c.customer_id}
+                            onExpand={() => void bukaAlamat(c.customer_id)}
+                            ariaLabel={`Alamat tujuan kirim ${c.name}`}
+                          >
+                            {row.cells.map((cell: any) => (
+                              <TableCell key={cell.id} data-label={cell.info.header}>{isiSel(c, cell.info.header)}</TableCell>
+                            ))}
+                          </TableExpandRow>
+                          <TableExpandedRow colSpan={headers.length + 1}>
+                            {alamatTerbuka === c.customer_id ? (
+                              <div className="pelanggan-alamat">
+                                <div className="pelanggan-alamat__kepala">
+                                  <h2 className="halaman__subjudul halaman__subjudul--rapat">Alamat tujuan kirim</h2>
+                                  <Button
+                                    kind="tertiary"
+                                    size="sm"
+                                    renderIcon={Add}
+                                    onClick={() => {
+                                      setAlamatFieldError([]);
+                                      setAlamatFormMessage('');
+                                      setAlamatModalOpen(true);
+                                    }}
+                                  >
+                                    Tambah alamat
+                                  </Button>
+                                </div>
+                                <p className="halaman__redup">
+                                  Barang bisa dikirim ke alamat yang berbeda dari alamat penagihan. Alamat yang
+                                  dipilih saat pengiriman disimpan apa adanya di dokumennya.
+                                </p>
+                                {alamatError ? (
+                                  <InlineNotification kind="error" lowContrast hideCloseButton title="Gagal memuat alamat" subtitle={alamatError} />
+                                ) : null}
+                                {alamatLoading ? (
+                                  <SkeletonText paragraph lineCount={2} />
+                                ) : alamatList.length === 0 ? (
+                                  <div className="pelanggan-alamat__kosong">
+                                    <p>Belum ada alamat tujuan kirim untuk pelanggan ini.</p>
+                                    <Button
+                                      kind="ghost"
+                                      size="sm"
+                                      renderIcon={Add}
+                                      onClick={() => {
+                                        setAlamatFieldError([]);
+                                        setAlamatFormMessage('');
+                                        setAlamatModalOpen(true);
+                                      }}
+                                    >
+                                      Tambah alamat pertama
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <ul className="pelanggan-alamat__daftar">
+                                    {alamatList.map((al) => (
+                                      <li key={al.customer_delivery_address_id} className="pelanggan-alamat__baris">
+                                        <div>
+                                          <strong>{al.label}</strong>
+                                          {al.archived_at ? <Tag type="gray" size="sm">Diarsipkan</Tag> : null}
+                                          <p className="halaman__redup">{al.address}</p>
+                                          {al.pic_name || al.pic_phone ? (
+                                            <p className="halaman__redup">
+                                              {[al.pic_name, al.pic_phone].filter(Boolean).join(' · ')}
+                                            </p>
+                                          ) : null}
+                                        </div>
+                                        {al.archived_at ? null : (
+                                          <Button
+                                            kind="danger--tertiary"
+                                            size="sm"
+                                            onClick={() => setAlamatAkanDiarsipkan(al)}
+                                          >
+                                            Arsipkan
+                                          </Button>
+                                        )}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                            ) : null}
+                          </TableExpandedRow>
+                        </React.Fragment>
                       );
                     })
                   )}
@@ -473,6 +654,94 @@ export default function CustomersPage() {
       )}
 
       {canManage ? (
+        <>
+        {/* MODAL TAMBAH ALAMAT — anatomi Carbon yang sama dengan modal pelanggan di bawah:
+            header berlabel, badan ber-form, kaki berAksi lebar penuh. Bukan pola baru. */}
+        <ComposedModal
+          open={alamatModalOpen}
+          onClose={() => {
+            setAlamatModalOpen(false);
+            setAlamatFieldError([]);
+            setAlamatFormMessage('');
+            return true;
+          }}
+          size="md"
+        >
+          <ModalHeader title="Tambah alamat tujuan kirim" label="Sales & CRM" />
+          <ModalBody hasForm>
+            <div className="pelanggan-form">
+              <TextInput
+                id="alamat-label"
+                size="lg"
+                labelText="Nama panggilan alamat"
+                helperText="Contoh: Gudang Cikarang, Kantor Pusat."
+                invalid={Boolean(galatAlamat('label'))}
+                invalidText={galatAlamat('label')}
+                value={alamatForm.label}
+                onChange={(e) => ubahFieldAlamat('label', e.target.value)}
+              />
+              <TextInput
+                id="alamat-alamat"
+                size="lg"
+                labelText="Alamat lengkap"
+                invalid={Boolean(galatAlamat('address'))}
+                invalidText={galatAlamat('address')}
+                value={alamatForm.address}
+                onChange={(e) => ubahFieldAlamat('address', e.target.value)}
+              />
+              <TextInput
+                id="alamat-pic"
+                size="lg"
+                labelText="Nama penerima (opsional)"
+                value={alamatForm.pic_name}
+                onChange={(e) => ubahFieldAlamat('pic_name', e.target.value)}
+              />
+              <TextInput
+                id="alamat-hp"
+                size="lg"
+                labelText="Telepon penerima (opsional)"
+                value={alamatForm.pic_phone}
+                onChange={(e) => ubahFieldAlamat('pic_phone', e.target.value)}
+              />
+              {alamatFormMessage && alamatFieldError.length === 0 ? (
+                <InlineNotification kind="error" lowContrast hideCloseButton title="Tidak bisa disimpan" subtitle={alamatFormMessage} />
+              ) : null}
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button kind="secondary" onClick={() => setAlamatModalOpen(false)}>Batal</Button>
+            <Button kind="primary" disabled={alamatSibuk} onClick={() => void simpanAlamat()}>
+              {alamatSibuk ? 'Menyimpan...' : 'Tambah alamat'}
+            </Button>
+          </ModalFooter>
+        </ComposedModal>
+
+        {/* ARSIP ALAMAT lewat modal danger Carbon — BUKAN window.confirm (aturan proyek). */}
+        <ComposedModal
+          open={alamatAkanDiarsipkan !== null}
+          danger
+          size="sm"
+          onClose={() => {
+            setAlamatAkanDiarsipkan(null);
+            return true;
+          }}
+        >
+          <ModalHeader title="Arsipkan alamat tujuan kirim?" label="Sales & CRM" />
+          <ModalBody>
+            <p>
+              Alamat <strong>{alamatAkanDiarsipkan?.label}</strong> tidak akan muncul lagi saat
+              memilih tujuan kirim. Dokumen yang sudah terbit tidak berubah — alamatnya sudah
+              tersimpan apa adanya di dokumen itu.
+            </p>
+          </ModalBody>
+          <ModalFooter>
+            <Button kind="secondary" onClick={() => setAlamatAkanDiarsipkan(null)}>Batal</Button>
+            <Button kind="danger" disabled={alamatSibuk} onClick={() => void arsipkanAlamat()}>
+              {alamatSibuk ? 'Memproses...' : 'Ya, arsipkan'}
+            </Button>
+          </ModalFooter>
+        </ComposedModal>
+
         <ComposedModal
           open={isModalOpen}
           onClose={() => {
@@ -523,6 +792,7 @@ export default function CustomersPage() {
             </Button>
           </ModalFooter>
         </ComposedModal>
+        </>
       ) : null}
     </div>
   );

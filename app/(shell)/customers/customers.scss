@@ -75,3 +75,55 @@
 .pelanggan-saring-arsip .cds--checkbox-label {
   margin: 0;
 }
+
+// ============================================================================================
+// ALAMAT TUJUAN KIRIM DI BARIS YANG DIMEKARKAN (WS-05, 29 Agu 2026)
+// ============================================================================================
+// Kolom mengikuti lebar WADAH, bukan lebar layar — aturan D-B yang lahir dari DS-22. Baris
+// dimekarkan hidup di dalam tabel yang menyempit lebih dulu daripada viewport, jadi breakpoint
+// viewport akan salah di sini.
+.pelanggan-alamat {
+  display: flex;
+  flex-direction: column;
+  gap: spacing.$spacing-03;
+  padding-block: spacing.$spacing-03;
+}
+
+.pelanggan-alamat__kepala {
+  display: flex;
+  align-items: center;
+  gap: spacing.$spacing-04;
+  flex-wrap: wrap;
+}
+
+.pelanggan-alamat__daftar {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: spacing.$spacing-03;
+  grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
+}
+
+.pelanggan-alamat__baris {
+  display: flex;
+  align-items: flex-start;
+  gap: spacing.$spacing-04;
+  padding: spacing.$spacing-04;
+  border: 1px solid theme.$border-subtle;
+  background: theme.$layer-01;
+
+  > div { flex: 1 1 auto; min-width: 0; }
+  p { margin: spacing.$spacing-02 0 0; }
+
+  // Aksi merusak didorong berjauhan dari isi (aturan modal butir 9).
+  > button { margin-inline-start: auto; flex: 0 0 auto; }
+}
+
+.pelanggan-alamat__kosong {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: spacing.$spacing-03;
+  padding-block: spacing.$spacing-03;
+}

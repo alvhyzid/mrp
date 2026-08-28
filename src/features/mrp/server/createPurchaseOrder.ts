@@ -19,26 +19,37 @@ export async function createPurchaseOrder(request: NextRequest): Promise<ApiResu
     }
 
     const body = await request.json();
-    const { data: parsed, error: parseError } = parsePurchaseOrderInput(body);
-    if (parseError || !parsed) return { status: 400, body: { error: parseError ?? 'Input tidak valid.' } };
+    const { data: parsed, error: parseError, field: parseField, line: parseLine } = parsePurchaseOrderInput(body);
+    if (parseError || !parsed) {
+      // `field`/`line` diteruskan APA ADANYA. Ketiadaannya bermakna "bukan galat satu isian"
+      // dan halaman menampilkannya di tingkat formulir — lihat STANDAR VALIDASI FABRIX §3.
+      return { status: 400, body: { error: parseError ?? 'Input tidak valid.', ...(parseField ? { field: parseField } : {}), ...(parseLine !== undefined ? { line: parseLine } : {}) } };
+    }
 
     const adminClient = getAdminClient();
 
     const { data: supplier, error: supplierError } = await adminClient.from('suppliers').select('supplier_id, company_id, name, address, npwp, archived_at').eq('supplier_id', parsed.supplier_id).maybeSingle();
     if (supplierError) return { status: 500, body: { error: supplierError.message } };
-    if (!supplier || supplier.company_id !== appUser.company_id) return { status: 400, body: { error: 'Supplier tidak valid.' } };
-    if (supplier.archived_at) return { status: 400, body: { error: `Supplier "${supplier.name}" sudah diarsipkan — tidak bisa dipilih untuk PO baru.` } };
+    if (!supplier || supplier.company_id !== appUser.company_id) return { status: 400, body: { error: 'Supplier tidak valid.', field: 'supplier_id' } };
+    if (supplier.archived_at) return { status: 400, body: { error: `Supplier "${supplier.name}" sudah diarsipkan — tidak bisa dipilih untuk PO baru.`, field: 'supplier_id' } };
 
     const { data: plant, error: plantError } = await adminClient.from('production_plants').select('production_plant_id, company_id, name, is_active').eq('production_plant_id', parsed.production_plant_id).maybeSingle();
     if (plantError) return { status: 500, body: { error: plantError.message } };
-    if (!plant || plant.company_id !== appUser.company_id) return { status: 400, body: { error: 'Lokasi pabrik tidak valid.' } };
-    if (!plant.is_active) return { status: 400, body: { error: `Pabrik "${plant.name}" tidak aktif — tidak bisa dipilih sebagai gudang penerima PO.` } };
+    if (!plant || plant.company_id !== appUser.company_id) return { status: 400, body: { error: 'Lokasi pabrik tidak valid.', field: 'production_plant_id' } };
+    if (!plant.is_active) return { status: 400, body: { error: `Pabrik "${plant.name}" tidak aktif — tidak bisa dipilih sebagai gudang penerima PO.`, field: 'production_plant_id' } };
 
     const itemIds = Array.from(new Set(parsed.lines.map((l) => l.item_id)));
     const { data: items, error: itemsError } = await adminClient.from('items').select('item_id, company_id').in('item_id', itemIds);
     if (itemsError) return { status: 500, body: { error: itemsError.message } };
     const validItemIds = new Set((items ?? []).filter((i) => i.company_id === appUser.company_id).map((i) => i.item_id));
-    if (validItemIds.size !== itemIds.length) return { status: 400, body: { error: 'Salah satu item pada baris PO tidak valid.' } };
+    if (validItemIds.size !== itemIds.length) {
+      // Baris yang salah DICARI, bukan dibiarkan jadi "salah satu baris". Pemeriksaannya
+      // memang dilakukan sekaligus untuk seluruh baris demi satu query; menyebut barisnya
+      // hanya butuh satu pencarian ulang di memori, dan itu jauh lebih murah daripada
+      // memindahkan pekerjaan mencari ke pengguna.
+      const indeks = parsed.lines.findIndex((l) => !validItemIds.has(l.item_id));
+      return { status: 400, body: { error: 'Item pada salah satu baris tidak valid.', field: 'item_id', ...(indeks >= 0 ? { line: indeks } : {}) } };
+    }
 
     const { data: po, error: poError } = await adminClient
       .from('purchase_orders')

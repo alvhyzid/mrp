@@ -168,6 +168,12 @@ export default function PurchasingPage() {
   const [poForm, setPoForm] = useState(emptyPoForm);
   const [poFormStatus, setPoFormStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [poFormMessage, setPoFormMessage] = useState('');
+  // GALAT TINGKAT FIELD (STANDAR VALIDASI FABRIX §2 golongan A). Sebuah DAFTAR, bukan satu
+  // nilai, karena §5.1 mewajibkan seluruh isian yang salah ditandai sekaligus — berhenti di
+  // yang pertama memaksa orang menyimpan berulang kali untuk menemukan sisanya.
+  const [poFieldError, setPoFieldError] = useState<{ field: string; line?: number; message: string }[]>([]);
+  const galatPo = (field: string, line?: number) =>
+    poFieldError.find((g) => g.field === field && g.line === line)?.message;
 
   // FASE 3 (Carbon "DataTable with toolbar") — form "Tambah Supplier"/"Buat PO"
   // pindah dari section inline di bawah tabel ke modal, dipicu tombol toolbar.
@@ -512,20 +518,56 @@ export default function PurchasingPage() {
   };
 
   const addPoLine = () => setPoForm((prev) => ({ ...prev, lines: [...prev.lines, { ...emptyFormLine }] }));
-  const removePoLine = (index: number) => setPoForm((prev) => ({ ...prev, lines: prev.lines.filter((_, i) => i !== index) }));
-  const updatePoLine = (index: number, field: keyof FormLine, value: string) =>
+  const removePoLine = (index: number) => {
+    // §5.4 — isian yang hilang dari layar wajib membawa galatnya pergi. Galat yatim tidak
+    // bisa diperbaiki siapa pun karena kontrolnya sudah tidak ada.
+    setPoFieldError([]);
+    setPoForm((prev) => ({ ...prev, lines: prev.lines.filter((_, i) => i !== index) }));
+  };
+  const updatePoLine = (index: number, field: keyof FormLine, value: string) => {
+    // §5.3 — tanda dicabut begitu isiannya diperbaiki. Galat yang menetap setelah dibetulkan
+    // melatih orang mengabaikannya.
+    setPoFieldError((prev) => prev.filter((g) => !(g.field === field && g.line === index)));
     setPoForm((prev) => ({ ...prev, lines: prev.lines.map((line, i) => (i === index ? { ...line, [field]: value } : line)) }));
+  };
 
   const handleCreatePo = async () => {
-    if (!poForm.supplier_id || !poForm.production_plant_id) {
-      setPoFormStatus('error');
-      setPoFormMessage('Supplier dan lokasi pabrik wajib dipilih.');
+    setPoFieldError([]);
+    // SEBELUMNYA satu kalimat gabungan "Supplier dan lokasi pabrik wajib dipilih." di dasar
+    // modal. Sekarang KEDUANYA ditandai sekaligus di kontrolnya masing-masing (§5.1).
+    const kurang: { field: string; line?: number; message: string }[] = [];
+    if (!poForm.supplier_id) kurang.push({ field: 'supplier_id', message: 'Supplier wajib dipilih.' });
+    if (!poForm.production_plant_id) kurang.push({ field: 'production_plant_id', message: 'Lokasi pabrik (alamat kirim) wajib dipilih.' });
+    if (kurang.length > 0) {
+      setPoFieldError(kurang);
+      setPoFormStatus('idle');
+      setPoFormMessage('');
+      return;
+    }
+    // BARIS TERISI SEPARUH sebelumnya DIBUANG DIAM-DIAM oleh filter di bawah: pengguna
+    // mengisi item lalu lupa jumlahnya, barisnya hilang dari PO, dan tidak ada yang memberi
+    // tahu. Sekarang barisnya ditandai — akar yang sama dengan sisa kelas ini: sistem tahu
+    // baris mana, penggunanya tidak diberi tahu.
+    const separuh = poForm.lines
+      .map((l, i) => ({ l, i }))
+      .filter(({ l }) => (l.item_id && !l.qty_ordered) || (!l.item_id && l.qty_ordered))
+      .map(({ l, i }) =>
+        l.item_id
+          ? { field: 'qty_ordered', line: i, message: 'Jumlah pesan wajib diisi untuk baris ini.' }
+          : { field: 'item_id', line: i, message: 'Item wajib dipilih untuk baris ini.' }
+      );
+    if (separuh.length > 0) {
+      setPoFieldError(separuh);
+      setPoFormStatus('idle');
+      setPoFormMessage('');
       return;
     }
     const linesPayload = poForm.lines
       .filter((l) => l.item_id && l.qty_ordered)
       .map((l) => ({ item_id: Number(l.item_id), qty_ordered: Number(l.qty_ordered), unit_price: l.unit_price === '' ? null : Number(l.unit_price) }));
     if (linesPayload.length === 0) {
+      // GOLONGAN B: penggunanya harus MENGISI baris, bukan memperbaiki satu isian yang
+      // terlihat salah. Tetap di tingkat formulir, dan itu memang benar.
       setPoFormStatus('error');
       setPoFormMessage('Minimal 1 baris item dengan jumlah pesan wajib diisi.');
       return;
@@ -542,6 +584,14 @@ export default function PurchasingPage() {
       })
     });
     if (!ok) {
+      // §3 — field dibaca sebagai DATA dari jawaban server, TIDAK ditebak dari kalimatnya.
+      // Ketiadaan `field` bermakna "bukan golongan A", dan galatnya tetap di tingkat formulir.
+      if (typeof body.field === 'string' && body.field) {
+        setPoFieldError([{ field: body.field, line: typeof body.line === 'number' ? body.line : undefined, message: String(body.error || 'Isian ini ditolak.') }]);
+        setPoFormStatus('idle');
+        setPoFormMessage('');
+        return;
+      }
       setPoFormStatus('error');
       setPoFormMessage(body.error || 'Gagal membuat PO.');
       return;
@@ -1000,7 +1050,7 @@ export default function PurchasingPage() {
                       }}
                     />
                     {canManage ? (
-                      <Button size="lg" renderIcon={Add} onClick={() => setIsPoModalOpen(true)}>
+                      <Button size="lg" renderIcon={Add} onClick={() => { setPoFieldError([]); setPoFormMessage(''); setPoFormStatus('idle'); setIsPoModalOpen(true); }}>
                         Buat PO
                       </Button>
                     ) : null}
@@ -1334,6 +1384,8 @@ export default function PurchasingPage() {
                 id="po-supplier"
                 size="lg"
                 titleText="Supplier"
+                invalid={Boolean(galatPo('supplier_id'))}
+                invalidText={galatPo('supplier_id')}
                 label="Pilih supplier..."
                 items={suppliers.filter((s) => !s.archived_at)}
                 itemToString={(s: any) => s?.name ?? ''}
@@ -1344,6 +1396,8 @@ export default function PurchasingPage() {
                 id="po-lokasi"
                 size="lg"
                 titleText="Lokasi pabrik (alamat kirim)"
+                invalid={Boolean(galatPo('production_plant_id'))}
+                invalidText={galatPo('production_plant_id')}
                 label="Pilih lokasi..."
                 items={plants}
                 itemToString={(p: any) => p?.name ?? ''}
@@ -1377,6 +1431,8 @@ export default function PurchasingPage() {
                       id={`po-item-${index}`}
                       size="lg"
                       titleText="Item"
+                      invalid={Boolean(galatPo('item_id', index))}
+                      invalidText={galatPo('item_id', index)}
                       label="Pilih item..."
                       items={items}
                       itemToString={(i: any) => (i ? `${i.item_code} — ${i.name}` : '')}
@@ -1386,6 +1442,8 @@ export default function PurchasingPage() {
                     <NumberInput
                       id={`po-qty-${index}`}
                       label={`Jumlah pesan (${selectedItem?.purchase_uom ?? 'satuan beli'})`}
+                      invalid={Boolean(galatPo('qty_ordered', index))}
+                      invalidText={galatPo('qty_ordered', index) ?? ''}
                       min={0}
                       allowEmpty
                       hideSteppers
@@ -1395,6 +1453,8 @@ export default function PurchasingPage() {
                     <NumberInput
                       id={`po-harga-${index}`}
                       label="Harga satuan (opsional)"
+                      invalid={Boolean(galatPo('unit_price', index))}
+                      invalidText={galatPo('unit_price', index) ?? ''}
                       min={0}
                       allowEmpty
                       hideSteppers
@@ -1409,7 +1469,7 @@ export default function PurchasingPage() {
               })}
             </div>
 
-            {poFormStatus === 'error' && poFormMessage ? (
+            {poFormStatus === 'error' && poFormMessage && poFieldError.length === 0 ? (
               <InlineNotification kind="error" lowContrast hideCloseButton title="Tidak bisa disimpan" subtitle={poFormMessage} />
             ) : null}
           </ModalBody>

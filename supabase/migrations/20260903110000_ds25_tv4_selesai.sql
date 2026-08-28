@@ -1,0 +1,82 @@
+-- DS-25 — T-V4 SELESAI. Task TETAP `sedang_dikerjakan`.
+--
+-- HANYA menyentuh satu baris, dan HANYA kolom catatan. Status TIDAK diubah, urgensi TIDAK
+-- diubah, nol task lain disentuh.
+--
+-- KENAPA STATUSNYA TIDAK DINAIKKAN JADI SELESAI. Seluruh butir gerbang T-V4 terpenuhi, tetapi
+-- gerbang itu adalah syarat PERLU, bukan syarat CUKUP: T-V3 masih berdiri -- 58 modul server
+-- lain tetap mengirim galat golongan A tanpa menyebut field-nya. Menutup task ini sekarang
+-- akan mencatat kelasnya beres padahal yang beres baru cetakan dan penjaganya.
+--
+-- Teks panjang lewat concat_ws(chr(10), ...) sesuai aturan proyek.
+update build_tasks
+set notes = concat_ws(chr(10),
+      notes,
+      '',
+      '============================================================',
+      'T-V4 SELESAI 28 Agu 2026. Commit: lihat riwayat berkas',
+      'src/features/mrp/server/purchaseOrderValidation.ts.',
+      '============================================================',
+      '',
+      'YANG DICEGAH -- bentuk kegagalan paling sulit ditemukan di kelas ini:',
+      '  nama field salah ketik -> nol kontrol cocok -> notifikasi formulir IKUT DIGERBANG',
+      '  MATI karena "sudah ada galat field" -> pengguna TIDAK MELIHAT APA PUN -> test tetap',
+      '  hijau. Galatnya bukan salah tempat; galatnya HILANG.',
+      'Diverifikasi langsung: sebelum T-V4, jawaban { error, field: ''quantitty'' } menghasilkan',
+      'NOL pesan di layar.',
+      '',
+      'KONTRAK SEKARANG -- DUA LAPIS, karena satu lapis tidak cukup:',
+      '  Kompilasi: FIELD_PO (supplier_id, production_plant_id, expected_date) dan',
+      '             FIELD_PO_BARIS (item_id, qty_ordered, unit_price) -> tipe FieldPo.',
+      '             Namanya SAMA PERSIS dengan kunci state formulir dan kunci FormLine.',
+      '  Runtime:   petakanGalatServerPo(body, jumlahBaris) sebagai SATU PINTU. Halaman',
+      '             DILARANG membaca body.field sendiri.',
+      '',
+      'SEMANTIK line: indeks baris BERBASIS NOL, mengacu ke urutan baris SAAT jawaban diterima,',
+      'dan hanya bermakna untuk field di FIELD_PO_BARIS.',
+      '',
+      'TIGA KEADAAN NAIK KE TINGKAT FORMULIR dengan KALIMAT ASLINYA -- galat tidak boleh hilang',
+      'hanya karena pemetaannya gagal, dan tidak ada pesan baru yang dikarang:',
+      '  1. field tidak ada di daftar (salah ketik, nama lama, modul lain)',
+      '  2. field baris tanpa line yang sah -- barisnya tidak bisa ditebak',
+      '  3. line di luar jangkauan baris yang sedang tampil, termasuk setelah baris dihapus',
+      'SATU keadaan SENGAJA tidak dinaikkan: field non-baris yang membawa line. Pemetaannya',
+      'tidak gagal, dan menaikkannya justru MEMINDAHKAN galat yang sebenarnya bisa ditunjuk.',
+      '',
+      'LUBANG LAPIS KOMPILASI YANG DITEMUKAN LEWAT MENJALANKAN, BUKAN MEMBACA:',
+      'mutasi nama salah ketik di validator BERBUNYI (TS2322), tetapi mutasi yang sama di',
+      'createPurchaseOrder TIDAK BERBUNYI SAMA SEKALI -- ApiResult.body bertipe',
+      'Record<string, unknown>, jadi union-nya tidak berlaku di sana. Kalau tidak diuji, ia akan',
+      'tercatat sebagai "sudah dijaga saat kompilasi" padahal separuhnya tidak. Ditutup dengan',
+      'pembangun bertipe galatFieldPo(error, field, line?); mutasi yang sama kini TS2345.',
+      '',
+      'CACAT LAIN YANG IKUT DITEMUKAN: kedua dropdown tingkat atas TIDAK mencabut tandanya saat',
+      'diperbaiki -- galat menyala di isian yang sudah benar, dan itu melatih orang mengabaikan',
+      'tanda. Keduanya kini lewat satu pintu ubahFieldPo yang menyimpan nilai DAN mencabut tanda.',
+      '',
+      'UJI: 9 penjaga baru (berkas jadi 17), MERAH lebih dulu lalu HIJAU. Tiap lapis dibuktikan',
+      'menggigit: dua mutasi typecheck (TS2322, TS2345) dan lima mutasi runtime.',
+      '',
+      'BUKTI PERAMBAN: delapan kasus, seluruhnya lewat jawaban yang disuntik, NOL baris tertulis.',
+      '  field tak dikenal      -> 0 tanda field, 1 notifikasi formulir dengan kalimat aslinya',
+      '  line di luar jangkauan -> sama',
+      '  baris spesifik line=1  -> ditandai di po-qty-1, BARIS KEDUA',
+      '  diperbaiki             -> tanda hilang, nol sisa',
+      '  banyak field           -> po-supplier DAN po-lokasi ditandai bersamaan',
+      '  baris dihapus          -> nol tanda yatim',
+      '  urutan baris diubah    -> TIDAK BERLAKU, formulir ini tidak punya pengubah urutan',
+      'Enam lebar pada kasus field tak dikenal: notifikasi tampil di keenamnya, tidak menutupi',
+      'tombol simpan, nol gulir menyamping, nol elemen melewati tepi.',
+      '',
+      'SISA PEKERJAAN -- kenapa task ini BELUM selesai:',
+      '  T-V1 Dropdown/ComboBox Carbon tidak memancarkan aria-invalid (keterbatasan Carbon)',
+      '  T-V2 validator server masih berhenti di galat pertama',
+      '  T-V3 58 modul server lain masih mengirim galat golongan A tanpa field  <-- yang utama',
+      '  T-V5 fokus tidak berpindah ke field yang ditolak (sengaja, butuh keputusan a11y)',
+      '',
+      'CATATAN ROLLOUT: FIELD_PO/FIELD_PO_BARIS dan petakanGalatServerPo masih MILIK PO. Modul',
+      'kedua butuh daftar field sendiri dan pintu yang digeneralisasi (parameter daftar field +',
+      'jumlah baris). Menyalin pintu ini apa adanya akan melahirkan dua pintu yang menyimpang --',
+      'kelas cacat yang sama yang sedang diberantas.'
+    )
+where task_code = 'DS-25';

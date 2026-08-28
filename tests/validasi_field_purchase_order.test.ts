@@ -22,7 +22,12 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tanpaKomentar } from './util/tanpaKomentar';
-import { parsePurchaseOrderInput } from '../src/features/mrp/server/purchaseOrderValidation';
+import {
+  parsePurchaseOrderInput,
+  petakanGalatServerPo,
+  FIELD_PO,
+  FIELD_PO_BARIS
+} from '../src/features/mrp/server/purchaseOrderValidation';
 
 const barisSah = { item_id: 7, qty_ordered: 3, unit_price: 1000 };
 const masukanSah = { supplier_id: 1, production_plant_id: 2, expected_date: '2026-09-01', lines: [barisSah] };
@@ -108,5 +113,109 @@ describe('DS-25 — validasi tingkat field pada PO ke supplier', () => {
     expect(s, 'notifikasi formulir modal PO harus disyaratkan tidak ada poFieldError').toMatch(
       /poFormStatus === 'error' && poFormMessage && (?:!poFieldError|poFieldError\.length === 0)/
     );
+  });
+});
+
+// ============================================================================
+// T-V4 — PENJAGA PEMETAAN FIELD DI BATAS SERVER -> KLIEN
+// ============================================================================
+// Jawaban server adalah data RUNTIME. TypeScript tidak memeriksanya, dan sampai penjaga ini
+// ada, sebuah nama field yang salah ketik menghasilkan bentuk kegagalan yang paling sulit
+// ditemukan: server mengirim galat -> nol kontrol cocok -> notifikasi formulir JUGA digerbang
+// mati karena "sudah ada galat field" -> pengguna TIDAK MELIHAT APA PUN -> seluruh test tetap
+// hijau. Galatnya tidak salah tempat; galatnya HILANG.
+//
+// Yang diuji di bawah adalah PERILAKU di batas itu, bukan bentuk kodenya.
+describe('T-V4 — pemetaan galat server ke field formulir', () => {
+  const duaBaris = 2;
+
+  it('(i) field yang TIDAK DIKENAL tidak boleh menghilangkan galatnya', () => {
+    for (const field of ['does_not_exist', 'quantity', 'quantitty', '', 'supplier', 'SUPPLIER_ID']) {
+      const hasil = petakanGalatServerPo({ error: 'Pesan asli dari server.', field }, duaBaris);
+      expect(hasil.jenis, `field "${field}" tidak dikenal -> wajib naik ke tingkat formulir`).toBe('formulir');
+      expect(hasil.pesan, 'kalimat aslinya WAJIB dipertahankan — pengguna tetap harus tahu apa yang salah').toBe('Pesan asli dari server.');
+    }
+  });
+
+  it('(j) field baris dengan line di luar jangkauan tidak boleh menandai baris yang salah', () => {
+    for (const line of [duaBaris, duaBaris + 5, -1, 99]) {
+      const hasil = petakanGalatServerPo({ error: 'Jumlah pesan harus angka positif.', field: 'qty_ordered', line }, duaBaris);
+      expect(hasil.jenis, `line ${line} di luar jangkauan (${duaBaris} baris)`).toBe('formulir');
+      expect(hasil.pesan).toBe('Jumlah pesan harus angka positif.');
+    }
+  });
+
+  it('(k) field baris TANPA line naik ke tingkat formulir — barisnya tidak bisa ditebak', () => {
+    for (const line of [undefined, null, '0', 1.5, NaN]) {
+      const hasil = petakanGalatServerPo({ error: 'Item pada salah satu baris tidak valid.', field: 'item_id', line }, duaBaris);
+      expect(hasil.jenis, `line=${String(line)} bukan indeks yang sah`).toBe('formulir');
+    }
+  });
+
+  it('(l) field yang sah dipetakan ke kontrolnya', () => {
+    const a = petakanGalatServerPo({ error: 'Supplier wajib dipilih.', field: 'supplier_id' }, duaBaris);
+    expect(a).toEqual({ jenis: 'field', field: 'supplier_id', line: undefined, pesan: 'Supplier wajib dipilih.' });
+
+    for (const line of [0, duaBaris - 1]) {
+      const b = petakanGalatServerPo({ error: 'Jumlah pesan harus angka positif.', field: 'qty_ordered', line }, duaBaris);
+      expect(b, `baris ${line} sah`).toEqual({ jenis: 'field', field: 'qty_ordered', line, pesan: 'Jumlah pesan harus angka positif.' });
+    }
+  });
+
+  it('(m) field NON-baris yang membawa line tetap ditandai, line-nya diabaikan', () => {
+    // Pemetaannya TIDAK gagal — supplier_id tidak ambigu. Yang tidak bermakna hanyalah
+    // line-nya, dan menaikkannya ke tingkat formulir justru akan MEMINDAHKAN galat yang
+    // sebenarnya bisa ditunjuk. Keputusan ini ditulis di standar §3 supaya tidak dikira lalai.
+    const hasil = petakanGalatServerPo({ error: 'Supplier tidak valid.', field: 'supplier_id', line: 1 }, duaBaris);
+    expect(hasil).toEqual({ jenis: 'field', field: 'supplier_id', line: undefined, pesan: 'Supplier tidak valid.' });
+  });
+
+  it('(n) tanpa field sama sekali -> tingkat formulir, seperti sebelumnya', () => {
+    const hasil = petakanGalatServerPo({ error: 'Role Anda tidak punya izin membuat PO ke supplier.' }, duaBaris);
+    expect(hasil.jenis).toBe('formulir');
+    expect(hasil.pesan).toBe('Role Anda tidak punya izin membuat PO ke supplier.');
+  });
+
+  it('(p) memperbaiki sebuah isian mencabut TANDANYA SAJA, dan menghapus baris tidak meninggalkan tanda yatim', () => {
+    const s = tanpaKomentar(readFileSync(join(process.cwd(), 'src/features/mrp/pages/PurchasingPage.tsx'), 'utf8'));
+    // Isian tingkat atas: satu pintu yang mencabut tanda field ITU saja (bukan seluruhnya —
+    // mengosongkan semuanya akan menyembunyikan isian lain yang masih salah).
+    expect(s, 'harus ada pintu bersama untuk isian PO tingkat atas').toMatch(/const ubahFieldPo\s*=/);
+    expect(s).toMatch(/setPoFieldError\(\(prev\) => prev\.filter\(\(g\) => g\.field !== field\)\)/);
+    expect(s, 'dropdown supplier & lokasi wajib lewat pintu itu').toMatch(/ubahFieldPo\('supplier_id'/);
+    expect(s).toMatch(/ubahFieldPo\('production_plant_id'/);
+    // Isian baris: hanya field+baris itu yang dicabut.
+    expect(s).toMatch(/prev\.filter\(\(g\) => !\(g\.field === field && g\.line === index\)\)/);
+    // Baris dihapus: SELURUH tanda dibuang, karena indeks baris bergeser dan tanda yang
+    // tertinggal akan menunjuk baris yang salah.
+    const hapus = s.slice(s.indexOf('const removePoLine'), s.indexOf('const updatePoLine'));
+    expect(hapus, 'menghapus baris harus membuang seluruh tanda — indeksnya bergeser').toMatch(/setPoFieldError\(\[\]\)/);
+  });
+
+  it('(q) server menyusun galat field lewat pembangun bertipe, bukan objek mentah', () => {
+    // Ditemukan lewat MENJALANKAN mutasi, bukan membaca: `ApiResult.body` bertipe
+    // Record<string, unknown>, jadi menulis `field: 'supplier'` LANGSUNG di dalamnya lolos
+    // typecheck sepenuhnya. Lapisan kompilasi baru berlaku bila namanya melewati sebuah
+    // parameter bertipe FieldPo.
+    const s = tanpaKomentar(readFileSync(join(process.cwd(), 'src/features/mrp/server/createPurchaseOrder.ts'), 'utf8'));
+    expect(s, 'galat field wajib lewat galatFieldPo').toMatch(/galatFieldPo\(/);
+    expect(s, 'jangan menulis field mentah di dalam body — typecheck tidak akan memeriksanya').not.toMatch(/body:\s*\{[^}]*field:/);
+  });
+
+  it('(o) daftar field adalah SATU sumber, dan formulir memakai nama yang sama persis', () => {
+    const s = tanpaKomentar(readFileSync(join(process.cwd(), 'src/features/mrp/pages/PurchasingPage.tsx'), 'utf8'));
+    // Nama yang dipakai halaman saat menandai kontrol wajib berasal dari daftar bersama —
+    // bukan diketik ulang. Ini yang mencegah salah ketik lahir di sisi klien.
+    for (const f of [...FIELD_PO, ...FIELD_PO_BARIS]) {
+      if (!s.includes(`galatPo('${f}'`)) continue;
+      expect([...FIELD_PO, ...FIELD_PO_BARIS], `${f} harus ada di daftar bersama`).toContain(f);
+    }
+    // Kunci baris formulir HARUS sama persis dengan daftar field baris.
+    expect(s, 'FormLine harus memakai nama yang sama dengan FIELD_PO_BARIS').toMatch(
+      new RegExp(`type FormLine = \\{[^}]*${FIELD_PO_BARIS.join('[^}]*')}[^}]*\\}`)
+    );
+    // Halaman TIDAK boleh memetakan sendiri — pemetaannya lewat satu pintu.
+    expect(s, 'halaman harus memakai petakanGalatServerPo, bukan membaca body.field langsung').toMatch(/petakanGalatServerPo/);
+    expect(s, 'jangan membaca body.field mentah di halaman').not.toMatch(/body\.field/);
   });
 });

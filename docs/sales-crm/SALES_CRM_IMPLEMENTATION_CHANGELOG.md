@@ -73,3 +73,70 @@ perbaikan lokal.
 **Impact**: pengguna di HP tidak bisa menekan "Batal" di keempat formulir bertahap.
 **Fix**: belum dilakukan — butuh audit konsumen + penjaga.
 **Regression**: menyentuh 4 halaman sekaligus.
+
+---
+
+## WS-05 — Alamat tujuan kirim: kapabilitas yang ada akhirnya punya layar · 29 Agu 2026
+
+**Golongan keputusan: COMPLETION.** Keputusan **DEC-S09 sudah ditutup** pemilik produk —
+*"BUILD THE UI"*. Entitas, tabel, RLS, arsip/pulih, dan **tiga route** sudah ada sejak PMB-07b
+dengan **nol** halaman memakainya. Ini melengkapi yang PARTIAL, **bukan** membangun yang baru.
+
+### Yang berubah
+
+| Berkas | Perubahan |
+|---|---|
+| `customerDeliveryAddresses.ts` | memakai `buatKontrakGalatField`; enam galat golongan A membawa `field` |
+| `CustomersPage.tsx` | baris tabel bisa **dimekarkan** (pola yang sama dengan Purchasing/Items/BOM); panel alamat dengan keadaan memuat · kosong-ber-aksi · galat; modal tambah; **modal danger** untuk arsip |
+| `customers.scss` | gaya panel; kolom mengikuti **lebar wadah** (aturan D-B), bukan lebar layar |
+
+**Nol pola baru**: baris mekar, modal Carbon, kontrak validasi, dan aksi merusak seluruhnya
+memakai cetakan FABRIX yang sudah ada.
+
+### REGRESI YANG SAYA PERKENALKAN, DITEMUKAN DAN DIPERBAIKI SEBELUM COMMIT
+
+Sapuan baseline mencatat `/customers` **bersih di enam lebar**. Setelah perubahan pertama saya,
+ia **menggulir menyamping di keenamnya** (1712 vs 1440).
+
+Diisolasi bertahap, dan tiga dugaan pertama **salah**:
+
+| Dugaan | Hasil |
+|---|---|
+| Fixture data | **bukan** — meluber juga dengan data kosong |
+| `TableExpandHeader` | **bukan** — dicabut, tetap meluber |
+| SCSS baru | **bukan** — TSX lama + SCSS baru = bersih |
+| **Dua modal yang saya tambahkan** | **YA** — dicabut, meluber hilang |
+
+**Sebabnya**: kedua modal saya letakkan **di luar** blok `canManage`, sedangkan modal yang
+sudah ada di halaman ini berada **di dalamnya**. Dipindahkan ke dalam (dengan fragment) →
+**1440 vs 1440**, bersih lagi.
+
+> **Batas kejujuran**: mekanisme persisnya — kenapa modal Carbon tertutup di luar blok itu
+> menambah 272px lebar dokumen — **belum saya telusuri sampai akar CSS-nya**. Yang saya
+> lakukan adalah menyamakan dengan pola yang sudah terbukti di halaman yang sama. Itu
+> memperbaiki gejalanya dan konsisten dengan cetakan; ia **bukan** penjelasan penyebabnya.
+
+### Uji & bukti
+
+`tests/alamat_kirim_pelanggan.test.ts` — **10 penjaga**, MERAH lebih dulu (10 gagal, modulnya
+belum ada), HIJAU sesudah.
+
+Bukti peramban, enam lebar, non-GET diblokir, **nol baris tertulis**:
+
+| Kasus | Hasil |
+|---|---|
+| Panel berisi | 1 alamat, tombol arsip |
+| Panel kosong | **menawarkan aksi** ("Tambah alamat pertama"), bukan hanya "belum ada" |
+| Modal tambah | 4 kontrol, **nol tanpa label** |
+| Galat field dari server | ditandai di `alamat-label`, `aria-invalid="true"` + `aria-errormessage` |
+| Field tak dikenal | naik ke notifikasi formulir dengan kalimat aslinya |
+| Arsip | **modal danger Carbon**, bukan `window.confirm` |
+| Enam lebar | panel tampil, satu `h1`, nol lompatan judul, **nol gulir, nol luber** |
+
+### Temuan dicatat, tidak diselesaikan
+
+Tabel `customers` **masih punya kolom `shipping_address` tunggal** berdampingan dengan tabel
+daftar `customer_delivery_addresses`. Dua tempat menyimpan hal yang mirip. PMB-07b menetapkan
+alamat sebagai **daftar**, jadi kolom tunggal itu kemungkinan warisan — tetapi mana yang jadi
+sumber kebenaran saat pengiriman dibuat **belum diverifikasi**, dan mencabut kolom adalah
+migrasi yang menyentuh data. **ARCHITECTURE DECISION REQUIRED.**

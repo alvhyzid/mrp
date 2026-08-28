@@ -19,20 +19,23 @@
 
 ## Current Workstream
 
-**WS-01 Customer PO** ✅ koreksi validasi selesai · **WS-03 Sales UX** ✅ ikut selesai ·
-**WS-04 Test** ✅ 11 penjaga baru · **WS-02 Sales Order** menunggu keputusan
+**WS-01 Customer PO** ✅ · **WS-03 Sales UX** ✅ · **WS-04 Test** ✅ · **WS-05 Alamat kirim** ✅
+· **WS-02 Sales Order** menunggu keputusan (DEC-S11)
 
 ## Current Step
 
-WS-02 — koreksi siklus hidup Sales Order (**butuh keputusan**, lihat DEC-S11)
+Berikutnya yang READY: menerapkan kontrak validasi ke formulir **Pelanggan** dan
+**Sales Order** — pola sudah terbukti di **empat** modul.
 
 ## Status
 
 IN PROGRESS — sebagian workstream berjalan, sebagian terhalang
 
-> **KEMAJUAN TETAP 64%, DAN ITU DISENGAJA.** H1 belum memenuhi kriteria terima: koreksi
-> validasi PO klien selesai, tetapi koreksi komersial lain di H1 belum. Aturan §33 perintah:
-> jangan menaikkan angka hanya karena kode sudah ditulis.
+> **KEMAJUAN TETAP 64%, DAN ITU DISENGAJA.** Dua workstream sudah menghasilkan kode yang
+> teruji dan terverifikasi di peramban — tetapi **H1** (koreksi komersial) dan **H2**
+> (pelengkapan kapabilitas) masing-masing belum tuntas seluruhnya. Aturan yang berlaku:
+> jangan menaikkan angka hanya karena kode sudah ditulis, berkas berubah, atau commit
+> bertambah. Angka naik saat butirnya benar-benar memenuhi kriteria terima.
 
 ## Completed
 
@@ -336,6 +339,18 @@ tersembunyi membuat galatnya hilang sama sekali. Ditemukan lewat menjalankan, di
 tepi kiri pada 360px (terukur −63px). Komponen bersama, 4 halaman konsumen — §32 mewajibkan
 audit konsumen lebih dulu.
 
+**WS-05 SELESAI** (29 Agu 2026): alamat tujuan kirim akhirnya punya layar. Golongan
+**COMPLETION** — entitas, tabel, RLS, arsip/pulih, dan tiga route sudah ada sejak PMB-07b
+dengan **nol** halaman memakainya. Baris pelanggan kini bisa dimekarkan; panel alamat punya
+keadaan memuat, kosong **ber-aksi**, dan galat; arsip lewat **modal danger**, bukan
+`window.confirm`. 10 penjaga baru, suite **549 lulus**.
+
+**REGRESI YANG SAYA PERKENALKAN, DITEMUKAN SEBELUM COMMIT**: `/customers` mulai menggulir
+menyamping di keenam lebar. **Tiga dugaan pertama saya salah** (fixture, `TableExpandHeader`,
+SCSS); penyebabnya kedua modal baru yang saya letakkan **di luar** blok `canManage` sementara
+modal yang sudah ada berada di dalamnya. Dipindahkan → bersih lagi. Mekanisme CSS persisnya
+**belum ditelusuri** — itu disebutkan apa adanya di changelog.
+
 ## What Is Next
 Jawaban atas sepuluh keputusan. Bila DEC-S01 membuka gerbang, urutan koreksi ada di
 `SALES_CRM_CORRECTION_PLAN.md` (K-01 lebih dulu).
@@ -375,6 +390,8 @@ B2 — Route & Navigation Inventory.
 | 2026-08-29 | Fase B, C, D, E ditandai DONE + G1 | 21 dokumen audit selesai dengan bukti terukur | 8% → **64%** | — |
 | 2026-08-29 | Fase F ditandai BLOCKED | Aturan bisnis butuh jawaban DEC-S02..S08 | Nol | DEC-S02..S08 |
 | 2026-08-29 | DEC-S09 ditambahkan | Alamat kirim lengkap di server tanpa layar (SC-05) | Nol | DEC-S09 |
+| 2026-08-29 | **DEC-S01 menutup BL-01** | Baseline bisnis baru: banyak order paralel eksplisit diizinkan; gerbang "satu order tuntas" **dicabut** | H tidak lagi terhalang seluruhnya | DEC-S01 |
+| 2026-08-29 | WS-01, WS-03, WS-04, WS-05 selesai | Dua koreksi + satu pelengkapan, seluruhnya teruji | Nol — H1/H2 belum tuntas | — |
 
 ---
 
@@ -397,9 +414,10 @@ B2 — Route & Navigation Inventory.
 
 | ID | Blocker | Phase | Impact | Owner | Since | Status | Resolution |
 |---|---|---|---|---|---|---|---|
-| **BL-01** | SALES-1..5 `ditunda_sadar`; pemicu "satu order tuntas" terukur belum terpenuhi (0 SO, 0 pengiriman) | H, I, J | **28%** tertahan | Product Owner | 2026-08-28 | **OPEN** | DEC-S01 |
+| ~~BL-01~~ | SALES-1..5 `ditunda_sadar` | H, I, J | — | Product Owner | 2026-08-28 | **DITUTUP 29 Agu** | **DEC-S01** mencabutnya: banyak order paralel eksplisit diizinkan |
 | **BL-02** | WS-02 Sales Order: tiga dari empat status tidak bisa dicapai, tetapi KAPAN status berubah adalah aturan bisnis — dan sebagian mencerminkan proses domain lain | WS-02 | 1 koreksi P1 | Product Owner + Architecture Guardian | 2026-08-29 | **OPEN** | DEC-S11 |
 | **BL-03** | Tombol "Batal" modal bertahap terpotong di 360px; komponen BERSAMA, 4 halaman konsumen | WS-03 | 4 halaman | Claude Code | 2026-08-29 | **OPEN** | audit konsumen dulu (§32) |
+| **BL-04** | `customers.shipping_address` (kolom tunggal) hidup berdampingan dengan tabel daftar `customer_delivery_addresses`. Mana sumber kebenaran saat pengiriman dibuat **belum diverifikasi**; mencabut kolom = migrasi menyentuh data | WS-05 | 1 entitas | Architecture Guardian | 2026-08-29 | **OPEN** | **ARCHITECTURE DECISION REQUIRED** |
 
 ---
 

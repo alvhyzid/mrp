@@ -713,7 +713,7 @@ export default function ItemsPage() {
   // berjejer rapat di daftar panjang terlalu mudah tertekan pada baris yang salah.
   const renderItemDetail = (item: Item) => (
     <div className="item-detail">
-      <h4 className="item-detail__judul">Detail “{item.name}”</h4>
+      <h2 className="item-detail__judul">Detail “{item.name}”</h2>
       <dl className="item-detail__daftar">
         {detailRows(item).map((baris) => (
           <div key={baris.label} className="item-detail__baris">
@@ -754,7 +754,7 @@ export default function ItemsPage() {
 
   const renderItemDocuments = (item: Item) => (
     <section className="item-bagian">
-      <h4 className="item-bagian__judul">Dokumen</h4>
+      <h3 className="item-bagian__judul">Dokumen</h3>
       {/* Ditulis eksplisit di layar, bukan cuma diketahui di kode: banyak bahan memang tidak
           punya dokumen sendiri, dan tanpa kalimat ini orang akan mengira ada yang kurang. */}
       <p className="item-bagian__pengantar">
@@ -894,7 +894,7 @@ export default function ItemsPage() {
 
   const renderItemSuppliers = (item: Item) => (
     <section className="item-bagian">
-      <h4 className="item-bagian__judul">Supplier yang memasok “{item.name}”</h4>
+      <h3 className="item-bagian__judul">Supplier yang memasok “{item.name}”</h3>
       {itemPricesLoading ? (
         <p className="item-teks--redup">Memuat…</p>
       ) : itemPrices.length === 0 ? (

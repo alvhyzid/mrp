@@ -674,7 +674,7 @@ export default function PurchasingPage() {
       </StructuredListWrapper>
 
       <div className="beli-detail__kepala">
-        <h4 className="halaman__subjudul halaman__subjudul--rapat">Bahan yang dipasok</h4>
+        <h3 className="halaman__subjudul halaman__subjudul--rapat">Bahan yang dipasok</h3>
         {canManage && !supplier.archived_at ? (
           <Button kind="tertiary" size="sm" renderIcon={Add} onClick={startAddPrice}>
             Tambah bahan
@@ -1364,7 +1364,7 @@ export default function PurchasingPage() {
 
             <div className="beli-baris">
               <div className="beli-baris__kepala">
-                <h4 className="halaman__subjudul halaman__subjudul--rapat">Baris item</h4>
+                <h3 className="halaman__subjudul halaman__subjudul--rapat">Baris item</h3>
                 <Button kind="tertiary" size="sm" renderIcon={Add} onClick={addPoLine}>
                   Tambah baris
                 </Button>

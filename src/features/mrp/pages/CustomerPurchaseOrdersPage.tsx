@@ -579,7 +579,7 @@ export default function CustomerPurchaseOrdersPage() {
           </TableBody>
         </Table>
 
-        <h3 className="halaman__subjudul halaman__subjudul--rapat">Persetujuan tiga departemen</h3>
+        <h2 className="halaman__subjudul halaman__subjudul--rapat">Persetujuan tiga departemen</h2>
         <div className="po-approval">
           {po.approvals.map((approval) => {
             const bisaBertindak = canApproveDepartment(role, approval.department) && approval.status === 'pending';

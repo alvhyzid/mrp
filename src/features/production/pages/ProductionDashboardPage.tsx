@@ -673,7 +673,7 @@ export default function ProductionDashboardPage() {
         {selectedBatchId ? (
           <div className="produksi-output">
             <div className="produksi-output__kepala">
-              <h4 className="halaman__subjudul halaman__subjudul--rapat">Catat hasil produksi</h4>
+              <h3 className="halaman__subjudul halaman__subjudul--rapat">Catat hasil produksi</h3>
               <Button kind="tertiary" size="sm" renderIcon={Add} onClick={addOutputLine}>
                 Tambah baris hasil
               </Button>

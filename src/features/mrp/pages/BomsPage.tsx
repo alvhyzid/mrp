@@ -572,9 +572,9 @@ export default function BomsPage() {
   const detailBom = (b: Bom) => (
     <div className="bom-detail">
       <div className="bom-detail__kepala">
-        <h3 className="halaman__subjudul halaman__subjudul--rapat">
+        <h2 className="halaman__subjudul halaman__subjudul--rapat">
           Komponen per ±{formatNumberId(Math.round(b.standard_yield_qty), 0)} {b.parent_item_base_uom ?? b.standard_yield_uom}
-        </h3>
+        </h2>
         <ProvenanceInfoButton
           label="Hasil standar per batch"
           envelope={{

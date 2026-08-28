@@ -599,7 +599,7 @@ export default function WorkOrdersPage() {
           />
         ) : null}
 
-        <h4 className="halaman__subjudul halaman__subjudul--rapat">Catat pemakaian bahan — per batch</h4>
+        <h2 className="halaman__subjudul halaman__subjudul--rapat">Catat pemakaian bahan — per batch</h2>
         <Dropdown
           id={`wo-batch-${wo.work_order_id}`}
           size="lg"
@@ -711,7 +711,7 @@ export default function WorkOrdersPage() {
           </>
         )}
 
-        <h4 className="halaman__subjudul halaman__subjudul--rapat">Catat jam kerja — per batch</h4>
+        <h2 className="halaman__subjudul halaman__subjudul--rapat">Catat jam kerja — per batch</h2>
         <p className="halaman__redup">
           Tim produksi berpindah tahap sepanjang hari — satu orang wajar dicatat berkali-kali di tahap atau batch berbeda pada hari yang sama.
         </p>
@@ -779,7 +779,7 @@ export default function WorkOrdersPage() {
           </div>
         )}
 
-        <h4 className="halaman__subjudul halaman__subjudul--rapat">Batch produksi</h4>
+        <h2 className="halaman__subjudul halaman__subjudul--rapat">Batch produksi</h2>
         {batchesForExpanded.length === 0 ? (
           <p className="halaman__redup">Belum ada batch untuk Work Order ini.</p>
         ) : (
@@ -810,7 +810,7 @@ export default function WorkOrdersPage() {
         )}
 
         <div className="wo-batch-baru">
-          <h4 className="halaman__subjudul halaman__subjudul--rapat">Buat batch baru</h4>
+          <h2 className="halaman__subjudul halaman__subjudul--rapat">Buat batch baru</h2>
           <div className="wo-batch-baru__kisi">
             <NumberInput
               id="wo-batch-qty"

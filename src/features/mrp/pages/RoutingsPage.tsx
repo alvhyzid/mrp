@@ -769,7 +769,7 @@ export default function RoutingsPage() {
 
               <div className="routing-tahap">
                 <div className="routing-tahap__kepala">
-                  <h2 className="halaman__subjudul halaman__subjudul--rapat">Tahap produksi</h2>
+                  <h3 className="halaman__subjudul halaman__subjudul--rapat">Tahap produksi</h3>
                   <Button kind="tertiary" size="sm" renderIcon={Add} onClick={addStep}>
                     Tambah tahap
                   </Button>

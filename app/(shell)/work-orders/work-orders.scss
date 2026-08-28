@@ -95,16 +95,35 @@
   }
 }
 
+// SATU KOLOM. cetakan-halaman-data.md §6e mengutip Carbon langsung: "form inputs and
+// other components expand the entire width of a modal", dan menyatakan membelah jadi dua
+// kolom DILARANG -- ia melewati ketiga langkah eskalasi (kurangi isi -> naik ukuran ->
+// halaman penuh) sekaligus, dan menghasilkan formulir yang sulit dipindai karena mata
+// harus melompat kiri-kanan alih-alih turun satu jalur.
+//
+// Versi sebelumnya memakai dua kolom mulai breakpoint `md`. Terukur di peramban: 1 kolom
+// di 360px, 2 kolom dari 672px ke atas -- termasuk di 1440px, tempat modalnya justru
+// MENYEMPIT ke 691px sehingga tiap kontrol hanya 321px.
+//
+// Breakpoint-nya dicabut sekaligus: dengan satu kolom, tidak ada lagi yang perlu diambil
+// dari lebar layar.
 .wo-form {
   display: grid;
   grid-template-columns: 1fr;
   gap: $spacing-05;
-
-  @include breakpoint('md') {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 .wo-form__lebar-penuh {
   grid-column: 1 / -1;
+}
+
+// Keadaan kosong: teks + jalan keluarnya, ditumpuk dan diberi jarak token supaya tombolnya
+// tidak menempel pada kalimatnya. Dipakai untuk KEDUA macam kosong -- yang berarti
+// "mulailah" dan yang berarti "longgarkan saringanmu".
+.wo-kosong {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: $spacing-03;
+  padding-block: $spacing-03;
 }

@@ -33,7 +33,7 @@ export async function createProductionBatch(request: NextRequest): Promise<ApiRe
       return { status: 400, body: { error: 'Work Order wajib dipilih.' } };
     }
     if (!plannedQty || plannedQty <= 0) {
-      return { status: 400, body: { error: 'Planned qty batch harus lebih besar dari 0.' } };
+      return { status: 400, body: { error: 'Jumlah rencana batch harus lebih besar dari 0.' } };
     }
 
     // planned_date: kapan batch ini SEHARUSNYA dikerjakan (dasar Dashboard

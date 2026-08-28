@@ -56,7 +56,7 @@ const statusWarnaTag: Record<string, 'blue' | 'purple' | 'gray' | 'green' | 'red
   cancelled: 'red'
 };
 
-const readinessLabels: Record<string, string> = { ready: 'Siap Mulai', blocked: 'Terhambat' };
+const readinessLabels: Record<string, string> = { ready: 'Siap mulai', blocked: 'Terhambat' };
 const readinessWarnaTag: Record<string, 'green' | 'red'> = { ready: 'green', blocked: 'red' };
 
 type WorkOrder = {
@@ -405,7 +405,7 @@ export default function WorkOrdersPage() {
     const plannedQty = Number(batchPlannedQty);
     if (!plannedQty || plannedQty <= 0) {
       setBatchFormStatus('error');
-      setBatchFormMessage('Planned qty batch harus lebih besar dari 0.');
+      setBatchFormMessage('Jumlah rencana batch harus lebih besar dari 0.');
       return;
     }
     setBatchFormStatus('pending');
@@ -1000,7 +1000,36 @@ export default function WorkOrdersPage() {
                     {rp.rows.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={kolom.length + 1}>
-                          {adaSaringan ? 'Tidak ada Work Order yang cocok dengan pencarian atau saringan.' : 'Belum ada Work Order.'}
+                          {/* DUA MACAM KOSONG, dan bedanya penting: yang satu berarti
+                              "mulailah", yang satu berarti "longgarkan saringanmu".
+                              Cetakan §4 mewajibkan masing-masing menawarkan jalan
+                              keluarnya sendiri -- teks mati membuat pengguna berhenti
+                              di layar yang tidak memberi tahu apa yang harus dilakukan. */}
+                          {adaSaringan ? (
+                            <div className="wo-kosong">
+                              <p>Tidak ada Work Order yang cocok dengan pencarian atau saringan.</p>
+                              <Button
+                                kind="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setCari('');
+                                  setSaringStatus('semua');
+                                  setHalaman(1);
+                                }}
+                              >
+                                Hapus saringan
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="wo-kosong">
+                              <p>Belum ada Work Order.</p>
+                              {canManage ? (
+                                <Button kind="ghost" size="sm" renderIcon={Add} onClick={() => setIsCreateModalOpen(true)}>
+                                  Buat Work Order pertama
+                                </Button>
+                              ) : null}
+                            </div>
+                          )}
                         </TableCell>
                       </TableRow>
                     ) : (

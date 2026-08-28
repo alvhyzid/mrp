@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
+import { petakanGalatServerPo, type FieldPo } from '../server/purchaseOrderValidation';
 import {
   Button,
   ComposedModal,
@@ -171,8 +172,8 @@ export default function PurchasingPage() {
   // GALAT TINGKAT FIELD (STANDAR VALIDASI FABRIX §2 golongan A). Sebuah DAFTAR, bukan satu
   // nilai, karena §5.1 mewajibkan seluruh isian yang salah ditandai sekaligus — berhenti di
   // yang pertama memaksa orang menyimpan berulang kali untuk menemukan sisanya.
-  const [poFieldError, setPoFieldError] = useState<{ field: string; line?: number; message: string }[]>([]);
-  const galatPo = (field: string, line?: number) =>
+  const [poFieldError, setPoFieldError] = useState<{ field: FieldPo; line?: number; message: string }[]>([]);
+  const galatPo = (field: FieldPo, line?: number) =>
     poFieldError.find((g) => g.field === field && g.line === line)?.message;
 
   // FASE 3 (Carbon "DataTable with toolbar") — form "Tambah Supplier"/"Buat PO"
@@ -517,6 +518,15 @@ export default function PurchasingPage() {
     }
   };
 
+  /// SATU PINTU untuk mengubah isian PO tingkat atas: ia menyimpan nilainya DAN mencabut
+  /// tandanya (§5.3). Dibuat sebagai pintu, bukan diulang di tiap onChange, karena mencabut
+  /// tanda adalah hal yang gampang lupa disalin — dan lupanya tidak terlihat: galatnya tetap
+  /// menyala di isian yang SUDAH benar, lalu orang belajar mengabaikannya.
+  const ubahFieldPo = (field: 'supplier_id' | 'production_plant_id' | 'expected_date', nilai: string) => {
+    setPoFieldError((prev) => prev.filter((g) => g.field !== field));
+    setPoForm((prev) => ({ ...prev, [field]: nilai }));
+  };
+
   const addPoLine = () => setPoForm((prev) => ({ ...prev, lines: [...prev.lines, { ...emptyFormLine }] }));
   const removePoLine = (index: number) => {
     // §5.4 — isian yang hilang dari layar wajib membawa galatnya pergi. Galat yatim tidak
@@ -535,7 +545,7 @@ export default function PurchasingPage() {
     setPoFieldError([]);
     // SEBELUMNYA satu kalimat gabungan "Supplier dan lokasi pabrik wajib dipilih." di dasar
     // modal. Sekarang KEDUANYA ditandai sekaligus di kontrolnya masing-masing (§5.1).
-    const kurang: { field: string; line?: number; message: string }[] = [];
+    const kurang: { field: FieldPo; line?: number; message: string }[] = [];
     if (!poForm.supplier_id) kurang.push({ field: 'supplier_id', message: 'Supplier wajib dipilih.' });
     if (!poForm.production_plant_id) kurang.push({ field: 'production_plant_id', message: 'Lokasi pabrik (alamat kirim) wajib dipilih.' });
     if (kurang.length > 0) {
@@ -548,13 +558,13 @@ export default function PurchasingPage() {
     // mengisi item lalu lupa jumlahnya, barisnya hilang dari PO, dan tidak ada yang memberi
     // tahu. Sekarang barisnya ditandai — akar yang sama dengan sisa kelas ini: sistem tahu
     // baris mana, penggunanya tidak diberi tahu.
-    const separuh = poForm.lines
+    const separuh: { field: FieldPo; line?: number; message: string }[] = poForm.lines
       .map((l, i) => ({ l, i }))
       .filter(({ l }) => (l.item_id && !l.qty_ordered) || (!l.item_id && l.qty_ordered))
       .map(({ l, i }) =>
         l.item_id
-          ? { field: 'qty_ordered', line: i, message: 'Jumlah pesan wajib diisi untuk baris ini.' }
-          : { field: 'item_id', line: i, message: 'Item wajib dipilih untuk baris ini.' }
+          ? { field: 'qty_ordered' as const, line: i, message: 'Jumlah pesan wajib diisi untuk baris ini.' }
+          : { field: 'item_id' as const, line: i, message: 'Item wajib dipilih untuk baris ini.' }
       );
     if (separuh.length > 0) {
       setPoFieldError(separuh);
@@ -584,16 +594,21 @@ export default function PurchasingPage() {
       })
     });
     if (!ok) {
-      // §3 — field dibaca sebagai DATA dari jawaban server, TIDAK ditebak dari kalimatnya.
-      // Ketiadaan `field` bermakna "bukan golongan A", dan galatnya tetap di tingkat formulir.
-      if (typeof body.field === 'string' && body.field) {
-        setPoFieldError([{ field: body.field, line: typeof body.line === 'number' ? body.line : undefined, message: String(body.error || 'Isian ini ditolak.') }]);
+      // T-V4 — pemetaannya lewat SATU pintu bersama, dan pintu itu memeriksa nama field
+      // terhadap daftar yang sama dipakai formulir ini. Halaman TIDAK boleh membaca
+      // `body.field` sendiri: nama yang salah ketik akan cocok dengan nol kontrol, notifikasi
+      // formulir ikut digerbang mati, dan galatnya HILANG tanpa satu pun test merah.
+      const terpetakan = petakanGalatServerPo(body as Record<string, unknown>, poForm.lines.length);
+      if (terpetakan.jenis === 'field') {
+        setPoFieldError([{ field: terpetakan.field, line: terpetakan.line, message: terpetakan.pesan }]);
         setPoFormStatus('idle');
         setPoFormMessage('');
         return;
       }
+      // Tidak bisa dipetakan -> NAIK ke tingkat formulir dengan kalimat ASLINYA. Galatnya
+      // tidak boleh hilang hanya karena pemetaannya gagal.
       setPoFormStatus('error');
-      setPoFormMessage(body.error || 'Gagal membuat PO.');
+      setPoFormMessage(terpetakan.pesan);
       return;
     }
     setPoFormStatus('success');
@@ -1390,7 +1405,7 @@ export default function PurchasingPage() {
                 items={suppliers.filter((s) => !s.archived_at)}
                 itemToString={(s: any) => s?.name ?? ''}
                 selectedItem={suppliers.find((s) => String(s.supplier_id) === poForm.supplier_id) ?? null}
-                onChange={({ selectedItem }: { selectedItem: any }) => setPoForm((prev) => ({ ...prev, supplier_id: selectedItem ? String(selectedItem.supplier_id) : '' }))}
+                onChange={({ selectedItem }: { selectedItem: any }) => ubahFieldPo('supplier_id', selectedItem ? String(selectedItem.supplier_id) : '')}
               />
               <Dropdown
                 id="po-lokasi"
@@ -1403,7 +1418,7 @@ export default function PurchasingPage() {
                 itemToString={(p: any) => p?.name ?? ''}
                 selectedItem={plants.find((p) => String(p.production_plant_id) === poForm.production_plant_id) ?? null}
                 onChange={({ selectedItem }: { selectedItem: any }) =>
-                  setPoForm((prev) => ({ ...prev, production_plant_id: selectedItem ? String(selectedItem.production_plant_id) : '' }))
+                  ubahFieldPo('production_plant_id', selectedItem ? String(selectedItem.production_plant_id) : '')
                 }
               />
               <TextInput

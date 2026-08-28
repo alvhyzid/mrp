@@ -1,3 +1,8 @@
+> **DOKUMEN INI DIGANTIKAN.** Nomor task yang benar adalah **`DS-24`**, bukan `DS-23`
+> (`DS-23` dicadangkan untuk F-01/F-11). Dan aritmetika di dalamnya keliru: yang benar
+> **5 false positive / 6 cacat**, bukan 7/4. Keduanya dikoreksi di
+> `FABRIX_HEADING_HIERARCHY_FINAL_REPORT.md` — baca itu sebagai keadaan sekarang.
+
 # DS-23 — HANDOFF: HIERARKI JUDUL LINTAS HALAMAN
 
 Laporan penuh: `FABRIX_DS23_HEADING_HIERARCHY_REMEDIATION_REPORT.md`

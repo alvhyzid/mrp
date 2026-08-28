@@ -153,6 +153,35 @@ describe('DS-23 — hierarki judul lintas halaman', () => {
     expect(gagal, `judul ganda yang benar-benar tampil bersamaan:\n${gagal.join('\n')}`).toEqual([]);
   });
 
+  // KOMPONEN CARBON YANG MEMAKU TINGKAT JUDULNYA -- diukur dari paket terpasang,
+  // 28 Agu 2026. Angka ini BUKAN pilihan kita dan tidak bisa ditimpa lewat properti:
+  //   FileUploader (labelTitle) -> as="h3"   (FileUploader.js:202)
+  //   Modal / ModalHeader       -> as="h2"   (sudah dijaga uji (c))
+  // FileUploaderButton memancarkan NOL judul, jadi ia sengaja TIDAK ikut disisir --
+  // memasukkannya akan menuduh ProfilePage dan ShipmentsPage tanpa sebab.
+  const TINGKAT_CARBON = 3;
+
+  it('(f) judul bawaan Carbon tidak boleh LEBIH TINGGI daripada judul yang membungkusnya', () => {
+    const gagal: string[] = [];
+    for (const berkas of HALAMAN) {
+      const s = tanpaKomentar(readFileSync(berkas, 'utf8'));
+      for (const m of s.matchAll(/<FileUploader[\s>]/g)) {
+        const potongan = s.slice(m.index, m.index + 400);
+        if (!/labelTitle\s*=/.test(potongan)) continue;
+        const sebelum = judulDi(s).filter((j) => j.indeks < m.index);
+        if (!sebelum.length) continue;
+        const induk = sebelum[sebelum.length - 1];
+        if (induk.tingkat > TINGKAT_CARBON) {
+          gagal.push(
+            `${berkas.replace(process.cwd() + '/', '')}: FileUploader memancarkan h${TINGKAT_CARBON}, ` +
+              `tetapi judul terdekat di atasnya h${induk.tingkat} — anak jadi LEBIH TINGGI daripada induknya`
+          );
+        }
+      }
+    }
+    expect(gagal, `pembalikan tingkat judul:\n${gagal.join('\n')}`).toEqual([]);
+  });
+
   it('(e) enam halaman yang diperbaiki DS-23 memakai tingkat yang sudah diverifikasi', () => {
     const HARAPAN: Record<string, number[]> = {
       'mrp/pages/BomsPage.tsx': [2, 3],

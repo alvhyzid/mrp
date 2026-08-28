@@ -226,6 +226,99 @@ dihasilkan basis data. **Nol fixture dibuat**, nol yang perlu dibersihkan. Basis
 mungkin tetap benar di tingkat formulir. **Penggolongan per pesan wajib dilakukan sebelum
 tiap modul disentuh**, dan itu sebabnya batch ini berhenti di satu pilot.
 
+## 14b. T-V4 — PENJAGA KONTRAK PEMETAAN FIELD
+
+### Masalah
+
+Pilot memperkenalkan kesepakatan **nama string** yang menyeberangi batas jaringan, dan batas
+itu tidak punya penjaga. Bentuk kegagalannya paling sulit ditemukan di seluruh kelas ini:
+nama salah ketik → nol kontrol cocok → **notifikasi formulir ikut digerbang mati** karena
+"sudah ada galat field" → **pengguna tidak melihat apa pun** → test tetap hijau.
+
+Diverifikasi langsung: sebelum T-V4, jawaban `{ error, field: 'quantitty' }` menghasilkan
+**nol pesan di layar**.
+
+### Akar
+
+`string` lolos TypeScript, dan jawaban server adalah data **runtime** yang tidak diperiksa
+siapa pun.
+
+### Kontrak sekarang — dua lapis
+
+| Lapis | Isi |
+|---|---|
+| **Kompilasi** | `FIELD_PO` (3 nama) + `FIELD_PO_BARIS` (3 nama) → tipe `FieldPo`; hasil validator dan pembangun `galatFieldPo()` memakainya |
+| **Runtime** | `petakanGalatServerPo(body, jumlahBaris)` — satu pintu; halaman dilarang membaca `body.field` |
+
+`line` = **indeks berbasis nol**, hanya bermakna untuk field baris.
+
+### Lubang lapis kompilasi yang ditemukan — dan ditutup
+
+> Mutasi pertama (`field: 'quantitty'` di validator) **berbunyi** di typecheck.
+> Mutasi kedua (`field: 'supplier'` di `createPurchaseOrder`) **TIDAK berbunyi sama sekali.**
+
+Sebabnya `ApiResult.body` bertipe `Record<string, unknown>`, jadi union-nya tidak berlaku di
+sana. **Ditemukan lewat menjalankan mutasi, bukan lewat membaca** — dan kalau tidak diuji, ia
+akan tercatat sebagai "sudah dijaga saat kompilasi" padahal separuhnya tidak.
+
+Ditutup dengan pembangun bertipe `galatFieldPo(error, field, line?)`; mutasi yang sama kini
+menghasilkan `TS2345`.
+
+### Kasus tidak sah → naik ke tingkat formulir dengan kalimat ASLINYA
+
+| Kasus | Hasil |
+|---|---|
+| `field` tidak dikenal (`does_not_exist`, `quantity`, `quantitty`, `''`, `SUPPLIER_ID`) | formulir |
+| Field baris, `line` di luar jangkauan (`2`, `7`, `-1`, `99` pada 2 baris) | formulir |
+| Field baris tanpa `line` sah (`undefined`, `null`, `'0'`, `1.5`, `NaN`) | formulir |
+| Tanpa `field` sama sekali | formulir |
+
+### Kasus sah → dipetakan
+
+| Kasus | Hasil |
+|---|---|
+| `supplier_id` tanpa `line` | ditandai di Dropdown supplier |
+| `qty_ordered` + `line: 0` dan `line: terakhir` | ditandai di baris itu |
+| Field non-baris **membawa** `line` | ditandai; `line` diabaikan (keputusan sadar, §4b) |
+
+### Uji
+
+**Sembilan penjaga baru** (total berkas ini **17**), MERAH lebih dulu (7 gagal karena
+fungsinya belum ada), HIJAU sesudah. Setiap lapis dibuktikan menggigit:
+
+| Mutasi | Yang berbunyi |
+|---|---|
+| nama salah ketik di validator | **typecheck** `TS2322` |
+| nama salah ketik di `createPurchaseOrder` | **typecheck** `TS2345` (setelah lubang ditutup) |
+| pemeriksaan nama runtime dicabut | uji (i) |
+| pemeriksaan jangkauan baris dicabut | uji (j) |
+| halaman membaca `body.field` sendiri | uji (o) |
+| pintu perubahan berhenti mencabut tanda | uji (p) |
+| server menyusun body mentah lagi | uji (q) |
+
+### Bukti peramban
+
+Delapan kasus di `/purchasing`, semuanya lewat jawaban yang disuntik — **nol baris tertulis**:
+
+| Kasus | Hasil terukur |
+|---|---|
+| **D** field tak dikenal | 0 tanda field · **1 notifikasi formulir dengan kalimat aslinya** |
+| **E** `line` di luar jangkauan | 0 tanda field · 1 notifikasi formulir |
+| **C** baris spesifik (`line: 1`) | ditandai di **`po-qty-1`** — baris kedua, bukan pertama |
+| **F** diperbaiki | tanda hilang, nol sisa |
+| **B** banyak field | **`po-supplier` dan `po-lokasi` ditandai bersamaan** |
+| **G** baris dihapus | nol tanda yatim |
+| **H** urutan baris diubah | **TIDAK ADA** kemampuannya di formulir ini — nol tombol pengubah urutan. Dilaporkan sebagai tidak berlaku, bukan sebagai lulus |
+
+**Enam lebar** pada kasus D (yang paling mungkin menyembunyikan galat): notifikasi tampil di
+keenamnya, **tidak menutupi tombol simpan**, nol gulir menyamping, nol elemen melewati tepi.
+
+### Aksesibilitas
+
+Tanda dan pesannya dipasang Carbon sendiri; **nol `aria-*` ditulis tangan**. Saat galat
+dicabut, elemen pesannya hilang bersama tautannya — diverifikasi pada kasus F (nol pesan
+tersisa di DOM).
+
 ## 15. TEMUAN TERTUNDA
 
 | Kode | Temuan | Urgensi jujur |
@@ -233,7 +326,7 @@ tiap modul disentuh**, dan itu sebabnya batch ini berhenti di satu pilot.
 | **T-V1** | `Dropdown`/`ComboBox` Carbon **tidak memancarkan `aria-invalid`** — pesannya dibacakan lewat `aria-describedby`, tetapi kontrolnya tidak ditandai invalid secara programatis. Menyentuh setiap Dropdown di aplikasi | **Penting** — tambalan sebagian melahirkan dua perilaku |
 | **T-V2** | Validator berhenti di galat **pertama**; §5.1 menuntut seluruhnya ditandai. Sisi klien sudah memenuhi (dua field sekaligus), sisi server belum | **Penting** |
 | **T-V3** | 58 modul server lain masih mengirim galat golongan A tanpa `field` | **Penting** — inti rollout |
-| **T-V4** | Pemetaan `field` server→formulir memakai kesepakatan **nama string**; belum ada penjaga yang memastikan nama yang dikirim benar-benar ada di formulir | **Bisa menunggu** — mulai menggigit begitu modul kedua ikut |
+| ~~**T-V4**~~ | **SELESAI** — kontrak dua lapis + satu pintu pemetaan; lihat §14b | — |
 | **T-V5** | Fokus tidak berpindah ke field yang ditolak (§5.7) | **Bisa menunggu** — butuh keputusan aksesibilitas |
 
 ## 16. LANGKAH BERIKUTNYA

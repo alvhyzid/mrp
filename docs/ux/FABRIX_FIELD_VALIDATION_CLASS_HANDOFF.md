@@ -62,15 +62,47 @@ Yang sekarang terjadi di layar:
 1. **Standar versi pertama saya salah soal Carbon**: ia menulis `NumberInput` memakai `aria-errormessage` bersama `TextInput`. Keliru — hanya `TextInput`/`PasswordInput`. Ada **tiga** mekanisme, bukan dua. Ditangkap dengan **menjalankan**, bukan membaca.
 2. **Dua penjaga saya sendiri menguji detail implementasi**, bukan perilaku (menuntut `setPoFieldError(null)` dan mencocokkan syarat render sebagai teks persis). Dilonggarkan sebelum dipakai.
 
+## T-V4 — PENJAGA KONTRAK PEMETAAN FIELD (**SELESAI**)
+
+**Yang dicegah**, dan ini bentuk kegagalan paling sulit ditemukan di kelas ini:
+
+> nama field salah ketik → nol kontrol cocok → notifikasi formulir **ikut digerbang mati** →
+> **pengguna tidak melihat apa pun** → test tetap hijau.
+
+Diverifikasi langsung: sebelum T-V4, jawaban `{ error, field: 'quantitty' }` menghasilkan
+**nol pesan di layar**. Sesudahnya, kalimat aslinya muncul sebagai notifikasi formulir.
+
+**Kontraknya dua lapis** — karena satu lapis tidak cukup:
+
+| Lapis | Isi |
+|---|---|
+| Kompilasi | enam nama field sebagai satu sumber → tipe `FieldPo`, dipakai validator **dan** pembangun jawaban |
+| Runtime | satu pintu `petakanGalatServerPo`; halaman **dilarang** membaca `body.field` sendiri |
+
+`line` = **indeks berbasis nol**. Tiga keadaan naik ke tingkat formulir dengan **kalimat
+aslinya**: nama tak dikenal · field baris tanpa `line` sah · `line` di luar jangkauan.
+
+**Lubang yang ditemukan lewat menjalankan, bukan membaca**: mutasi nama salah ketik di
+`createPurchaseOrder` **tidak berbunyi sama sekali** di typecheck, karena `ApiResult.body`
+bertipe `Record<string, unknown>`. Kalau tidak diuji, ia akan tercatat sebagai "dijaga saat
+kompilasi" padahal separuhnya tidak. Ditutup dengan pembangun bertipe.
+
+**Satu cacat lain ikut ditemukan dan diperbaiki**: kedua dropdown tingkat atas **tidak
+mencabut tandanya** saat diperbaiki — galat menyala di isian yang sudah benar. Keduanya kini
+lewat satu pintu.
+
 ## LANGKAH BERIKUTNYA — SATU REKOMENDASI
 
-**Tutup `T-V4` lebih dulu: penjaga yang memastikan nama `field` yang dikirim server benar-benar
-ada di formulirnya.** Alasannya urutan, bukan kerapian — pemetaan itu kesepakatan **nama
-string**, dan selama belum dijaga, modul kedua akan menyalinnya dengan nama yang salah ketik
-dan galatnya menghilang **tanpa satu pun test merah**. Itu bentuk kegagalan yang paling sulit
-ditemukan, dan biayanya paling kecil **sekarang**, saat pemakainya baru satu.
+**Modul kedua sekarang AMAN dimulai** — tetapi polanya belum bisa disalin mentah, dan bedanya
+penting:
 
-Sesudah itu baru modul kedua. Kandidat terbesar `customerDeliveryAddresses.ts` (9 golongan A).
+`FIELD_PO`/`FIELD_PO_BARIS` dan `petakanGalatServerPo` masih **milik PO**, bukan milik semua
+formulir. Modul kedua butuh daftar field**nya sendiri**, dan pintu pemetaannya perlu
+digeneralisasi (parameter daftar field + jumlah baris). Itu pekerjaan kecil, tapi **wajib
+dilakukan saat modul kedua**, bukan sesudah modul ketiga — menyalin pintu ini apa adanya akan
+melahirkan dua pintu yang menyimpang, kelas yang sama yang sedang diberantas.
+
+Kandidat terbesar: `customerDeliveryAddresses.ts` (9 galat golongan A).
 
 **JANGAN** menyapu 58 modul sekaligus: penggolongan per pesan wajib dilakukan dulu, dan
 sebagian modul (mis. `deleteOrArchiveCustomer`) dipicu **tombol**, bukan formulir — galatnya

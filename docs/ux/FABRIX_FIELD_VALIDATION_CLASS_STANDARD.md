@@ -101,6 +101,76 @@ Ketujuh kontrol yang dipakai repo ini (`TextInput`, `NumberInput`, `TextArea`, `
 `Dropdown`, `ComboBox`, `DatePickerInput`) seluruhnya menerima `invalid` + `invalidText`.
 **Tidak ada yang perlu dibungkus.**
 
+## 4b. T-V4 — KONTRAK PEMETAAN FIELD DI BATAS SERVER → KLIEN
+
+**`field` adalah nama yang menyeberangi batas jaringan. Batas harus punya penjaga.**
+
+### Masalahnya
+
+`string` lolos TypeScript, tetapi jawaban server adalah data **runtime**. Sebuah nama yang
+salah ketik menghasilkan bentuk kegagalan paling sulit ditemukan di seluruh kelas ini:
+
+> server mengirim galat → nol kontrol cocok → notifikasi formulir **ikut digerbang mati**
+> karena "sudah ada galat field" → **pengguna tidak melihat apa pun** → test tetap hijau.
+
+Galatnya bukan salah tempat. Galatnya **hilang**.
+
+### Kontraknya — dua lapis, karena satu lapis tidak cukup
+
+**Lapis 1, saat kompilasi.** Daftar nama sebagai satu sumber:
+
+```ts
+export const FIELD_PO       = ['supplier_id', 'production_plant_id', 'expected_date'] as const;
+export const FIELD_PO_BARIS = ['item_id', 'qty_ordered', 'unit_price'] as const;
+export type  FieldPo        = (typeof FIELD_PO)[number] | (typeof FIELD_PO_BARIS)[number];
+```
+
+Namanya **sama persis** dengan kunci state formulir dan kunci `FormLine` — itulah yang
+membuat pemetaannya bisa dijamin, bukan sekadar diharapkan.
+
+> **LAPIS KOMPILASI PUNYA LUBANG YANG HARUS DITUTUP SENGAJA, dan ini ditemukan lewat
+> menjalankan mutasi — bukan lewat membaca.** Tipe hasil validator tidak berlaku di dalam
+> `ApiResult.body`, yang bertipe `Record<string, unknown>`: menulis `field: 'supplier'`
+> langsung di sana **lolos typecheck sepenuhnya**. Karena itu galat golongan A **wajib**
+> disusun lewat pembangun bertipe (`galatFieldPo(error, field, line?)`), bukan objek mentah.
+
+**Lapis 2, saat berjalan.** Satu pintu memetakan jawaban server:
+
+```ts
+petakanGalatServerPo(body, jumlahBaris): { jenis: 'field'; … } | { jenis: 'formulir'; pesan }
+```
+
+Halaman **tidak boleh** membaca `body.field` sendiri.
+
+### Semantik `line`
+
+**Indeks baris berbasis NOL**, mengacu ke urutan baris **saat jawaban diterima**. Ia hanya
+bermakna untuk field di `FIELD_PO_BARIS`.
+
+### Tiga keadaan yang NAIK ke tingkat formulir
+
+Ketiganya berarti *"pemetaannya tidak bisa dipercaya"*, dan **menandai kontrol yang salah
+lebih buruk daripada menampilkan kalimatnya apa adanya**:
+
+1. `field` tidak ada di daftar — salah ketik, nama lama, atau modul lain.
+2. Field baris **tanpa** `line` yang sah — barisnya tidak bisa ditebak.
+3. `line` di luar jangkauan baris yang sedang tampil — termasuk setelah baris dihapus.
+
+**Kalimat aslinya SELALU dipertahankan.** Galat tidak boleh hilang hanya karena pemetaannya
+gagal, dan tidak ada pesan baru yang dikarang.
+
+### Satu keadaan yang SENGAJA tidak dinaikkan
+
+Field **non-baris** yang membawa `line`. Pemetaannya tidak gagal — `supplier_id` tidak
+ambigu — dan yang tidak bermakna hanyalah `line`-nya. Menaikkannya justru **memindahkan galat
+yang sebenarnya bisa ditunjuk**. Ditulis di sini supaya tidak dikira kelalaian.
+
+### Menghapus tanda
+
+Isian tingkat atas dan isian baris keduanya lewat **satu pintu** yang menyimpan nilai **dan**
+mencabut tandanya. Menghapus sebuah baris membuang **seluruh** tanda, karena indeks baris
+bergeser dan tanda yang tertinggal akan menunjuk baris yang salah.
+
 ## 5. ATURAN TURUNAN
 
 **5.1 Banyak field salah sekaligus.** Tandai **seluruhnya**, jangan berhenti di yang pertama.

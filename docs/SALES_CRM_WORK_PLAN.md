@@ -15,15 +15,24 @@
 
 ## Current Phase
 
-**PHASE F — TO-BE / BUSINESS RULE / ACCEPTANCE DEFINITION**
+**PHASE H — IMPLEMENTATION (H1 Core Commercial Corrections)** · mode paralel
+
+## Current Workstream
+
+**WS-01 Customer PO** ✅ koreksi validasi selesai · **WS-03 Sales UX** ✅ ikut selesai ·
+**WS-04 Test** ✅ 11 penjaga baru · **WS-02 Sales Order** menunggu keputusan
 
 ## Current Step
 
-**F1 — Sales/CRM TO-BE Capability Model** (menunggu jawaban DEC-S02..S08)
+WS-02 — koreksi siklus hidup Sales Order (**butuh keputusan**, lihat DEC-S11)
 
 ## Status
 
-BLOCKED — menunggu keputusan pemilik produk
+IN PROGRESS — sebagian workstream berjalan, sebagian terhalang
+
+> **KEMAJUAN TETAP 64%, DAN ITU DISENGAJA.** H1 belum memenuhi kriteria terima: koreksi
+> validasi PO klien selesai, tetapi koreksi komersial lain di H1 belum. Aturan §33 perintah:
+> jangan menaikkan angka hanya karena kode sudah ditulis.
 
 ## Completed
 
@@ -99,7 +108,7 @@ Hierarki dokumen yang berlaku, dari yang paling menang:
 | **E** | Entity / State / Boundary / UX Reconciliation | **12%** | **12%** | **DONE** |
 | **F** | TO-BE / Business Rule / Acceptance Definition | 10% | 0% | **BLOCKED** — DEC-S02..S08 |
 | **G** | Architecture Gate & Technical Design | 10% | **2%** | IN PROGRESS (G1 selesai) |
-| **H** | Implementation / Correction / Completion | 13% | 0% | **BLOCKED — BL-01** |
+| **H** | Implementation / Correction / Completion | 13% | 0% | **IN PROGRESS** — H1 sebagian; SALES-1..5 tetap BLOCKED (BL-01) |
 | **I** | Testing / UX Validation / E2E | 8% | 0% | NOT STARTED |
 | **J** | Final Reconciliation & Release Certification | 7% | 0% | NOT STARTED |
 | | **TOTAL** | **100%** | **64%** | |
@@ -316,7 +325,16 @@ data**, dan **nol** implementasi perlu diganti. Yang salah: Sales Order punya em
 dan **hanya satu yang bisa dicapai**.
 
 ## What Is Being Worked On
-Tidak ada — Fase F menunggu jawaban DEC-S02..S08.
+**WS-01 + WS-03 + WS-04 SELESAI** (29 Agu 2026): galat PO klien kini menempel di isian yang
+salah, di modal bertahap empat langkah. Tiga berkas berubah, 11 penjaga baru, enam mutasi
+dibuktikan menggigit, bukti peramban di enam lebar. Suite 528 → **539 lulus, nol gagal**.
+
+**Satu cacat saya perkenalkan sendiri lalu perbaiki**: menandai isian di langkah yang sedang
+tersembunyi membuat galatnya hilang sama sekali. Ditemukan lewat menjalankan, dikunci uji (k).
+
+**Satu UX FINDING dicatat, tidak diperbaiki**: tombol "Batal" di kaki modal bertahap terpotong
+tepi kiri pada 360px (terukur −63px). Komponen bersama, 4 halaman konsumen — §32 mewajibkan
+audit konsumen lebih dulu.
 
 ## What Is Next
 Jawaban atas sepuluh keputusan. Bila DEC-S01 membuka gerbang, urutan koreksi ada di
@@ -380,6 +398,8 @@ B2 — Route & Navigation Inventory.
 | ID | Blocker | Phase | Impact | Owner | Since | Status | Resolution |
 |---|---|---|---|---|---|---|---|
 | **BL-01** | SALES-1..5 `ditunda_sadar`; pemicu "satu order tuntas" terukur belum terpenuhi (0 SO, 0 pengiriman) | H, I, J | **28%** tertahan | Product Owner | 2026-08-28 | **OPEN** | DEC-S01 |
+| **BL-02** | WS-02 Sales Order: tiga dari empat status tidak bisa dicapai, tetapi KAPAN status berubah adalah aturan bisnis — dan sebagian mencerminkan proses domain lain | WS-02 | 1 koreksi P1 | Product Owner + Architecture Guardian | 2026-08-29 | **OPEN** | DEC-S11 |
+| **BL-03** | Tombol "Batal" modal bertahap terpotong di 360px; komponen BERSAMA, 4 halaman konsumen | WS-03 | 4 halaman | Claude Code | 2026-08-29 | **OPEN** | audit konsumen dulu (§32) |
 
 ---
 

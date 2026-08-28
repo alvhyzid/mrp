@@ -91,18 +91,44 @@ kompilasi" padahal separuhnya tidak. Ditutup dengan pembangun bertipe.
 mencabut tandanya** saat diperbaiki — galat menyala di isian yang sudah benar. Keduanya kini
 lewat satu pintu.
 
+## T-V5 — KONTRAK BERSAMA, PILOT #2 (**SELESAI**)
+
+**Kandidat yang Anda tunjuk tidak bisa dipakai, dan itu temuan — bukan hambatan yang saya
+akali.** `customerDeliveryAddresses.ts` punya **nol pemanggil UI**: diverifikasi lewat
+pencarian di seluruh berkas TSX, lewat sensus route yatim DS-25, dan lewat komentar modul itu
+sendiri. Tanpa layar, seluruh bukti peramban dan aksesibilitas — yaitu inti misi batch ini —
+tidak bisa dijalankan. `recordOpeningBalance.ts` bernasib sama.
+
+**Pengganti dipilih dengan pengukuran: `recordStockAdjustment` di `/warehouse`** — dan justru
+karena ia **berbeda** dari pilot pertama: bukan modal, **nol baris berulang**, dan punya
+**field bersyarat**. Kalau satu kontrak melayani dua bentuk berbeda tanpa cabang khusus, ia
+terbukti sebagai pola.
+
+**Hasilnya: terbukti.** `src/lib/kontrakGalatField.ts` melayani keduanya; modul hanya
+menyumbang daftar nama. **Pilot #1 tetap 17/17 hijau tanpa satu uji pun disunting** meski
+mekanismenya dipindahkan ke pabrik bersama.
+
+**Golongan A modul ini bertambah 4 → 6**, dan itu diukur bukan diduga: daftar lot yang
+ditawarkan berisi status `available` **dan** `expired`, jadi pengguna memang bisa memilih lot
+yang akan ditolak — dan bisa memperbaikinya dengan memilih lot lain.
+
 ## LANGKAH BERIKUTNYA — SATU REKOMENDASI
 
-**Modul kedua sekarang AMAN dimulai** — tetapi polanya belum bisa disalin mentah, dan bedanya
-penting:
+**Polanya sekarang terbukti untuk dua bentuk formulir, dan rollout berikutnya boleh memakai
+kontrak yang sama.** Yang saya sarankan BUKAN modul ketiga, melainkan **memisahkan dua kelas
+pekerjaan yang selama ini tercampur di daftar 58 modul**:
 
-`FIELD_PO`/`FIELD_PO_BARIS` dan `petakanGalatServerPo` masih **milik PO**, bukan milik semua
-formulir. Modul kedua butuh daftar field**nya sendiri**, dan pintu pemetaannya perlu
-digeneralisasi (parameter daftar field + jumlah baris). Itu pekerjaan kecil, tapi **wajib
-dilakukan saat modul kedua**, bukan sesudah modul ketiga — menyalin pintu ini apa adanya akan
-melahirkan dua pintu yang menyimpang, kelas yang sama yang sedang diberantas.
+1. **Modul yang punya layar** — ikut pola ini, satu per satu, dengan penggolongan A/B/C per
+   pesan. Kandidat terukur berikutnya: `recordWorkOrderStepProgress` (4 golongan A, dipakai
+   dua halaman), lalu `createProductionBatch` (3, tiga halaman).
+2. **Modul yang TIDAK punya layar sama sekali** — `customerDeliveryAddresses` dan
+   `recordOpeningBalance` sudah terbukti begitu, dan mungkin ada lagi. Untuk modul ini,
+   memasang kontrak field **tidak menghasilkan apa pun yang bisa dilihat pengguna**; yang
+   dibutuhkan lebih dulu adalah layarnya.
 
-Kandidat terbesar: `customerDeliveryAddresses.ts` (9 galat golongan A).
+**Sensus mana dari 59 modul yang benar-benar punya layar belum pernah dilakukan** — dan tanpa
+itu, rollout akan mengerjakan modul yang hasilnya tidak bisa diverifikasi siapa pun. Itu
+langkah berikutnya yang paling murah dan paling menentukan.
 
 **JANGAN** menyapu 58 modul sekaligus: penggolongan per pesan wajib dilakukan dulu, dan
 sebagian modul (mis. `deleteOrArchiveCustomer`) dipicu **tombol**, bukan formulir — galatnya

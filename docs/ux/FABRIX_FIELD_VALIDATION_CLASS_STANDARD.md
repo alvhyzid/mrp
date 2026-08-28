@@ -171,6 +171,45 @@ Isian tingkat atas dan isian baris keduanya lewat **satu pintu** yang menyimpan 
 mencabut tandanya. Menghapus sebuah baris membuang **seluruh** tanda, karena indeks baris
 bergeser dan tanda yang tertinggal akan menunjuk baris yang salah.
 
+## 4c. KONTRAK BERSAMA — SATU MEKANISME, BANYAK MODUL (T-V5)
+
+**Mekanismenya hidup di `src/lib/kontrakGalatField.ts`. Modul hanya menyumbang DAFTAR NAMA.**
+
+```ts
+const kontrak = buatKontrakGalatField(FIELD_ATAS, FIELD_BARIS);
+export const galatFieldX  = kontrak.galatField;   // server menyusun jawaban
+export const petakanGalatX = kontrak.petakan;     // halaman memetakan jawaban
+```
+
+**Modul tanpa baris berulang mengirim daftar baris KOSONG** — dan tidak menulis perlakuan
+khusus apa pun. Kontraklah yang menolak `line` mana pun. Itu ujinya: bila sebuah modul perlu
+menambah cabang sendiri, kontraknya belum terbukti.
+
+### Yang WAJIB bersama
+
+Tipe hasil · pemeta runtime · pembangun jawaban bertipe · keempat aturan keputusan
+(nama tak dikenal, field baris tanpa `line` sah, `line` di luar jangkauan, field non-baris
+membawa `line`).
+
+### Yang WAJIB tetap milik modul
+
+Registri nama · kalimat pesan · penggolongan A/B/C · pengikatan ke kontrol · aturan pencabutan
+bersyarat. Ketiganya yang terakhir bergantung pada **bentuk formulir**, dan memaksakannya jadi
+satu hanya menambah cabang.
+
+### Aturan tambahan yang lahir dari pilot kedua
+
+**Registri WAJIB mencerminkan kontrol yang benar-benar ada di layar.** Nama yang ada di
+registri tetapi tidak punya kontrol akan lolos pemeriksaan runtime lalu ditandai pada sesuatu
+yang tidak ada — dan galatnya hilang persis seperti kalau namanya salah ketik. Ini kelas
+tersendiri, dan dijaga oleh uji yang mencocokkan setiap nama registri dengan pengikatannya di
+halaman.
+
+**Field BERSYARAT wajib mencabut tandanya saat syaratnya berubah.** Contohnya catatan yang
+hanya wajib untuk alasan tertentu: begitu alasannya diganti, kewajibannya lenyap dan tandanya
+harus ikut lenyap — kalau tidak, ia menyala pada isian yang tidak bisa diperbaiki dengan cara
+apa pun.
+
 ## 5. ATURAN TURUNAN
 
 **5.1 Banyak field salah sekaligus.** Tandai **seluruhnya**, jangan berhenti di yang pertama.

@@ -319,6 +319,142 @@ Tanda dan pesannya dipasang Carbon sendiri; **nol `aria-*` ditulis tangan**. Saa
 dicabut, elemen pesannya hilang bersama tautannya — diverifikasi pada kasus F (nol pesan
 tersisa di DOM).
 
+## 14c. T-V5 — KONTRAK BERSAMA, PILOT #2
+
+### PEMBLOKIR PADA KANDIDAT YANG DITUNJUK — dilaporkan, bukan diakali
+
+Brief menunjuk **`customerDeliveryAddresses.ts`**. Audit Phase 0 menemukan modul itu
+**tidak bisa dipakai sebagai pilot**, dan sebabnya menentukan:
+
+> **Nol pemanggil UI.** Diverifikasi tiga cara: pencarian di seluruh berkas TSX
+> (`0` kecocokan untuk `/api/customer-delivery-addresses`), sensus route yatim DS-25 yang
+> lebih dulu menandainya, dan **komentar modul itu sendiri**: *"LAPISAN DATA & SERVER SAJA —
+> layarnya MENUNGGU cetakan UX …, belum ada halaman yang memanggil fungsi-fungsi ini."*
+
+Tanpa layar, Phase 4 (UI), Phase 5 (peramban, enam lebar), dan Phase 6 (aksesibilitas)
+**tidak bisa dijalankan sama sekali** — dan misi batch ini justru membuktikan bahwa galat
+**sampai ke kontrol yang dilihat pengguna**. Sembilan galatnya seluruhnya masuk kategori
+*"field tanpa kontrol UI"*, yaitu kasus D di Phase 1 yang justru harus **gagal**.
+
+`recordOpeningBalance.ts` (4 golongan A) ditemukan bermasalah sama: **nol pemanggil UI**.
+
+### Pengganti, dipilih dengan pengukuran
+
+| Modul | Golongan A | Pemakai UI | Modal? | Baris berulang? |
+|---|---|---|---|---|
+| `customerDeliveryAddresses` | 5 | **NOL** | — | — |
+| `recordOpeningBalance` | 4 | **NOL** | — | — |
+| **`recordStockAdjustment`** | **4→6** | `WarehouseDashboardPage` | **tidak** | **tidak** |
+| `recordWorkOrderStepProgress` | 4 | 2 halaman | ya | ya |
+| `createProductionBatch` | 3 | 3 halaman | ya | ya |
+
+**`recordStockAdjustment` dipilih justru karena BERBEDA dari pilot pertama**, bukan karena
+mirip: bukan modal, **nol baris berulang**, dan punya **field bersyarat** (`notes` hanya wajib
+saat alasannya "Lainnya"). Kalau satu kontrak melayani dua bentuk yang berbeda tanpa cabang
+khusus, ia terbukti sebagai pola. Kalau butuh cabang khusus, ia belum terbukti.
+
+### Golongan A bertambah 4 → 6, dan ini diverifikasi bukan diduga
+
+Dua pesan yang tampak "keadaan bisnis" ternyata **golongan A**:
+
+- *"Lot tidak ditemukan di perusahaan Anda."*
+- *"Lot ini berstatus tidak tersedia (bukan available) — tidak bisa disesuaikan."*
+
+Sebabnya diukur di `listLots.ts:47`: daftar lot yang ditawarkan berisi status **`available`
+DAN `expired`**. Jadi daftar pilihan **memang memuat lot yang akan ditolak**, dan penggunanya
+bisa memperbaikinya dengan memilih lot lain — persis definisi golongan A.
+
+### Abstraksi yang dipilih: **pabrik kontrak**, bukan kelas dasar dan bukan salinan
+
+`src/lib/kontrakGalatField.ts` — satu fungsi `buatKontrakGalatField(atas, baris)` yang
+mengembalikan dua fungsi bertipe: `galatField()` dan `petakan()`.
+
+| Kriteria | Hasil |
+|---|---|
+| Aman saat kompilasi | ya — nama di luar registri ditolak `TS2345` |
+| Aman saat berjalan | ya — nama tak dikenal dan `line` tak sah naik ke tingkat formulir |
+| Butuh `any` | **nol** |
+| Butuh type assertion | **nol** di kode produksi |
+| Kerangka baru | tidak — satu fungsi, dua tipe, ±40 baris efektif |
+
+**Alternatif yang ditolak, beserta alasannya:**
+
+- **Dua implementasi kecil terpisah** — persis kelas "dua jalur hidup" yang sedang diberantas: perbaikan diterapkan di satu salinan, salinan kedua tidak ikut, dan tidak ada yang mengeluh sampai salah satunya meleset.
+- **Satu registri global berisi semua nama field seluruh modul** — nama akan bertabrakan antar modul (`notes` ada di banyak formulir dengan arti berbeda), dan galat satu modul bisa "dikenali" oleh registri modul lain.
+- **Skema runtime (Zod dsb.)** — menambah kebergantungan untuk memeriksa enam nama string; ongkosnya lebih besar daripada masalahnya.
+
+### Yang SENGAJA tidak digeneralisasi
+
+Registri nama, kalimat pesan, penentuan golongan A/B/C, dan pengikatan ke kontrol tetap
+**milik modul masing-masing**. Menggeneralisasikannya berarti kontrak harus tahu ada modul
+tertentu — dan penjaga (i) menolak itu secara eksplisit.
+
+### Uji
+
+**Dua belas penjaga baru** (`tests/kontrak_galat_field_bersama.test.ts`), MERAH lebih dulu
+(modulnya belum ada), HIJAU sesudah. Enam mutasi dibuktikan menggigit:
+
+| Mutasi | Yang berbunyi |
+|---|---|
+| registri memuat nama tanpa kontrol di layar | (d) |
+| kontrak bersama diberi cabang khusus modul | (i) |
+| modul menyalin logika pemetaannya sendiri | (a) (g) (j) |
+| pencabutan bersyarat dicabut | (l) |
+| gerbang notifikasi dicabut | (f) |
+
+> Satu mutasi saya **tidak sah** dan itu dicatat: cabang khusus disisipkan sebagai
+> **komentar**, dan penjaga memang membuang komentar sebelum menyisir. Diulang sebagai kode
+> sungguhan, dan barulah ia berbunyi.
+
+**Pilot #1 tetap 17/17 hijau tanpa satu uji pun disunting** meski mekanismenya dipindahkan ke
+pabrik bersama — itulah bukti bahwa pemindahannya tidak mengubah perilaku.
+
+### Bukti peramban — delapan kasus, enam lebar
+
+| Kasus | Hasil terukur |
+|---|---|
+| Banyak galat field | **tiga** ditandai bersamaan (`gudang-lot`, `gudang-delta`, `gudang-alasan`), nol notifikasi |
+| Diperbaiki | seluruh tanda hilang |
+| **Field bersyarat** | "Lainnya" tanpa catatan → ditandai di `gudang-catatan` |
+| **Alasan diganti** | tanda pada catatan **lenyap** — kewajibannya hilang, tandanya ikut |
+| Galat field dari server | ditandai di `gudang-lot` |
+| **Field tak dikenal** | 0 tanda · **1 notifikasi dengan kalimat aslinya** |
+| Galat bisnis | notifikasi, nol tanda |
+| Berhasil | notifikasi berhasil, tanda bersih |
+
+**Enam lebar** (360–1920): tiga pesan tampil di keenamnya, **nol terpotong**, nol gulir
+menyamping, nol elemen melewati tepi.
+
+**Field tanpa kontrol UI** tidak bisa diuji di peramban — registri dan layar kini cocok. Ia
+dijaga secara statis oleh uji (d), dan itu disebut apa adanya, bukan diklaim sebagai lulus.
+
+### Aksesibilitas
+
+`gudang-delta` (NumberInput) dan `gudang-catatan` (TextInput): `aria-invalid="true"` +
+tautan ke id pesannya. Dropdown tidak memancarkan `aria-invalid` — **keterbatasan Carbon yang
+sudah tercatat sebagai T-V1**, bukan regresi batch ini; pesannya tetap tertaut dan terbaca.
+**Nol `aria-*` ditulis tangan.**
+
+### Perbandingan Pilot #1 vs Pilot #2
+
+| Perkara | PO (`/purchasing`) | Penyesuaian stok (`/warehouse`) | Bersama? |
+|---|---|---|---|
+| Tipe hasil | `GalatFieldTerpetakan<F>` | sama | **YA** |
+| Registri field | `FIELD_PO` + `FIELD_PO_BARIS` | `FIELD_PENYESUAIAN`, baris **kosong** | tidak — milik modul |
+| Pemeta runtime | `kontrak.petakan` | `kontrak.petakan` | **YA** |
+| Pembangun jawaban | `kontrak.galatField` | `kontrak.galatField` | **YA** |
+| Field tak dikenal | naik ke formulir | naik ke formulir | **YA** |
+| Galat bisnis | tetap formulir | tetap formulir | **YA** |
+| Dukungan `line` | dipakai (baris item) | **tidak dipakai** — daftar baris kosong | **YA**, tanpa cabang khusus |
+| Pengikatan UI | `galatPo(field, line?)` | `galatPenyesuaian(field)` | tidak — bentuk formulirnya beda |
+| Pintu perubahan | `ubahFieldPo` + `updatePoLine` | `ubahFieldPenyesuaian` (+ aturan bersyarat) | tidak — kondisinya milik modul |
+| Aksesibilitas | mekanisme Carbon | mekanisme Carbon | **YA** |
+
+**Yang terbukti bersama**: tipe hasil, pemeta, pembangun, dan keempat aturan keputusan.
+**Yang terbukti TIDAK layak digeneralisasi**: registri, pengikatan UI, dan aturan pencabutan
+bersyarat — ketiganya bergantung pada bentuk formulir, dan memaksakannya jadi satu akan
+menambah cabang, bukan mengurangi.
+
 ## 15. TEMUAN TERTUNDA
 
 | Kode | Temuan | Urgensi jujur |

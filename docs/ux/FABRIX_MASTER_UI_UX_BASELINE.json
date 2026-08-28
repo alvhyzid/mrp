@@ -1,0 +1,2861 @@
+{
+ "generatedAt": "2026-08-28",
+ "baseline": {
+  "headBeforeAudit": "5ed008e",
+  "gitClean": true,
+  "sourceMutations": 0,
+  "dbMutations": 0,
+  "fixtures": 0
+ },
+ "metrics": {
+  "routes": {
+   "pageRoutes": 39,
+   "apiRoutes": 122,
+   "layouts": 29,
+   "dynamic": 2,
+   "shell": 29,
+   "nonShell": 10,
+   "featurePageFiles": 39,
+   "source": "enumerasi filesystem app/**/page.tsx + app/api/**/route.ts",
+   "confidence": "TINGGI",
+   "limitation": "route yang disembunyikan peran tetap terhitung ADA"
+  },
+  "capabilities": {
+   "total": 122,
+   "withUI": 109,
+   "withoutUI": 13,
+   "serverModules": 181,
+   "entitiesWithNoUIAtAll": [
+    "customer-delivery-addresses",
+    "document-signatures",
+    "stock-alerts"
+   ],
+   "source": "pencocokan route<->TSX dengan segmen dinamis sebagai pola",
+   "confidence": "TINGGI",
+   "limitation": "pemanggilan lewat variabel yang dirakit runtime tidak terdeteksi"
+  },
+  "forms": {
+   "pagesWithControls": 28,
+   "controls": 254,
+   "invalidText": 14,
+   "inlineNotification": 110,
+   "manualAria": 0,
+   "source": "sensus JSX setelah komentar dibuang",
+   "confidence": "TINGGI",
+   "limitation": "kontrol yang dirender kondisional tetap terhitung"
+  },
+  "overlays": {
+   "files": 22,
+   "total": 109,
+   "byType": {
+    "ComposedModal": 18,
+    "Modal": 7,
+    "Tooltip": 0,
+    "Toggletip": 2,
+    "OverflowMenu": 0,
+    "Popover": 0,
+    "Dropdown": 82,
+    "ModalBertahap": 0
+   },
+   "source": "sensus JSX",
+   "confidence": "TINGGI",
+   "limitation": "Dropdown dihitung sebagai overlay walau sering inline"
+  },
+  "carbon": {
+   "componentTypes": 49,
+   "usages": 1291,
+   "rawElementsInPages": {
+    "h1": 6,
+    "h2": 50,
+    "form": 8,
+    "input": 3,
+    "h3": 12,
+    "button": 2,
+    "table": 2
+   },
+   "source": "sensus JSX",
+   "confidence": "TINGGI",
+   "limitation": "h1-h4 dalam daftar ini adalah judul SAH, bukan pelanggaran"
+  },
+  "responsive": {
+   "measurements": 174,
+   "fullyClean": 162,
+   "flaggedPages": [
+    "/company",
+    "/profile"
+   ],
+   "horizontalScroll": 0,
+   "rightOverflow": 0,
+   "leftOverflow": 0,
+   "widths": [
+    360,
+    672,
+    768,
+    1280,
+    1440,
+    1920
+   ],
+   "source": "Playwright, 29 halaman shell x 6 lebar, tenant uji, seluruh non-GET diblokir",
+   "confidence": "TINGGI",
+   "limitation": "10 halaman non-shell TIDAK diukur; data tenant uji sebagian kosong"
+  },
+  "accessibility": {
+   "pagesWithMain": 29,
+   "pagesWithSkipLink": 29,
+   "h1Anomalies": 0,
+   "headingJumps": 0,
+   "unlabelledInputs": 0,
+   "buttonsWithoutName": 3,
+   "buttonsUnder40px": 348,
+   "source": "DOM langsung",
+   "confidence": "TINGGI",
+   "limitation": "kontras dan urutan tab tidak diukur"
+  },
+  "validation": {
+   "modulesWith4xx": 145,
+   "classA": 90,
+   "classBC": 519,
+   "modulesOnContract": [
+    "mrp/server/purchaseOrderValidation.ts",
+    "mrp/server/recordStockAdjustment.ts"
+   ],
+   "source": "sensus dua bentuk pesan",
+   "confidence": "SEDANG",
+   "limitation": "penggolongan A/B/C memakai penyaring kata — BATAS ATAS, bukan vonis per pesan"
+  },
+  "state": {
+   "silentFailures": 32,
+   "onWritePaths": 3,
+   "onReadPaths": 29,
+   "pagesWithoutLoading": 2,
+   "pagesWithoutEmpty": 14,
+   "source": "sensus sumber + verifikasi manual ketiga jalur menulis",
+   "confidence": "TINGGI",
+   "limitation": "deteksi keadaan kosong memakai pola teks Bahasa Indonesia"
+  },
+  "duplication": {
+   "duplicatedLabelMaps": 10,
+   "windowConfirmFiles": 6,
+   "pagesUsingSharedHeader": 30,
+   "source": "sensus",
+   "confidence": "TINGGI",
+   "limitation": "—"
+  },
+  "tests": {
+   "files": 79,
+   "cases": 535,
+   "source": "find tests/*.test.ts",
+   "confidence": "TINGGI",
+   "limitation": "suite penuh TIDAK dijalankan di batch audit ini"
+  },
+  "roadmap": {
+   "totalTasks": 326,
+   "done": 115,
+   "percent": 35.3,
+   "uiRevisionScope": 22,
+   "uiRevisionDone": 0,
+   "source": "build_tasks (baca-saja)",
+   "confidence": "TINGGI",
+   "limitation": "persen = selesai/total, termasuk task non-UI"
+  }
+ },
+ "routes": [
+  {
+   "url": "/forgot-password",
+   "berkas": "app/(public)/forgot-password/page.tsx",
+   "grup": "public",
+   "dinamis": false,
+   "komponen": "@/features/auth/pages/ForgotPasswordPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/invite/accept",
+   "berkas": "app/(public)/invite/accept/page.tsx",
+   "grup": "public",
+   "dinamis": false,
+   "komponen": "@/features/auth/pages/InviteAcceptPage",
+   "barisSumber": 13
+  },
+  {
+   "url": "/login",
+   "berkas": "app/(public)/login/page.tsx",
+   "grup": "public",
+   "dinamis": false,
+   "komponen": "@/features/auth/pages/LoginPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/(public)",
+   "berkas": "app/(public)/page.tsx",
+   "grup": "public",
+   "dinamis": false,
+   "komponen": "@/features/auth/pages/HomePage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/pod/[token]",
+   "berkas": "app/(public)/pod/[token]/page.tsx",
+   "grup": "public",
+   "dinamis": true,
+   "komponen": "@/features/mrp/pages/PodConfirmationPage",
+   "barisSumber": 9
+  },
+  {
+   "url": "/register",
+   "berkas": "app/(public)/register/page.tsx",
+   "grup": "public",
+   "dinamis": false,
+   "komponen": "@/features/auth/pages/RegisterPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/reset-password",
+   "berkas": "app/(public)/reset-password/page.tsx",
+   "grup": "public",
+   "dinamis": false,
+   "komponen": "@/features/auth/pages/ResetPasswordPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/ai-project",
+   "berkas": "app/(shell)/ai-project/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/ai-project/pages/AiProjectDashboardPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/ai-readiness",
+   "berkas": "app/(shell)/ai-readiness/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/ai-readiness/pages/AiReadinessPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/attendance",
+   "berkas": "app/(shell)/attendance/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/attendance/pages/AttendancePage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/boms",
+   "berkas": "app/(shell)/boms/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/mrp/pages/BomsPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/build-tasks",
+   "berkas": "app/(shell)/build-tasks/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/mrp/pages/BuildTasksPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/company",
+   "berkas": "app/(shell)/company/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/company/pages/CompanySettingsPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/company/setelan",
+   "berkas": "app/(shell)/company/setelan/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/company/pages/SetelanPerhitunganPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/customer-purchase-orders",
+   "berkas": "app/(shell)/customer-purchase-orders/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/mrp/pages/CustomerPurchaseOrdersPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/customers",
+   "berkas": "app/(shell)/customers/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/mrp/pages/CustomersPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/dashboard",
+   "berkas": "app/(shell)/dashboard/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/auth/pages/DashboardPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/documents",
+   "berkas": "app/(shell)/documents/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/documents/pages/DocumentsPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/hr",
+   "berkas": "app/(shell)/hr/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/hr/pages/HrDashboardPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/items",
+   "berkas": "app/(shell)/items/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/mrp/pages/ItemsPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/kamus",
+   "berkas": "app/(shell)/kamus/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/kamus/pages/KamusPage",
+   "barisSumber": 11
+  },
+  {
+   "url": "/kpi",
+   "berkas": "app/(shell)/kpi/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/kpi/pages/KpiPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/kpi/saya",
+   "berkas": "app/(shell)/kpi/saya/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/kpi/pages/MyKpiPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/operating-profit",
+   "berkas": "app/(shell)/operating-profit/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/mrp/pages/OperatingProfitPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/ppic",
+   "berkas": "app/(shell)/ppic/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/ppic/pages/PpicDashboardPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/process-mining",
+   "berkas": "app/(shell)/process-mining/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/process-mining/pages/ProcessMiningPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/production",
+   "berkas": "app/(shell)/production/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/production/pages/ProductionDashboardPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/profile",
+   "berkas": "app/(shell)/profile/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/auth/pages/ProfilePage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/purchasing",
+   "berkas": "app/(shell)/purchasing/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/mrp/pages/PurchasingPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/routing",
+   "berkas": "app/(shell)/routing/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/mrp/pages/RoutingsPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/sales-orders",
+   "berkas": "app/(shell)/sales-orders/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/mrp/pages/SalesOrdersPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/shipments",
+   "berkas": "app/(shell)/shipments/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/mrp/pages/ShipmentsPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/team",
+   "berkas": "app/(shell)/team/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/team/pages/TeamManagePage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/warehouse",
+   "berkas": "app/(shell)/warehouse/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/warehouse/pages/WarehouseDashboardPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/whats-new",
+   "berkas": "app/(shell)/whats-new/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/mrp/pages/WhatsNewPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/work-orders",
+   "berkas": "app/(shell)/work-orders/page.tsx",
+   "grup": "shell",
+   "dinamis": false,
+   "komponen": "@/features/mrp/pages/WorkOrdersPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/debug",
+   "berkas": "app/debug/page.tsx",
+   "grup": null,
+   "dinamis": false,
+   "komponen": "@/features/auth/pages/DebugPage",
+   "barisSumber": 2
+  },
+  {
+   "url": "/shipments/[shipmentId]/surat-jalan",
+   "berkas": "app/shipments/[shipmentId]/surat-jalan/page.tsx",
+   "grup": null,
+   "dinamis": true,
+   "komponen": "@/features/mrp/pages/SuratJalanPrintPage",
+   "barisSumber": 7
+  },
+  {
+   "url": "/test-tenant",
+   "berkas": "app/test-tenant/page.tsx",
+   "grup": null,
+   "dinamis": false,
+   "komponen": "@/features/auth/pages/TestTenantPage",
+   "barisSumber": 2
+  }
+ ],
+ "capabilitiesWithoutUI": [
+  {
+   "url": "/api/ai-project/tasks/[taskId]/manual-percent",
+   "metode": [
+    "PATCH"
+   ]
+  },
+  {
+   "url": "/api/customer-delivery-addresses/[addressId]/restore",
+   "metode": [
+    "POST"
+   ]
+  },
+  {
+   "url": "/api/customer-delivery-addresses/[addressId]",
+   "metode": [
+    "DELETE"
+   ]
+  },
+  {
+   "url": "/api/customer-delivery-addresses",
+   "metode": [
+    "GET",
+    "POST",
+    "PATCH"
+   ]
+  },
+  {
+   "url": "/api/document-signatures",
+   "metode": [
+    "POST"
+   ]
+  },
+  {
+   "url": "/api/kamus/terms/[kamusTermId]/samples",
+   "metode": [
+    "GET"
+   ]
+  },
+  {
+   "url": "/api/kpi/[kpiRegistryId]/target",
+   "metode": [
+    "PATCH"
+   ]
+  },
+  {
+   "url": "/api/kpi/[kpiRegistryId]/visibility",
+   "metode": [
+    "PATCH"
+   ]
+  },
+  {
+   "url": "/api/production-batches/[batchId]/labor-cost",
+   "metode": [
+    "GET"
+   ]
+  },
+  {
+   "url": "/api/sales-orders/[salesOrderId]/margin",
+   "metode": [
+    "GET"
+   ]
+  },
+  {
+   "url": "/api/stock-alerts/refresh",
+   "metode": [
+    "POST"
+   ]
+  },
+  {
+   "url": "/api/work-orders/reopen",
+   "metode": [
+    "POST"
+   ]
+  },
+  {
+   "url": "/api/work-orders/status",
+   "metode": [
+    "PATCH"
+   ]
+  }
+ ],
+ "entities": [
+  {
+   "entitas": "production-batches",
+   "rute": 9,
+   "metode": "GET,PATCH,POST",
+   "denganUI": 8,
+   "tanpaUI": 1,
+   "siklus": "complete start"
+  },
+  {
+   "entitas": "attendance",
+   "rute": 6,
+   "metode": "GET,PATCH,POST",
+   "denganUI": 6,
+   "tanpaUI": 0,
+   "siklus": "decide decide"
+  },
+  {
+   "entitas": "kamus",
+   "rute": 6,
+   "metode": "GET,PATCH,POST",
+   "denganUI": 5,
+   "tanpaUI": 1,
+   "siklus": "confirm"
+  },
+  {
+   "entitas": "kpi",
+   "rute": 6,
+   "metode": "GET,PATCH,POST",
+   "denganUI": 4,
+   "tanpaUI": 2,
+   "siklus": ""
+  },
+  {
+   "entitas": "ai-project",
+   "rute": 5,
+   "metode": "GET,PATCH,POST",
+   "denganUI": 4,
+   "tanpaUI": 1,
+   "siklus": ""
+  },
+  {
+   "entitas": "documents",
+   "rute": 5,
+   "metode": "DELETE,GET,POST",
+   "denganUI": 5,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "sales-order-lines",
+   "rute": 5,
+   "metode": "GET,PATCH,POST",
+   "denganUI": 5,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "work-orders",
+   "rute": 5,
+   "metode": "GET,PATCH,POST",
+   "denganUI": 3,
+   "tanpaUI": 2,
+   "siklus": "reopen*"
+  },
+  {
+   "entitas": "customers",
+   "rute": 4,
+   "metode": "DELETE,GET,PATCH,POST",
+   "denganUI": 4,
+   "tanpaUI": 0,
+   "siklus": "archive restore"
+  },
+  {
+   "entitas": "routings",
+   "rute": 4,
+   "metode": "DELETE,GET,PATCH,POST",
+   "denganUI": 4,
+   "tanpaUI": 0,
+   "siklus": "archive restore"
+  },
+  {
+   "entitas": "shipments",
+   "rute": 4,
+   "metode": "GET,PATCH,POST",
+   "denganUI": 4,
+   "tanpaUI": 0,
+   "siklus": "dispatch"
+  },
+  {
+   "entitas": "suppliers",
+   "rute": 4,
+   "metode": "DELETE,GET,PATCH,POST",
+   "denganUI": 4,
+   "tanpaUI": 0,
+   "siklus": "archive restore"
+  },
+  {
+   "entitas": "boms",
+   "rute": 3,
+   "metode": "DELETE,GET,PATCH,POST",
+   "denganUI": 3,
+   "tanpaUI": 0,
+   "siklus": "restore"
+  },
+  {
+   "entitas": "company",
+   "rute": 3,
+   "metode": "GET,PATCH,POST",
+   "denganUI": 3,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "customer-delivery-addresses",
+   "rute": 3,
+   "metode": "DELETE,GET,PATCH,POST",
+   "denganUI": 0,
+   "tanpaUI": 3,
+   "siklus": "restore*"
+  },
+  {
+   "entitas": "customer-purchase-orders",
+   "rute": 3,
+   "metode": "GET,PATCH,POST",
+   "denganUI": 3,
+   "tanpaUI": 0,
+   "siklus": "approve"
+  },
+  {
+   "entitas": "profile",
+   "rute": 3,
+   "metode": "GET,PATCH,POST",
+   "denganUI": 3,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "work-centers",
+   "rute": 3,
+   "metode": "GET,PATCH",
+   "denganUI": 3,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "build-tasks",
+   "rute": 2,
+   "metode": "GET",
+   "denganUI": 2,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "invitations",
+   "rute": 2,
+   "metode": "POST",
+   "denganUI": 2,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "items",
+   "rute": 2,
+   "metode": "DELETE,GET,PATCH,POST",
+   "denganUI": 2,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "pod",
+   "rute": 2,
+   "metode": "GET,POST",
+   "denganUI": 2,
+   "tanpaUI": 0,
+   "siklus": "confirm"
+  },
+  {
+   "entitas": "production-standards",
+   "rute": 2,
+   "metode": "GET,POST",
+   "denganUI": 2,
+   "tanpaUI": 0,
+   "siklus": "decide"
+  },
+  {
+   "entitas": "sales-orders",
+   "rute": 2,
+   "metode": "GET",
+   "denganUI": 1,
+   "tanpaUI": 1,
+   "siklus": ""
+  },
+  {
+   "entitas": "stock-adjustments",
+   "rute": 2,
+   "metode": "POST",
+   "denganUI": 2,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "supplier-item-prices",
+   "rute": 2,
+   "metode": "DELETE,GET,POST",
+   "denganUI": 2,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "work-order-step-progress",
+   "rute": 2,
+   "metode": "GET,POST",
+   "denganUI": 2,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "ai-readiness",
+   "rute": 1,
+   "metode": "GET",
+   "denganUI": 1,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "customer-po-approvals-pending",
+   "rute": 1,
+   "metode": "GET",
+   "denganUI": 1,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "dashboard-summary",
+   "rute": 1,
+   "metode": "GET",
+   "denganUI": 1,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "document-signatures",
+   "rute": 1,
+   "metode": "POST",
+   "denganUI": 0,
+   "tanpaUI": 1,
+   "siklus": ""
+  },
+  {
+   "entitas": "employee-attendance",
+   "rute": 1,
+   "metode": "GET",
+   "denganUI": 1,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "employees",
+   "rute": 1,
+   "metode": "GET,PATCH,POST",
+   "denganUI": 1,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "goods-receipts",
+   "rute": 1,
+   "metode": "POST",
+   "denganUI": 1,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "login",
+   "rute": 1,
+   "metode": "POST",
+   "denganUI": 1,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "lots",
+   "rute": 1,
+   "metode": "GET",
+   "denganUI": 1,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "me",
+   "rute": 1,
+   "metode": "GET",
+   "denganUI": 1,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "process-mining",
+   "rute": 1,
+   "metode": "GET",
+   "denganUI": 1,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "production-disruptions",
+   "rute": 1,
+   "metode": "GET,PATCH,POST",
+   "denganUI": 1,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "production-plants",
+   "rute": 1,
+   "metode": "GET",
+   "denganUI": 1,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "purchase-orders-pending",
+   "rute": 1,
+   "metode": "GET",
+   "denganUI": 1,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "purchase-orders",
+   "rute": 1,
+   "metode": "GET,POST",
+   "denganUI": 1,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "register",
+   "rute": 1,
+   "metode": "POST",
+   "denganUI": 1,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "reports",
+   "rute": 1,
+   "metode": "GET",
+   "denganUI": 1,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "routing-steps",
+   "rute": 1,
+   "metode": "GET",
+   "denganUI": 1,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "stock-alerts",
+   "rute": 1,
+   "metode": "POST",
+   "denganUI": 0,
+   "tanpaUI": 1,
+   "siklus": ""
+  },
+  {
+   "entitas": "stock-summary",
+   "rute": 1,
+   "metode": "GET",
+   "denganUI": 1,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "system-alerts",
+   "rute": 1,
+   "metode": "GET,PATCH",
+   "denganUI": 1,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "users",
+   "rute": 1,
+   "metode": "GET,PATCH",
+   "denganUI": 1,
+   "tanpaUI": 0,
+   "siklus": ""
+  },
+  {
+   "entitas": "work-order-outputs",
+   "rute": 1,
+   "metode": "POST",
+   "denganUI": 1,
+   "tanpaUI": 0,
+   "siklus": ""
+  }
+ ],
+ "forms": [
+  {
+   "berkas": "ai-project/pages/AiProjectDashboardPage.tsx",
+   "kontrol": 1,
+   "invalidText": 0,
+   "invalid": 0,
+   "required": 0,
+   "inline": 3,
+   "modalBertahap": false,
+   "formTag": 0,
+   "barisBerulang": false,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "attendance/pages/AttendancePage.tsx",
+   "kontrol": 4,
+   "invalidText": 0,
+   "invalid": 0,
+   "required": 0,
+   "inline": 1,
+   "modalBertahap": false,
+   "formTag": 0,
+   "barisBerulang": false,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "auth/pages/ForgotPasswordPage.tsx",
+   "kontrol": 1,
+   "invalidText": 0,
+   "invalid": 0,
+   "required": 1,
+   "inline": 1,
+   "modalBertahap": false,
+   "formTag": 1,
+   "barisBerulang": false,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "auth/pages/LoginPage.tsx",
+   "kontrol": 2,
+   "invalidText": 0,
+   "invalid": 0,
+   "required": 2,
+   "inline": 1,
+   "modalBertahap": false,
+   "formTag": 1,
+   "barisBerulang": false,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "auth/pages/ProfilePage.tsx",
+   "kontrol": 7,
+   "invalidText": 2,
+   "invalid": 2,
+   "required": 0,
+   "inline": 1,
+   "modalBertahap": false,
+   "formTag": 1,
+   "barisBerulang": false,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "auth/pages/RegisterPage.tsx",
+   "kontrol": 4,
+   "invalidText": 0,
+   "invalid": 0,
+   "required": 4,
+   "inline": 1,
+   "modalBertahap": false,
+   "formTag": 1,
+   "barisBerulang": false,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "auth/pages/ResetPasswordPage.tsx",
+   "kontrol": 2,
+   "invalidText": 0,
+   "invalid": 0,
+   "required": 2,
+   "inline": 2,
+   "modalBertahap": false,
+   "formTag": 1,
+   "barisBerulang": false,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "company/pages/CompanySettingsPage.tsx",
+   "kontrol": 4,
+   "invalidText": 1,
+   "invalid": 1,
+   "required": 0,
+   "inline": 1,
+   "modalBertahap": false,
+   "formTag": 0,
+   "barisBerulang": false,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "company/pages/SetelanPerhitunganPage.tsx",
+   "kontrol": 4,
+   "invalidText": 0,
+   "invalid": 0,
+   "required": 0,
+   "inline": 5,
+   "modalBertahap": false,
+   "formTag": 1,
+   "barisBerulang": false,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "documents/pages/DocumentsPage.tsx",
+   "kontrol": 11,
+   "invalidText": 0,
+   "invalid": 0,
+   "required": 1,
+   "inline": 3,
+   "modalBertahap": false,
+   "formTag": 1,
+   "barisBerulang": false,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "hr/pages/HrDashboardPage.tsx",
+   "kontrol": 16,
+   "invalidText": 1,
+   "invalid": 1,
+   "required": 0,
+   "inline": 4,
+   "modalBertahap": false,
+   "formTag": 0,
+   "barisBerulang": false,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "kamus/pages/KamusPage.tsx",
+   "kontrol": 6,
+   "invalidText": 0,
+   "invalid": 0,
+   "required": 0,
+   "inline": 2,
+   "modalBertahap": false,
+   "formTag": 0,
+   "barisBerulang": false,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "mrp/pages/BomsPage.tsx",
+   "kontrol": 13,
+   "invalidText": 0,
+   "invalid": 0,
+   "required": 0,
+   "inline": 3,
+   "modalBertahap": false,
+   "formTag": 0,
+   "barisBerulang": true,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "mrp/pages/BuildTasksPage.tsx",
+   "kontrol": 8,
+   "invalidText": 0,
+   "invalid": 0,
+   "required": 0,
+   "inline": 4,
+   "modalBertahap": false,
+   "formTag": 0,
+   "barisBerulang": false,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "mrp/pages/CustomerPurchaseOrdersPage.tsx",
+   "kontrol": 21,
+   "invalidText": 0,
+   "invalid": 0,
+   "required": 0,
+   "inline": 7,
+   "modalBertahap": false,
+   "formTag": 0,
+   "barisBerulang": true,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "mrp/pages/CustomersPage.tsx",
+   "kontrol": 11,
+   "invalidText": 0,
+   "invalid": 0,
+   "required": 0,
+   "inline": 3,
+   "modalBertahap": false,
+   "formTag": 0,
+   "barisBerulang": false,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "mrp/pages/ItemsPage.tsx",
+   "kontrol": 20,
+   "invalidText": 0,
+   "invalid": 0,
+   "required": 5,
+   "inline": 6,
+   "modalBertahap": false,
+   "formTag": 1,
+   "barisBerulang": false,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "mrp/pages/OperatingProfitPage.tsx",
+   "kontrol": 2,
+   "invalidText": 0,
+   "invalid": 0,
+   "required": 0,
+   "inline": 2,
+   "modalBertahap": false,
+   "formTag": 0,
+   "barisBerulang": false,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "mrp/pages/PodConfirmationPage.tsx",
+   "kontrol": 3,
+   "invalidText": 0,
+   "invalid": 0,
+   "required": 0,
+   "inline": 3,
+   "modalBertahap": false,
+   "formTag": 0,
+   "barisBerulang": true,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "mrp/pages/PurchasingPage.tsx",
+   "kontrol": 27,
+   "invalidText": 5,
+   "invalid": 5,
+   "required": 0,
+   "inline": 6,
+   "modalBertahap": false,
+   "formTag": 0,
+   "barisBerulang": true,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "mrp/pages/RoutingsPage.tsx",
+   "kontrol": 8,
+   "invalidText": 0,
+   "invalid": 0,
+   "required": 0,
+   "inline": 5,
+   "modalBertahap": false,
+   "formTag": 0,
+   "barisBerulang": false,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "mrp/pages/SalesOrdersPage.tsx",
+   "kontrol": 4,
+   "invalidText": 0,
+   "invalid": 0,
+   "required": 0,
+   "inline": 2,
+   "modalBertahap": false,
+   "formTag": 0,
+   "barisBerulang": true,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "mrp/pages/ShipmentsPage.tsx",
+   "kontrol": 9,
+   "invalidText": 1,
+   "invalid": 1,
+   "required": 0,
+   "inline": 7,
+   "modalBertahap": false,
+   "formTag": 0,
+   "barisBerulang": true,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "mrp/pages/WorkOrdersPage.tsx",
+   "kontrol": 20,
+   "invalidText": 0,
+   "invalid": 0,
+   "required": 0,
+   "inline": 10,
+   "modalBertahap": false,
+   "formTag": 0,
+   "barisBerulang": true,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "ppic/pages/PpicDashboardPage.tsx",
+   "kontrol": 14,
+   "invalidText": 0,
+   "invalid": 0,
+   "required": 0,
+   "inline": 9,
+   "modalBertahap": false,
+   "formTag": 0,
+   "barisBerulang": false,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "production/pages/ProductionDashboardPage.tsx",
+   "kontrol": 16,
+   "invalidText": 0,
+   "invalid": 0,
+   "required": 0,
+   "inline": 8,
+   "modalBertahap": false,
+   "formTag": 0,
+   "barisBerulang": true,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "team/pages/TeamManagePage.tsx",
+   "kontrol": 3,
+   "invalidText": 0,
+   "invalid": 0,
+   "required": 0,
+   "inline": 3,
+   "modalBertahap": false,
+   "formTag": 0,
+   "barisBerulang": false,
+   "ariaManual": 0
+  },
+  {
+   "berkas": "warehouse/pages/WarehouseDashboardPage.tsx",
+   "kontrol": 13,
+   "invalidText": 4,
+   "invalid": 4,
+   "required": 0,
+   "inline": 7,
+   "modalBertahap": false,
+   "formTag": 0,
+   "barisBerulang": true,
+   "ariaManual": 0
+  }
+ ],
+ "overlays": [
+  {
+   "berkas": "features/attendance/pages/AttendancePage.tsx",
+   "Dropdown": 2,
+   "total": 2
+  },
+  {
+   "berkas": "features/auth/pages/ProfilePage.tsx",
+   "Modal": 1,
+   "total": 1
+  },
+  {
+   "berkas": "features/company/pages/CompanySettingsPage.tsx",
+   "Modal": 1,
+   "total": 1
+  },
+  {
+   "berkas": "features/company/pages/SetelanPerhitunganPage.tsx",
+   "Toggletip": 1,
+   "total": 1
+  },
+  {
+   "berkas": "features/documents/pages/DocumentsPage.tsx",
+   "ComposedModal": 2,
+   "Dropdown": 6,
+   "total": 8
+  },
+  {
+   "berkas": "features/hr/pages/HrDashboardPage.tsx",
+   "ComposedModal": 1,
+   "Dropdown": 6,
+   "total": 7
+  },
+  {
+   "berkas": "features/kamus/pages/KamusPage.tsx",
+   "Dropdown": 3,
+   "total": 3
+  },
+  {
+   "berkas": "features/mrp/pages/BomsPage.tsx",
+   "ComposedModal": 1,
+   "Modal": 2,
+   "Dropdown": 6,
+   "total": 9
+  },
+  {
+   "berkas": "features/mrp/pages/BuildTasksPage.tsx",
+   "Dropdown": 5,
+   "total": 5
+  },
+  {
+   "berkas": "features/mrp/pages/CustomerPurchaseOrdersPage.tsx",
+   "ComposedModal": 1,
+   "Dropdown": 7,
+   "total": 8
+  },
+  {
+   "berkas": "features/mrp/pages/CustomersPage.tsx",
+   "ComposedModal": 1,
+   "Dropdown": 2,
+   "total": 3
+  },
+  {
+   "berkas": "features/mrp/pages/ItemsPage.tsx",
+   "ComposedModal": 1,
+   "Modal": 2,
+   "Toggletip": 1,
+   "Dropdown": 1,
+   "total": 5
+  },
+  {
+   "berkas": "features/mrp/pages/OperatingProfitPage.tsx",
+   "Dropdown": 2,
+   "total": 2
+  },
+  {
+   "berkas": "features/mrp/pages/PurchasingPage.tsx",
+   "ComposedModal": 3,
+   "Dropdown": 7,
+   "total": 10
+  },
+  {
+   "berkas": "features/mrp/pages/RoutingsPage.tsx",
+   "ComposedModal": 1,
+   "Modal": 1,
+   "Dropdown": 3,
+   "total": 5
+  },
+  {
+   "berkas": "features/mrp/pages/SalesOrdersPage.tsx",
+   "Dropdown": 1,
+   "total": 1
+  },
+  {
+   "berkas": "features/mrp/pages/ShipmentsPage.tsx",
+   "ComposedModal": 2,
+   "Dropdown": 2,
+   "total": 4
+  },
+  {
+   "berkas": "features/mrp/pages/WorkOrdersPage.tsx",
+   "ComposedModal": 1,
+   "Dropdown": 11,
+   "total": 12
+  },
+  {
+   "berkas": "features/ppic/pages/PpicDashboardPage.tsx",
+   "ComposedModal": 2,
+   "Dropdown": 4,
+   "total": 6
+  },
+  {
+   "berkas": "features/production/pages/ProductionDashboardPage.tsx",
+   "ComposedModal": 1,
+   "Dropdown": 7,
+   "total": 8
+  },
+  {
+   "berkas": "features/team/pages/TeamManagePage.tsx",
+   "ComposedModal": 1,
+   "Dropdown": 2,
+   "total": 3
+  },
+  {
+   "berkas": "features/warehouse/pages/WarehouseDashboardPage.tsx",
+   "Dropdown": 5,
+   "total": 5
+  }
+ ],
+ "carbonByComponent": {
+  "Button": {
+   "jumlah": 193,
+   "berkas": 35
+  },
+  "TableCell": {
+   "jumlah": 163,
+   "berkas": 17
+  },
+  "InlineNotification": {
+   "jumlah": 123,
+   "berkas": 37
+  },
+  "TextInput": {
+   "jumlah": 111,
+   "berkas": 24
+  },
+  "TableRow": {
+   "jumlah": 100,
+   "berkas": 17
+  },
+  "Dropdown": {
+   "jumlah": 82,
+   "berkas": 19
+  },
+  "Tag": {
+   "jumlah": 77,
+   "berkas": 26
+  },
+  "SkeletonText": {
+   "jumlah": 43,
+   "berkas": 22
+  },
+  "DataTableSkeleton": {
+   "jumlah": 43,
+   "berkas": 16
+  },
+  "Tile": {
+   "jumlah": 41,
+   "berkas": 17
+  },
+  "Table": {
+   "jumlah": 40,
+   "berkas": 17
+  },
+  "TableHead": {
+   "jumlah": 40,
+   "berkas": 17
+  },
+  "NumberInput": {
+   "jumlah": 36,
+   "berkas": 11
+  },
+  "ComposedModal": {
+   "jumlah": 18,
+   "berkas": 13
+  },
+  "ModalHeader": {
+   "jumlah": 18,
+   "berkas": 13
+  },
+  "ModalBody": {
+   "jumlah": 18,
+   "berkas": 13
+  },
+  "DataTable": {
+   "jumlah": 18,
+   "berkas": 15
+  },
+  "TableContainer": {
+   "jumlah": 18,
+   "berkas": 15
+  },
+  "TableToolbar": {
+   "jumlah": 16,
+   "berkas": 15
+  },
+  "Pagination": {
+   "jumlah": 14,
+   "berkas": 14
+  },
+  "ModalFooter": {
+   "jumlah": 12,
+   "berkas": 9
+  },
+  "StructuredListWrapper": {
+   "jumlah": 12,
+   "berkas": 8
+  },
+  "Checkbox": {
+   "jumlah": 8,
+   "berkas": 7
+  },
+  "Modal": {
+   "jumlah": 7,
+   "berkas": 5
+  },
+  "FileUploaderButton": {
+   "jumlah": 5,
+   "berkas": 4
+  },
+  "PasswordInput": {
+   "jumlah": 4,
+   "berkas": 3
+  },
+  "Search": {
+   "jumlah": 2,
+   "berkas": 2
+  },
+  "BreadcrumbItem": {
+   "jumlah": 2,
+   "berkas": 1
+  },
+  "SelectItem": {
+   "jumlah": 2,
+   "berkas": 1
+  },
+  "Toggletip": {
+   "jumlah": 2,
+   "berkas": 2
+  },
+  "RadioButton": {
+   "jumlah": 2,
+   "berkas": 1
+  },
+  "FormGroup": {
+   "jumlah": 2,
+   "berkas": 1
+  },
+  "FileUploader": {
+   "jumlah": 2,
+   "berkas": 2
+  },
+  "Tab": {
+   "jumlah": 2,
+   "berkas": 1
+  },
+  "Breadcrumb": {
+   "jumlah": 1,
+   "berkas": 1
+  },
+  "Layer": {
+   "jumlah": 1,
+   "berkas": 1
+  },
+  "ProgressIndicator": {
+   "jumlah": 1,
+   "berkas": 1
+  },
+  "ProgressStep": {
+   "jumlah": 1,
+   "berkas": 1
+  },
+  "ToastNotification": {
+   "jumlah": 1,
+   "berkas": 1
+  },
+  "ActionableNotification": {
+   "jumlah": 1,
+   "berkas": 1
+  },
+  "InlineLoading": {
+   "jumlah": 1,
+   "berkas": 1
+  },
+  "TextArea": {
+   "jumlah": 1,
+   "berkas": 1
+  },
+  "Select": {
+   "jumlah": 1,
+   "berkas": 1
+  },
+  "DatePicker": {
+   "jumlah": 1,
+   "berkas": 1
+  },
+  "DatePickerInput": {
+   "jumlah": 1,
+   "berkas": 1
+  },
+  "Accordion": {
+   "jumlah": 1,
+   "berkas": 1
+  },
+  "AccordionItem": {
+   "jumlah": 1,
+   "berkas": 1
+  },
+  "MultiSelect": {
+   "jumlah": 1,
+   "berkas": 1
+  },
+  "Tabs": {
+   "jumlah": 1,
+   "berkas": 1
+  }
+ },
+ "validationCandidates": [
+  {
+   "modul": "mrp/server/customerDeliveryAddresses.ts",
+   "total": 22,
+   "A": 5,
+   "BC": 17,
+   "berkontrak": false,
+   "pembangun": false
+  },
+  {
+   "modul": "mrp/server/purchaseOrderValidation.ts",
+   "total": 6,
+   "A": 4,
+   "BC": 2,
+   "berkontrak": true,
+   "pembangun": false
+  },
+  {
+   "modul": "mrp/server/recordOpeningBalance.ts",
+   "total": 8,
+   "A": 4,
+   "BC": 4,
+   "berkontrak": false,
+   "pembangun": false
+  },
+  {
+   "modul": "mrp/server/recordStockAdjustment.ts",
+   "total": 8,
+   "A": 4,
+   "BC": 4,
+   "berkontrak": true,
+   "pembangun": true
+  },
+  {
+   "modul": "mrp/server/recordWorkOrderStepProgress.ts",
+   "total": 12,
+   "A": 4,
+   "BC": 8,
+   "berkontrak": false,
+   "pembangun": false
+  },
+  {
+   "modul": "mrp/server/createProductionBatch.ts",
+   "total": 8,
+   "A": 3,
+   "BC": 5,
+   "berkontrak": false,
+   "pembangun": false
+  },
+  {
+   "modul": "mrp/server/createShipmentWithSignature.ts",
+   "total": 13,
+   "A": 3,
+   "BC": 10,
+   "berkontrak": false,
+   "pembangun": false
+  },
+  {
+   "modul": "mrp/server/recordLaborLog.ts",
+   "total": 11,
+   "A": 3,
+   "BC": 8,
+   "berkontrak": false,
+   "pembangun": false
+  },
+  {
+   "modul": "mrp/server/recordWorkOrderConsumption.ts",
+   "total": 9,
+   "A": 3,
+   "BC": 6,
+   "berkontrak": false,
+   "pembangun": false
+  },
+  {
+   "modul": "mrp/server/supplierItemPriceValidation.ts",
+   "total": 3,
+   "A": 3,
+   "BC": 0,
+   "berkontrak": false,
+   "pembangun": false
+  },
+  {
+   "modul": "signatures/server/recordDocumentSignature.ts",
+   "total": 5,
+   "A": 3,
+   "BC": 2,
+   "berkontrak": false,
+   "pembangun": false
+  },
+  {
+   "modul": "documents/server/uploadDocument.ts",
+   "total": 8,
+   "A": 2,
+   "BC": 6,
+   "berkontrak": false,
+   "pembangun": false
+  },
+  {
+   "modul": "kamus/server/answerKamusTerm.ts",
+   "total": 6,
+   "A": 2,
+   "BC": 4,
+   "berkontrak": false,
+   "pembangun": false
+  },
+  {
+   "modul": "mrp/server/bomValidation.ts",
+   "total": 8,
+   "A": 2,
+   "BC": 6,
+   "berkontrak": false,
+   "pembangun": false
+  },
+  {
+   "modul": "mrp/server/itemValidation.ts",
+   "total": 4,
+   "A": 2,
+   "BC": 2,
+   "berkontrak": false,
+   "pembangun": false
+  },
+  {
+   "modul": "mrp/server/recordWorkOrderOutput.ts",
+   "total": 9,
+   "A": 2,
+   "BC": 7,
+   "berkontrak": false,
+   "pembangun": false
+  },
+  {
+   "modul": "mrp/server/reopenWorkOrder.ts",
+   "total": 6,
+   "A": 2,
+   "BC": 4,
+   "berkontrak": false,
+   "pembangun": false
+  },
+  {
+   "modul": "mrp/server/routingValidation.ts",
+   "total": 3,
+   "A": 2,
+   "BC": 1,
+   "berkontrak": false,
+   "pembangun": false
+  },
+  {
+   "modul": "mrp/server/setWorkOrderStatus.ts",
+   "total": 6,
+   "A": 2,
+   "BC": 4,
+   "berkontrak": false,
+   "pembangun": false
+  },
+  {
+   "modul": "mrp/server/supplierValidation.ts",
+   "total": 3,
+   "A": 2,
+   "BC": 1,
+   "berkontrak": false,
+   "pembangun": false
+  },
+  {
+   "modul": "mrp/server/updateProductionBatchSchedule.ts",
+   "total": 6,
+   "A": 2,
+   "BC": 4,
+   "berkontrak": false,
+   "pembangun": false
+  },
+  {
+   "modul": "mrp/server/updateWorkCenterCapacity.ts",
+   "total": 6,
+   "A": 2,
+   "BC": 4,
+   "berkontrak": false,
+   "pembangun": false
+  },
+  {
+   "modul": "ai-readiness/server/createAiCapabilityOverride.ts",
+   "total": 4,
+   "A": 1,
+   "BC": 3,
+   "berkontrak": false,
+   "pembangun": false
+  },
+  {
+   "modul": "ai-readiness/server/submitAnswerFeedback.ts",
+   "total": 2,
+   "A": 1,
+   "BC": 1,
+   "berkontrak": false,
+   "pembangun": false
+  },
+  {
+   "modul": "attendance/server/attendanceCorrections.ts",
+   "total": 6,
+   "A": 1,
+   "BC": 5,
+   "berkontrak": false,
+   "pembangun": false
+  }
+ ],
+ "duplicatedLabelMaps": [
+  {
+   "kunci": [
+    "active",
+    "archived",
+    "draft"
+   ],
+   "salinan": 3,
+   "tempat": [
+    "BomsPage.tsx:statusLabels",
+    "WorkOrdersPage.tsx:bomStatusLabels",
+    "PpicDashboardPage.tsx:bomStatusLabels"
+   ]
+  },
+  {
+   "kunci": [
+    "cancelled",
+    "completed",
+    "in_progress",
+    "paused",
+    "planned"
+   ],
+   "salinan": 3,
+   "tempat": [
+    "WorkOrdersPage.tsx:statusLabels",
+    "PpicDashboardPage.tsx:statusLabels",
+    "ProductionDashboardPage.tsx:statusLabels"
+   ]
+  },
+  {
+   "kunci": [
+    "blocked",
+    "ready"
+   ],
+   "salinan": 3,
+   "tempat": [
+    "WorkOrdersPage.tsx:readinessLabels",
+    "PpicDashboardPage.tsx:readinessLabels",
+    "ProductionDashboardPage.tsx:readinessLabels"
+   ]
+  },
+  {
+   "kunci": [
+    "DIPELAJARI",
+    "ESTIMASI_MANUAL"
+   ],
+   "salinan": 2,
+   "tempat": [
+    "provenance-info-button.tsx:standardStatusLabels",
+    "BomsPage.tsx:yieldSourceLabels"
+   ]
+  },
+  {
+   "kunci": [
+    "fat",
+    "finance",
+    "hr",
+    "management",
+    "ppic",
+    "production"
+   ],
+   "salinan": 2,
+   "tempat": [
+    "HrDashboardPage.tsx:departmentLabels",
+    "glossary.ts:DEPARTMENT_LABELS"
+   ]
+  },
+  {
+   "kunci": [
+    "critical",
+    "info",
+    "warning"
+   ],
+   "salinan": 2,
+   "tempat": [
+    "NotificationBell.tsx:severityLabels",
+    "WarehouseDashboardPage.tsx:severityLabels"
+   ]
+  },
+  {
+   "kunci": [
+    "cancelled",
+    "delivered",
+    "draft",
+    "shipped"
+   ],
+   "salinan": 2,
+   "tempat": [
+    "SalesOrdersPage.tsx:shipmentStatusLabels",
+    "ShipmentsPage.tsx:statusLabels"
+   ]
+  },
+  {
+   "kunci": [
+    "cancelled",
+    "completed",
+    "in_progress",
+    "planned"
+   ],
+   "salinan": 2,
+   "tempat": [
+    "WorkOrdersPage.tsx:batchStatusLabels",
+    "ProductionDashboardPage.tsx:batchStatusLabels"
+   ]
+  },
+  {
+   "kunci": [
+    "completed",
+    "in_progress",
+    "pending"
+   ],
+   "salinan": 2,
+   "tempat": [
+    "PpicDashboardPage.tsx:progressStatusLabels",
+    "ProductionDashboardPage.tsx:stepStatusLabels"
+   ]
+  },
+  {
+   "kunci": [
+    "ALPA",
+    "BELUM_HADIR",
+    "CUTI",
+    "DI_LUAR_AREA",
+    "HADIR",
+    "ISTIRAHAT"
+   ],
+   "salinan": 2,
+   "tempat": [
+    "statusAbsensi.ts:labelStatusAbsensi",
+    "statusAbsensi.ts:warnaTagStatusAbsensi"
+   ]
+  }
+ ],
+ "findings": [
+  {
+   "id": "UX-AUDIT-0001",
+   "severity": "P1",
+   "classification": "ACCESSIBILITY",
+   "title": "Tiga tombol unggah gambar tanpa nama aksesibel",
+   "affected": "/company (1), /profile (2)",
+   "evidence": "peramban 174 pengukuran; 4 mekanisme penamaan diperiksa (teks, aria-label, title, aria-labelledby) — keempatnya kosong; SVG tanpa <title>",
+   "confidence": "TINGGI",
+   "level": "kelas"
+  },
+  {
+   "id": "UX-AUDIT-0002",
+   "severity": "P1",
+   "classification": "CORRECTNESS",
+   "title": "Kegagalan yang tidak sampai ke pengguna: if (ok) tanpa cabang gagal",
+   "affected": "13 halaman, 32 titik (3 di jalur menulis)",
+   "evidence": "sensus sumber; ketiga jalur menulis diperiksa satu per satu — layar TIDAK berubah saat gagal, jadi bukan berhasil-palsu",
+   "confidence": "TINGGI",
+   "level": "kelas"
+  },
+  {
+   "id": "UX-AUDIT-0003",
+   "severity": "P1",
+   "classification": "ARCHITECTURE",
+   "title": "Kapabilitas backend tanpa layar",
+   "affected": "13 route; 3 entitas SELURUH rutenya tanpa UI",
+   "evidence": "pencocokan route<->pemanggil TSX dengan segmen dinamis sebagai pola",
+   "confidence": "TINGGI",
+   "level": "kelas"
+  },
+  {
+   "id": "UX-AUDIT-0004",
+   "severity": "P1",
+   "classification": "CORRECTNESS",
+   "title": "Aksi status Work Order ada di server, nol pemanggil UI, sementara saringan menawarkan statusnya",
+   "affected": "/work-orders",
+   "evidence": "route /api/work-orders/status dan /reopen nol pemanggil; kejadian KEEMPAT dari kelas yang dicatat CLAUDE.md",
+   "confidence": "TINGGI",
+   "level": "halaman"
+  },
+  {
+   "id": "UX-AUDIT-0005",
+   "severity": "P1",
+   "classification": "VALIDATION",
+   "title": "90 galat golongan A masih di tingkat formulir",
+   "affected": "145 modul server; 2 sudah berkontrak",
+   "evidence": "sensus dua bentuk (objek mentah + pembangun bertipe)",
+   "confidence": "SEDANG",
+   "level": "kelas"
+  },
+  {
+   "id": "UX-AUDIT-0006",
+   "severity": "P1",
+   "classification": "ACCESSIBILITY",
+   "title": "Dropdown/ComboBox Carbon tidak memancarkan aria-invalid",
+   "affected": "seluruh formulir ber-Dropdown",
+   "evidence": "dibaca dari paket terpasang: nol kemunculan aria-invalid di Dropdown.js",
+   "confidence": "TINGGI",
+   "level": "kelas"
+  },
+  {
+   "id": "UX-AUDIT-0007",
+   "severity": "P1",
+   "classification": "USABILITY",
+   "title": "Enam window.confirm tersisa",
+   "affected": "4 halaman",
+   "evidence": "sensus sumber; sudah dimiliki DS-06 dan bertabrakan dengan AUD-47",
+   "confidence": "TINGGI",
+   "level": "kelas"
+  },
+  {
+   "id": "UX-AUDIT-0008",
+   "severity": "P1",
+   "classification": "CONSISTENCY",
+   "title": "Lima cabang penolakan akses menulis judul halaman dengan tangan",
+   "affected": "5 halaman",
+   "evidence": "14 dari 19 halaman ber-cabang-penolakan sudah memakai KepalaHalaman",
+   "confidence": "TINGGI",
+   "level": "kelas"
+  },
+  {
+   "id": "UX-AUDIT-0009",
+   "severity": "P2",
+   "classification": "TECHNICAL_DEBT",
+   "title": "Sepuluh peta label/status disalin",
+   "affected": "lintas halaman",
+   "evidence": "sensus Record<string,...> dengan sidik kunci",
+   "confidence": "TINGGI",
+   "level": "kelas"
+  },
+  {
+   "id": "UX-AUDIT-0010",
+   "severity": "P2",
+   "classification": "CONSISTENCY",
+   "title": "Elemen mentah tersisa di halaman: 3 input, 2 button, 2 table, 8 form",
+   "affected": "beberapa halaman",
+   "evidence": "sensus setelah komentar dibuang",
+   "confidence": "SEDANG",
+   "level": "kelas"
+  },
+  {
+   "id": "UX-AUDIT-0011",
+   "severity": "P2",
+   "classification": "CONSISTENCY",
+   "title": "AreaNotifikasi hanya dipakai 7 dari 39 halaman",
+   "affected": "32 halaman",
+   "evidence": "sensus impor",
+   "confidence": "TINGGI",
+   "level": "kelas"
+  },
+  {
+   "id": "UX-AUDIT-0012",
+   "severity": "P2",
+   "classification": "VALIDATION",
+   "title": "Validator server berhenti di galat pertama",
+   "affected": "seluruh modul validasi",
+   "evidence": "pembacaan sumber + perilaku pilot",
+   "confidence": "TINGGI",
+   "level": "kelas"
+  },
+  {
+   "id": "UX-AUDIT-0013",
+   "severity": "P2",
+   "classification": "GOVERNANCE",
+   "title": "Tiga mekanisme bantuan kontekstual bersaing; yang diwajibkan paling sedikit dipakai",
+   "affected": "FieldLabel 2, ProvenanceInfoButton 17",
+   "evidence": "sensus impor; F-04 di register",
+   "confidence": "TINGGI",
+   "level": "keputusan"
+  },
+  {
+   "id": "UX-AUDIT-0014",
+   "severity": "P2",
+   "classification": "USABILITY",
+   "title": "Empat belas halaman tanpa keadaan kosong yang terdeteksi",
+   "affected": "14 halaman",
+   "evidence": "sensus pola teks; SEBAGIAN mungkin memang tidak berdaftar",
+   "confidence": "RENDAH",
+   "level": "kelas"
+  },
+  {
+   "id": "UX-AUDIT-0015",
+   "severity": "P2",
+   "classification": "USABILITY",
+   "title": "Dua halaman tanpa keadaan memuat",
+   "affected": "2 halaman",
+   "evidence": "sensus pola",
+   "confidence": "SEDANG",
+   "level": "kelas"
+  },
+  {
+   "id": "UX-AUDIT-0016",
+   "severity": "P2",
+   "classification": "ARCHITECTURE",
+   "title": "Kesepakatan nama field lintas batas hanya dijaga pada 2 modul",
+   "affected": "143 modul lain",
+   "evidence": "T-V4/T-V5",
+   "confidence": "TINGGI",
+   "level": "kelas"
+  },
+  {
+   "id": "UX-AUDIT-0017",
+   "severity": "P2",
+   "classification": "RESPONSIVENESS",
+   "title": "348 kemunculan tombol lebih pendek dari 40px",
+   "affected": "lintas halaman & lebar",
+   "evidence": "pengukuran DOM; DS-07 menutup ambang 44px untuk kontrol tertentu — butir ini perlu tinjauan per kasus, BUKAN vonis menyeluruh",
+   "confidence": "RENDAH",
+   "level": "kelas"
+  },
+  {
+   "id": "UX-AUDIT-0018",
+   "severity": "P3",
+   "classification": "ACCESSIBILITY",
+   "title": "SuratJalanPrintPage tanpa h1",
+   "affected": "1 halaman cetak",
+   "evidence": "sensus sumber",
+   "confidence": "TINGGI",
+   "level": "halaman"
+  },
+  {
+   "id": "UX-AUDIT-0019",
+   "severity": "P3",
+   "classification": "CARBON",
+   "title": "FileUploader memaku judulnya h3",
+   "affected": "halaman ber-FileUploader",
+   "evidence": "dibaca dari paket terpasang",
+   "confidence": "TINGGI",
+   "level": "kelas"
+  },
+  {
+   "id": "UX-AUDIT-0020",
+   "severity": "P3",
+   "classification": "TECHNICAL_DEBT",
+   "title": "Penjaga hierarki judul memeriksa himpunan, bukan urutan",
+   "affected": "penjaga",
+   "evidence": "ditulis di kepala berkas ujinya",
+   "confidence": "TINGGI",
+   "level": "kelas"
+  },
+  {
+   "id": "UX-AUDIT-0021",
+   "severity": "P3",
+   "classification": "RESPONSIVENESS",
+   "title": "Sepuluh halaman non-shell belum pernah diukur responsif",
+   "affected": "10 halaman",
+   "evidence": "UNABLE TO VERIFY — di luar sapuan shell",
+   "confidence": "TINGGI",
+   "level": "kelas"
+  }
+ ],
+ "decisions": [
+  {
+   "id": "DEC-01",
+   "question": "Field mana yang WAJIB DIISI secara bisnis, dan kalimat penolakan apa yang dipakai?",
+   "whyItMatters": "Menentukan apa yang sistem TOLAK untuk dicatat",
+   "affectedPages": "seluruh 28 halaman berform",
+   "affectedClasses": "validasi",
+   "options": [
+    "tetapkan per formulir",
+    "tunda",
+    "pakai aturan minimum"
+   ],
+   "recommendation": "tetapkan bertahap saat tiap modul disentuh",
+   "consequence": "tanpa ini rollout validasi hanya bisa memindahkan galat yang SUDAH ada",
+   "blocking": true
+  },
+  {
+   "id": "DEC-02",
+   "question": "Mekanisme bantuan kontekstual mana yang kanonik?",
+   "whyItMatters": "Tiga mekanisme bersaing; yang diwajibkan paling sedikit dipakai",
+   "affectedPages": "19 halaman",
+   "affectedClasses": "carbon, konsistensi",
+   "options": [
+    "FieldLabel",
+    "ProvenanceInfoButton",
+    "Toggletip Carbon"
+   ],
+   "recommendation": "FieldLabel untuk bantuan field, ProvenanceInfoButton tetap untuk asal-usul angka",
+   "consequence": "memblokir pembersihan tiga jalur",
+   "blocking": true
+  },
+  {
+   "id": "DEC-03",
+   "question": "window.confirm disapu sekarang atau saat tiap halaman dimigrasikan?",
+   "whyItMatters": "CONFLICT-1 di register",
+   "affectedPages": "4 halaman",
+   "affectedClasses": "carbon",
+   "options": [
+    "sapu sekarang",
+    "ikut migrasi halaman"
+   ],
+   "recommendation": "sapu sekarang — 6 titik saja",
+   "consequence": true
+  },
+  {
+   "id": "DEC-04",
+   "question": "DS-06 atau AUD-47 yang memiliki konfirmasi merusak?",
+   "whyItMatters": "CONFLICT-3; dua task melacak hal yang sama",
+   "affectedPages": "4 halaman",
+   "affectedClasses": "governance",
+   "options": [
+    "DS-06",
+    "AUD-47"
+   ],
+   "recommendation": "DS-06, dan AUD-47 ditutup sebagai duplikat",
+   "consequence": true
+  },
+  {
+   "id": "DEC-05",
+   "question": "Nomor mana untuk F-01/F-11 (token paralel)?",
+   "whyItMatters": "DS-23 dicadangkan sejak lama dan belum dijawab",
+   "affectedPages": "17 berkas",
+   "affectedClasses": "governance",
+   "options": [
+    "DS-23",
+    "nomor lain"
+   ],
+   "recommendation": "DS-23 sesuai usulan rekonsiliasi",
+   "consequence": true
+  },
+  {
+   "id": "DEC-06",
+   "question": "Tiga entitas tanpa layar: dibuatkan layar, atau dicabut?",
+   "whyItMatters": "Kapabilitas yang tidak bisa dipakai siapa pun",
+   "affectedPages": "customer-delivery-addresses, document-signatures, stock-alerts",
+   "affectedClasses": "arsitektur",
+   "options": [
+    "bangun layar",
+    "cabut",
+    "biarkan"
+   ],
+   "recommendation": "putuskan per entitas — alamat kirim tampaknya memang direncanakan",
+   "consequence": true
+  },
+  {
+   "id": "DEC-07",
+   "question": "Siapa boleh menjeda/membatalkan Work Order, dan apakah UI-nya dibangun?",
+   "whyItMatters": "Server sudah bisa, UI tidak punya tombolnya, saringan menawarkan statusnya",
+   "affectedPages": "/work-orders",
+   "affectedClasses": "aksi/status",
+   "options": [
+    "bangun UI",
+    "cabut saringan",
+    "biarkan"
+   ],
+   "recommendation": "bangun UI, karena servernya sudah lengkap",
+   "consequence": true
+  },
+  {
+   "id": "DEC-08",
+   "question": "Status DI_LUAR_AREA dihitung hadir atau tidak?",
+   "whyItMatters": "Mengubah ARTI angka kehadiran",
+   "affectedPages": "/hr, /attendance",
+   "affectedClasses": "data",
+   "options": [
+    "hadir",
+    "tidak hadir",
+    "golongan sendiri"
+   ],
+   "recommendation": "—",
+   "consequence": true
+  },
+  {
+   "id": "DEC-09",
+   "question": "Keunikan supplier ditentukan nama atau kode?",
+   "whyItMatters": "Menentukan apa yang ditolak saat menambah supplier",
+   "affectedPages": "/purchasing",
+   "affectedClasses": "data",
+   "options": [
+    "nama",
+    "kode",
+    "keduanya"
+   ],
+   "recommendation": "—",
+   "consequence": true
+  },
+  {
+   "id": "DEC-10",
+   "question": "Di mana keputusan mengikat disimpan?",
+   "whyItMatters": "CONFLICT-2: tiga rumah (CLAUDE.md, build_tasks, UX-YYYY-NNN)",
+   "affectedPages": "seluruh",
+   "affectedClasses": "governance",
+   "options": [
+    "satu rumah",
+    "dua",
+    "tiga"
+   ],
+   "recommendation": "CLAUDE.md untuk ATURAN, build_tasks untuk PEKERJAAN",
+   "consequence": false
+  }
+ ],
+ "workstreams": [
+  {
+   "id": "A",
+   "name": "correctness/data",
+   "findings": "UX-AUDIT-0002, 0004",
+   "effort": "M",
+   "regressionRisk": "SEDANG",
+   "canStartNow": true,
+   "blocker": "—"
+  },
+  {
+   "id": "B",
+   "name": "validation",
+   "findings": "UX-AUDIT-0005, 0012, 0016",
+   "effort": "XL",
+   "regressionRisk": "SEDANG",
+   "canStartNow": true,
+   "blocker": "DEC-01 membatasi LEBARNYA, bukan mulainya"
+  },
+  {
+   "id": "C",
+   "name": "accessibility",
+   "findings": "UX-AUDIT-0001, 0006, 0018",
+   "effort": "S",
+   "regressionRisk": "RENDAH",
+   "canStartNow": true,
+   "blocker": "—"
+  },
+  {
+   "id": "D",
+   "name": "responsive",
+   "findings": "UX-AUDIT-0017, 0021",
+   "effort": "M",
+   "regressionRisk": "RENDAH",
+   "canStartNow": true,
+   "blocker": "—"
+  },
+  {
+   "id": "E",
+   "name": "carbon",
+   "findings": "UX-AUDIT-0007, 0010, 0019",
+   "effort": "M",
+   "regressionRisk": "SEDANG",
+   "canStartNow": false,
+   "blocker": "DEC-03, DEC-04"
+  },
+  {
+   "id": "F",
+   "name": "forms",
+   "findings": "UX-AUDIT-0011, 0013",
+   "effort": "L",
+   "regressionRisk": "SEDANG",
+   "canStartNow": false,
+   "blocker": "DEC-02"
+  },
+  {
+   "id": "G",
+   "name": "tables",
+   "findings": "—",
+   "effort": "S",
+   "regressionRisk": "RENDAH",
+   "canStartNow": true,
+   "blocker": "—"
+  },
+  {
+   "id": "H",
+   "name": "navigation/shell",
+   "findings": "—",
+   "effort": "XS",
+   "regressionRisk": "RENDAH",
+   "canStartNow": true,
+   "blocker": "—"
+  },
+  {
+   "id": "I",
+   "name": "lifecycle/actions",
+   "findings": "UX-AUDIT-0003, 0004",
+   "effort": "L",
+   "regressionRisk": "TINGGI",
+   "canStartNow": false,
+   "blocker": "DEC-06, DEC-07"
+  },
+  {
+   "id": "J",
+   "name": "page-specific UX",
+   "findings": "UX-AUDIT-0008, 0014, 0015",
+   "effort": "L",
+   "regressionRisk": "RENDAH",
+   "canStartNow": true,
+   "blocker": "—"
+  }
+ ],
+ "dependencies": [
+  {
+   "from": "STREAM B validation",
+   "to": "DEC-01",
+   "type": "membatasi lebar, bukan memblokir mulai"
+  },
+  {
+   "from": "STREAM E carbon",
+   "to": "DEC-03/DEC-04",
+   "type": "BLOCKED"
+  },
+  {
+   "from": "STREAM F forms",
+   "to": "DEC-02",
+   "type": "BLOCKED"
+  },
+  {
+   "from": "STREAM I lifecycle",
+   "to": "DEC-06/DEC-07",
+   "type": "BLOCKED"
+  },
+  {
+   "from": "rollout validasi modul ke-3",
+   "to": "sensus modul mana yang punya layar",
+   "type": "SEQUENTIAL"
+  },
+  {
+   "from": "seluruh halaman",
+   "to": "kelas UX-AUDIT-0002/0005/0006",
+   "type": "CLASS DEPENDENCY"
+  }
+ ],
+ "governanceConflicts": [
+  {
+   "id": "CONFLICT-1",
+   "status": "decision required",
+   "summary": "window.confirm: sapu sekarang vs ikut migrasi"
+  },
+  {
+   "id": "CONFLICT-2",
+   "status": "decision required",
+   "summary": "tiga rumah untuk keputusan mengikat"
+  },
+  {
+   "id": "CONFLICT-3",
+   "status": "decision required",
+   "summary": "DS-06 vs AUD-47 duplikat"
+  },
+  {
+   "id": "CONFLICT-4",
+   "status": "decision required",
+   "summary": "model kepemilikan governance vs otonomi CLAUDE.md"
+  },
+  {
+   "id": "DS-23",
+   "status": "reserved, unanswered",
+   "summary": "dicadangkan untuk F-01/F-11 sejak rekonsiliasi"
+  }
+ ],
+ "tests": [
+  {
+   "berkas": "ai_project_dashboard.test.ts",
+   "baris": 257,
+   "it": 7
+  },
+  {
+   "berkas": "ai_readiness.test.ts",
+   "baris": 220,
+   "it": 8
+  },
+  {
+   "berkas": "attendance_geo_qr_w1.test.ts",
+   "baris": 326,
+   "it": 11
+  },
+  {
+   "berkas": "auth_hook_cold_start_retry.test.ts",
+   "baris": 180,
+   "it": 7
+  },
+  {
+   "berkas": "auth_user_lewat_helper_watchdog.test.ts",
+   "baris": 80,
+   "it": 2
+  },
+  {
+   "berkas": "backup_table_list_lengkap.test.ts",
+   "baris": 78,
+   "it": 2
+  },
+  {
+   "berkas": "bagian3_po_supplier_goods_receipt.test.ts",
+   "baris": 205,
+   "it": 6
+  },
+  {
+   "berkas": "baseline_lock_separation.test.ts",
+   "baris": 245,
+   "it": 8
+  },
+  {
+   "berkas": "bom_lifecycle.test.ts",
+   "baris": 339,
+   "it": 10
+  },
+  {
+   "berkas": "bom_yield_display.test.ts",
+   "baris": 212,
+   "it": 5
+  },
+  {
+   "berkas": "build_task_sorting.test.ts",
+   "baris": 149,
+   "it": 10
+  },
+  {
+   "berkas": "build_tasks.test.ts",
+   "baris": 179,
+   "it": 5
+  },
+  {
+   "berkas": "company_settings_mst26.test.ts",
+   "baris": 208,
+   "it": 7
+  },
+  {
+   "berkas": "cross_company_isolation.test.ts",
+   "baris": 224,
+   "it": 7
+  },
+  {
+   "berkas": "currency_formatter.test.ts",
+   "baris": 83,
+   "it": 12
+  },
+  {
+   "berkas": "dashboard_summary.test.ts",
+   "baris": 212,
+   "it": 8
+  },
+  {
+   "berkas": "detail_expandable_items.test.ts",
+   "baris": 192,
+   "it": 12
+  },
+  {
+   "berkas": "ds21_penanda_langkah_responsif.test.ts",
+   "baris": 162,
+   "it": 6
+  },
+  {
+   "berkas": "ds22_baris_komponen_bom.test.ts",
+   "baris": 108,
+   "it": 6
+  },
+  {
+   "berkas": "elemen_mentah_halaman_internal.test.ts",
+   "baris": 479,
+   "it": 9
+  },
+  {
+   "berkas": "employee_attendance_access.test.ts",
+   "baris": 188,
+   "it": 6
+  },
+  {
+   "berkas": "employee_crud_and_k8_standards.test.ts",
+   "baris": 620,
+   "it": 12
+  },
+  {
+   "berkas": "employee_real_payroll_fields.test.ts",
+   "baris": 193,
+   "it": 5
+  },
+  {
+   "berkas": "employer_cost_uplift.test.ts",
+   "baris": 356,
+   "it": 9
+  },
+  {
+   "berkas": "function_grant_security_audit.test.ts",
+   "baris": 151,
+   "it": 3
+  },
+  {
+   "berkas": "glossary.test.ts",
+   "baris": 89,
+   "it": 10
+  },
+  {
+   "berkas": "hierarki_judul_lintas_halaman.test.ts",
+   "baris": 206,
+   "it": 6
+  },
+  {
+   "berkas": "hr_kehadiran_hari_ini.test.ts",
+   "baris": 132,
+   "it": 12
+  },
+  {
+   "berkas": "kamus_module.test.ts",
+   "baris": 216,
+   "it": 11
+  },
+  {
+   "berkas": "kerangka_halaman_bersama.test.ts",
+   "baris": 98,
+   "it": 2
+  },
+  {
+   "berkas": "kesiapan_wo_dari_data.test.ts",
+   "baris": 157,
+   "it": 3
+  },
+  {
+   "berkas": "kontrak_galat_field_bersama.test.ts",
+   "baris": 143,
+   "it": 12
+  },
+  {
+   "berkas": "kpi_kamus_integrity_guard.test.ts",
+   "baris": 178,
+   "it": 4
+  },
+  {
+   "berkas": "kpi_module.test.ts",
+   "baris": 404,
+   "it": 11
+  },
+  {
+   "berkas": "layar_publik_carbon.test.ts",
+   "baris": 179,
+   "it": 5
+  },
+  {
+   "berkas": "lot_expired_enforcement.test.ts",
+   "baris": 149,
+   "it": 8
+  },
+  {
+   "berkas": "margin_v1_acceptance.test.ts",
+   "baris": 423,
+   "it": 4
+  },
+  {
+   "berkas": "margin_watch.test.ts",
+   "baris": 384,
+   "it": 9
+  },
+  {
+   "berkas": "master_dokumen_md1.test.ts",
+   "baris": 236,
+   "it": 7
+  },
+  {
+   "berkas": "membaca_tidak_menulis.test.ts",
+   "baris": 272,
+   "it": 4
+  },
+  {
+   "berkas": "migrasi_kurung_seimbang.test.ts",
+   "baris": 135,
+   "it": 2
+  },
+  {
+   "berkas": "migration_hardcoded_tenant_id_watchdog.test.ts",
+   "baris": 323,
+   "it": 7
+  },
+  {
+   "berkas": "mlvt_case_study_skeleton.test.ts",
+   "baris": 173,
+   "it": 6
+  },
+  {
+   "berkas": "nav_status_jujur.test.ts",
+   "baris": 124,
+   "it": 6
+  },
+  {
+   "berkas": "operating_profit_payroll_period.test.ts",
+   "baris": 195,
+   "it": 3
+  },
+  {
+   "berkas": "peringatan_bahan_gabungan.test.ts",
+   "baris": 132,
+   "it": 9
+  },
+  {
+   "berkas": "peringatan_bahan_gabungan_server.test.ts",
+   "baris": 234,
+   "it": 5
+  },
+  {
+   "berkas": "planning_feasibility_shortage.test.ts",
+   "baris": 136,
+   "it": 1
+  },
+  {
+   "berkas": "planning_feasibility_stage_aware.test.ts",
+   "baris": 366,
+   "it": 3
+  },
+  {
+   "berkas": "pmb07a_identity_snapshot.test.ts",
+   "baris": 262,
+   "it": 4
+  },
+  {
+   "berkas": "pmb07b_delivery_addresses.test.ts",
+   "baris": 240,
+   "it": 5
+  },
+  {
+   "berkas": "prd12_work_order_status_lifecycle.test.ts",
+   "baris": 192,
+   "it": 5
+  },
+  {
+   "berkas": "process_mining.test.ts",
+   "baris": 136,
+   "it": 5
+  },
+  {
+   "berkas": "production_batch_lifecycle.test.ts",
+   "baris": 310,
+   "it": 5
+  },
+  {
+   "berkas": "production_batch_number_override.test.ts",
+   "baris": 150,
+   "it": 4
+  },
+  {
+   "berkas": "production_batch_routing_bom_snapshot.test.ts",
+   "baris": 308,
+   "it": 4
+  },
+  {
+   "berkas": "production_plants.test.ts",
+   "baris": 190,
+   "it": 3
+  },
+  {
+   "berkas": "purchasing_notifikasi_berhasil.test.ts",
+   "baris": 101,
+   "it": 7
+  },
+  {
+   "berkas": "rate_capacity_and_shift_wage.test.ts",
+   "baris": 360,
+   "it": 7
+  },
+  {
+   "berkas": "role_hierarchy_financial_access.test.ts",
+   "baris": 295,
+   "it": 9
+  },
+  {
+   "berkas": "routing_archive.test.ts",
+   "baris": 241,
+   "it": 7
+  },
+  {
+   "berkas": "routing_revisi_ui.test.ts",
+   "baris": 115,
+   "it": 9
+  },
+  {
+   "berkas": "setelan_cetakan_formulir_halaman.test.ts",
+   "baris": 97,
+   "it": 10
+  },
+  {
+   "berkas": "shelf_life_unit_conversion.test.ts",
+   "baris": 74,
+   "it": 8
+  },
+  {
+   "berkas": "shipments_physical_stage.test.ts",
+   "baris": 364,
+   "it": 8
+  },
+  {
+   "berkas": "standard_labor_cost.test.ts",
+   "baris": 175,
+   "it": 3
+  },
+  {
+   "berkas": "step_progress_date_and_reject.test.ts",
+   "baris": 316,
+   "it": 9
+  },
+  {
+   "berkas": "stock_adjustment_warehouse_staff_access.test.ts",
+   "baris": 176,
+   "it": 4
+  },
+  {
+   "berkas": "stock_threshold_percent.test.ts",
+   "baris": 144,
+   "it": 14
+  },
+  {
+   "berkas": "storage_ikut_terhapus.test.ts",
+   "baris": 218,
+   "it": 7
+  },
+  {
+   "berkas": "sudut_tajam_carbon.test.ts",
+   "baris": 158,
+   "it": 2
+  },
+  {
+   "berkas": "super_admin.test.ts",
+   "baris": 136,
+   "it": 3
+  },
+  {
+   "berkas": "supplier_customer_alur1.test.ts",
+   "baris": 294,
+   "it": 6
+  },
+  {
+   "berkas": "todays_production_schedule.test.ts",
+   "baris": 224,
+   "it": 3
+  },
+  {
+   "berkas": "ui_raw_leak_watchdog.test.ts",
+   "baris": 340,
+   "it": 3
+  },
+  {
+   "berkas": "util_tanpa_komentar.test.ts",
+   "baris": 133,
+   "it": 15
+  },
+  {
+   "berkas": "validasi_field_purchase_order.test.ts",
+   "baris": 222,
+   "it": 17
+  },
+  {
+   "berkas": "wadah_tabel_tanpa_overflow_hidden.test.ts",
+   "baris": 272,
+   "it": 8
+  },
+  {
+   "berkas": "work_orders_revisi_ui.test.ts",
+   "baris": 113,
+   "it": 8
+  }
+ ]
+}

@@ -139,7 +139,23 @@ berpindah · nol data persediaan disentuh.
 **Nol YES diberikan tanpa bukti.** Kolom *Deployed* untuk migrasi berbeda karena migrasi
 diterapkan langsung ke basis data, bukan lewat deployment aplikasi.
 
-## 12. Tiga pilihan, dan konsekuensinya
+## 12. KEPUTUSAN ARCHITECTURE GUARDIAN — 30 Agustus 2026
+
+**A DITOLAK · C DITOLAK · B DISETUJUI.** UAT di basis data PT Indo Taste **tidak
+diperbolehkan**. Penanda `UJI-` **bukan batas keamanan**; pemisahan branch **bukan** pemisahan
+lingkungan.
+
+**Yang sudah dikerjakan sesudah keputusan itu** (rincian: `docs/infrastruktur/INF-11_STAGING_ENVIRONMENT_ISOLATION.md`):
+
+- Basis data staging **sudah ada dan ber-skema identik** — 339 migrasi, 97 tabel, 6 bucket.
+- **Isolasi terbukti** lewat uji negatif dua arah (401 di kedua arah, dengan kontrol positif).
+- **Data UAT sintetis + 6 pengguna** siap, lewat satu perintah yang bisa diulang.
+- Commit `0db1524` dan `d97b80b` **tidak didorong** — sesuai keputusan.
+
+**Penghambat tersisa: satu.** Deployment aplikasi yang menunjuk staging — butuh Vercel, dan
+sesi ini **tidak punya tokennya**. Dicatat sebagai **INF-03**.
+
+## 12b. Tiga pilihan yang SUDAH TIDAK BERLAKU (dipertahankan sebagai jejak)
 
 | Pilihan | Yang terjadi | Risiko |
 |---|---|---|
@@ -147,11 +163,23 @@ diterapkan langsung ke basis data, bukan lewat deployment aplikasi.
 | **B. Pisahkan lingkungan uji lebih dulu** (INF-11) | UAT aman, data boleh dirusak | Butuh keputusan biaya/infrastruktur; UAT tertunda |
 | **C. Dorong ke `main`, UAT dengan disiplin fixture** | Situs terbarui; UAT memakai pelanggan/PO bertanda uji yang dihapus sesudahnya | Lebih aman dari A, **tetapi tetap di basis data yang sama** |
 
-**Saya tidak memilihkan.** Ketiganya menyangkut data sungguhan perusahaan Anda.
+~~**Saya tidak memilihkan.** Ketiganya menyangkut data sungguhan perusahaan Anda.~~
+→ **Architecture Guardian memilih B.** A dan C ditolak.
 
 ## 13. Daftar periksa UAT
 
 Siap dipakai **begitu kode ter-deploy**. Tanda ⚠️ = membuat/mengubah data.
+
+> **Dijalankan di mana**: begitu deployment staging ada, seluruh daftar ini dijalankan di
+> **UAT Manufaktur Nusantara** — perusahaan sintetis di basis data staging. Masuk memakai
+> `gm@uat.fabrix`, `finance@uat.fabrix`, `ppic@uat.fabrix`, `sales@uat.fabrix`,
+> `admin@uat.fabrix`, atau `gudang@uat.fabrix`.
+>
+> **Data yang sudah disiapkan**: `UAT-PO-001` (baru, untuk alur persetujuan) · `UAT-PO-002`
+> (ditahan Finance, untuk pelepasan darurat) · SO `101` (siap ditutup dari produksi) · SO `102`
+> (siap ditutup dari stok) · SO `103` (kurang kirim 200, tidak boleh bisa ditutup).
+>
+> **Tanda ⚠️ di bawah kini berarti "mengubah data STAGING"** — bukan data nyata. Aman.
 
 ### [ ] 1. Pelanggan
 Buka **Customers** → buka satu pelanggan.

@@ -832,3 +832,19 @@ berarti merilis ke sana, dan UAT di sana berarti menekan tombol pada data nyata 
 dilarang oleh perintah batch ini sendiri.
 
 **Progres TETAP 64%.** Commit dan dokumen kesiapan tidak menaikkan bobot fase.
+
+
+---
+
+## Gerbang deployment (30 Agu 2026, pukul 03.15)
+
+| Kode | Status |
+|---|---|
+| **INF-11** — isolasi lingkungan | **PASS** — basis data staging ada, isolasi terbukti dua arah, data UAT siap |
+| **INF-03** — deployment staging | **OPEN** — spesifikasi siap, menunggu tindakan pemilik produk di Vercel |
+| **UAT** | **BELUM SIAP** — menunggu INF-03 |
+
+**Build kandidat rilis `29ca347`: PASS** (kode keluar 0, 170 rute, lint 28 = patokan,
+typecheck bersih). **Progres tetap 64%** — deployment tidak menaikkan bobot fase.
+
+Spesifikasi lengkap: `docs/infra/INF03_VERCEL_STAGING_DEPLOYMENT_SPEC.md`.

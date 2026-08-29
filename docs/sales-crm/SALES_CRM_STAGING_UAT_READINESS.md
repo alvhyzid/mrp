@@ -301,3 +301,34 @@ Buka **Audit Log**.
 5. **Inti manufaktur belum pernah dipakai** di data nyata: nol BOM, Work Order, batch, lot,
    pengiriman. Butir 9 dan 10 daftar UAT **membutuhkan data itu dibuat lebih dulu**.
 6. **Mutasi lewat HTTP belum terbukti** dari ujung ke ujung — lihat §7.
+
+
+---
+
+## 15. TANDA GAGAL untuk tiap butir UAT
+
+Daftar di §13 menyebut **apa yang seharusnya terjadi**. Bagian ini menyebut **apa yang berarti
+implementasinya salah** — supaya Anda tidak perlu menebak apakah sesuatu "memang begitu".
+
+| # | Butir | **TANDA GAGAL — kalau ini yang terjadi, laporkan** |
+|---|---|---|
+| 1 | Pelanggan | Daftar kosong padahal data UAT ada · detail tidak terbuka · daftar alamat tidak muncul |
+| 2 | Alamat kirim | Alamat tersimpan tapi **tidak muncul** di pemilih pengiriman · alamat lama ikut berubah di surat jalan yang sudah terbit |
+| 3 | PO klien | PO bisa langsung diproses **tanpa** tiga persetujuan · "Status bayar" menampilkan angka yang tampak sungguhan |
+| 4 | Tahan PO | Bisa menahan **tanpa memilih alasan** · riwayat tidak menyebut nama & departemen Anda · kategori "Lainnya" diterima tanpa catatan |
+| 5 | Pelepasan darurat | Tombol muncul untuk **Company Admin** · penahanan asli **hilang** atau berubah jadi seolah Finance yang melepas · bisa melepas **tanpa alasan** · GM tidak melihat penahanan aslinya |
+| 6 | Peran Sales | `sales` tidak ada di daftar peran · peran orang sungguhan berubah sendiri |
+| 7 | Sales Order | Satu PO menghasilkan **dua** Sales Order · status "Sedang produksi" masih muncul · menekan proses dua kali menggandakan |
+| 8 | Permintaan pembatalan | Mengajukan **langsung** mengubah status order · pemohon **bisa** menyetujui permintaannya sendiri |
+| 9 | Penutupan (produksi) | Order **bisa** ditutup padahal kirim baru sebagian · layar tidak menyebut **berapa** yang kurang · bisa ditutup tanpa konfirmasi PPIC |
+| 10 | Penutupan (stok) | Order **ditolak** hanya karena tidak punya Work Order · panel tidak menyebut "stok yang sudah ada" |
+| 11 | Pembayaran vs penutupan | Order **ditolak** ditutup karena belum lunas · muncul kolom "terbayar"/"sisa" yang isinya angka |
+| 12 | Termin & kewajiban | Jumlah kewajiban **tidak sama** dengan nilai order · muncul status pembayaran yang tampak sungguhan |
+| 13 | Keamanan | Sales bisa membuat Work Order/pengiriman · peran lain bisa menutup order · tombol darurat muncul untuk selain GM |
+| 14 | Tampilan | Halaman bisa digeser ke samping · tombol terpotong · modal tidak muat di HP |
+| 15 | Pesan kesalahan | Pesan muncul di dasar modal, **bukan** menempel di kotak yang salah |
+| 16 | Riwayat keputusan | Baris tanpa pelaku diisi **tebakan nama** · alasan tidak tercatat |
+| 17 | Jejak audit | Keputusan darurat **tidak** menyebut dasar wewenangnya |
+
+**Aturan umum yang berlaku ke semua butir**: bila layar menampilkan **angka keuangan yang
+terlihat sungguhan** padahal FABRIX belum mencatat pembayaran, itu **selalu** tanda gagal.

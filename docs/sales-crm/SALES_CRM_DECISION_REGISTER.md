@@ -181,3 +181,15 @@ datanya** — dan itu persis yang dilarang. Pemicu bangun: domain Finance ada.
 
 Dua jalur pemenuhan sama-sama sah: lewat **produksi**, dan lewat **stok yang sudah ada**.
 Yang tetap wajib: **pengiriman 100%**, dan bila Work Order memang ada, **seluruhnya selesai**.
+
+
+---
+
+## Gerbang deployment 30 Agustus 2026
+
+| Keputusan | Status | Catatan |
+|---|---|---|
+| **UAT di basis data production** | **DITOLAK** Architecture Guardian | penanda `UJI-` bukan batas keamanan |
+| **Pilihan B — pisahkan lingkungan** | **DISETUJUI & DIJALANKAN** | INF-11 **PASS** |
+| **Dorong ke `main` demi UAT** | **DILARANG** | commit kandidat tetap di lokal |
+| **INF-03 deployment staging** | **TERBUKA** | butuh tindakan pemilik produk di Vercel |

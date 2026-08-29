@@ -471,3 +471,21 @@ memilih menerima risikonya secara sadar.
 **Skema basis data sudah lebih maju daripada kode ter-deploy** di ketiga project (339 migrasi),
 dan itu diperiksa **tidak merusak**: seluruh perubahan bersifat tambahan, dan status yang
 dicabut (`in_production`) tidak pernah ditulis kode mana pun.
+
+
+---
+
+# GERBANG DEPLOYMENT INF-03 — 30 Agustus 2026
+
+**Nol perubahan arsitektur.** Batch ini menyiapkan deployment, bukan membangun.
+
+**INF-11 = PASS.** **INF-03 = OPEN.** **UAT = BELUM SIAP.**
+
+**Temuan teknis yang menentukan cara memasangnya**: `NEXT_PUBLIC_SUPABASE_URL` **ditanam ke
+bundel saat BUILD**, bukan dibaca saat berjalan — dibuktikan dengan menyisir berkas hasil build
+dan menemukan ref project di dalamnya. Konsekuensinya: variabel lingkungan staging **wajib
+sudah ada sebelum build pertama**, dan menambahkannya belakangan tidak mengubah apa pun sampai
+di-build ulang.
+
+Kandidat rilis: **`29ca347`** — ketiga commit disertakan supaya yang ter-deploy sama persis
+dengan yang diuji.

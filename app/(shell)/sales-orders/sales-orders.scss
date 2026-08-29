@@ -33,3 +33,135 @@
 .so-ambang {
   max-inline-size: 14rem;
 }
+
+// WS-SALES-CANCEL -- pembatalan Sales Order. Token saja: nol angka px, nol heksadesimal.
+.so-pembatalan {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-03;
+}
+
+.so-pembatalan__aksi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-05;
+}
+
+.so-pembatalan__ket,
+.so-pembatalan__isi {
+  @include type-style('body-compact-01');
+  color: $text-secondary;
+  margin: 0;
+}
+
+.so-pembatalan__akibat {
+  @include type-style('body-compact-01');
+  color: $text-secondary;
+  margin-block-end: $spacing-05;
+}
+
+.so-pembatalan__daftar {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+}
+
+.so-pembatalan__baris {
+  border-inline-start: $spacing-01 solid $border-subtle-01;
+  padding-inline-start: $spacing-05;
+}
+
+.so-pembatalan__kepala {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-03;
+}
+
+.so-pembatalan__waktu {
+  @include type-style('label-01');
+  color: $text-secondary;
+}
+
+// DEC-S05 -- jadwal pembayaran. Token saja: nol angka px, nol warna heksadesimal.
+.so-bayar {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-03;
+}
+
+.so-bayar__termin,
+.so-bayar__batas {
+  @include type-style('body-compact-01');
+  color: $text-secondary;
+  margin: 0;
+}
+
+// Keterbatasan yang HARUS terbaca, bukan catatan kaki yang terlewat: angka di tabel
+// ini komitmen, bukan pembayaran yang sudah diverifikasi.
+.so-bayar__batas {
+  // $support-warning, BUKAN $support-caution. Yang kedua TIDAK ADA di paket terpasang --
+  // saya mengarangnya dari ingatan, dan akibatnya halaman Sales Order mengembalikan 500.
+  // Typecheck lolos karena SCSS tidak ikut diperiksa; yang menangkapnya adalah membuka
+  // halamannya di peramban. Token diverifikasi dari node_modules/@carbon/styles.
+  border-inline-start: $spacing-01 solid $support-warning;
+  padding-inline-start: $spacing-05;
+  margin-block-start: $spacing-03;
+}
+
+// PJL-03 — PENUTUPAN ORDER.
+// Kelas sendiri, bukan menumpang kelas pembatalan: keduanya sengaja terpisah di layar
+// (aturan modal nomor 9), dan gaya bersama akan membuat keduanya bergerak bersama-sama
+// pada perubahan berikutnya.
+.so-penutupan {
+  margin-block-start: $spacing-06;
+}
+
+.so-penutupan__fakta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-05 $spacing-07;
+  margin: 0 0 $spacing-05;
+}
+
+.so-penutupan__fakta dt {
+  @include type-style('label-01');
+  color: $text-secondary;
+}
+
+.so-penutupan__fakta dd {
+  @include type-style('body-compact-01');
+  margin: 0;
+  color: $text-primary;
+}
+
+.so-penutupan__aksi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-04;
+}
+
+.so-penutupan__ket {
+  @include type-style('helper-text-01');
+  color: $text-secondary;
+  margin: 0;
+}
+
+// Halangan penutupan: garis di tepi kiri, bukan latar berwarna penuh — ia keterangan,
+// bukan peringatan galat.
+.so-penutupan__halangan {
+  border-inline-start: $spacing-01 solid $border-strong-01;
+  padding-inline-start: $spacing-05;
+}
+
+.so-penutupan__sebab {
+  @include type-style('body-compact-01');
+  margin: $spacing-03 0 0;
+  padding-inline-start: $spacing-05;
+  color: $text-primary;
+}

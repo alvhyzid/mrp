@@ -140,3 +140,70 @@ daftar `customer_delivery_addresses`. Dua tempat menyimpan hal yang mirip. PMB-0
 alamat sebagai **daftar**, jadi kolom tunggal itu kemungkinan warisan — tetapi mana yang jadi
 sumber kebenaran saat pengiriman dibuat **belum diverifikasi**, dan mencabut kolom adalah
 migrasi yang menyentuh data. **ARCHITECTURE DECISION REQUIRED.**
+
+---
+
+## 29 Agustus 2026 — gelombang kedua sampai kelima
+
+Dicatat berurutan, termasuk **apa yang saya laporkan keliru dan bagaimana diketahuinya**.
+Bagian terakhir sengaja ditulis apa adanya: dua dari lima gelombang lahir karena laporan
+gilirannya sendiri ternyata belum benar.
+
+### Gelombang 2 — WS-S03: satu jalur kanonik pembuatan Sales Order
+
+| Aspek | Isi |
+|---|---|
+| Basis data | `process_customer_purchase_order()` diperluas idempotensi. **Tanda tangan tidak diubah** supaya grant tidak regresi — diukur: identik di tiga proyek |
+| Aplikasi | `processCustomerPurchaseOrder.ts` **berhenti menulis**; memanggil RPC lewat klien ber-sesi pengguna |
+| Menutup | SC-04 **dan** SC-01b — snapshot identitas ikut tersalin |
+| Bukti | 11 pemeriksaan · 4 mutasi, **keempatnya menggigit setelah 1 pengetatan** |
+| Batas | Kegagalan di tahap *insert baris* **tidak bisa dipaksa** — kedua tabel berkendala identik. Yang diuji: keatomikan satuannya lewat tabrakan nomor SO |
+
+### Gelombang 3 — WS-S04 + WS-S05: jejak keputusan & aksi PO klien
+
+| Aspek | Isi |
+|---|---|
+| Keputusan arsitektur | **PERLUAS** `status_transition_log` (5 kolom), **bukan** tabel audit baru |
+| Katalog alasan | `decision_reason_categories`, 26 kategori, master seluruh tenant tanpa `company_id` |
+| Aksi | `tahan_po_klien` · `lepas_po_klien` · `batalkan_po_klien` |
+| Aturan ditegakkan | Penghalang satu departemen **tidak bisa dilepas** departemen lain (BD-06) |
+| Bukti | 14 pemeriksaan · 5 mutasi, kelimanya menggigit · 6 lebar × (panel + modal) bersih |
+| Sengaja bersamaan | Kolom audit **tidak boleh lahir tanpa penulisnya** — kolom `reason` yang selalu null sudah membuktikannya |
+
+### Gelombang 4 — SEC-21: lubang keamanan P0
+
+**Ditemukan penjaga proyek ini, bukan oleh saya.** Pemanggil **tanpa login** membuat Sales
+Order sungguhan (id 901) di perusahaan yang bukan miliknya.
+
+Dua sebab: hak `EXECUTE` bawaan Postgres ke `PUBLIC`, dan gerbang yang **gagal terbuka**
+karena `if NULL` tidak pernah dieksekusi.
+
+Ditutup dengan `wajib_identitas_tenant()` + pencabutan `anon` dari enam fungsi (setelah
+diperiksa terhadap **145 kebijakan RLS**: nol yang memakainya).
+
+### Gelombang 5 — SEC-23: laporan gelombang 4 ternyata belum lengkap
+
+**Verifikasi independen membantah laporan sendiri.** Sesi ber-`company_id` **tanpa
+`app_role`** masih bisa membuat Sales Order — **pola yang sama, gerbang yang berbeda**.
+
+`wajib_identitas_tenant()` memeriksa identitas dan perusahaan, **bukan peran**.
+
+Ditutup dengan `coalesce(…, false)` di seluruh gerbang peran, dan — yang lebih penting —
+**pengawas kelasnya** (`pg_proc_risiko_null`) yang menyisir **seluruh** fungsi, bukan tiga
+yang kebetulan ketahuan.
+
+### Yang saya laporkan keliru, dan koreksinya
+
+| Klaim | Kenyataan |
+|---|---|
+| "Identitas dibekukan di PO **dan Sales Order**" | Jalur aplikasi **tidak** menyalinnya. Diperbaiki di WS-S03 |
+| "11 → 5 fungsi terbuka anon" | Benar **hanya** untuk `SECURITY DEFINER`. Sebenarnya **14 dari 53** |
+| "Lubang keamanan sudah ditutup" (gelombang 4) | **Pintu kedua masih terbuka.** Ditutup di gelombang 5 |
+| "Halaman punya 3 cacat" (WS-S05) | **Ketiganya cacat alat ukur saya**, bukan cacat halaman |
+
+### Temuan dicatat, sengaja tidak dikerjakan
+
+`SEC-20` (9 tabel non-Sales ber-RLS tanpa kebijakan) · `SEC-22` (4 penolong RLS yang
+menerima identitas sebagai parameter) · `AUD-50` (5 tabel ber-jejak tanpa pengisi) ·
+`INF-28` (pemulihan pencadangan belum terbukti) · `PJL-09` (kolom alamat lama) ·
+`PJL-10` (konflik nama status) · `DS-26` (penolakan yang sama tampil di dua tempat).

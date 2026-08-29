@@ -1,32 +1,71 @@
-import type { NextRequest } from 'next/server';
-import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
-import { isCompanyLeadership } from '@/lib/roles';
+import { NextRequest } from 'next/server';
+import { getAdminClient, getCurrentUser, getUserScopedClient, parseBearerToken } from '@/lib/supabaseServer';
 
+// Bentuk balasan lokal, sama seperti berkas server lain di modul ini (mis.
+// listSalesOrders.ts) -- proyek ini belum punya tipe bersama untuk itu, dan
+// membuatnya sekarang berada di luar lingkup task ini.
 interface ApiResult {
   status: number;
   body: Record<string, unknown>;
 }
 
-// Reimplementasi TypeScript dari fungsi DB process_customer_purchase_order()
-// (supabase/migrations/20260813100000_po_so_customer_schema_updates.sql, direvisi di
-// 20260814100000_admin_staff_role.sql). Fungsi DB itu SECURITY DEFINER dan membaca
-// auth.jwt() milik user yang memanggilnya lewat PostgREST — tapi API route ini
-// (seperti semua endpoint lain di aplikasi) memanggil Supabase pakai service-role
-// client, yang TIDAK punya konteks JWT user biasa, jadi tidak bisa langsung .rpc()
-// fungsi itu dari sini. Fungsi DB tetap ada sebagai pengaman lapis kedua kalau ada
-// yang panggil langsung lewat anon key + JWT sendiri; logikanya (termasuk format
-// so_number) HARUS tetap sinkron dengan versi ini.
+// WS-S03 (SC-04 + SC-01b) — SATU jalur kanonik pembuatan Sales Order.
 //
-// Sengaja HANYA company_admin/general_manager (bukan ppic_manager, meski dia salah
-// satu dari 3 approver) — Process adalah keputusan final mengunci komitmen produksi,
-// beda dari approve per-department.
+// APA YANG BERUBAH DI BERKAS INI, DAN KENAPA.
+// Sebelumnya berkas ini adalah implementasi KEDUA yang lengkap dari proses yang
+// sama: ia memvalidasi, menomori, meng-insert Sales Order, meng-insert barisnya,
+// lalu memperbarui status PO klien -- seluruhnya di aplikasi, dengan `delete`
+// manual sebagai kompensasi bila insert baris gagal. Sementara itu fungsi basis
+// data process_customer_purchase_order() melakukan hal yang sama dalam SATU
+// TRANSAKSI, dan tidak pernah dipanggil aplikasi.
+//
+// Dua jalur untuk satu proses bukan pilihan, melainkan cacat -- dan cacatnya sudah
+// menggigit: snapshot identitas pelanggan (PMB-07a) ditambahkan ke fungsi basis
+// data dan TIDAK ke jalur ini, sehingga Sales Order yang lahir lewat layar tidak
+// membekukan identitas pelanggannya dan ditandai layar seolah terbit sebelum
+// fitur itu ada.
+//
+// Sekarang berkas ini TIDAK LAGI MENULIS APA PUN. Ia hanya:
+//   1. memastikan pemanggilnya pengguna yang sah;
+//   2. membaca nomor SO yang sudah ada bila permintaan ini pengulangan;
+//   3. MEMANGGIL fungsi kanonik;
+//   4. menerjemahkan pesan galat basis data jadi kode status HTTP yang tepat.
+//
+// KENAPA MEMAKAI KLIEN BER-SESI PENGGUNA, BUKAN service role. Fungsi kanonik itu
+// menegakkan wewenangnya SENDIRI lewat klaim JWT (jwt_company_id(),
+// jwt_is_company_leadership(), auth.uid()). Dipanggil dengan service role, seluruh
+// klaim itu kosong dan fungsinya akan menolak permintaan yang sah. Wewenangnya
+// kini ditegakkan DI BASIS DATA -- satu tempat, bukan dua yang harus tetap cocok.
+//
+// PEMERIKSAAN YANG MENURUNKAN RISIKO PERPINDAHAN INI, diukur bukan diasumsikan:
+// kedua jalur memakai gerbang yang sama persis. LEADERSHIP_ROLES di src/lib/roles.ts
+// berisi ['company_admin','general_manager']; jwt_is_company_leadership() berisi
+// ('company_admin','general_manager'). Gerbang kepemilikan company, status `new`,
+// tiga persetujuan, dan validasi pabrik juga identik. Jadi yang berpindah hanyalah
+// TEMPAT penegakannya, bukan siapa yang boleh.
+//
+// YANG TIDAK DICAKUP BERKAS INI: ia tidak menjamin tidak ada jalur ketiga lahir
+// kelak. Itu tugas penjaga di tests/jalur_kanonik_sales_order.test.ts, yang gagal
+// keras bila ada berkas selain fungsi kanonik yang menulis ke sales_orders.
+
+// Pemetaan pesan basis data -> kode status HTTP. Pesannya sendiri SUDAH Bahasa
+// Indonesia dan sudah bisa dibaca orang pabrik (ditulis begitu sejak fungsi itu
+// dibuat), jadi yang perlu diterjemahkan hanyalah KODE STATUS-nya -- bukan
+// kalimatnya. Menulis ulang kalimatnya di sini akan melahirkan dua sumber pesan
+// yang harus tetap cocok, yaitu bentuk cacat yang sama yang sedang ditutup.
+function statusUntukPesan(pesan: string): number {
+  if (pesan.includes('tidak ditemukan di perusahaan Anda')) return 404;
+  if (pesan.includes('Hanya company_admin atau general_manager')) return 403;
+  if (pesan.includes('hanya bisa diproses dari status new')) return 400;
+  if (pesan.includes('belum disetujui oleh ketiga department')) return 400;
+  if (pesan.includes('Lokasi pabrik tidak valid')) return 400;
+  return 500;
+}
+
 export async function processCustomerPurchaseOrder(request: NextRequest): Promise<ApiResult> {
   try {
     const { appUser } = await getCurrentUser(request);
-
-    if (!isCompanyLeadership(appUser.role)) {
-      return { status: 403, body: { error: 'Hanya Admin Perusahaan atau General Manager yang boleh memproses PO client.' } };
-    }
+    const accessToken = await parseBearerToken(request);
 
     if (!appUser.company_id) {
       return { status: 400, body: { error: 'User belum terkait dengan perusahaan yang valid.' } };
@@ -42,180 +81,47 @@ export async function processCustomerPurchaseOrder(request: NextRequest): Promis
 
     const adminClient = getAdminClient();
 
-    const { data: po, error: poError } = await adminClient
-      .from('customer_purchase_orders')
-      .select('*')
-      .eq('customer_purchase_order_id', customerPurchaseOrderId)
-      .maybeSingle();
-
-    if (poError) {
-      return { status: 500, body: { error: poError.message } };
-    }
-    if (!po || po.company_id !== appUser.company_id) {
-      return { status: 404, body: { error: 'PO client tidak ditemukan di perusahaan Anda.' } };
-    }
-
-    if (po.status !== 'new') {
-      return { status: 400, body: { error: `PO client hanya bisa diproses dari status new (status saat ini: ${po.status}).` } };
-    }
-
-    const { data: approvals, error: approvalsError } = await adminClient
-      .from('customer_po_approvals')
-      .select('status')
-      .eq('customer_purchase_order_id', customerPurchaseOrderId)
-      .eq('status', 'approved');
-
-    if (approvalsError) {
-      return { status: 500, body: { error: approvalsError.message } };
-    }
-    if ((approvals?.length ?? 0) < 3) {
-      return { status: 400, body: { error: `PO client belum disetujui oleh ketiga department (baru ${approvals?.length ?? 0} dari 3).` } };
-    }
-
-    const { data: plant, error: plantError } = await adminClient
-      .from('production_plants')
-      .select('company_id')
-      .eq('production_plant_id', productionPlantId)
-      .maybeSingle();
-
-    if (plantError) {
-      return { status: 500, body: { error: plantError.message } };
-    }
-    if (!plant || plant.company_id !== po.company_id) {
-      return { status: 400, body: { error: 'Lokasi pabrik tidak valid untuk perusahaan Anda.' } };
-    }
-
-    // Idempotency: 1 PO client cuma boleh menghasilkan 1 SO — "cpo-<id>" adalah
-    // key yang bisa ditentukan ulang persis sama dari data yang sudah ada (tidak
-    // bergantung client mengirim apa pun), jadi request "Process" yang sama
-    // di-double-click/diulang jaringan TIDAK PERNAH bisa membuat SO kedua, bahkan
-    // kalau 2 request-nya benar-benar berjalan bersamaan (race ditutup oleh
-    // unique(company_id, idempotency_key) di database, bukan cuma pre-check ini).
-    const soIdempotencyKey = `cpo-${po.customer_purchase_order_id}`;
-
-    const { data: existingSo, error: existingSoError } = await adminClient
+    // Pemeriksaan pengulangan ini MURNI KOSMETIK -- ia hanya menentukan apakah
+    // balasan menyebut `replayed`. Yang benar-benar menjamin satu PO klien cuma
+    // punya satu Sales Order adalah kunci pengulangan di dalam fungsi kanonik
+    // DITAMBAH kekangan unik di basis data, bukan pemeriksaan ini. Jadi bila
+    // pemeriksaan ini meleset karena balapan, hasilnya tetap benar.
+    const idempotencyKey = `cpo-${customerPurchaseOrderId}`;
+    const { data: existingSo } = await adminClient
       .from('sales_orders')
       .select('sales_order_id, so_number')
-      .eq('company_id', po.company_id)
-      .eq('idempotency_key', soIdempotencyKey)
+      .eq('company_id', appUser.company_id)
+      .eq('idempotency_key', idempotencyKey)
       .maybeSingle();
-    if (existingSoError) {
-      return { status: 500, body: { error: existingSoError.message } };
-    }
+
     if (existingSo) {
       return { status: 200, body: { success: true, sales_order_id: existingSo.sales_order_id, so_number: existingSo.so_number, replayed: true } };
     }
 
-    const so_number = await generateSoNumber(adminClient, po.company_id);
+    const userClient = getUserScopedClient(accessToken);
+    const { data: salesOrderId, error: rpcError } = await userClient.rpc('process_customer_purchase_order', {
+      p_customer_purchase_order_id: customerPurchaseOrderId,
+      p_production_plant_id: productionPlantId
+    });
 
-    const { data: insertedSo, error: soInsertError } = await adminClient
+    if (rpcError) {
+      return { status: statusUntukPesan(rpcError.message), body: { error: rpcError.message } };
+    }
+    if (!salesOrderId) {
+      return { status: 500, body: { error: 'Gagal membuat sales order.' } };
+    }
+
+    // Nomor SO dibaca SETELAH fungsi kanonik sukses, bukan dihitung ulang di sini.
+    // Menghitungnya ulang berarti dua tempat yang menomori, dan format nomor SUDAH
+    // pernah jadi sumber cacat di proyek ini.
+    const { data: so } = await adminClient
       .from('sales_orders')
-      .insert([
-        {
-          company_id: po.company_id,
-          customer_purchase_order_id: po.customer_purchase_order_id,
-          customer_id: po.customer_id,
-          production_plant_id: productionPlantId,
-          status: 'confirmed',
-          so_number,
-          idempotency_key: soIdempotencyKey
-        }
-      ])
-      .select('sales_order_id')
-      .single();
+      .select('so_number')
+      .eq('sales_order_id', salesOrderId)
+      .maybeSingle();
 
-    if (soInsertError || !insertedSo) {
-      // Race: request lain untuk PO client YANG SAMA menang duluan. Bisa kena DUA
-      // constraint unique berbeda (sales_orders.customer_purchase_order_id yang
-      // SUDAH ADA sejak awal skema, ATAU idempotency_key yang baru ditambahkan) —
-      // keduanya berarti hal yang sama persis di sini (1 PO cuma boleh 1 SO), jadi
-      // ditangani sama: ambil SO yang sudah dibuat request lain, kembalikan sebagai
-      // sukses (bukan error/duplikat), bukan cuma kalau constraint idempotency_key
-      // spesifik yang kena.
-      if (soInsertError?.code === '23505') {
-        const { data: winnerSo } = await adminClient
-          .from('sales_orders')
-          .select('sales_order_id, so_number')
-          .eq('company_id', po.company_id)
-          .eq('customer_purchase_order_id', po.customer_purchase_order_id)
-          .maybeSingle();
-        if (winnerSo) {
-          return { status: 200, body: { success: true, sales_order_id: winnerSo.sales_order_id, so_number: winnerSo.so_number, replayed: true } };
-        }
-        return { status: 409, body: { error: 'PO client ini sedang/sudah diproses oleh permintaan lain.' } };
-      }
-      return { status: 500, body: { error: soInsertError?.message ?? 'Gagal membuat sales order.' } };
-    }
-
-    const { data: poLines, error: poLinesError } = await adminClient
-      .from('customer_purchase_order_lines')
-      .select('item_id, qty_ordered, unit_price')
-      .eq('customer_purchase_order_id', po.customer_purchase_order_id);
-
-    if (poLinesError) {
-      return { status: 500, body: { error: poLinesError.message } };
-    }
-
-    const { error: soLinesInsertError } = await adminClient.from('sales_order_lines').insert(
-      (poLines ?? []).map((line) => ({
-        sales_order_id: insertedSo.sales_order_id,
-        item_id: line.item_id,
-        qty_ordered: line.qty_ordered,
-        unit_price: line.unit_price
-      }))
-    );
-
-    if (soLinesInsertError) {
-      await adminClient.from('sales_orders').delete().eq('sales_order_id', insertedSo.sales_order_id);
-      return { status: 500, body: { error: soLinesInsertError.message } };
-    }
-
-    const { error: poUpdateError } = await adminClient
-      .from('customer_purchase_orders')
-      .update({ status: 'processed', processed_by: appUser.user_id, processed_at: new Date().toISOString() })
-      .eq('customer_purchase_order_id', po.customer_purchase_order_id);
-
-    if (poUpdateError) {
-      return { status: 500, body: { error: poUpdateError.message } };
-    }
-
-    return { status: 200, body: { success: true, sales_order_id: insertedSo.sales_order_id, so_number } };
+    return { status: 200, body: { success: true, sales_order_id: salesOrderId, so_number: so?.so_number ?? null } };
   } catch (error) {
     return { status: 401, body: { error: error instanceof Error ? error.message : String(error) } };
   }
-}
-
-// Format & aturan HARUS identik dengan fungsi DB process_customer_purchase_order():
-// "<urutan 3-digit>/<bulan>-<kode company>/<tahun>", urutan reset tiap tahun per company.
-async function generateSoNumber(adminClient: ReturnType<typeof getAdminClient>, companyId: number): Promise<string> {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-
-  const { data: company } = await adminClient.from('companies').select('name').eq('company_id', companyId).single();
-  const { data: setting } = await adminClient
-    .from('company_settings')
-    .select('setting_value')
-    .eq('company_id', companyId)
-    .eq('setting_key', 'so_number_company_code')
-    .maybeSingle();
-
-  const companyCode = setting?.setting_value?.trim()
-    ? setting.setting_value.trim()
-    : (company?.name ?? '').replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || 'CO';
-
-  const yearStart = new Date(Date.UTC(year, 0, 1)).toISOString();
-  const yearEnd = new Date(Date.UTC(year + 1, 0, 1)).toISOString();
-
-  const { count } = await adminClient
-    .from('sales_orders')
-    .select('sales_order_id', { count: 'exact', head: true })
-    .eq('company_id', companyId)
-    .gte('created_at', yearStart)
-    .lt('created_at', yearEnd);
-
-  const sequence = (count ?? 0) + 1;
-  const sequenceStr = String(sequence).padStart(3, '0');
-
-  return `${sequenceStr}/${month}-${companyCode}/${year}`;
 }

@@ -17,6 +17,8 @@ import {
   ModalHeader,
   NumberInput,
   Pagination,
+  Select,
+  SelectItem,
   StructuredListBody,
   StructuredListCell,
   StructuredListRow,
@@ -46,6 +48,20 @@ import SuratJalanPreview from '../components/SuratJalanPreview';
 import { formatNumberId } from '@/lib/currency';
 
 const SHIPMENT_SIGN_CONFIRMATION_TEXT = 'Sudah di cek dan tambahkan tanda tangan saya';
+
+// Nilai penanda "ketik alamat sekali pakai". BUKAN string kosong: Carbon Select
+// memperlakukan nilai kosong sebagai "belum dipilih", dan di sini "sekali pakai"
+// adalah pilihan yang SAH, bukan ketiadaan pilihan.
+const ALAMAT_SEKALI_PAKAI = 'sekali-pakai';
+
+type AlamatKirim = {
+  customer_delivery_address_id: number;
+  label: string | null;
+  address: string;
+  pic_name: string | null;
+  pic_phone: string | null;
+  archived_at: string | null;
+};
 
 // Label kolom Status di "Daftar Pengiriman" SENGAJA beda istilah dari nama status
 // database (`shipments.status`, tidak diubah): shipped ("barang sudah keluar gudang,
@@ -153,6 +169,24 @@ export default function ShipmentsPage() {
   const [lotsByItemId, setLotsByItemId] = useState<Record<number, LotOption[]>>({});
   const [lotsLoaded, setLotsLoaded] = useState(false);
   const [deliveryAddress, setDeliveryAddress] = useState('');
+  // WO-S05 (SC-05b) -- alamat yang sudah didaftarkan di halaman Pelanggan dapat DIPILIH
+  // di sini. Server SUDAH menerima & memvalidasi `delivery_address_id` sejak PMB-07b
+  // (createShipmentWithSignature.ts: milik company yang sama, tidak terarsip, alamatnya
+  // DISALIN jadi teks beku); yang belum ada hanyalah pintunya di layar.
+  //
+  // SUMBER KEBENARAN TIDAK BERUBAH SEDIKIT PUN oleh perubahan ini: yang tercetak di
+  // surat jalan tetap `shipments.delivery_address` (teks beku saat pengiriman dibuat),
+  // dan `delivery_address_id` tetap sekadar jejak referensi. Memilih dari daftar hanya
+  // MENGISI teks itu, bukan menggantikannya dengan rujukan hidup -- jadi mengubah alamat
+  // master kelak TIDAK mengubah pengiriman yang sudah terbit.
+  //
+  // YANG TIDAK DICAKUP: ini TIDAK menyentuh `customers.shipping_address` (kolom lama yang
+  // tidak pernah dibaca saat mengirim -- nasibnya menunggu keputusan BL-04/WO-S05b), dan
+  // TIDAK menambahkan alamat di tingkat Sales Order (menunggu BD-08).
+  const [alamatTersimpan, setAlamatTersimpan] = useState<AlamatKirim[]>([]);
+  const [alamatDipilih, setAlamatDipilih] = useState<string>(ALAMAT_SEKALI_PAKAI);
+  const [alamatMemuat, setAlamatMemuat] = useState(false);
+  const [alamatGalat, setAlamatGalat] = useState<string | null>(null);
   const [recipientName, setRecipientName] = useState('');
   const [recipientPhone, setRecipientPhone] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState('');
@@ -274,12 +308,37 @@ export default function ShipmentsPage() {
     [shipments]
   );
 
+  const muatAlamatTersimpan = useCallback(
+    async (customerId: number) => {
+      setAlamatMemuat(true);
+      setAlamatGalat(null);
+      const { ok, body } = await authedFetch(`/api/customer-delivery-addresses?customer_id=${customerId}`);
+      setAlamatMemuat(false);
+      if (!ok) {
+        // Kegagalan memuat daftar TIDAK boleh menghentikan pembuatan pengiriman --
+        // mengetik alamat sekali pakai tetap jalan. Tetapi ia juga TIDAK BOLEH DIAM:
+        // daftar yang gagal dimuat terlihat sama persis dengan pelanggan yang memang
+        // belum punya alamat, dan orang akan mengetik ulang tanpa tahu bedanya.
+        setAlamatTersimpan([]);
+        setAlamatGalat(typeof (body as { error?: unknown })?.error === 'string' ? String((body as { error: string }).error) : 'Daftar alamat tersimpan gagal dimuat.');
+        return;
+      }
+      const semua = ((body as { addresses?: AlamatKirim[] }).addresses ?? []).filter((a) => !a.archived_at);
+      setAlamatTersimpan(semua);
+    },
+    [authedFetch]
+  );
+
   const openCreateForm = useCallback(
     async (so: SalesOrder) => {
       setCreatingForSoId(so.sales_order_id);
       setCreateStep('form');
       setCreateStatus('idle');
       setCreateMessage('');
+      setAlamatTersimpan([]);
+      setAlamatDipilih(ALAMAT_SEKALI_PAKAI);
+      setAlamatGalat(null);
+      void muatAlamatTersimpan(so.customer_id);
       setDeliveryAddress(lastAddressForCustomer(so.customer_id));
       setRecipientName('');
       setRecipientPhone('');
@@ -320,7 +379,7 @@ export default function ShipmentsPage() {
         return next;
       });
     },
-    [authedFetch, lastAddressForCustomer]
+    [authedFetch, lastAddressForCustomer, muatAlamatTersimpan]
   );
 
   const closeCreateForm = () => {
@@ -373,7 +432,12 @@ export default function ShipmentsPage() {
       method: 'POST',
       body: JSON.stringify({
         sales_order_id: so.sales_order_id,
+        // Teks tetap dikirim apa pun pilihannya -- server yang memutuskan mana yang
+        // dibekukan. Bila id dikirim, server MENIMPA teks ini dengan alamat dari
+        // daftar (createShipmentWithSignature.ts:107), jadi keduanya tidak bisa
+        // berbeda diam-diam.
         delivery_address: deliveryAddress.trim(),
+        ...(alamatDipilih !== ALAMAT_SEKALI_PAKAI ? { delivery_address_id: Number(alamatDipilih) } : {}),
         recipient_name: recipientName.trim() || null,
         recipient_phone: recipientPhone.trim() || null,
         vehicle_number: vehicleNumber.trim() || null,
@@ -933,13 +997,63 @@ export default function ShipmentsPage() {
 
               <h3 className="halaman__subjudul halaman__subjudul--rapat">Detail pengiriman</h3>
               <div className="kirim-form__kisi">
+                {/* SATU label untuk SATU isian. Pemilih dan kotak ketik di bawahnya
+                    secara makna adalah hal yang sama -- "ke mana barang ini dikirim" --
+                    jadi keduanya berada di bawah label "Alamat tujuan", bukan punya
+                    label sendiri-sendiri. */}
+                {alamatTersimpan.length > 0 ? (
+                  <Select
+                    id="kirim-alamat-pilih"
+                    size="lg"
+                    labelText="Alamat tujuan"
+                    helperText="Pilih alamat yang sudah terdaftar, atau ketik alamat sekali pakai."
+                    value={alamatDipilih}
+                    onChange={(e) => {
+                      const nilai = e.target.value;
+                      setAlamatDipilih(nilai);
+                      if (nilai === ALAMAT_SEKALI_PAKAI) {
+                        setDeliveryAddress('');
+                        return;
+                      }
+                      const dipilih = alamatTersimpan.find((a) => String(a.customer_delivery_address_id) === nilai);
+                      setDeliveryAddress(dipilih ? dipilih.address : '');
+                    }}
+                  >
+                    {alamatTersimpan.map((a) => (
+                      <SelectItem
+                        key={a.customer_delivery_address_id}
+                        value={String(a.customer_delivery_address_id)}
+                        text={a.label ? `${a.label} — ${a.address}` : a.address}
+                      />
+                    ))}
+                    <SelectItem value={ALAMAT_SEKALI_PAKAI} text="Ketik alamat sekali pakai…" />
+                  </Select>
+                ) : null}
+
+                {alamatMemuat ? <p className="kirim-form__keterangan">Memuat alamat tersimpan…</p> : null}
+
+                {alamatGalat ? (
+                  <p className="kirim-form__keterangan kirim-form__keterangan--galat">
+                    {alamatGalat} Alamat masih bisa diketik langsung di bawah.
+                  </p>
+                ) : null}
+
+                {!alamatMemuat && !alamatGalat && alamatTersimpan.length === 0 ? (
+                  <p className="kirim-form__keterangan">
+                    Pelanggan ini belum punya alamat tersimpan. Alamat bisa didaftarkan di halaman Pelanggan supaya
+                    tidak perlu diketik ulang setiap kali mengirim.
+                  </p>
+                ) : null}
+
                 <TextInput
                   id="kirim-alamat"
                   size="lg"
-                  labelText="Alamat tujuan"
+                  labelText={alamatTersimpan.length > 0 ? 'Alamat tujuan yang akan tercetak' : 'Alamat tujuan'}
+                  hideLabel={alamatTersimpan.length > 0}
                   placeholder="Alamat lengkap tujuan pengiriman"
                   value={deliveryAddress}
                   onChange={(e) => setDeliveryAddress(e.target.value)}
+                  readOnly={alamatDipilih !== ALAMAT_SEKALI_PAKAI}
                   invalid={deliveryAddress.trim() === ''}
                   invalidText="Alamat tujuan wajib diisi — ia tercetak di surat jalan."
                 />

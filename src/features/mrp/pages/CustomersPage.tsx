@@ -35,6 +35,10 @@ import {
   petakanGalatAlamat,
   type FieldAlamat
 } from '../server/customerDeliveryAddresses';
+import {
+  petakanGalatPelanggan,
+  type FieldPelanggan
+} from '../server/customerValidation';
 import { Add } from '@carbon/icons-react';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import { canManageCustomerPo } from '@/lib/roles';
@@ -98,6 +102,15 @@ export default function CustomersPage() {
   // Pencarian & pembagian halaman dulu diurus komponen DataTable lama. Carbon DataTable
   // TIDAK mengurus keduanya, jadi keadaannya pindah ke halaman ini -- disebut supaya sesi
   // berikutnya tidak mengira Carbon kehilangan kemampuan.
+  // GALAT TINGKAT FIELD FORMULIR PELANGGAN (DS-25 / WS-B).
+  const [pelangganFieldError, setPelangganFieldError] = useState<{ field: FieldPelanggan; message: string }[]>([]);
+  const galatPelanggan = (field: FieldPelanggan) => pelangganFieldError.find((g) => g.field === field)?.message;
+  /// SATU PINTU: menyimpan nilai DAN mencabut tandanya (§5.3).
+  const ubahFieldPelanggan = (field: FieldPelanggan, nilai: string) => {
+    setPelangganFieldError((prev) => prev.filter((g) => g.field !== field));
+    setForm((prev) => ({ ...prev, [field]: nilai }));
+  };
+
   // ALAMAT TUJUAN KIRIM (WS-05 / DEC-S09). Kapabilitasnya sudah ada di server sejak PMB-07b
   // dan NOL layar memakainya — tiga route tanpa pemanggil. Ini melengkapi yang PARTIAL,
   // bukan membangun yang baru.
@@ -150,19 +163,23 @@ export default function CustomersPage() {
     [getAccessToken]
   );
 
-  const muatAlamat = useCallback(
-    async (customerId: number) => {
-      setAlamatLoading(true);
-      setAlamatError('');
-      const { ok, body } = await authedFetch(`/api/customer-delivery-addresses?customer_id=${customerId}`);
-      if (ok) setAlamatList(body.addresses || []);
-      // Kegagalan TIDAK boleh diam: tanpa cabang ini, daftar alamat tampak kosong padahal
-      // pemuatannya gagal -- dan "kosong" berarti hal yang sangat berbeda dari "gagal dimuat".
-      else setAlamatError(body.error || 'Gagal memuat alamat tujuan kirim.');
-      setAlamatLoading(false);
-    },
-    [authedFetch]
-  );
+  // SENGAJA BUKAN useCallback. Fungsi ini hanya dipanggil dari penangan peristiwa
+  // (buka baris, simpan alamat, arsipkan alamat) -- tidak pernah dari useEffect dan
+  // tidak pernah masuk daftar dependensi mana pun, jadi memoisasinya tidak dipakai
+  // siapa pun. Yang terjadi bila ia dibungkus useCallback: React Compiler mendapati
+  // dependensi yang disimpulkannya berbeda dari yang ditulis tangan, lalu MELEWATI
+  // optimasi SELURUH komponen ini -- kerugian yang jauh lebih besar daripada manfaat
+  // memoisasi yang tidak dipakai. Terukur lewat lint pada 29 Agu 2026.
+  const muatAlamat = async (customerId: number) => {
+    setAlamatLoading(true);
+    setAlamatError('');
+    const { ok, body } = await authedFetch(`/api/customer-delivery-addresses?customer_id=${customerId}`);
+    if (ok) setAlamatList(body.addresses || []);
+    // Kegagalan TIDAK boleh diam: tanpa cabang ini, daftar alamat tampak kosong padahal
+    // pemuatannya gagal -- dan "kosong" berarti hal yang sangat berbeda dari "gagal dimuat".
+    else setAlamatError(body.error || 'Gagal memuat alamat tujuan kirim.');
+    setAlamatLoading(false);
+  };
 
   const bukaAlamat = async (customerId: number) => {
     if (alamatTerbuka === customerId) {
@@ -306,12 +323,21 @@ export default function CustomersPage() {
       pic_email: form.pic_email || null,
       payment_terms: form.payment_terms || null
     };
+    setPelangganFieldError([]);
     const { ok, body } = editingCustomerId
       ? await authedFetch('/api/customers', { method: 'PATCH', body: JSON.stringify({ customer_id: editingCustomerId, ...payload }) })
       : await authedFetch('/api/customers', { method: 'POST', body: JSON.stringify(payload) });
     if (!ok) {
+      // Pemetaan lewat pintu bersama — halaman tidak membaca `body.field` sendiri.
+      const terpetakan = petakanGalatPelanggan(body as Record<string, unknown>, 0);
+      if (terpetakan.jenis === 'field') {
+        setPelangganFieldError([{ field: terpetakan.field, message: terpetakan.pesan }]);
+        setFormStatus('idle');
+        setFormMessage('');
+        return;
+      }
       setFormStatus('error');
-      setFormMessage(body.error || 'Gagal menyimpan client.');
+      setFormMessage(terpetakan.pesan);
       return;
     }
     setFormStatus('success');
@@ -754,16 +780,27 @@ export default function CustomersPage() {
           <ModalHeader title={editingCustomerId ? `Ubah pelanggan — ${form.name}` : 'Tambah pelanggan baru'} label="Sales & CRM" />
           <ModalBody hasForm>
             <div className="pelanggan-form">
-              <TextInput id="pel-nama" size="lg" labelText="Nama pelanggan" helperText="Contoh: PT Sastro Utama Media Grup" value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} />
+              <TextInput
+                id="pel-nama"
+                size="lg"
+                labelText="Nama pelanggan"
+                helperText="Contoh: PT Sastro Utama Media Grup"
+                invalid={Boolean(galatPelanggan('name'))}
+                invalidText={galatPelanggan('name')}
+                value={form.name}
+                onChange={(e) => ubahFieldPelanggan('name', e.target.value)}
+              />
               <Dropdown
                 id="pel-jenis"
                 size="lg"
                 titleText="Jenis pelanggan"
+                invalid={Boolean(galatPelanggan('customer_type'))}
+                invalidText={galatPelanggan('customer_type')}
                 label="Pilih jenis"
                 items={['company', 'individual']}
                 selectedItem={form.customer_type}
                 itemToString={(item: string) => customerTypeLabels[item] ?? item}
-                onChange={({ selectedItem }: { selectedItem: string | null }) => selectedItem && setForm((prev) => ({ ...prev, customer_type: selectedItem }))}
+                onChange={({ selectedItem }: { selectedItem: string | null }) => selectedItem && ubahFieldPelanggan('customer_type', selectedItem)}
               />
               <TextInput id="pel-tagih" size="lg" labelText="Alamat penagihan" helperText="Dipakai di faktur." value={form.billing_address} onChange={(e) => setForm((prev) => ({ ...prev, billing_address: e.target.value }))} />
               <TextInput id="pel-kirim" size="lg" labelText="Alamat pengiriman" helperText="Kosongkan bila sama dengan alamat penagihan." value={form.shipping_address} onChange={(e) => setForm((prev) => ({ ...prev, shipping_address: e.target.value }))} />
@@ -780,7 +817,7 @@ export default function CustomersPage() {
                 </div>
               </fieldset>
               <TextInput id="pel-kontak" size="lg" labelText="Kontak lain (opsional)" helperText="Catatan kontak tambahan." value={form.contact_info} onChange={(e) => setForm((prev) => ({ ...prev, contact_info: e.target.value }))} />
-              {formMessage ? <InlineNotification kind={formStatus === 'error' ? 'error' : 'success'} lowContrast title={formMessage} hideCloseButton /> : null}
+              {formMessage && pelangganFieldError.length === 0 ? <InlineNotification kind={formStatus === 'error' ? 'error' : 'success'} lowContrast title={formMessage} hideCloseButton /> : null}
             </div>
           </ModalBody>
           <ModalFooter>

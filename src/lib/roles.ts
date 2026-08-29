@@ -21,6 +21,18 @@ export const COMPANY_ROLES = [
   'warehouse_staff',
   'hr_manager',
   'hr_staff',
+  // WS-SALES-ROLE (29 Agu 2026) -- peran Sales TERSENDIRI, keputusan pemilik produk.
+  //
+  // KENAPA NAMA PERAN, BUKAN TABEL IZIN. Disensus lebih dulu: FABRIX TIDAK punya tabel
+  // roles/permissions/role_permissions/departments -- nol, seluruhnya. Yang ada adalah
+  // kolom teks users.role berkekangan CHECK plus predikat di berkas ini (diimpor 113
+  // berkas) dan perbandingan jwt_app_role() di kebijakan RLS. Jadi nama peran ITULAH
+  // mekanisme kanoniknya; membuat tabel izin baru justru melanggar larangan membangun
+  // sistem peran PARALEL.
+  //
+  // `admin_staff` BUKAN Sales dan TIDAK disentuh sedikit pun -- lihat catatan di
+  // CUSTOMER_PO_MANAGE_ROLES di bawah.
+  'sales',
   'viewer'
 ];
 
@@ -84,7 +96,15 @@ export function canManageBom(role: string | undefined | null): boolean {
 // customers_write_ppic / customer_purchase_orders_insert_ppic di
 // supabase/migrations/20260812153100_customer_purchase_orders.sql (+ admin_staff
 // ditambahkan di supabase/migrations/20260814100000_admin_staff_role.sql).
-export const CUSTOMER_PO_MANAGE_ROLES = [...LEADERSHIP_ROLES, 'ppic_manager', 'ppic_staff', 'admin_staff'];
+// `sales` DITAMBAHKAN, `admin_staff` TETAP. Keduanya berdampingan dan itu disengaja:
+// pemilik produk menyatakan admin_staff BUKAN Sales, jadi ia tidak diganti, tidak
+// dilabeli ulang, dan tidak kehilangan apa pun. Yang terjadi hanyalah Sales kini
+// punya wewenangnya sendiri.
+//
+// Predikat ini menjaga tiga hal sekaligus (halaman Pelanggan, createCustomer,
+// updateCustomer, dan PO klien), sehingga menambahkan `sales` di sini memberi Sales
+// PERSIS lingkup yang ditetapkan: pelanggan dan PO klien -- bukan yang lain.
+export const CUSTOMER_PO_MANAGE_ROLES = [...LEADERSHIP_ROLES, 'ppic_manager', 'ppic_staff', 'admin_staff', 'sales'];
 
 export function canManageCustomerPo(role: string | undefined | null): boolean {
   return !!role && CUSTOMER_PO_MANAGE_ROLES.includes(role);
@@ -93,7 +113,7 @@ export function canManageCustomerPo(role: string | undefined | null): boolean {
 // Subset lebih sempit dari CUSTOMER_PO_MANAGE_ROLES — khusus tombol pintasan
 // "Buat PO" di header (bukan izin akses halaman PO Client itu sendiri, yang tetap
 // terbuka juga untuk ppic_manager/ppic_staff seperti sebelumnya).
-export const CUSTOMER_PO_QUICK_CREATE_ROLES = [...LEADERSHIP_ROLES, 'admin_staff'];
+export const CUSTOMER_PO_QUICK_CREATE_ROLES = [...LEADERSHIP_ROLES, 'admin_staff', 'sales'];
 
 export function canQuickCreateCustomerPo(role: string | undefined | null): boolean {
   return !!role && CUSTOMER_PO_QUICK_CREATE_ROLES.includes(role);
@@ -109,6 +129,42 @@ export function canApproveDepartment(role: string | undefined | null, department
   if (department === 'ppic') return role === 'ppic_manager';
   if (department === 'manager') return isCompanyLeadership(role);
   return false;
+}
+
+// Departemen keputusan pengguna -- BUKAN wewenang menyetujui.
+//
+// Dipisahkan dari canApproveDepartment() DENGAN SENGAJA, dan pemisahan ini adalah inti
+// pemisahan tugas: Sales boleh MENAHAN PO klien karena penghalangnya miliknya (BD-06),
+// tetapi Sales TIDAK PERNAH menjadi salah satu dari tiga departemen yang MENYETUJUI.
+// Menggabungkan keduanya jadi satu fungsi akan membuat penambahan `sales` di sini
+// diam-diam memberinya hak persetujuan.
+//
+// WAJIB sinkron dengan jwt_decision_department() di basis data (migrasi 20260909100000).
+export function decisionDepartment(role: string | undefined | null): string | null {
+  if (!role) return null;
+  if (role === 'finance_manager') return 'finance';
+  if (role === 'ppic_manager') return 'ppic';
+  if (role === 'sales') return 'sales';
+  if (isCompanyLeadership(role)) return 'manager';
+  return null;
+}
+
+// DEC-S13 — WEWENANG PELEPASAN DARURAT PENGHALANG.
+//
+// DIPERSEMPIT 30 Agu 2026 atas keputusan pemilik produk: HANYA General Manager.
+// `company_admin` SENGAJA TIDAK termasuk meski ia kepemimpinan — ia peran ADMINISTRATOR
+// SISTEM (mengelola pengguna, undangan, setelan), dan wewenang teknis tidak boleh diam-diam
+// menjadi wewenang komersial pada aksi yang melampaui keputusan departemen lain.
+//
+// Inilah gunanya wewenang ini punya NAMA SENDIRI sejak awal: mempersempitnya menyentuh satu
+// konstanta di sini dan satu fungsi di basis data — nol tempat lain.
+//
+// WAJIB sinkron dengan jwt_boleh_lepas_darurat() (migrasi 20260914120000).
+export const EMERGENCY_HOLD_RELEASE_ROLES = ['general_manager'];
+
+export function canEmergencyReleaseHold(role: string | undefined | null): boolean {
+  if (!role) return false;
+  return EMERGENCY_HOLD_RELEASE_ROLES.includes(role);
 }
 
 // Role yang boleh membuat/mengelola Work Order — harus sinkron dengan policy

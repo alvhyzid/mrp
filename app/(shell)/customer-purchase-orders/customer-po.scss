@@ -203,3 +203,82 @@
 .cds--modal-footer--three-button .cds--btn:first-child {
   margin-inline-end: auto;
 }
+
+// WS-S05 -- aksi terkendali PO klien. Token saja: nol angka px, nol warna heksadesimal.
+//
+// Aturan modal #9: aksi merusak DIJAUHKAN dari aksi biasa. "Batalkan PO" didorong ke
+// tepi kanan dengan seluruh lebar panel di antaranya -- di layar sentuh jari jauh lebih
+// besar daripada kursor, dan aksi yang tidak bisa dibatalkan tidak boleh berjarak satu
+// jari dari aksi sehari-hari.
+.po-aksi {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-05;
+  align-items: center;
+}
+
+.po-aksi__merusak {
+  @include breakpoint('md') {
+    margin-inline-start: auto;
+  }
+}
+
+.po-aksi__akibat {
+  @include type-style('body-compact-01');
+  color: $text-secondary;
+  margin-block-end: $spacing-05;
+}
+
+.po-riwayat {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-03;
+}
+
+.po-riwayat__daftar {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-05;
+}
+
+.po-riwayat__baris {
+  border-inline-start: $spacing-01 solid $border-subtle-01;
+  padding-inline-start: $spacing-05;
+}
+
+.po-riwayat__kepala {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-03;
+}
+
+.po-riwayat__waktu {
+  @include type-style('label-01');
+  color: $text-secondary;
+}
+
+.po-riwayat__isi {
+  @include type-style('body-compact-01');
+  color: $text-secondary;
+  margin: 0;
+}
+
+// DEC-S13 — pelepasan darurat.
+// Penahanan asli ditampilkan di dalam modal sebelum keputusan diambil, dengan garis tepi
+// yang membedakannya dari kalimat akibat biasa — ia RIWAYAT, bukan penjelasan aksi.
+.po-darurat__asal {
+  border-inline-start: $spacing-01 solid $border-strong-01;
+  padding-inline-start: $spacing-05;
+  margin-block: $spacing-05;
+}
+
+// Dasar wewenang pada riwayat: dibedakan supaya keputusan yang melampaui wewenang orang
+// lain tidak terbaca seperti keputusan rutin.
+.po-riwayat__isi--darurat {
+  color: $text-primary;
+  font-weight: 600;
+}

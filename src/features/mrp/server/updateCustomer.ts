@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
 import { canManageCustomerPo } from '@/lib/roles';
-import { parseCustomerInput } from './customerValidation';
+import { parseCustomerInput, galatFieldPelanggan } from './customerValidation';
 
 interface ApiResult {
   status: number;
@@ -23,8 +23,8 @@ export async function updateCustomer(request: NextRequest): Promise<ApiResult> {
     const customerId = Number(body.customer_id);
     if (!customerId) return { status: 400, body: { error: 'ID Client tidak valid.' } };
 
-    const { input, error } = parseCustomerInput(body);
-    if (error || !input) return { status: 400, body: { error } };
+    const { input, error, field } = parseCustomerInput(body);
+    if (error || !input) return { status: 400, body: field ? galatFieldPelanggan(error ?? 'Input tidak valid.', field) : { error } };
 
     const adminClient = getAdminClient();
     const { data: existing, error: existingError } = await adminClient.from('customers').select('customer_id, company_id, archived_at').eq('customer_id', customerId).maybeSingle();

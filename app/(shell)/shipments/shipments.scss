@@ -131,3 +131,15 @@
 .kirim-catatan-draf {
   margin-block-start: $spacing-05;
 }
+
+// WO-S05 -- keterangan di bawah pemilih alamat (memuat / kosong / gagal).
+// Token saja: nol angka px, nol warna heksadesimal.
+.kirim-form__keterangan {
+  @include type-style('helper-text-01');
+  color: $text-secondary;
+  margin-top: -$spacing-03;
+}
+
+.kirim-form__keterangan--galat {
+  color: $text-error;
+}

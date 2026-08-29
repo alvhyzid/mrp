@@ -28,6 +28,27 @@ export function getAdminClient(): SupabaseClient {
   });
 }
 
+// Klien yang berjalan SEBAGAI PENGGUNA yang sedang login, bukan sebagai service role.
+//
+// KENAPA INI PERLU ADA DAN KAPAN DIPAKAI. getAdminClient() memakai service role yang
+// MELEWATI RLS dan tidak punya auth.uid() -- terukur: dari 598 baris data_change_audit_log
+// di data nyata, hanya 4 yang punya auth_uid, karena hampir semua tulisan lewat service
+// role. Untuk memanggil fungsi basis data yang menegakkan wewenangnya SENDIRI lewat klaim
+// JWT -- jwt_company_id(), jwt_is_company_leadership(), auth.uid() -- klien service role
+// TIDAK BISA dipakai: seluruh klaim itu kosong, dan fungsinya akan menolak permintaan yang
+// sebenarnya sah.
+//
+// YANG DIJAWAB helper ini: memanggil RPC yang wewenangnya ditegakkan database.
+// YANG TIDAK DIJAWAB: ia TETAP tunduk pada RLS untuk query biasa. Jadi ia BUKAN pengganti
+// getAdminClient() untuk pembacaan lintas tabel yang kebijakannya belum lengkap -- memakainya
+// di sana akan menghasilkan NOL BARIS tanpa galat, yaitu kegagalan yang paling sulit terlihat.
+export function getUserScopedClient(accessToken: string): SupabaseClient {
+  return createClient(ensureEnv('NEXT_PUBLIC_SUPABASE_URL', supabaseUrl), ensureEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', supabaseAnonKey), {
+    auth: { persistSession: false },
+    global: { headers: { Authorization: `Bearer ${accessToken}` } }
+  });
+}
+
 export async function parseBearerToken(request: NextRequest): Promise<string> {
   const authorization = request.headers.get('authorization') || request.headers.get('Authorization');
   if (!authorization || !authorization.toLowerCase().startsWith('bearer ')) {

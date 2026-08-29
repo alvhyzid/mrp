@@ -62,12 +62,62 @@ const ALLOWED_BROAD_GRANT: Record<string, string> = {
   // SECURITY DEFINER TAPI sudah punya pemeriksaan jwt_company_id()/role internal
   // yang terbukti benar (baca kode + verifikasi test) -- broad grant di sini aman
   // karena fungsi sendiri yang menolak, bukan grant yang menahan.
-  get_monthly_operating_profit: 'SECURITY DEFINER dengan jwt_company_id()+jwt_can_view_financial_data() internal',
-  get_production_batch_labor_cost_detail: 'SECURITY DEFINER dengan jwt_company_id()+role check (company_admin only) internal',
-  get_production_batch_labor_cost_total: 'SECURITY DEFINER dengan jwt_company_id()+jwt_can_view_wages()/financial internal',
-  get_sales_order_margin: 'SECURITY DEFINER dengan jwt_company_id()+jwt_can_view_financial_data() internal',
-  get_work_order_labor_cost_total: 'SECURITY DEFINER dengan jwt_company_id()+jwt_can_view_wages()/financial internal',
-  process_customer_purchase_order: 'SECURITY DEFINER dengan jwt_company_id()+jwt_is_company_leadership() internal',
+  get_monthly_operating_profit: 'SECURITY DEFINER + wajib_identitas_tenant() gagal-tertutup; anon dicabut (SEC-21)',
+  get_production_batch_labor_cost_detail: 'SECURITY DEFINER + wajib_identitas_tenant() gagal-tertutup; anon dicabut (SEC-21)',
+  get_production_batch_labor_cost_total: 'SECURITY DEFINER + wajib_identitas_tenant() gagal-tertutup; anon dicabut (SEC-21)',
+  get_sales_order_margin: 'SECURITY DEFINER + wajib_identitas_tenant() gagal-tertutup; anon dicabut (SEC-21)',
+  get_work_order_labor_cost_total: 'SECURITY DEFINER + wajib_identitas_tenant() gagal-tertutup; anon dicabut (SEC-21)',
+  // SEC-21 (29 Agu 2026) -- alasan lama berbunyi "sudah punya pemeriksaan internal yang
+  // TERBUKTI BENAR". Itu ternyata TIDAK BENAR: pemeriksaannya memakai `<>` dan `not`
+  // terhadap nilai yang bernilai NULL tanpa JWT, sehingga `if NULL` tidak pernah
+  // dieksekusi dan gerbangnya GAGAL TERBUKA. Dibuktikan dengan pemanggil anon yang
+  // benar-benar MEMBUAT Sales Order. Sejak SEC-21: anon dicabut, dan tiap fungsi
+  // dibuka dengan wajib_identitas_tenant() yang menolak lebih dulu.
+  process_customer_purchase_order: 'SECURITY DEFINER + wajib_identitas_tenant() gagal-tertutup; anon dicabut (SEC-21)',
+  // WS-S05 (29 Agu 2026) -- ketiga aksi PO klien HARUS bisa dipanggil `authenticated`,
+  // karena itulah cara aplikasi memanggilnya (klien ber-sesi pengguna, bukan service
+  // role -- fungsi-fungsi ini menegakkan wewenangnya lewat klaim JWT, dan service role
+  // tidak membawa klaim apa pun). PUBLIC dan anon SUDAH DICABUT lewat migrasi
+  // 20260906130000; yang tersisa hanya authenticated.
+  //
+  // Alasan ini baru menjadi BENAR setelah migrasi itu, dan itu perlu ditulis: versi
+  // pertama fungsi-fungsi ini memakai `<>` dan `not` terhadap nilai yang bisa NULL,
+  // sehingga untuk pemanggil TANPA klaim JWT kedua gerbangnya menghasilkan NULL dan
+  // `if NULL` TIDAK PERNAH dieksekusi -- gerbangnya DILEWATI, bukan menolak. Diperbaiki
+  // dengan `is distinct from` + coalesce(..., false) di migrasi yang sama.
+  tahan_po_klien: 'SECURITY DEFINER dengan jwt_company_id()+jwt_decision_department() internal; PUBLIC/anon dicabut (20260906130000)',
+  lepas_po_klien: 'SECURITY DEFINER dengan jwt_company_id()+jwt_decision_department()+pemilik tahanan internal; PUBLIC/anon dicabut (20260906130000)',
+  batalkan_po_klien: 'SECURITY DEFINER dengan jwt_company_id()+jwt_is_company_leadership() internal; PUBLIC/anon dicabut (20260906130000)',
+  jwt_decision_department: 'RLS-policy helper, hanya baca klaim JWT pemanggil sendiri; PUBLIC/anon dicabut (20260906130000)',
+  // WS-SALES-CANCEL (29 Agu 2026) -- keduanya HARUS bisa dipanggil `authenticated`,
+  // karena itulah cara aplikasi memanggilnya lewat klien ber-sesi pengguna. Keduanya
+  // dibuka dengan wajib_identitas_tenant() dan memakai coalesce pada gerbang peran,
+  // jadi tanpa identitas/perusahaan/peran mereka menolak, bukan melewati.
+  // PUBLIC dan anon sudah dicabut di migrasi 20260910110000.
+  ajukan_pembatalan: 'SECURITY DEFINER + wajib_identitas_tenant() + gerbang departemen; PUBLIC/anon dicabut (WS-SALES-CANCEL)',
+  putuskan_pembatalan: 'SECURITY DEFINER + wajib_identitas_tenant() + gerbang leadership ber-coalesce + pemisahan pemohon/pemutus; PUBLIC/anon dicabut (WS-SALES-CANCEL)',
+  // DEC-S05 (29 Agu 2026) -- dipanggil aplikasi lewat klien ber-sesi pengguna, jadi
+  // HARUS bisa `authenticated`. Dibuka dengan wajib_identitas_tenant(), gerbang perannya
+  // memakai coalesce, dan kepemilikan perusahaan diperiksa dengan `is distinct from`.
+  // PUBLIC/anon dicabut di migrasi 20260911110000.
+  terapkan_payment_terms: 'SECURITY DEFINER + wajib_identitas_tenant() + gerbang peran komersial ber-coalesce; PUBLIC/anon dicabut (DEC-S05)',
+  // PJL-03 (29 Agu 2026) -- keempatnya dipanggil aplikasi lewat klien ber-sesi pengguna.
+  // Dua yang membaca tetap butuh identitas: kelayakan menolak Sales Order milik perusahaan
+  // lain, dan versi "semua" dibuka dengan wajib_identitas_tenant(). PUBLIC/anon dicabut di
+  // migrasi 20260912110000. PENYELESAIAN TIDAK MEMERIKSA PEMBAYARAN -- itu aturan bisnis,
+  // bukan kelalaian gerbang.
+  kelayakan_penyelesaian_so: 'SECURITY DEFINER membaca-saja + pemeriksaan kepemilikan perusahaan; PUBLIC/anon dicabut (PJL-03)',
+  kelayakan_penyelesaian_so_semua: 'SECURITY DEFINER membaca-saja + wajib_identitas_tenant() + saring company_id; PUBLIC/anon dicabut (PJL-03)',
+  konfirmasi_pemenuhan_sales_order: 'SECURITY DEFINER + wajib_identitas_tenant() + gerbang departemen ppic + kunci baris SO; PUBLIC/anon dicabut (PJL-03)',
+  selesaikan_sales_order: 'SECURITY DEFINER + wajib_identitas_tenant() + gerbang leadership ber-coalesce + pemisahan pengonfirmasi/penutup + penjaga data basi; PUBLIC/anon dicabut (PJL-03)',
+  // DEC-S13 (30 Agu 2026) -- pelepasan darurat penghalang PO klien. Dipanggil aplikasi lewat
+  // klien ber-sesi pengguna. Wewenangnya BERNAMA SENDIRI (jwt_boleh_lepas_darurat), bukan
+  // disimpulkan dari "kebetulan pimpinan", dan gerbangnya ber-coalesce.
+  // PUBLIC/anon dicabut di migrasi 20260913100000.
+  jwt_boleh_lepas_darurat: 'Penolong wewenang darurat (DEC-S13). Butuh authenticated karena dipanggil dari fungsi yang dipanggil pengguna; anon dicabut',
+  pasang_konteks_darurat: 'Menitipkan dasar wewenang + departemen yang dilampaui ke konteks transaksi; memanggil pasang_konteks_keputusan() yang sudah ada lebih dulu (DEC-S13)',
+  lepas_darurat_po_klien: 'SECURITY DEFINER + wajib_identitas_tenant() + gerbang wewenang darurat ber-coalesce + larangan jalan pintas departemen sendiri; PUBLIC/anon dicabut (DEC-S13)',
+  wajib_identitas_tenant: 'Gerbang gagal-tertutup itu sendiri: menolak pemanggil tanpa identitas/konteks perusahaan. Butuh authenticated karena dipanggil dari fungsi yang dipanggil pengguna; anon dicabut (SEC-21)',
   get_employee_cost_category: 'SECURITY DEFINER dengan jwt_company_id()+leadership/financial/hr_manager internal (MRG-11, 23 Agu 2026 -- diperbaiki setelah audit ini menangkap versi awal tanpa pemeriksaan)',
   // SEDANG (bukan RENDAH) -- terbukti dipakai di RLS policy sungguhan
   // (companies_insert_admin, subscription_plans admin policies) lewat

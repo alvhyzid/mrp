@@ -98,3 +98,48 @@ describe('WS-05 — alamat tujuan kirim pelanggan', () => {
     expect(s, 'keadaan galat').toMatch(/alamatError/);
   });
 });
+
+// ============================================================================
+// WS-B — VALIDASI FORMULIR PELANGGAN
+// ============================================================================
+// Pemakai KELIMA kontrak galat field bersama. Formulir pelanggan hanya punya dua isian yang
+// bisa ditolak server (Alur 1: hanya nama yang wajib, sama seperti supplier), jadi registrinya
+// sengaja kecil — nama yang ada di registri tetapi tanpa kontrol akan ditandai pada sesuatu
+// yang tidak ada, dan galatnya hilang seperti kalau namanya salah ketik.
+describe('WS-B — validasi formulir pelanggan', () => {
+  it('(l) registri pelanggan hanya memuat isian yang bisa ditolak server', async () => {
+    const { FIELD_PELANGGAN } = await import('../src/features/mrp/server/customerValidation');
+    expect([...FIELD_PELANGGAN].sort()).toEqual(['customer_type', 'name']);
+  });
+
+  it('(m) galat pelanggan menyebut field-nya, dan kalimatnya tidak berubah', async () => {
+    const { parseCustomerInput } = await import('../src/features/mrp/server/customerValidation');
+    const kosong = parseCustomerInput({ name: '   ' });
+    expect(kosong.error).toBe('Nama client wajib diisi.');
+    expect(kosong.field).toBe('name');
+    const jenis = parseCustomerInput({ name: 'PT Contoh', customer_type: 'yayasan' });
+    expect(jenis.error).toBe('Tipe client tidak valid.');
+    expect(jenis.field).toBe('customer_type');
+    expect(parseCustomerInput({ name: 'PT Contoh' }).error).toBeUndefined();
+  });
+
+  it('(n) nama tak dikenal naik ke tingkat formulir dengan kalimat aslinya', async () => {
+    const { petakanGalatPelanggan } = await import('../src/features/mrp/server/customerValidation');
+    for (const field of ['nama', 'name_', 'label', '']) {
+      const h = petakanGalatPelanggan({ error: 'Pesan asli.', field }, 0);
+      expect(h.jenis, `"${field}"`).toBe('formulir');
+      expect(h.pesan).toBe('Pesan asli.');
+    }
+  });
+
+  it('(o) layar menandai kedua kontrol dan menggerbang notifikasinya', async () => {
+    const { FIELD_PELANGGAN } = await import('../src/features/mrp/server/customerValidation');
+    const s = halaman();
+    for (const f of FIELD_PELANGGAN) {
+      expect(s, `"${f}" tidak ditandai invalid`).toMatch(new RegExp(`invalid=\\{Boolean\\(galatPelanggan\\('${f}'\\)\\)\\}`));
+      expect(s, `"${f}" ditandai TANPA pesan`).toMatch(new RegExp(`invalidText=\\{galatPelanggan\\('${f}'\\)`));
+    }
+    expect(s).toMatch(/petakanGalatPelanggan/);
+    expect(s).toMatch(/pelangganFieldError\.length === 0/);
+  });
+});

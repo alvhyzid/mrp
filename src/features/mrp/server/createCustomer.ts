@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { getCurrentUser, getAdminClient } from '@/lib/supabaseServer';
 import { canManageCustomerPo } from '@/lib/roles';
-import { parseCustomerInput } from './customerValidation';
+import { parseCustomerInput, galatFieldPelanggan } from './customerValidation';
 
 interface ApiResult {
   status: number;
@@ -26,9 +26,9 @@ export async function createCustomer(request: NextRequest): Promise<ApiResult> {
     }
 
     const body = await request.json();
-    const { input, error } = parseCustomerInput(body);
+    const { input, error, field } = parseCustomerInput(body);
     if (error || !input) {
-      return { status: 400, body: { error } };
+      return { status: 400, body: field ? galatFieldPelanggan(error ?? 'Input tidak valid.', field) : { error } };
     }
 
     const adminClient = getAdminClient();

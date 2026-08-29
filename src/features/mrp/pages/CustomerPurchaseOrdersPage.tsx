@@ -11,7 +11,11 @@ import {
   Dropdown,
   InlineNotification,
   ModalBody,
+  ModalFooter,
   ModalHeader,
+  Select,
+  SelectItem,
+  TextArea,
   NumberInput,
   Pagination,
   StructuredListBody,
@@ -40,7 +44,7 @@ import { AreaNotifikasi, type Notifikasi } from '@/components/ui/notifikasi';
 import { FooterBertahap, PenandaLangkah, type LangkahModal } from '@/components/ui/modal-bertahap';
 
 // PO KLIEN — dimigrasikan ke Carbon 26 Agu 2026 (DS-09), cetakan Master Item.
-import { canManageCustomerPo, canApproveDepartment, isCompanyLeadership } from '@/lib/roles';
+import { canManageCustomerPo, canApproveDepartment, isCompanyLeadership, canEmergencyReleaseHold, decisionDepartment } from '@/lib/roles';
 import { formatCurrency, formatNumberId } from '@/lib/currency';
 
 // Daftar syarat bayar SEBELUMNYA disalin di sini, berdampingan dengan salinan di
@@ -63,6 +67,43 @@ const TIPE_ITEM: { kode: string; label: string }[] = [
   { kode: 'packaging', label: 'Kemasan' }
 ];
 const itemBaruKosong = { item_code: '', name: '', type: 'finished_good', base_uom: '' };
+
+// WS-S04/WS-S05 -- satu baris riwayat keputusan, dibaca dari jejak KANONIK
+// (status_transition_log), bukan dari tabel riwayat khusus Sales.
+type JejakKeputusan = {
+  id: number;
+  aksi: string;
+  dari: string;
+  ke: string;
+  waktu: string;
+  kategori: string | null;
+  kategori_label: string | null;
+  catatan: string | null;
+  pelaku_nama: string | null;
+  pelaku_peran: string | null;
+  pelaku_departemen: string | null;
+  kelengkapan: 'lengkap' | 'tidak_diketahui';
+  // DEC-S13 -- hanya terisi pada keputusan yang MELAMPAUI jalur normal.
+  dasar_wewenang: string | null;
+  departemen_dilampaui: string | null;
+};
+
+type KategoriAlasan = { code: string; label: string; department: string | null; requires_note: boolean };
+
+const aksiLabels: Record<string, string> = {
+  hold: 'Ditahan',
+  release: 'Dilepas',
+  emergency_release: 'Dilepas darurat',
+  cancel: 'Dibatalkan',
+  process: 'Diproses jadi Sales Order',
+  lainnya: 'Perubahan status'
+};
+
+const departemenLabels: Record<string, string> = {
+  finance: 'Finance',
+  ppic: 'PPIC',
+  manager: 'Manager / GM'
+};
 
 const statusLabels: Record<string, string> = {
   new: 'Baru',
@@ -125,6 +166,7 @@ type PurchaseOrder = {
   payment_status: string;
   lines: PoLine[];
   approvals: Approval[];
+  riwayat_keputusan: JejakKeputusan[];
   sales_order: { sales_order_id: number; so_number: string; status: string; production_plant_id: number } | null;
 };
 
@@ -257,6 +299,17 @@ export default function CustomerPurchaseOrdersPage() {
   // SAMA (showNewCustomer, sudah begitu sejak awal) — BUKAN modal terpisah/modal-di-
   // dalam-modal, sesuai keputusan eksplisit. Validasi/handleSubmit TIDAK diubah.
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+
+  // WS-S05 -- aksi terkendali PO klien. Satu modal dipakai bergantian oleh ketiga aksi,
+  // karena bentuk keputusannya sama: pilih kategori alasan, tambahkan catatan bila perlu.
+  const [aksiTerbuka, setAksiTerbuka] = useState<{ po: PurchaseOrder; aksi: 'tahan' | 'lepas' | 'lepas_darurat' | 'batalkan' } | null>(null);
+  const [kategoriAlasan, setKategoriAlasan] = useState<KategoriAlasan[]>([]);
+  const [kategoriDipilih, setKategoriDipilih] = useState('');
+  const [catatanAlasan, setCatatanAlasan] = useState('');
+  const [aksiSibuk, setAksiSibuk] = useState(false);
+  const [aksiGalatForm, setAksiGalatForm] = useState('');
+  const [aksiGalatField, setAksiGalatField] = useState<{ field: string; message: string }[]>([]);
+  const galatAksi = (field: string) => aksiGalatField.find((g) => g.field === field)?.message;
 
   // Pencarian, saringan, dan pembagian halaman: Carbon DataTable tidak membawanya.
   const [cari, setCari] = useState('');
@@ -588,6 +641,97 @@ export default function CustomerPurchaseOrdersPage() {
     }
   };
 
+  // DEC-S13 -- departemen penahan dibaca dari jejak keputusan yang SUDAH ditampilkan
+  // halaman ini; nol field baru diminta ke server untuk keperluan ini.
+  const departemenPenahan = (po: PurchaseOrder): string | null => {
+    const penahanan = [...po.riwayat_keputusan].reverse().find((j) => j.aksi === 'hold');
+    return penahanan?.pelaku_departemen ?? null;
+  };
+
+  // Departemen pengguna sendiri -- MENYALIN decisionDepartment() supaya layar dan server
+  // memakai pemetaan yang sama. Bila keduanya berbeda, tombolnya muncul lalu servernya
+  // menolak, dan itu terbaca sebagai kerusakan.
+  const departemenSaya = decisionDepartment(role);
+
+  const bolehLepasDarurat = (po: PurchaseOrder): boolean => {
+    if (po.status !== 'on_hold') return false;
+    if (!canEmergencyReleaseHold(role)) return false;
+    const penahan = departemenPenahan(po);
+    // Penghalang milik departemen sendiri -> jalur normal terbuka, darurat tidak berlaku.
+    return penahan !== null && penahan !== departemenSaya;
+  };
+
+  const AKSI_KE_ENTITAS: Record<string, string> = { tahan: 'hold', lepas: 'release', lepas_darurat: 'emergency_release', batalkan: 'cancel' };
+
+  const bukaAksi = async (po: PurchaseOrder, aksi: 'tahan' | 'lepas' | 'lepas_darurat' | 'batalkan') => {
+    setAksiTerbuka({ po, aksi });
+    setKategoriDipilih('');
+    setCatatanAlasan('');
+    setAksiGalatForm('');
+    setAksiGalatField([]);
+    setKategoriAlasan([]);
+    const { ok, body } = await authedFetch(`/api/decision-reason-categories?entity=customer_purchase_orders&action=${AKSI_KE_ENTITAS[aksi]}`);
+    if (!ok) {
+      // Katalog yang gagal dimuat TIDAK boleh diam: kontrol kosong terlihat sama persis
+      // dengan "memang tidak ada pilihan", dan pengguna akan mengira aksinya rusak.
+      setAksiGalatForm(String((body as { error?: unknown })?.error ?? 'Daftar kategori alasan gagal dimuat.'));
+      return;
+    }
+    setKategoriAlasan(((body as { categories?: KategoriAlasan[] }).categories ?? []));
+  };
+
+  const kategoriTerpilih = kategoriAlasan.find((k) => k.code === kategoriDipilih) ?? null;
+
+  const kirimAksi = async () => {
+    if (!aksiTerbuka) return;
+    setAksiGalatForm('');
+    setAksiGalatField([]);
+    if (!kategoriDipilih) {
+      setAksiGalatField([{ field: 'reason_category', message: 'Pilih kategori alasan lebih dulu.' }]);
+      return;
+    }
+    // Kewajiban catatan diperiksa DI SINI juga, bukan hanya di server -- supaya
+    // penggunanya tahu sebelum menekan tombol. Servernya tetap yang menentukan,
+    // dan pesannya SAMA-SAMA menempel di kolomnya (bukan di dasar modal), supaya
+    // satu kesalahan tidak terlihat seperti dua masalah berbeda.
+    if (kategoriTerpilih?.requires_note && catatanAlasan.trim() === '') {
+      setAksiGalatField([{ field: 'reason_note', message: 'Kategori ini mewajibkan catatan tambahan.' }]);
+      return;
+    }
+    setAksiSibuk(true);
+    // Alamat ditulis LENGKAP dan literal, bukan dirangkai dari variabel. Bukan gaya:
+    // penjaga proyek ini memeriksa bahwa setiap alamat /api yang ditulis kode benar-benar
+    // punya route di App Router -- dan alamat yang dirangkai saat berjalan TIDAK BISA
+    // diperiksa, sehingga route yang hilang baru ketahuan saat penggunanya menekan tombol.
+    const ALAMAT_AKSI: Record<'tahan' | 'lepas' | 'lepas_darurat' | 'batalkan', string> = {
+      tahan: '/api/customer-purchase-orders/tahan',
+      lepas: '/api/customer-purchase-orders/lepas',
+      lepas_darurat: '/api/customer-purchase-orders/lepas-darurat',
+      batalkan: '/api/customer-purchase-orders/batalkan'
+    };
+    const { ok, body } = await authedFetch(ALAMAT_AKSI[aksiTerbuka.aksi], {
+      method: 'POST',
+      body: JSON.stringify({
+        customer_purchase_order_id: aksiTerbuka.po.customer_purchase_order_id,
+        reason_category: kategoriDipilih,
+        reason_note: catatanAlasan
+      })
+    });
+    setAksiSibuk(false);
+    if (!ok) {
+      const pesan = String((body as { error?: unknown })?.error ?? 'Tindakan gagal.');
+      const field = (body as { field?: unknown })?.field;
+      if (typeof field === 'string') {
+        setAksiGalatField([{ field, message: pesan }]);
+        return;
+      }
+      setAksiGalatForm(pesan);
+      return;
+    }
+    setAksiTerbuka(null);
+    await loadPurchaseOrders();
+  };
+
   const detailPo = (po: PurchaseOrder) => {
     const adaKolomHarga = po.lines.some((line) => line.unit_price !== null);
     const semuaSetuju = po.approvals.every((a) => a.status === 'approved');
@@ -710,6 +854,80 @@ export default function CustomerPurchaseOrdersPage() {
 
         {actionMessage[po.customer_purchase_order_id] ? (
           <InlineNotification kind="info" lowContrast hideCloseButton title="Hasil tindakan" subtitle={actionMessage[po.customer_purchase_order_id]} />
+        ) : null}
+
+        {/* WS-S05 -- aksi terkendali. Aturan modal #9: aksi merusak DIJAUHKAN dari aksi
+            biasa. "Batalkan" didorong ke kanan dengan seluruh lebar panel di antaranya,
+            karena di layar sentuh jari jauh lebih besar daripada kursor. */}
+        {po.status === 'new' || po.status === 'on_hold' ? (
+          <div className="po-aksi">
+            {po.status === 'new' ? (
+              <Button kind="tertiary" size="md" onClick={() => bukaAksi(po, 'tahan')}>
+                Tahan PO ini
+              </Button>
+            ) : (
+              <>
+                <Button kind="tertiary" size="md" onClick={() => bukaAksi(po, 'lepas')}>
+                  Lepas tahanan
+                </Button>
+                {/* DEC-S13 -- pelepasan DARURAT hanya muncul bila jalur normal memang
+                    tertutup bagi pengguna ini: penghalangnya milik departemen LAIN, dan
+                    ia memegang wewenang darurat. Menyembunyikannya hanya menyembunyikan;
+                    yang menegakkan tetap fungsi basis data. */}
+                {bolehLepasDarurat(po) ? (
+                  <Button kind="danger--tertiary" size="md" onClick={() => bukaAksi(po, 'lepas_darurat')}>
+                    Lepas darurat
+                  </Button>
+                ) : null}
+              </>
+            )}
+            <Button kind="danger--tertiary" size="md" className="po-aksi__merusak" onClick={() => bukaAksi(po, 'batalkan')}>
+              Batalkan PO
+            </Button>
+          </div>
+        ) : null}
+
+        {/* Riwayat keputusan -- §22. Ditampilkan apa adanya, termasuk baris yang TIDAK
+            tahu pelakunya. Mengarang pelaku untuk baris lama jauh lebih berbahaya
+            daripada mengakui tidak tahu. */}
+        {po.riwayat_keputusan.length > 0 ? (
+          <div className="po-riwayat">
+            <h3 className="halaman__subjudul halaman__subjudul--rapat">Riwayat keputusan</h3>
+            <ol className="po-riwayat__daftar">
+              {po.riwayat_keputusan.map((j) => (
+                <li key={j.id} className="po-riwayat__baris">
+                  <div className="po-riwayat__kepala">
+                    <Tag type={j.aksi === 'cancel' ? 'red' : j.aksi === 'emergency_release' ? 'magenta' : j.aksi === 'hold' ? 'gray' : 'green'}>{aksiLabels[j.aksi] ?? j.aksi}</Tag>
+                    <span className="po-riwayat__waktu">{new Date(j.waktu).toLocaleString('id-ID')}</span>
+                  </div>
+                  <p className="po-riwayat__isi">
+                    {j.kelengkapan === 'lengkap' ? (
+                      <>
+                        <strong>{j.pelaku_nama}</strong>
+                        {j.pelaku_departemen ? ` · ${departemenLabels[j.pelaku_departemen] ?? j.pelaku_departemen}` : ''}
+                      </>
+                    ) : (
+                      <em>Pelaku tidak tercatat — keputusan ini terjadi sebelum jejak pelaku dicatat sistem.</em>
+                    )}
+                  </p>
+                  {j.kategori_label || j.kategori ? (
+                    <p className="po-riwayat__isi">Alasan: {j.kategori_label ?? j.kategori}</p>
+                  ) : null}
+                  {j.catatan ? <p className="po-riwayat__isi">Catatan: {j.catatan}</p> : null}
+                  {/* DEC-S13 -- keputusan yang melampaui wewenang orang lain WAJIB terbaca
+                      sebagai itu, bukan menyamar jadi pelepasan biasa. */}
+                  {j.dasar_wewenang ? (
+                    <p className="po-riwayat__isi po-riwayat__isi--darurat">
+                      Dasar wewenang: {j.dasar_wewenang}
+                      {j.departemen_dilampaui
+                        ? ` · melampaui departemen ${departemenLabels[j.departemen_dilampaui] ?? j.departemen_dilampaui}`
+                        : ''}
+                    </p>
+                  ) : null}
+                </li>
+              ))}
+            </ol>
+          </div>
         ) : null}
       </div>
     );
@@ -1178,6 +1396,139 @@ export default function CustomerPurchaseOrdersPage() {
             onSimpan={() => void handleSubmit()}
             sedangMenyimpan={formStatus === 'pending'}
           />
+        </ComposedModal>
+      ) : null}
+
+      {/* WS-S05 -- satu modal untuk ketiga keputusan. Varian Carbon dipilih menurut SIFAT
+          pekerjaannya (DS-RULES C.2): Tahan & Lepas bersifat TRANSAKSIONAL (satu keputusan,
+          satu aksi), Batalkan bersifat BERBAHAYA (danger) karena tidak bisa dibatalkan. */}
+      {aksiTerbuka ? (
+        <ComposedModal
+          open
+          size="sm"
+          danger={aksiTerbuka.aksi === 'batalkan' || aksiTerbuka.aksi === 'lepas_darurat'}
+          onClose={() => {
+            setAksiTerbuka(null);
+            return true;
+          }}
+        >
+          <ModalHeader
+            label={`PO ${aksiTerbuka.po.po_number}`}
+            title={
+              aksiTerbuka.aksi === 'tahan'
+                ? 'Tahan PO klien'
+                : aksiTerbuka.aksi === 'lepas'
+                  ? 'Lepas tahanan PO klien'
+                  : aksiTerbuka.aksi === 'lepas_darurat'
+                    ? 'Lepas darurat — melampaui departemen penahan'
+                    : 'Batalkan PO klien'
+            }
+            closeModal={() => setAksiTerbuka(null)}
+          />
+          <ModalBody hasForm>
+            <p className="po-aksi__akibat">
+              {aksiTerbuka.aksi === 'tahan'
+                ? 'PO tetap aktif, tetapi tidak bisa diproses jadi Sales Order sampai penghalangnya dilepas.'
+                : aksiTerbuka.aksi === 'lepas'
+                  ? 'PO kembali bisa diproses jadi Sales Order.'
+                  : aksiTerbuka.aksi === 'lepas_darurat'
+                    ? 'Anda melepas penghalang milik DEPARTEMEN LAIN. Ini bukan pelepasan biasa: alasannya wajib, dan keputusan ini tercatat atas nama Anda beserta dasar wewenangnya.'
+                    : 'Pembatalan bersifat final — PO ini tidak bisa diaktifkan kembali.'}
+            </p>
+
+            {/* DEC-S13 -- penahanan ASLI ditampilkan apa adanya sebelum keputusan diambil.
+                Sejarah tidak ditulis ulang: baris penahanan tetap milik penahannya, dan
+                pelepasan darurat menjadi baris BARU di sampingnya. */}
+            {aksiTerbuka.aksi === 'lepas_darurat' ? (() => {
+              const penahanan = [...aksiTerbuka.po.riwayat_keputusan].reverse().find((j) => j.aksi === 'hold');
+              return (
+                <div className="po-darurat__asal">
+                  <h3 className="halaman__subjudul halaman__subjudul--rapat">Penahanan yang akan dilampaui</h3>
+                  {penahanan ? (
+                    <>
+                      <p className="po-aksi__akibat">
+                        <strong>{penahanan.pelaku_nama ?? 'Pelaku tidak tercatat'}</strong>
+                        {penahanan.pelaku_departemen ? ` · ${departemenLabels[penahanan.pelaku_departemen] ?? penahanan.pelaku_departemen}` : ''}
+                        {' · '}
+                        {new Date(penahanan.waktu).toLocaleString('id-ID')}
+                      </p>
+                      <p className="po-aksi__akibat">Alasan penahanan: {penahanan.kategori_label ?? penahanan.kategori ?? '—'}</p>
+                      {penahanan.catatan ? <p className="po-aksi__akibat">Catatan: {penahanan.catatan}</p> : null}
+                    </>
+                  ) : (
+                    <p className="po-aksi__akibat">Penahanan ini terjadi sebelum jejak pelaku dicatat sistem.</p>
+                  )}
+                </div>
+              );
+            })() : null}
+            <p className="po-aksi__akibat">
+              Status sekarang: <strong>{statusLabels[aksiTerbuka.po.status] ?? aksiTerbuka.po.status}</strong>
+              {' → '}
+              <strong>
+                {aksiTerbuka.aksi === 'tahan'
+                  ? statusLabels.on_hold
+                  : aksiTerbuka.aksi === 'lepas' || aksiTerbuka.aksi === 'lepas_darurat'
+                    ? statusLabels.new
+                    : statusLabels.cancelled}
+              </strong>
+            </p>
+
+            {/* Katalog datang dari basis data; layar TIDAK memuat daftarnya sendiri. */}
+            <Select
+              id="po-aksi-kategori"
+              size="lg"
+              labelText="Kategori alasan"
+              helperText="Alasan disimpan agar keputusan ini bisa dijelaskan berbulan-bulan kemudian."
+              invalid={Boolean(galatAksi('reason_category'))}
+              invalidText={galatAksi('reason_category')}
+              value={kategoriDipilih}
+              onChange={(e) => {
+                setKategoriDipilih(e.target.value);
+                setAksiGalatField([]);
+              }}
+            >
+              <SelectItem value="" text="Pilih alasan…" />
+              {kategoriAlasan.map((k) => (
+                <SelectItem key={k.code} value={k.code} text={k.label} />
+              ))}
+            </Select>
+
+            <TextArea
+              id="po-aksi-catatan"
+              labelText="Catatan tambahan"
+              helperText={kategoriTerpilih?.requires_note ? 'Wajib diisi untuk kategori ini.' : 'Boleh dikosongkan.'}
+              rows={3}
+              invalid={Boolean(galatAksi('reason_note'))}
+              invalidText={galatAksi('reason_note')}
+              value={catatanAlasan}
+              onChange={(e) => {
+                setCatatanAlasan(e.target.value);
+                setAksiGalatField([]);
+              }}
+            />
+
+            {aksiGalatForm && aksiGalatField.length === 0 ? (
+              <InlineNotification kind="error" lowContrast hideCloseButton title={aksiGalatForm} />
+            ) : null}
+          </ModalBody>
+          <ModalFooter>
+            <Button kind="secondary" onClick={() => setAksiTerbuka(null)}>
+              Batal
+            </Button>
+            <Button
+              kind={aksiTerbuka.aksi === 'batalkan' || aksiTerbuka.aksi === 'lepas_darurat' ? 'danger' : 'primary'}
+              disabled={aksiSibuk}
+              onClick={() => void kirimAksi()}
+            >
+              {aksiTerbuka.aksi === 'tahan'
+                ? 'Tahan PO'
+                : aksiTerbuka.aksi === 'lepas'
+                  ? 'Lepas tahanan'
+                  : aksiTerbuka.aksi === 'lepas_darurat'
+                    ? 'Lepas darurat'
+                    : 'Batalkan PO'}
+            </Button>
+          </ModalFooter>
         </ComposedModal>
       ) : null}
 

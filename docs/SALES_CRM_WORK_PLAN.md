@@ -19,17 +19,184 @@
 
 ## Current Workstream
 
-**WS-01 Customer PO** ✅ · **WS-03 Sales UX** ✅ · **WS-04 Test** ✅ · **WS-05 Alamat kirim** ✅
-· **WS-02 Sales Order** menunggu keputusan (DEC-S11)
+**GELOMBANG KEDELAPAN — DEC-S05 TERMIN & KEWAJIBAN PEMBAYARAN** (29 Agu 2026).
+
+| Workstream | Status |
+|---|---|
+| **WS-PAYMENT-TERMS** | **DONE / VERIFIED** — aturan pembayaran bisa dipakai ulang, persentase atau nominal tetap |
+| **WS-PAYMENT-OBLIGATION** | **DONE / VERIFIED** — komitmen **beku** per Sales Order, jumlahnya sama persis dengan nilai order |
+| **WS-CUSTOMER-PAYMENT** | **BLOCKED BY FIN-02** — pencatatan uang masuk milik Finance, dan domainnya belum ada |
+| **WS-CUSTOMER-RECEIVABLE** | **BLOCKED BY FIN-02** — piutang milik Finance, dan domainnya belum ada |
+
+**BD-10 TIDAK ditutup** oleh pekerjaan ini, dan alasannya kini **terukur**: `payments`,
+`receivables`, ledger, jatuh tempo — **seluruhnya nihil**. Yang bernama `invoices` adalah
+**FABRIX menagih tenant**, bukan tenant menagih pelanggan.
+
+> **Angka sensus, disertai saringannya** (diperbarui 29 Agu 2026 sore). Sensus pertama menyebut
+> **101 tabel**; itu benar untuk **tabel + view sebelum tiga tabel payment lahir**. Sensus ulang
+> hari ini dengan saringan lebih ketat: **96 tabel dasar** (tabel + view = 104). Kesimpulannya
+> identik — nol tabel pembayaran pelanggan, nol piutang, nol ledger, nol jatuh tempo.
+
+**Penyerahan FIN-02 sudah disusun** dan menunggu Architecture Guardian:
+`docs/finance/FIN-02_CUSTOMER_RECEIVABLE_DOMAIN_GAP.md` (paket penyelidikan + 24 pertanyaan yang
+**sengaja tidak dijawab sendiri**) dan `docs/sales-crm/SALES_CRM_FIN02_ARCHITECTURE_HANDOFF.md`.
+
+**Progres TIDAK naik karena dokumen ini lahir.** Tetap **64%** — yang bertambah adalah
+kejelasan, bukan kapabilitas. Angkanya hanya berubah bila kriteria terima kapabilitas bisnis
+berubah.
+
+## Gelombang ketujuh — permintaan pembatalan + Sales menahan PO klien
+
+Dua kapabilitas yang tadinya terkunci peran Sales kini terbuka dan **terbukti bekerja**.
+
+| Workstream | Status |
+|---|---|
+| **WS-SALES-ROLE** | **DONE** (gelombang keenam) |
+| **WS-SALES-CANCEL** | **DONE** — permintaan ≠ pembatalan, pemohon ≠ pemutus |
+| **WS-PO-HOLD** | **DONE** — Sales bisa menahan PO klien dengan alasan miliknya sendiri |
+
+## Gelombang keenam — peran Sales + tujuh keputusan ditutup
+
+**Peran `sales` kini ada sebagai peran tersendiri.** `admin_staff` **tidak disentuh** dan
+tetap bukan Sales. **Nol pengguna nyata dipindahkan** — membuat peran bukan menugaskan orang.
+
+**Tujuh keputusan bisnis ditutup pemilik produk:** DEC-S02 Quotation · S03 Sample ·
+S04 Kode produk pelanggan · S05 Payment terms · S07 Komplain · S08 Amandemen SO ·
+S09 Alamat kirim. **Keputusan CLOSED, implementasi OPEN** — ketujuhnya belum dibangun.
+DEC-S06 tetap OPEN DISCOVERY; DEC-S10 butuh tinjauan arsitektur.
+
+## Gelombang kelima — verifikasi independen (SEC-23)
+
+Diminta memverifikasi ulang SEC-21 tanpa mempercayai laporannya sendiri.
+**Verifikasi itu membantah laporan saya**: sesi yang membawa `company_id` tetapi **tanpa
+klaim peran** masih bisa membuat Sales Order. **Sudah ditutup (SEC-23), dan pengawas
+KELASNYA dibangun** — bukan hanya kasusnya.
+
+**Koreksi angka:** "11 → 5 fungsi terbuka anon" benar hanya untuk `SECURITY DEFINER`.
+Sebenarnya **14 dari 53** fungsi non-trigger dapat dipanggil anon; sembilan sisanya
+**bukan** `SECURITY DEFINER` sehingga RLS tetap berlaku.
+
+**Enam berkas keputusan** kini punya nama sendiri di `docs/sales-crm/`.
+
+## Gelombang keempat — koreksi keamanan P0 (SEC-21)
+
+Penjaga proyek ini menolak pekerjaan gelombang ketiga yang sudah saya laporkan selesai.
+Ditelusuri, dan **terbukti dengan percobaan sungguhan**: pemanggil **tanpa login** dapat
+membuat Sales Order untuk perusahaan yang bukan miliknya. **Sudah ditutup dan dibuktikan
+tertutup.**
+
+**Selesai gelombang ini:** SEC-21 (gagal-tertutup + pencabutan hak anon), matriks keamanan
+9 skenario, perbaikan cacat penolong test bersama, verifikasi cakupan pencadangan.
+
+**Usulan keputusan disiapkan, tidak diimplementasikan:** AD-03, BD-09, BD-10, Peran Sales,
+Override — seluruhnya di `docs/sales-crm/SALES_CRM_DECISION_PROPOSALS.md`.
 
 ## Current Step
 
-Berikutnya yang READY: menerapkan kontrak validasi ke formulir **Pelanggan** dan
-**Sales Order** — pola sudah terbukti di **empat** modul.
+Menunggu lima keputusan di atas. Yang **tidak** terhalang: **permintaan pembatalan Sales
+Order** — tetapi ia sendiri menunggu kejelasan **Peran Sales**, karena "Sales mengajukan"
+tidak bisa ditegakkan tanpa peran yang mewakilinya.
+
+> **Tiga temuan berubah material saat diverifikasi ulang**, dan itu mengubah pekerjaannya —
+> bukan sekadar memperbarui catatan. **SC-04**: jalur atomik ternyata **sudah ada** di
+> database dan tidak dipakai (jadi perbaikannya "pilih satu jalur", bukan "tulis transaksi").
+> **SC-05**: sumber kebenaran alamat **sudah terverifikasi**, jadi BL-04 menyempit dari
+> "sumber kebenaran mana" menjadi "nasib kolom lama". **SC-01**: mesin statusnya ternyata
+> **sudah kanonik di database** — yang nihil adalah kode yang menggerakkannya.
 
 ## Status
 
 IN PROGRESS — sebagian workstream berjalan, sebagian terhalang
+
+## Selesai di gelombang ketujuh 29 Agu 2026 — pembatalan & tahan
+
+| Kode | Hasil | Bukti |
+|---|---|---|
+| **PJL-11** | Sales **mengajukan** pembatalan; Manager/GM **memutuskan**. Mengajukan **tidak** membatalkan | `tests/permintaan_pembatalan.test.ts` (17) · **4 mutasi, keempatnya menggigit** |
+| **WS-PO-HOLD** | Sales menahan PO klien dengan kategori alasan milik Sales, jejaknya mencatat peran & departemennya | terbukti di `tests/peran_sales.test.ts` butir (j) |
+
+**Keputusan arsitektur yang paling menentukan:** menambah status `cancellation_requested`
+akan lebih elegan — dan **ditolak**, karena **AD-03 masih terbuka** dan menambah status akan
+mendahului keputusan itu. Bentuk yang dipilih **tidak menyentuh** `sales_orders.status`
+selama tahap permintaan, sehingga tetap benar apa pun hasil AD-03.
+
+**Yang tidak pernah dihapus:** pembatalan hanya mengubah **satu kolom status**. Nol
+`DELETE`. Test (8) membuktikannya: pembatalan disetujui, dan riwayat pengiriman beserta
+`qty_shipped` **terbukti tidak berubah**.
+
+## Selesai di gelombang keenam 29 Agu 2026 — peran Sales
+
+| Kode | Hasil | Bukti |
+|---|---|---|
+| **SEC-24** | Peran `sales` tersendiri, hak paling minimum | `tests/peran_sales.test.ts` (16) · **4 mutasi, keempatnya menggigit** |
+
+**Arsitektur yang ditemukan dan menentukan bentuknya:** FABRIX **tidak punya** tabel
+`roles`, `permissions`, `role_permissions`, maupun `departments` — nol, seluruhnya. Nama
+peran **itulah** mekanisme kanoniknya. Membuat tabel izin baru justru akan melanggar
+larangan membangun sistem peran paralel.
+
+**Yang Sales dapat:** pelanggan + PO klien, dan departemen keputusan `sales` sehingga bisa
+**menahan** PO klien sesuai BD-06.
+**Yang Sales TIDAK dapat:** wewenang pimpinan, persetujuan Finance/PPIC/Manager, data
+keuangan, upah, pembelian, BOM, Work Order, pengiriman, penyesuaian stok.
+
+**Pemisahan yang paling mudah rusak** sengaja dipecah dua fungsi: `decisionDepartment()`
+menjawab *departemen mana*, `canApproveDepartment()` menjawab *boleh menyetujui atau tidak*.
+
+## Selesai di gelombang keempat 29 Agu 2026 — koreksi keamanan P0
+
+| Kode | Hasil | Bukti |
+|---|---|---|
+| **SEC-21** | Pemanggil tanpa login **tidak lagi** bisa membuat Sales Order maupun membaca data keuangan | percobaan penyerang diulang → `42501`, **nol** SO tercipta · 11 → 5 fungsi terbuka anon |
+| **Matriks keamanan** | 9 skenario §10, tiap penolakan diperiksa **alasannya** | `tests/matriks_keamanan_sales.test.ts` (8) · **2 mutasi menggigit** |
+| **Penolong test** | `ensureAuthUser` gagal untuk email ber-huruf besar | diperbaiki **di kelasnya**, bukan di satu berkas |
+| **Pencadangan** | 92 tabel diuji ekspor sungguhan, nol gagal | tabel baru mengekspor 26 baris |
+
+**Temuan yang dicatat, tidak dikerjakan:** **SEC-22** (4 penolong RLS yang menerima
+identitas sebagai parameter — mencabutnya akan memadamkan RLS berjalan) dan **INF-28**
+(pencadangan terbukti bisa **diekspor**, belum terbukti bisa **dipulihkan**).
+
+## Selesai di gelombang ketiga 29 Agu 2026
+
+| WS | Hasil | Bukti |
+|---|---|---|
+| **WS-S04** | Jejak keputusan kini tahu **siapa, kenapa, dari apa ke apa** — `status_transition_log` diperluas 5 kolom + katalog 26 kategori alasan. **Nol tabel audit baru** | `tests/aksi_po_klien_jejak_keputusan.test.ts` (14) · migrasi `20260906100000` di 3 proyek |
+| **WS-S05** | PO klien bisa **Ditahan / Dilepas / Dibatalkan**, dengan wewenang per departemen dan alasan wajib | migrasi `20260906110000` · **5 mutasi diuji, kelimanya menggigit** · bukti peramban 6 lebar × (panel + modal) |
+
+**Temuan baru yang dicatat, bukan dikerjakan:** **PJL-10** (konflik registry vs implementasi
+untuk nama status Sales Order) dan **AUD-50** (lima tabel ber-jejak lain yang pelakunya
+belum pernah terisi — sengaja dikerjakan bersama fitur masing-masing, bukan sebagai sapuan).
+
+## Selesai di gelombang kedua 29 Agu 2026
+
+| WS | Hasil | Bukti |
+|---|---|---|
+| **WS-S03** | Pembuatan Sales Order kini **satu jalur**, atomik, dan membekukan identitas pelanggan | `tests/jalur_kanonik_sales_order.test.ts` (11) · migrasi `20260905100000` di 3 proyek · **4 mutasi diuji, keempatnya menggigit setelah 1 pengetatan** |
+| **WS-S02** | Snapshot identitas pelanggan di Sales Order | **diserap WS-S03** — tidak dikerjakan terpisah, karena menambalnya sendiri akan melanggengkan dua jalur |
+| **WS-S07** | Analisis sumber kebenaran alamat lama **tuntas** | sensus 5 titik sentuh, **nol pembaca** di jalur pengiriman, nol baris terisi |
+| **WS-S08** | Usulan prinsip audit keputusan FABRIX-wide | `SALES_CRM_DECISION_AUDIT_ARCHITECTURE.md` — **usulan, tidak diterapkan** (§14) |
+
+**Temuan arsitektur yang menentukan arah WS-S05:** FABRIX **sudah punya** mekanisme audit
+keputusan kanonik (`status_transition_log`, ber-trigger di 6 tabel). Yang kurang **lima
+kolom**, bukan satu tabel. Terukur: `data_change_audit_log` punya 598 baris dan **hanya 4
+yang tahu siapa pelakunya** — sisanya mencatat peran *database*, bukan peran FABRIX.
+
+## Selesai di giliran 29 Agu 2026 (batch rekonsiliasi)
+
+**Dua work order tuntas — keduanya yang TIDAK menunggu keputusan siapa pun:**
+
+| WO | Hasil | Bukti |
+|---|---|---|
+| **WO-S03** | `sales_order_lines` tidak lagi jadi satu-satunya tabel Sales ber-RLS tanpa kebijakan | `tests/akses_baris_sales_order_lines.test.ts` (7) · migrasi `20260904100000` di 3 proyek · **2 mutasi diuji, keduanya menggigit** |
+| **WO-S05** | Alamat tersimpan bisa dipilih saat membuat pengiriman | `tests/wos05_pemilih_alamat_pengiriman.test.ts` (10) · **5 mutasi diuji, semuanya menggigit** · bukti peramban 6 lebar + 3 pemeriksaan tepi |
+
+**Task tercatat di registry kanonik `build_tasks`** (bukan hanya di dokumen):
+`SEC-19` selesai · `KRM-06` selesai · `PJL-07` menunggu (P0) · `PJL-08` menunggu ·
+`SEC-20` menunggu · `DS-26` menunggu · `PJL-03` diperbarui dengan hasil rekonsiliasi.
+
+**Angka tidak naik dan itu disengaja.** Kedua WO memenuhi kriteria terimanya sendiri, tetapi
+**H1 maupun H2 belum tuntas seluruhnya** — dan bobot hanya diberikan per butir berbobot yang
+tuntas, bukan per pekerjaan yang selesai.
 
 > **KEMAJUAN TETAP 64%, DAN ITU DISENGAJA.** Dua workstream sudah menghasilkan kode yang
 > teruji dan terverifikasi di peramban — tetapi **H1** (koreksi komersial) dan **H2**
@@ -391,6 +558,9 @@ B2 — Route & Navigation Inventory.
 | 2026-08-29 | Fase F ditandai BLOCKED | Aturan bisnis butuh jawaban DEC-S02..S08 | Nol | DEC-S02..S08 |
 | 2026-08-29 | DEC-S09 ditambahkan | Alamat kirim lengkap di server tanpa layar (SC-05) | Nol | DEC-S09 |
 | 2026-08-29 | **DEC-S01 menutup BL-01** | Baseline bisnis baru: banyak order paralel eksplisit diizinkan; gerbang "satu order tuntas" **dicabut** | H tidak lagi terhalang seluruhnya | DEC-S01 |
+| 2026-08-29 | **Rekonsiliasi SC-01..SC-05 selesai** | 2 temuan tetap, **3 berubah material**, **2 temuan baru** (SC-01b, SC-05b) | **Nol** — bobot tidak diubah, 64% tetap | AD-01, AD-02, BD-01..08 |
+| 2026-08-29 | **BL-04 dipersempit** | Sumber kebenaran alamat terverifikasi lewat sensus kode; yang tersisa hanya nasib kolom lama | Nol — tetapi **membuka WO-S05** yang tadinya ikut terblokir | BL-04 |
+| 2026-08-29 | **BL-05 dibuka** | Dua implementasi lengkap pembuatan SO ditemukan saat verifikasi SC-04 | Nol pada bobot; menaikkan SC-04 jadi P0 dengan bentuk perbaikan berbeda | AD-02 |
 | 2026-08-29 | WS-01, WS-03, WS-04, WS-05 selesai | Dua koreksi + satu pelengkapan, seluruhnya teruji | Nol — H1/H2 belum tuntas | — |
 
 ---
@@ -407,6 +577,31 @@ B2 — Route & Navigation Inventory.
 | DEC-S06 | Pernah ada permintaan kontrak harga/volume komitmen? | Pemicu membuka blanket contract | PRODUCT | terbuka | D6 | — |
 | DEC-S07 | Seberapa sering retur/komplain setahun, bentuknya apa? | Dasar SALES-5 | PRODUCT | terbuka | D8 | — |
 | DEC-S08 | Seberapa sering qty/tanggal berubah setelah konfirmasi? | Memvalidasi prioritas SALES-4 | PRODUCT | terbuka | D7 | — |
+| **DEC-S11** | Pemisahan kepemilikan status Sales Order antar domain | Sales memiliki CANCELLED; Manufacturing memiliki IN PRODUCTION; Logistics berkontribusi pada COMPLETED | **PRODUCT** | **DITUTUP 29 Agu** | H | membuka WS-A (visibilitas turunan) |
+| **AD-01** | Status eksekusi SO **disimpan** (aturan DB) atau **diturunkan** (DEC-S11)? | `status_transition_rules` mengizinkan `in_production`/`completed` sebagai status tersimpan; DEC-S11 memberikannya ke domain lain | **ARCHITECTURE DECISION REQUIRED** | terbuka | WO-S01 | memblokir siklus hidup SO |
+| **AD-02** | Jalur kanonik pembuatan SO: **fungsi DB** atau **TypeScript**? | Dua implementasi lengkap hidup berdampingan; yang dipakai tidak atomik dan tidak menyalin snapshot identitas | **ARCHITECTURE DECISION REQUIRED** | terbuka | WO-S02 | memblokir perbaikan P0 |
+| **BD-01** | Order dianggap SELESAI kapan — terkirim, ditandatangani terima, atau lunas? | Menentukan arti `completed` | PRODUCT | terbuka | WO-S01 | — |
+| **BD-02** | Siapa boleh membatalkan Sales Order? | Wewenang tidak boleh ditebak | PRODUCT | terbuka | WO-S01 | — |
+| **BD-03** | Boleh batal setelah Work Order dibuat / produksi mulai? Perlu persetujuan siapa? | Bahan sudah terpakai — pembatalan berbiaya nyata | PRODUCT | terbuka | WO-S01 | — |
+| **BD-04** | Bila satu departemen MENOLAK PO Klien: PO bisa diperbaiki, atau mati? | `rejected` ada di CHECK, akibatnya belum ditentukan | PRODUCT | terbuka | WO-S01, WO-S04 | — |
+| **BD-05** | Apa arti "Ditunda" bagi PO Klien dalam pekerjaan sehari-hari? | Tanpa ini tombolnya cuma mengubah warna | PRODUCT | terbuka | WO-S04 | — |
+| **BD-06** | Siapa boleh menahan, melepas, membatalkan PO Klien? | Wewenang | PRODUCT | terbuka | WO-S04 | — |
+| **BD-07** | Alasan wajib diisi saat menahan/membatalkan? | Kolom `reason` sudah ada dan selalu kosong | PRODUCT | terbuka | WO-S04 | — |
+| **BD-08** | Alamat tujuan ditetapkan saat order diterima, atau cukup saat dikirim? | Menentukan perlu-tidaknya kolom alamat di SO | PRODUCT | terbuka | WO-S05b | — |
+| **AD-03** | Nama status Sales Order: registry kanonik (11 state) atau implementasi (4 state)? | Registry sendiri melarang penyalinan buta; menyalinnya menambah 7 state tanpa pemicu, dan 3 di antaranya melanggar AD-01 | **ARCHITECTURE DECISION REQUIRED** | terbuka | WS-S01 | memblokir penamaan status |
+| **BD-09** | Apa aturan pemenuhan yang dipakai — berapa toleransi kurang/lebih kirim yang dianggap "terpenuhi"? | BD-01 mensyaratkan "kuantitas terpenuhi sesuai aturan pemenuhan"; aturannya belum ada | PRODUCT | terbuka | WS-S01 | — |
+| **BD-10** | Dari mana Finance menyatakan kewajiban pembayaran terpenuhi? | `payment_terms` hanya `full`/`tempo`; **nol** tabel jatuh tempo maupun penerimaan pembayaran — Finance belum punya tempat menyatakannya | PRODUCT | terbuka | WS-S01 | — |
+| **DEC-S12** | Apakah `admin_staff` memang peran Sales, atau peran `sales` sungguhan belum ada? | 16 peran, tak satu pun `sales`; BD-06 menyebut Sales boleh menahan PO — hari ini tidak bisa ditegakkan | **PRODUCT** | terbuka | permintaan pembatalan, WS-S05 | memblokir "Sales mengajukan" |
+| **DEC-S13** | Perlukah aksi **Override** saat pemegang peran departemen penahan tidak tersedia? | BD-06 mengunci pelepasan ke departemen penahan; bila orangnya tidak ada, PO tertahan tanpa jalan keluar | **PRODUCT + ARCHITECTURE** | terbuka | WS-S05 | — |
+| **DEC-S12** | Apakah `admin_staff` peran Sales, atau peran Sales belum ada? | 16 peran, tak satu pun `sales` | **PRODUCT** | **DITUTUP 29 Agu** — `admin_staff` **BUKAN** Sales; peran Sales tersendiri **WAJIB** ada | SEC-24 | dibangun |
+| **DEC-S02** | Quotation jadi objek terstruktur di dalam FABRIX | Hari ini dibuat di Excel; tidak bisa dilacak, direvisi, atau diketahui kedaluwarsanya | **PRODUCT** | **DITUTUP 29 Agu** | SLS-08 | implementasi OPEN |
+| **DEC-S03** | Sample: alur, kepemilikan, pembayaran, pengiriman | Sales meminta, R&D membuat, Finance memverifikasi bila berbayar, Logistik mengirim | **PRODUCT** | **DITUTUP 29 Agu** | SLS-08 | implementasi OPEN |
+| **DEC-S04** | Kode produk pelanggan hidup berdampingan dengan kode FABRIX | Kode pelanggan **tidak boleh** melahirkan Product baru — ia rujukan, bukan identitas | **PRODUCT** | **DITUTUP 29 Agu** | SLS-08 | implementasi OPEN |
+| **DEC-S05** | Payment terms **dinegosiasikan** per transaksi, dan di-snapshot | Customer Master hari ini tidak bisa merekonstruksi terms historis | **PRODUCT** | **DITUTUP 29 Agu** | SLS-08 | bertemu **BD-10** yang masih terbuka |
+| **DEC-S07** | Komplain tercatat & tertelusur sampai batch | Batch **tidak** diduplikasi di Sales — tetap milik Traceability | **PRODUCT** | **DITUTUP 29 Agu** | SLS-08 | implementasi OPEN |
+| **DEC-S08** | Perubahan qty/tanggal setelah konfirmasi lewat **amandemen**, bukan edit senyap | Nilai asli + usulan + keputusan + pelaku + alasan + waktu disimpan | **PRODUCT** | **DITUTUP 29 Agu** | SLS-08 | implementasi OPEN |
+| **DEC-S06** | Kontrak / komitmen volume | Belum ada bukti kebutuhan nyata | **PRODUCT** | **OPEN DISCOVERY** | — | jangan dibangun dulu |
+| **DEC-S10** | Master Document vs catatan keputusan vs catatan transaksi | Keputusan bisnis wajib tetap bisa direkonstruksi dari catatan transaksional | **ARCHITECTURE REVIEW** | terbuka | — | — |
 
 ---
 
@@ -417,7 +612,8 @@ B2 — Route & Navigation Inventory.
 | ~~BL-01~~ | SALES-1..5 `ditunda_sadar` | H, I, J | — | Product Owner | 2026-08-28 | **DITUTUP 29 Agu** | **DEC-S01** mencabutnya: banyak order paralel eksplisit diizinkan |
 | **BL-02** | WS-02 Sales Order: tiga dari empat status tidak bisa dicapai, tetapi KAPAN status berubah adalah aturan bisnis — dan sebagian mencerminkan proses domain lain | WS-02 | 1 koreksi P1 | Product Owner + Architecture Guardian | 2026-08-29 | **OPEN** | DEC-S11 |
 | **BL-03** | Tombol "Batal" modal bertahap terpotong di 360px; komponen BERSAMA, 4 halaman konsumen | WS-03 | 4 halaman | Claude Code | 2026-08-29 | **OPEN** | audit konsumen dulu (§32) |
-| **BL-04** | `customers.shipping_address` (kolom tunggal) hidup berdampingan dengan tabel daftar `customer_delivery_addresses`. Mana sumber kebenaran saat pengiriman dibuat **belum diverifikasi**; mencabut kolom = migrasi menyentuh data | WS-05 | 1 entitas | Architecture Guardian | 2026-08-29 | **OPEN** | **ARCHITECTURE DECISION REQUIRED** |
+| **BL-04** | *(DIPERSEMPIT 29 Agu)* Sumber kebenaran alamat pengiriman **SUDAH TERVERIFIKASI**: `shipments.delivery_address` (teks beku) yang menang; `delivery_address_id` jejak referensi; `customers.shipping_address` **tidak pernah dibaca** saat mengirim. Sisa keputusan: **nasib kolom lama** (menyentuh skema) | WO-S05b | 1 kolom, **0 baris terisi** | Architecture Guardian | 2026-08-29 | **OPEN (dipersempit)** | **ARCHITECTURE DECISION REQUIRED** — bagian UI-nya (WO-S05) TIDAK ikut terblokir |
+| **BL-05** | *(BARU 29 Agu)* Pembuatan Sales Order punya **DUA implementasi lengkap**: fungsi DB `process_customer_purchase_order()` (atomik, menyalin snapshot identitas, **nol pemanggil aplikasi**) dan `processCustomerPurchaseOrder.ts` (dipakai route, kompensasi manual, **tidak menyalin snapshot**) | WO-S02 | **P0**, 0 baris terdampak (0 SO) | Architecture Guardian | 2026-08-29 | **OPEN** | **AD-02** |
 
 ---
 
@@ -465,3 +661,149 @@ Belum dimulai (PHASE H). **Nol migrasi dibuat sejauh ini.**
 
 Seluruh butir §42 perintah masih **kosong**. Tidak satu pun boleh dicentang sebelum
 phase-nya dijalankan dan buktinya ada.
+
+---
+
+## Gelombang kesembilan — rekonsiliasi FIN-02 & aturan bisnis terkunci (29 Agu 2026, malam)
+
+**Nol kode, nol migrasi, nol tabel Finance.** Isinya rekonsiliasi, dokumentasi, penyerahan.
+
+| Workstream | Status |
+|---|---|
+| **WS-PAYMENT-TERMS** | **DONE / VERIFIED** |
+| **WS-PAYMENT-OBLIGATION** | **DONE / VERIFIED** |
+| **WS-CUSTOMER-PAYMENT** | **BLOCKED BY FIN-02** |
+| **WS-CUSTOMER-RECEIVABLE** | **BLOCKED BY FIN-02** |
+| **WS-SO-COMPLETION** | **UNBLOCKED — SIAP DIJADWALKAN** (aturan terkunci; **tidak** dikerjakan batch ini) |
+| **WS-PAYMENT-GATE** | **ARCHITECTURE PENDING** — gerbang produksi & pengiriman, menunggu FIN-02 |
+
+### Yang berubah paling material: satu rantai penghambat ternyata keliru
+
+Sembilan tempat di repositori mencatat **FIN-02 → BD-10 → penyelesaian Sales Order terblokir**.
+Keputusan pemilik produk 29 Agu 2026 **memutus rantai itu**: penyelesaian Sales Order berbasis
+**PEMENUHAN** (diproduksi + dikirim + konfirmasi PPIC + konfirmasi Manager/GM), **bukan**
+pembayaran. Order boleh **COMPLETED** meski pelanggan masih menunggak.
+
+Kesembilan tempat sudah dikoreksi **dengan menyebut bunyi lamanya**, bukan dihapus.
+
+| Keputusan | Sebelum | Sesudah |
+|---|---|---|
+| **BD-01** kapan order selesai | OPEN | **CLOSED** — berbasis pemenuhan |
+| **BD-09** toleransi kurang-kirim | OPEN | **CLOSED** — **nol toleransi otomatis** |
+| **BD-10** kapan pembayaran terpenuhi | OPEN, menahan penyelesaian SO | **OPEN**, menahan **status pembayaran & gerbang** saja |
+
+### Kontrak lintas domain yang diberi nama (belum ada, belum dibangun)
+
+**K-07** Finance → pelunasan milestone → **Produksi** · **K-08** Finance → pelunasan milestone →
+**Pengiriman** · **K-09** Pemenuhan → **penutupan Sales Order**.
+
+### Dokumen
+
+`docs/finance/FIN-02_ARCHITECTURE_RECONCILIATION.md` (22 bagian) ·
+`docs/finance/FIN-02_CUSTOMER_RECEIVABLE_DOMAIN_GAP.md` (**35 pertanyaan bergolongan A–E**) ·
+`docs/sales-crm/SALES_CRM_FIN02_ARCHITECTURE_HANDOFF.md`.
+
+### Progres
+
+**TETAP 64%.** Rekonsiliasi dan dokumentasi **tidak menaikkan progres** — yang menaikkannya hanya
+kapabilitas workstream yang benar-benar selesai dan terverifikasi. **WS-SO-COMPLETION baru
+"boleh dimulai", belum "selesai".**
+
+
+---
+
+## Gelombang kesepuluh — PJL-03 penutupan Sales Order (29 Agu 2026, malam)
+
+| Workstream | Status |
+|---|---|
+| **WS-SO-COMPLETION** | **DONE / VERIFIED** — 23 pemeriksaan, empat mutasi menggigit, bukti peramban enam lebar; regresi penuh **91 berkas · 690 lulus · 0 gagal** |
+| **WS-PAYMENT-TERMS** · **WS-PAYMENT-OBLIGATION** | **DONE / VERIFIED** (gelombang kesembilan) |
+| **WS-CUSTOMER-PAYMENT** · **WS-CUSTOMER-RECEIVABLE** | **BLOCKED BY FIN-02** |
+| **WS-PAYMENT-GATE** | **ARCHITECTURE PENDING** — menunggu FIN-02 |
+
+**Apa yang sekarang bisa dilakukan sistem:** PPIC mengonfirmasi bahwa seluruh barang sudah
+diproduksi dan dikirim; Manager/GM menutup ordernya. **Tunggakan pembayaran tidak menghalangi.**
+Kurang kirim **menghalangi** — nol toleransi. Layar menyebut **sebab** bila belum bisa ditutup,
+bukan sekadar "tidak bisa".
+
+**Yang ditemukan saat mengerjakannya, dan menentukan bentuk pekerjaannya:** transisi
+`confirmed → completed` **tidak ada** di aturan transisi, dan `in_production` **tidak pernah
+ditulis kode mana pun** — sehingga penutupan mustahil bahkan bila tombolnya dibuat. Satu jalur
+ditambahkan; **nol status baru**, jadi AD-03 tetap terbuka.
+
+**Temuan yang dicatat dan TIDAK dikerjakan:** **PJL-16** — Sales Order tanpa Work Order sama
+sekali tidak bisa ditutup (gagal tertutup, disengaja). Arah sebaliknya mengubah arti kata
+"selesai", jadi keputusannya milik pemilik produk.
+
+### Progres
+
+**TETAP 64%.** PJL-03 memang selesai dan terverifikasi, tetapi **Fase H memuat banyak butir**
+dan bobot kenaikannya adalah **kriteria terima milik arsitek** — bukan angka yang boleh saya
+karang sendiri. Yang bisa saya nyatakan dengan bukti: **satu workstream berpindah dari
+"terhalang" ke "selesai & terverifikasi"**.
+
+
+---
+
+## Gelombang kesebelas — FIN-02 · BD-10 · AD-03 · DEC-S13 (30 Agu 2026)
+
+| Workstream | Status |
+|---|---|
+| **WS-FIN02-CONTRACT** | **DOCUMENTED** — kontrak antar domain didefinisikan; sisi Finance tetap belum ada |
+| **WS-BD10-RECONCILE** | **VERIFIED** — nol kode menggerbangi penyelesaian SO dengan pembayaran |
+| **WS-AD03-AUDIT** | **PROPOSAL** — audit 11 status + tiga opsi kanonik; implementasi **tidak diubah** |
+| **WS-DEC-S13** | **DONE / VERIFIED** — 15 pemeriksaan, 3 mutasi menggigit, peramban 6 lebar bersih; regresi penuh **92 berkas · 705 lulus · 0 gagal** |
+
+## STATUS PENYERAHAN — untuk agen berikutnya (30 Agu 2026)
+
+**Apa yang berubah**: pelepasan darurat penghalang PO klien ada dan terbukti; kontrak
+Sales↔Finance punya bentuk tertulis; kosakata status Sales Order sudah diaudit penuh.
+
+**Apa yang tersisa**: FIN-02 (butuh keputusan kepemilikan domain Finance) · AD-03 (butuh
+keputusan A/B/C) · PJL-13 layar termin · PJL-15 gerbang pembayaran · PJL-16 order tanpa Work
+Order · PJL-17 "Status bayar" yang tidak punya sumber · QA-04 jalur emas.
+
+**Keputusan TERKUNCI**: AD-01 · AD-02 · BD-01 · BD-02 · BD-03 · BD-06 · BD-07 · BD-09 · BD-11 ·
+BD-12 · DEC-S02..S12 · **DEC-S13**.
+
+**Keputusan TERBUKA**: FIN-02 · BD-10 · AD-03 · lingkup wewenang darurat (lebih sempit dari
+kepemimpinan?) · PJL-16 · PJL-17 · format Quotation.
+
+**Kontrak yang kini ADA**: K-01..K-05 · K-09 (pemenuhan → penutupan). **Didefinisikan tapi
+sisi seberangnya belum ada**: K-06. **Belum ada**: K-07 · K-08.
+
+**Status yang masih ditinjau**: `in_production` — tersimpan di skema, **tidak pernah ditulis**.
+
+**Wewenang yang ada**: 17 peran · `canApproveDepartment` (finance/ppic/manager) ·
+`decisionDepartment` (+sales) · `EMERGENCY_HOLD_RELEASE_ROLES` (**baru**).
+
+**Ketergantungan lintas domain yang tersisa**: Sales menunggu **Finance** (pembayaran, piutang,
+gerbang) dan **Manufacturing/Logistik** (fakta pemenuhan — sudah berjalan lewat turunan).
+
+### Progres
+
+**TETAP 64%.**
+
+
+---
+
+## Gelombang kedua belas — penutupan keputusan (30 Agu 2026)
+
+| Workstream | Status |
+|---|---|
+| **WS-PJL16-STOCK-FULFILLMENT** | **DONE / VERIFIED** — 25 pemeriksaan, 2 mutasi menggigit, bukti peramban skenario stok |
+| **WS-AD03-STATE-CUTOVER** | **DONE / VERIFIED** — `in_production` dicabut, nol baris terdampak |
+| **WS-DECS13-AUTHORITY** | **DONE / VERIFIED** — GM saja, 16 pemeriksaan, mutasi menggigit |
+| **WS-PJL17-PAYMENT-DISPLAY** | **PARKED** — keputusan: jangan mengarang data |
+| **WS-HANDOFF-ENGINEERING** | **DONE** — `SALES_TO_ENGINEERING_PRODUCT_HANDOFF.md` (23 bagian) |
+
+**Progres TETAP 64%.** Empat keputusan ditutup dan tiga di antaranya berimplementasi, tetapi
+bobot fase mengikuti kriteria terima di rencana ini — bukan jumlah keputusan, dokumen, atau test.
+
+
+### Bukti akhir gelombang kedua belas
+
+Regresi penuh: **92 berkas · 708 lulus · 7 dilewati · 0 gagal** (1.691 detik), dicocokkan ke
+kode sumber **715 = 715**. Test khusus Sales: **155 pemeriksaan di 11 berkas**.
+Uji mutasi kumulatif batch ini: **3 penjaga dirusak, ketiganya menggigit** (5 · 3 · 2 kegagalan).
+Lint **28 = patokan**. Keamanan data: nol sisa fixture di kedua project.

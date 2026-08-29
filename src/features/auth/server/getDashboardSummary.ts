@@ -27,7 +27,10 @@ export async function getDashboardSummary(request: NextRequest): Promise<ApiResu
 
     const [newPoResult, activeSoResult, activeEmployeeResult, lotsResult, itemsResult] = await Promise.all([
       adminClient.from('customer_purchase_orders').select('customer_purchase_order_id', { count: 'exact', head: true }).eq('company_id', appUser.company_id).eq('status', 'new'),
-      adminClient.from('sales_orders').select('sales_order_id', { count: 'exact', head: true }).eq('company_id', appUser.company_id).in('status', ['confirmed', 'in_production']),
+      adminClient.from('sales_orders').select('sales_order_id', { count: 'exact', head: true }).eq('company_id', appUser.company_id)// AD-03 (30 Agu 2026): `in_production` DICABUT sebagai status Sales Order -- ia tidak pernah
+      // ditulis kode mana pun, dan kebenaran produksi milik Manufacturing. Yang tersisa untuk
+      // "order yang masih berjalan" adalah `confirmed`.
+      .eq('status', 'confirmed'),
       adminClient.from('employees').select('employee_id', { count: 'exact', head: true }).eq('company_id', appUser.company_id).eq('is_active', true),
       adminClient.from('lots').select('item_id, quantity_on_hand').eq('company_id', appUser.company_id).eq('status', 'available'),
       adminClient.from('items').select('item_id, min_stock_level').eq('company_id', appUser.company_id)

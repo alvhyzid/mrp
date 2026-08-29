@@ -5,6 +5,13 @@ import { useRouter } from 'next/navigation';
 import { supabase, hasSupabaseConfig } from '@/lib/supabaseClient';
 import {
   Button,
+  ComposedModal,
+  ModalBody,
+  ModalFooter,
+  ModalHeader,
+  Select,
+  SelectItem,
+  TextArea,
   DataTable,
   DataTableSkeleton,
   Dropdown,
@@ -34,16 +41,37 @@ import {
 import { KepalaHalaman } from '@/components/ui/kepala-halaman';
 
 // SALES ORDER — dimigrasikan ke Carbon 26 Agu 2026 (DS-09), cetakan Master Item.
-import { canViewPlanningFeasibility, canViewFinancialData } from '@/lib/roles';
+import { canViewPlanningFeasibility, canViewFinancialData, isCompanyLeadership, decisionDepartment } from '@/lib/roles';
 import { formatCurrency, formatNumberId } from '@/lib/currency';
 import { ProvenanceInfoButton } from '@/components/ui/provenance-info-button';
 
-const statusLabels: Record<string, string> = { confirmed: 'Dikonfirmasi', in_production: 'Sedang Produksi', completed: 'Selesai', cancelled: 'Batal' };
+// STATUS KOMERSIAL — milik Sales. Ini yang dijanjikan ke pelanggan.
+// AD-03 (30 Agu 2026): `in_production` dicabut dari kekangan status. Labelnya ikut dibuang --
+// label untuk status yang tidak bisa ada lagi hanya akan membingungkan pembaca berikutnya.
+// Kemajuan produksi tetap terlihat, lewat `eksekusi` yang DITURUNKAN dari Work Order.
+const statusLabels: Record<string, string> = { confirmed: 'Dikonfirmasi', completed: 'Selesai', cancelled: 'Batal' };
+
+// VISIBILITAS EKSEKUSI — DITURUNKAN dari domain lain, bukan status Sales (DEC-S11).
+// Produksi dimiliki Work Order; pengiriman dimiliki modul Pengiriman. Keduanya ditampilkan
+// TERPISAH dari status komersial supaya tidak ada yang mengira Sales yang menentukannya.
+const eksekusiProduksiLabels: Record<string, string> = {
+  belum: 'Belum diproduksi',
+  direncanakan: 'Produksi direncanakan',
+  berjalan: 'Produksi berjalan',
+  selesai: 'Produksi selesai'
+};
+const eksekusiPengirimanLabels: Record<string, string> = {
+  belum: 'Belum dikirim',
+  sebagian: 'Terkirim sebagian',
+  penuh: 'Terkirim penuh'
+};
+const eksekusiWarna: Record<string, 'gray' | 'blue' | 'green' | 'teal'> = {
+  belum: 'gray', direncanakan: 'blue', berjalan: 'teal', selesai: 'green', sebagian: 'blue', penuh: 'green'
+};
 /// Warna Tag mengikuti ARTI. "Sedang diproduksi" ungu, bukan kuning: itu kemajuan yang
 /// normal, bukan peringatan. Hanya "dibatalkan" yang merah.
 const statusWarnaTag: Record<string, 'blue' | 'purple' | 'green' | 'red'> = {
   confirmed: 'blue',
-  in_production: 'purple',
   completed: 'green',
   cancelled: 'red'
 };
@@ -81,9 +109,35 @@ type SalesOrder = {
   production_plant_id: number;
   production_plant_name: string | null;
   status: string;
+  eksekusi?: { produksi: string; pengiriman: string };
+  // PJL-03 -- kelayakan penutupan DIHITUNG SERVER oleh fungsi yang sama yang menegakkannya.
+  // Layar hanya menampilkan; ia tidak pernah menyimpulkan kelayakan dengan rumusnya sendiri.
+  kelayakan_penutupan?: {
+    layak: boolean;
+    sebab_belum_layak: string[];
+    // PJL-16 -- sumber pemenuhan DITURUNKAN dari jejak lot pengiriman, bukan kolom baru.
+    sumber_pemenuhan?: 'produksi' | 'stok' | 'campuran' | 'belum_terkirim';
+    lot_terkirim?: number;
+    lot_dari_produksi?: number;
+    qty_dipesan: number | string;
+    qty_terkirim: number | string;
+    work_order_total: number;
+    work_order_selesai: number;
+    pembatalan_menunggu: number;
+  } | null;
+  konfirmasi_penutupan?: {
+    departemen: string;
+    nama: string;
+    peran: string;
+    waktu: string;
+    kategori_label: string;
+    catatan: string | null;
+  }[];
   created_at: string;
   lines: SoLine[];
   shipments: SoShipmentSummary[];
+  permintaan_pembatalan: PermintaanPembatalan[];
+  jadwal_pembayaran: KewajibanPembayaran[];
 };
 
 type BlockingStage = { sequence_no: number; step_name: string };
@@ -175,6 +229,61 @@ const marginCategoryProvenance: Record<string, { formula: string; sourceDocument
   }
 };
 
+// WS-SALES-CANCEL -- permintaan pembatalan, dibaca dari tabel KANONIK.
+type PermintaanPembatalan = {
+  id: number;
+  status: 'pending' | 'approved' | 'rejected' | 'withdrawn';
+  diajukan: string;
+  kategori_label: string;
+  catatan: string | null;
+  pemohon_nama: string | null;
+  pemohon_peran: string | null;
+  pemohon_departemen: string | null;
+  diputuskan: string | null;
+  keputusan_label: string | null;
+  keputusan_catatan: string | null;
+  pemutus_nama: string | null;
+  pemutus_peran: string | null;
+  eksekusi_saat_diajukan: { work_order?: number; qty_dipesan?: number; qty_terkirim?: number; pengiriman?: number } | null;
+};
+
+type KategoriAlasan = { code: string; label: string; department: string | null; requires_note: boolean };
+
+// DEC-S05 -- satu baris jadwal pembayaran. SNAPSHOT: nilainya dibekukan saat termin
+// diterapkan, jadi mengubah master kelak tidak mengubah angka yang sudah disepakati.
+type KewajibanPembayaran = {
+  id: number;
+  urutan: number;
+  termin: string;
+  label: string;
+  persen: number | null;
+  pemicu: string;
+  tempo_hari: number | null;
+  nilai: number;
+  pembayaran_belum_tercatat: boolean;
+};
+
+const pemicuLabels: Record<string, string> = {
+  konfirmasi_order: 'Saat order dikonfirmasi',
+  sebelum_produksi: 'Sebelum produksi dimulai',
+  sebelum_kirim: 'Sebelum barang dikirim',
+  setelah_kirim_n_hari: 'Setelah barang dikirim'
+};
+
+const permintaanStatusLabels: Record<string, string> = {
+  pending: 'Menunggu keputusan',
+  approved: 'Disetujui',
+  rejected: 'Ditolak',
+  withdrawn: 'Ditarik'
+};
+
+const permintaanStatusWarna: Record<string, 'blue' | 'red' | 'gray'> = {
+  pending: 'blue',
+  approved: 'red',
+  rejected: 'gray',
+  withdrawn: 'gray'
+};
+
 const shipmentStatusLabels: Record<string, string> = { draft: 'Draft', shipped: 'Terkirim', delivered: 'Diterima', cancelled: 'Batal' };
 const shipmentStatusWarnaTag: Record<string, 'gray' | 'purple' | 'green' | 'red'> = {
   draft: 'gray',
@@ -192,6 +301,18 @@ export default function SalesOrdersPage() {
   const [soError, setSoError] = useState('');
   const [soLoading, setSoLoading] = useState(true);
   const [expandedSoId, setExpandedSoId] = useState<number | null>(null);
+
+  // WS-SALES-CANCEL -- satu modal dipakai dua peran yang berbeda tugasnya:
+  // Sales MENGAJUKAN, pimpinan MEMUTUSKAN. Dipisah lewat `mode`, bukan lewat dua
+  // modal terpisah, karena bentuk keputusannya sama: kategori alasan + catatan.
+  const [aksiSo, setAksiSo] = useState<{ so: SalesOrder; mode: 'ajukan' | 'putuskan' | 'konfirmasi_pemenuhan' | 'tutup'; keputusan?: 'approved' | 'rejected'; requestId?: number } | null>(null);
+  const [kategoriAlasan, setKategoriAlasan] = useState<KategoriAlasan[]>([]);
+  const [kategoriDipilih, setKategoriDipilih] = useState('');
+  const [catatanAlasan, setCatatanAlasan] = useState('');
+  const [aksiSibuk, setAksiSibuk] = useState(false);
+  const [aksiGalatForm, setAksiGalatForm] = useState('');
+  const [aksiGalatField, setAksiGalatField] = useState<{ field: string; message: string }[]>([]);
+  const galatAksi = (field: string) => aksiGalatField.find((g) => g.field === field)?.message;
 
   // Pencarian, saringan, dan pembagian halaman: Carbon DataTable tidak membawanya.
   const [cari, setCari] = useState('');
@@ -241,6 +362,85 @@ export default function SalesOrdersPage() {
     setSoError('');
     setSoLoading(false);
   }, [getAccessToken]);
+
+  // ---- WS-SALES-CANCEL ----
+  const bolehAjukan = decisionDepartment(role) !== null;
+  const bolehPutuskan = isCompanyLeadership(role);
+  // PJL-03 -- wewenang layar memakai pemetaan yang SUDAH ADA. Nol peran baru.
+  // Ini hanya menyembunyikan tombol; yang menegakkan tetap fungsi basis data.
+  const bolehKonfirmasiPemenuhan = decisionDepartment(role) === 'ppic';
+  const bolehTutup = isCompanyLeadership(role);
+
+  const bukaAksiSo = async (so: SalesOrder, mode: 'ajukan' | 'putuskan' | 'konfirmasi_pemenuhan' | 'tutup', keputusan?: 'approved' | 'rejected', requestId?: number) => {
+    setAksiSo({ so, mode, keputusan, requestId });
+    setKategoriDipilih('');
+    setCatatanAlasan('');
+    setAksiGalatForm('');
+    setAksiGalatField([]);
+    setKategoriAlasan([]);
+    const aksi =
+      mode === 'ajukan' ? 'cancel_request'
+      : mode === 'putuskan' ? 'cancel_decision'
+      : mode === 'konfirmasi_pemenuhan' ? 'fulfillment_confirm'
+      : 'completion';
+    const accessToken = await getAccessToken();
+    const res = await fetch(`/api/decision-reason-categories?entity=sales_orders&action=${aksi}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const body = await res.json();
+    if (!res.ok) {
+      // Katalog yang gagal dimuat TIDAK boleh diam: kontrol kosong terlihat sama
+      // persis dengan "memang tidak ada pilihan".
+      setAksiGalatForm(String(body?.error ?? 'Daftar kategori alasan gagal dimuat.'));
+      return;
+    }
+    setKategoriAlasan((body.categories ?? []) as KategoriAlasan[]);
+  };
+
+  const kategoriTerpilih = kategoriAlasan.find((k) => k.code === kategoriDipilih) ?? null;
+
+  const kirimAksiSo = async () => {
+    if (!aksiSo) return;
+    setAksiGalatForm('');
+    setAksiGalatField([]);
+    if (!kategoriDipilih) {
+      setAksiGalatField([{ field: 'reason_category', message: 'Pilih kategori alasan lebih dulu.' }]);
+      return;
+    }
+    if (kategoriTerpilih?.requires_note && catatanAlasan.trim() === '') {
+      setAksiGalatField([{ field: 'reason_note', message: 'Kategori ini mewajibkan catatan tambahan.' }]);
+      return;
+    }
+    setAksiSibuk(true);
+    const accessToken = await getAccessToken();
+    const alamat =
+      aksiSo.mode === 'ajukan' ? '/api/sales-orders/cancellation-request'
+      : aksiSo.mode === 'putuskan' ? '/api/sales-orders/cancellation-decision'
+      : aksiSo.mode === 'konfirmasi_pemenuhan' ? '/api/sales-orders/fulfillment-confirm'
+      : '/api/sales-orders/completion';
+    const isi =
+      aksiSo.mode === 'ajukan'
+        ? { entity: 'sales_orders', record_id: aksiSo.so.sales_order_id, reason_category: kategoriDipilih, reason_note: catatanAlasan }
+        : aksiSo.mode === 'putuskan'
+          ? { cancellation_request_id: aksiSo.requestId, keputusan: aksiSo.keputusan, reason_category: kategoriDipilih, reason_note: catatanAlasan }
+          : { sales_order_id: aksiSo.so.sales_order_id, reason_category: kategoriDipilih, reason_note: catatanAlasan };
+    const res = await fetch(alamat, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(isi)
+    });
+    const body = await res.json();
+    setAksiSibuk(false);
+    if (!res.ok) {
+      if (typeof body?.field === 'string') {
+        setAksiGalatField([{ field: body.field, message: String(body.error) }]);
+        return;
+      }
+      setAksiGalatForm(String(body?.error ?? 'Tindakan gagal.'));
+      return;
+    }
+    setAksiSo(null);
+    await loadSalesOrders();
+  };
+
 
   useEffect(() => {
     const checkAccessAndLoad = async () => {
@@ -622,6 +822,17 @@ export default function SalesOrdersPage() {
                 </div>
                 <div>
                   <span className="text-muted-foreground">Status:</span> <Tag type={statusWarnaTag[expandedSo.status] ?? 'gray'}>{statusLabels[expandedSo.status] ?? expandedSo.status}</Tag>
+                  {expandedSo.eksekusi ? (
+                    <>
+                      {' '}
+                      <Tag type={eksekusiWarna[expandedSo.eksekusi.produksi] ?? 'gray'}>
+                        {eksekusiProduksiLabels[expandedSo.eksekusi.produksi] ?? expandedSo.eksekusi.produksi}
+                      </Tag>
+                      <Tag type={eksekusiWarna[expandedSo.eksekusi.pengiriman] ?? 'gray'}>
+                        {eksekusiPengirimanLabels[expandedSo.eksekusi.pengiriman] ?? expandedSo.eksekusi.pengiriman}
+                      </Tag>
+                    </>
+                  ) : null}
                 </div>
                 <div>
                   <span className="text-muted-foreground">Dibuat:</span> {new Date(expandedSo.created_at).toLocaleDateString('id-ID')}
@@ -1198,6 +1409,248 @@ export default function SalesOrdersPage() {
                   </Table>
                 )}
               </div>
+
+                {/* DEC-S05 -- jadwal pembayaran. Ditampilkan sebagai KOMITMEN, bukan
+                    sebagai status pembayaran: FABRIX belum punya domain Finance untuk
+                    piutang pelanggan, jadi "sudah dibayar" tidak punya sumber. Menuliskan
+                    status di sini berarti mengarang, dan menyimpannya berarti membuat
+                    sumber kebenaran pembayaran kedua. Keterbatasannya disebutkan di layar
+                    supaya tidak ada yang mengira angka ini sudah diverifikasi. */}
+                {expandedSo.jadwal_pembayaran.length > 0 ? (
+                  <div className="so-bayar">
+                    <h2 className="halaman__subjudul halaman__subjudul--rapat">Jadwal pembayaran</h2>
+                    <p className="so-bayar__termin">
+                      Termin: <strong>{expandedSo.jadwal_pembayaran[0].termin}</strong>
+                    </p>
+                    <Table size="sm" className="tabel-responsif">
+                      <TableHead>
+                        <TableRow>
+                          <TableHeader>Tahap</TableHeader>
+                          <TableHeader>Kapan ditagihkan</TableHeader>
+                          <TableHeader>Porsi</TableHeader>
+                          <TableHeader>Nilai</TableHeader>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {expandedSo.jadwal_pembayaran.map((k) => (
+                          <TableRow key={k.id}>
+                            <TableCell data-label="Tahap">{k.label}</TableCell>
+                            <TableCell data-label="Kapan ditagihkan">
+                              {pemicuLabels[k.pemicu] ?? k.pemicu}
+                              {k.tempo_hari ? ` · ${k.tempo_hari} hari` : ''}
+                            </TableCell>
+                            <TableCell data-label="Porsi">{k.persen !== null ? `${formatNumberId(Number(k.persen))}%` : 'Nominal tetap'}</TableCell>
+                            <TableCell data-label="Nilai">{formatCurrency(Number(k.nilai))}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    <p className="so-bayar__batas">
+                      Ini <strong>komitmen pembayaran</strong>, bukan catatan pembayaran. FABRIX belum mencatat
+                      penerimaan pembayaran, jadi berapa yang sudah dibayar dan berapa yang tertunggak
+                      <strong> belum bisa ditampilkan di sini</strong>.
+                    </p>
+                  </div>
+                ) : null}
+
+                {/* PJL-03 -- PENUTUPAN ORDER.
+                    Ditempatkan SEBELUM blok Pembatalan dan terpisah darinya: menutup order
+                    adalah jalur normal, membatalkan adalah aksi merusak. Aturan modal nomor 9
+                    melarang keduanya berdempetan.
+
+                    Layar menjelaskan KENAPA, bukan sekadar bisa/tidak bisa. Sebab-sebabnya
+                    datang dari server -- halaman ini tidak menyimpulkan kelayakan sendiri. */}
+                <div className="so-penutupan">
+                  <h2 className="halaman__subjudul halaman__subjudul--rapat">Penutupan order</h2>
+
+                  {expandedSo.kelayakan_penutupan ? (
+                    <>
+                      <dl className="so-penutupan__fakta">
+                        <div>
+                          <dt>Produksi</dt>
+                          <dd>
+                            {expandedSo.kelayakan_penutupan.work_order_selesai} / {expandedSo.kelayakan_penutupan.work_order_total} Work Order selesai
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Pengiriman</dt>
+                          <dd>
+                            {formatNumberId(Number(expandedSo.kelayakan_penutupan.qty_terkirim))} / {formatNumberId(Number(expandedSo.kelayakan_penutupan.qty_dipesan))}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Dipenuhi dari</dt>
+                          <dd>
+                            {expandedSo.kelayakan_penutupan.sumber_pemenuhan === 'produksi'
+                              ? 'Produksi sendiri'
+                              : expandedSo.kelayakan_penutupan.sumber_pemenuhan === 'stok'
+                                ? 'Stok yang sudah ada'
+                                : expandedSo.kelayakan_penutupan.sumber_pemenuhan === 'campuran'
+                                  ? 'Sebagian produksi, sebagian stok'
+                                  : 'Belum ada pengiriman'}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Pemenuhan</dt>
+                          <dd>
+                            <Tag type={expandedSo.kelayakan_penutupan.layak ? 'green' : 'gray'}>
+                              {expandedSo.kelayakan_penutupan.layak ? 'Lengkap' : 'Belum lengkap'}
+                            </Tag>
+                          </dd>
+                        </div>
+                      </dl>
+
+                      {expandedSo.status === 'completed' ? (
+                        <p className="so-penutupan__ket">Sales Order ini sudah ditutup.</p>
+                      ) : expandedSo.kelayakan_penutupan.layak ? (
+                        (() => {
+                          const konfirmasiPpic = (expandedSo.konfirmasi_penutupan ?? []).find((k) => k.departemen === 'ppic');
+                          return (
+                            <div className="so-penutupan__aksi">
+                              {!konfirmasiPpic ? (
+                                bolehKonfirmasiPemenuhan ? (
+                                  <>
+                                    <Button kind="primary" size="md" onClick={() => void bukaAksiSo(expandedSo, 'konfirmasi_pemenuhan')}>
+                                      Konfirmasi pemenuhan
+                                    </Button>
+                                    <span className="so-penutupan__ket">
+                                      Mengonfirmasi tidak menutup order — penutupannya di Manager atau General Manager.
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="so-penutupan__ket">Menunggu konfirmasi pemenuhan dari PPIC.</span>
+                                )
+                              ) : bolehTutup ? (
+                                <>
+                                  <Button kind="primary" size="md" onClick={() => void bukaAksiSo(expandedSo, 'tutup')}>
+                                    Tutup Sales Order
+                                  </Button>
+                                  <span className="so-penutupan__ket">
+                                    Tunggakan pembayaran tidak menghalangi penutupan — order ditutup karena pemenuhannya selesai.
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="so-penutupan__ket">Menunggu penutupan oleh Manager atau General Manager.</span>
+                              )}
+                            </div>
+                          );
+                        })()
+                      ) : (
+                        <div className="so-penutupan__halangan">
+                          <p className="so-penutupan__ket">Belum bisa diselesaikan:</p>
+                          <ul className="so-penutupan__sebab">
+                            {expandedSo.kelayakan_penutupan.sebab_belum_layak.map((sebab) => (
+                              <li key={sebab}>{sebab}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {(expandedSo.konfirmasi_penutupan ?? []).length > 0 ? (
+                        <ol className="so-pembatalan__daftar">
+                          {(expandedSo.konfirmasi_penutupan ?? []).map((k) => (
+                            <li key={`${k.departemen}-${k.waktu}`} className="so-pembatalan__baris">
+                              <div className="so-pembatalan__kepala">
+                                <Tag type={k.departemen === 'ppic' ? 'blue' : 'green'}>
+                                  {k.departemen === 'ppic' ? 'Pemenuhan dikonfirmasi' : 'Order ditutup'}
+                                </Tag>
+                                <span className="so-pembatalan__waktu">{new Date(k.waktu).toLocaleString('id-ID')}</span>
+                              </div>
+                              <p className="so-pembatalan__isi">
+                                {k.nama} · {k.peran} · {k.kategori_label}
+                              </p>
+                              {k.catatan ? <p className="so-pembatalan__isi">Catatan: {k.catatan}</p> : null}
+                            </li>
+                          ))}
+                        </ol>
+                      ) : null}
+                    </>
+                  ) : (
+                    <p className="so-penutupan__ket">Keadaan pemenuhan belum bisa dibaca.</p>
+                  )}
+                </div>
+
+                {/* WS-SALES-CANCEL -- pembatalan Sales Order.
+                    PERMINTAAN dan KEPUTUSAN dipisah dengan sengaja: Sales mengajukan,
+                    pimpinan memutuskan, dan pemohon tidak boleh memutuskan miliknya
+                    sendiri. Layar mencerminkan pemisahan itu, bukan menyembunyikannya. */}
+                <div className="so-pembatalan">
+                  {/* h2, BUKAN h3: halaman ini belum punya subjudul lain, jadi h3 akan
+                      melompat dari h1 dan pembaca layar kehilangan satu tingkat.
+                      Ditangkap tests/hierarki_judul_lintas_halaman.test.ts. */}
+                  <h2 className="halaman__subjudul halaman__subjudul--rapat">Pembatalan</h2>
+
+                  {(() => {
+                    const terbuka = expandedSo.permintaan_pembatalan.find((p) => p.status === 'pending');
+                    const sudahBatal = expandedSo.status === 'cancelled';
+                    if (sudahBatal) {
+                      return <p className="so-pembatalan__ket">Sales Order ini sudah dibatalkan.</p>;
+                    }
+                    if (!terbuka) {
+                      return bolehAjukan ? (
+                        <div className="so-pembatalan__aksi">
+                          <Button kind="danger--tertiary" size="md" onClick={() => void bukaAksiSo(expandedSo, 'ajukan')}>
+                            Ajukan pembatalan
+                          </Button>
+                          <span className="so-pembatalan__ket">
+                            Mengajukan tidak langsung membatalkan — keputusannya di Manager atau General Manager.
+                          </span>
+                        </div>
+                      ) : (
+                        <p className="so-pembatalan__ket">Peran Anda tidak mewakili departemen yang boleh mengajukan aksiSo.</p>
+                      );
+                    }
+                    return (
+                      <div className="so-pembatalan__aksi">
+                        <Tag type="blue">Menunggu keputusan</Tag>
+                        {bolehPutuskan ? (
+                          <>
+                            <Button kind="danger" size="md" onClick={() => void bukaAksiSo(expandedSo, 'putuskan', 'approved', terbuka.id)}>
+                              Setujui pembatalan
+                            </Button>
+                            <Button kind="tertiary" size="md" onClick={() => void bukaAksiSo(expandedSo, 'putuskan', 'rejected', terbuka.id)}>
+                              Tolak permintaan
+                            </Button>
+                          </>
+                        ) : (
+                          <span className="so-pembatalan__ket">Menunggu keputusan Manager atau General Manager.</span>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {expandedSo.permintaan_pembatalan.length > 0 ? (
+                    <ol className="so-pembatalan__daftar">
+                      {expandedSo.permintaan_pembatalan.map((p) => (
+                        <li key={p.id} className="so-pembatalan__baris">
+                          <div className="so-pembatalan__kepala">
+                            <Tag type={permintaanStatusWarna[p.status] ?? 'gray'}>{permintaanStatusLabels[p.status] ?? p.status}</Tag>
+                            <span className="so-pembatalan__waktu">{new Date(p.diajukan).toLocaleString('id-ID')}</span>
+                          </div>
+                          <p className="so-pembatalan__isi">
+                            Diajukan <strong>{p.pemohon_nama ?? '—'}</strong>
+                            {p.pemohon_departemen ? ` · ${p.pemohon_departemen}` : ''} · {p.kategori_label}
+                          </p>
+                          {p.catatan ? <p className="so-pembatalan__isi">Catatan: {p.catatan}</p> : null}
+                          {/* Keadaan eksekusi SAAT diajukan -- bahan tinjauan dampak bagi pemutus. */}
+                          {p.eksekusi_saat_diajukan ? (
+                            <p className="so-pembatalan__isi">
+                              Saat diajukan: {p.eksekusi_saat_diajukan.work_order ?? 0} Work Order ·{' '}
+                              {formatNumberId(Number(p.eksekusi_saat_diajukan.qty_terkirim ?? 0))} dari{' '}
+                              {formatNumberId(Number(p.eksekusi_saat_diajukan.qty_dipesan ?? 0))} sudah terkirim
+                            </p>
+                          ) : null}
+                          {p.diputuskan ? (
+                            <p className="so-pembatalan__isi">
+                              Diputuskan <strong>{p.pemutus_nama ?? '—'}</strong> · {p.keputusan_label}
+                              {p.keputusan_catatan ? ` · ${p.keputusan_catatan}` : ''}
+                            </p>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ol>
+                  ) : null}
+                </div>
                                 </div>
                               ) : null}
                             </TableExpandedRow>
@@ -1229,6 +1682,122 @@ export default function SalesOrdersPage() {
           />
         </>
       )}
+
+      {/* WS-SALES-CANCEL -- satu modal, dua tugas. Varian Carbon dipilih menurut SIFAT
+          pekerjaannya (DS-RULES C.2): mengajukan bersifat transaksional, menyetujui
+          pembatalan bersifat BERBAHAYA karena tidak bisa dikembalikan. */}
+      {aksiSo ? (
+        <ComposedModal
+          open
+          size="sm"
+          danger={aksiSo.mode === 'putuskan' && aksiSo.keputusan === 'approved'}
+          onClose={() => {
+            setAksiSo(null);
+            return true;
+          }}
+        >
+          <ModalHeader
+            label={`Sales Order ${aksiSo.so.so_number}`}
+            title={
+              aksiSo.mode === 'ajukan'
+                ? 'Ajukan pembatalan'
+                : aksiSo.mode === 'konfirmasi_pemenuhan'
+                  ? 'Konfirmasi pemenuhan'
+                : aksiSo.mode === 'tutup'
+                  ? 'Tutup Sales Order'
+                : aksiSo.keputusan === 'approved'
+                  ? 'Setujui pembatalan'
+                  : 'Tolak permintaan pembatalan'
+            }
+            closeModal={() => setAksiSo(null)}
+          />
+          <ModalBody hasForm>
+            <p className="so-pembatalan__akibat">
+              {aksiSo.mode === 'ajukan'
+                ? 'Permintaan ini TIDAK langsung membatalkan Sales Order. Keputusannya ada di Manager atau General Manager.'
+                : aksiSo.mode === 'konfirmasi_pemenuhan'
+                  ? 'Konfirmasi ini TIDAK menutup Sales Order. Ia menyatakan bahwa seluruh barang sudah diproduksi dan dikirim; penutupannya ada di Manager atau General Manager.'
+                : aksiSo.mode === 'tutup'
+                  ? 'Sales Order akan ditutup. Tunggakan pembayaran TIDAK menghalangi penutupan — order ditutup karena pemenuhannya selesai, bukan karena sudah dibayar.'
+                : aksiSo.keputusan === 'approved'
+                  ? 'Sales Order akan dibatalkan. Riwayat produksi dan pengiriman yang sudah terjadi TIDAK dihapus — pembatalan hanya menyentuh komitmen yang belum dieksekusi.'
+                  : 'Permintaan ditolak. Sales Order tetap berjalan seperti semula.'}
+            </p>
+            <p className="so-pembatalan__akibat">
+              Status sekarang: <strong>{statusLabels[aksiSo.so.status] ?? aksiSo.so.status}</strong>
+              {aksiSo.mode === 'putuskan' && aksiSo.keputusan === 'approved' ? (
+                <>
+                  {' → '}
+                  <strong>{statusLabels.cancelled ?? 'Dibatalkan'}</strong>
+                </>
+              ) : null}
+              {aksiSo.mode === 'tutup' ? (
+                <>
+                  {' → '}
+                  <strong>{statusLabels.completed ?? 'Selesai'}</strong>
+                </>
+              ) : null}
+            </p>
+
+            <Select
+              id="so-batal-kategori"
+              size="lg"
+              labelText="Kategori alasan"
+              helperText="Alasan disimpan agar keputusan ini bisa dijelaskan berbulan-bulan kemudian."
+              invalid={Boolean(galatAksi('reason_category'))}
+              invalidText={galatAksi('reason_category')}
+              value={kategoriDipilih}
+              onChange={(e) => {
+                setKategoriDipilih(e.target.value);
+                setAksiGalatField([]);
+              }}
+            >
+              <SelectItem value="" text="Pilih alasan…" />
+              {kategoriAlasan.map((k) => (
+                <SelectItem key={k.code} value={k.code} text={k.label} />
+              ))}
+            </Select>
+
+            <TextArea
+              id="so-batal-catatan"
+              labelText="Catatan tambahan"
+              helperText={kategoriTerpilih?.requires_note ? 'Wajib diisi untuk kategori ini.' : 'Boleh dikosongkan.'}
+              rows={3}
+              invalid={Boolean(galatAksi('reason_note'))}
+              invalidText={galatAksi('reason_note')}
+              value={catatanAlasan}
+              onChange={(e) => {
+                setCatatanAlasan(e.target.value);
+                setAksiGalatField([]);
+              }}
+            />
+
+            {aksiGalatForm && aksiGalatField.length === 0 ? (
+              <InlineNotification kind="error" lowContrast hideCloseButton title={aksiGalatForm} />
+            ) : null}
+          </ModalBody>
+          <ModalFooter>
+            <Button kind="secondary" onClick={() => setAksiSo(null)}>
+              Batal
+            </Button>
+            <Button
+              kind={aksiSo.mode === 'putuskan' && aksiSo.keputusan === 'approved' ? 'danger' : 'primary'}
+              disabled={aksiSibuk}
+              onClick={() => void kirimAksiSo()}
+            >
+              {aksiSo.mode === 'ajukan'
+                ? 'Ajukan pembatalan'
+                : aksiSo.mode === 'konfirmasi_pemenuhan'
+                  ? 'Konfirmasi pemenuhan'
+                  : aksiSo.mode === 'tutup'
+                    ? 'Tutup Sales Order'
+                    : aksiSo.keputusan === 'approved'
+                      ? 'Setujui pembatalan'
+                      : 'Tolak permintaan'}
+            </Button>
+          </ModalFooter>
+        </ComposedModal>
+      ) : null}
     </div>
   );
 }

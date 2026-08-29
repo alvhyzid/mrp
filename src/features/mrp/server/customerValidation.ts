@@ -1,3 +1,16 @@
+import { buatKontrakGalatField } from '@/lib/kontrakGalatField';
+
+// KONTRAK GALAT FIELD modul ini (DS-25 / WS-B). Registri hanya memuat dua nama yang
+// benar-benar bisa ditolak server — Alur 1 menetapkan hanya nama yang wajib, sama seperti
+// supplier. Nama yang ada di registri tetapi tanpa kontrol akan ditandai pada sesuatu yang
+// tidak ada, dan galatnya hilang persis seperti kalau namanya salah ketik.
+export const FIELD_PELANGGAN = ['name', 'customer_type'] as const;
+export type FieldPelanggan = (typeof FIELD_PELANGGAN)[number];
+
+const kontrak = buatKontrakGalatField(FIELD_PELANGGAN, [] as const);
+export const galatFieldPelanggan = kontrak.galatField;
+export const petakanGalatPelanggan = kontrak.petakan;
+
 export const customerTypes = ['company', 'individual'];
 
 export interface CustomerInput {
@@ -20,16 +33,16 @@ function optionalText(value: unknown): string | null {
 }
 
 // Alur 1 (3.3) — hanya nama yang wajib, sama seperti supplier.
-export function parseCustomerInput(body: Record<string, unknown>): { input?: CustomerInput; error?: string } {
+export function parseCustomerInput(body: Record<string, unknown>): { input?: CustomerInput; error?: string; field?: FieldPelanggan } {
   const name = String(body.name ?? '').trim();
   const customerType = String(body.customer_type ?? 'company').trim();
 
   if (!name) {
-    return { error: 'Nama client wajib diisi.' };
+    return { error: 'Nama client wajib diisi.', field: 'name' };
   }
 
   if (!customerTypes.includes(customerType)) {
-    return { error: 'Tipe client tidak valid.' };
+    return { error: 'Tipe client tidak valid.', field: 'customer_type' };
   }
 
   return {

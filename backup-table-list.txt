@@ -15,6 +15,7 @@ boms
 build_task_approval_history
 build_task_urgency_history
 build_tasks
+cancellation_requests
 companies
 company_settings
 company_settings_history
@@ -24,6 +25,7 @@ customer_purchase_order_lines
 customer_purchase_orders
 customers
 data_change_audit_log
+decision_reason_categories
 delivery_confirmations
 document_access_log
 document_links
@@ -51,6 +53,8 @@ kpi_snapshots
 leave_requests
 lot_genealogy
 lots
+payment_term_steps
+payment_terms
 production_batch_bom_line_snapshots
 production_batch_routing_step_snapshots
 production_batch_standard_crew_snapshots
@@ -66,9 +70,11 @@ purchase_orders
 routing_step_standard_crew
 routing_steps
 routings
+sales_order_completion_approvals
 sales_order_line_feasibility_snapshots
 sales_order_line_margin_snapshots
 sales_order_lines
+sales_order_payment_obligations
 sales_orders
 shifts
 shipment_lines

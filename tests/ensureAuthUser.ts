@@ -61,7 +61,19 @@ export async function ensureAuthUser(
   for (let page = 1; page <= 5; page += 1) {
     const { data: daftar, error: daftarError } = await adminClient.auth.admin.listUsers({ perPage: 200, page });
     if (daftarError) throw new Error(`Gagal mencari pengguna auth ${email}: ${daftarError.message}`);
-    const ketemu = daftar?.users?.find((u) => u.email === email);
+    // PERBANDINGAN TANPA MEMBEDAKAN BESAR-KECIL HURUF, dan ini bukan kerapian.
+    // Supabase Auth MENURUNKAN email jadi huruf kecil saat menyimpannya, sedangkan
+    // createUser mencocokkan email TANPA membedakan besar-kecil huruf. Jadi fixture
+    // ber-email camelCase (mis. sec21.bosA@debug.mrp) menghasilkan keadaan yang
+    // terlihat mustahil: createUser berkata "sudah terdaftar", lalu pencarian
+    // case-sensitive TIDAK menemukannya, lalu helper ini melempar galat yang
+    // menyatakan kondisinya tidak boleh terjadi.
+    // Terbukti 29 Agu 2026: auth.users berisi `sec21.bosa@debug.mrp` sementara yang
+    // dicari `sec21.bosA@debug.mrp`. Berkas test pertama yang memakai huruf besar di
+    // email-lah yang menyingkapnya -- 23 berkas sebelumnya kebetulan memakai huruf
+    // kecil semua, jadi cacat ini menunggu bertahun-tahun tanpa gejala.
+    const emailKecil = email.toLowerCase();
+    const ketemu = daftar?.users?.find((u) => (u.email ?? '').toLowerCase() === emailKecil);
     if (ketemu) return ketemu.id;
     if (!daftar?.users?.length || daftar.users.length < 200) break;
   }

@@ -807,3 +807,28 @@ Regresi penuh: **92 berkas · 708 lulus · 7 dilewati · 0 gagal** (1.691 detik)
 kode sumber **715 = 715**. Test khusus Sales: **155 pemeriksaan di 11 berkas**.
 Uji mutasi kumulatif batch ini: **3 penjaga dirusak, ketiganya menggigit** (5 · 3 · 2 kegagalan).
 Lint **28 = patokan**. Keamanan data: nol sisa fixture di kedua project.
+
+
+---
+
+## Gerbang kesiapan STAGING & UAT (30 Agu 2026)
+
+**UAT READY = TIDAK.** Rinciannya di `docs/sales-crm/SALES_CRM_STAGING_UAT_READINESS.md`.
+
+| Tahap | Keadaan |
+|---|---|
+| IMPLEMENTED | **YA** |
+| TESTED | **YA** — 92 berkas · 708 lulus · 0 gagal |
+| COMMITTED | **YA** — `0db1524`, 115 berkas |
+| PUSHED | **TIDAK** — 60 commit belum meninggalkan mesin ini |
+| DEPLOYED | **TIDAK** |
+| STAGING VERIFIED | **TIDAK** — tidak mungkin, kodenya belum di sana |
+| UAT READY | **TIDAK** |
+
+**Penghambat tunggal, dan ia bukan teknis**: situs `mrp-staging-zeta.vercel.app` adalah
+**deployment production** yang tersambung ke **basis data PT Indo Taste yang sungguhan**
+(dibuktikan dari berkas JavaScript yang dikirim situs itu sendiri). Mendorong ke `main`
+berarti merilis ke sana, dan UAT di sana berarti menekan tombol pada data nyata — yang
+dilarang oleh perintah batch ini sendiri.
+
+**Progres TETAP 64%.** Commit dan dokumen kesiapan tidak menaikkan bobot fase.

@@ -453,3 +453,21 @@ dipulihkan → 25 dan 16 hijau lagi.
 `SALES_TO_ENGINEERING_PRODUCT_HANDOFF.md` — 23 bagian, termasuk daftar tegas **apa yang
 Engineering/Product TIDAK BOLEH duplikasi** dan satu temuan baru: **harga jual tidak berversi
 dan tidak punya master** (PJL-18).
+
+
+---
+
+# GERBANG STAGING & UAT — 30 Agustus 2026
+
+**Nol perubahan arsitektur di giliran ini.** Seluruh pekerjaan Sales & CRM di-commit menjadi
+`0db1524` (115 berkas, +17.810 baris) dan **berhenti sebelum didorong**.
+
+**Temuan yang menentukan**: situs yang selama ini disebut *staging* adalah **production**, dan
+ia memakai **basis data nyata** — dibuktikan dari berkas JavaScript yang dikirim situsnya
+sendiri (`kfvtrwuuqcjfkkuqizxt`). Karena itu "deploy ke staging untuk UAT" **tidak tersedia
+sebagai tindakan yang aman** sampai lingkungan ujinya dipisahkan (INF-11) atau pemilik produk
+memilih menerima risikonya secara sadar.
+
+**Skema basis data sudah lebih maju daripada kode ter-deploy** di ketiga project (339 migrasi),
+dan itu diperiksa **tidak merusak**: seluruh perubahan bersifat tambahan, dan status yang
+dicabut (`in_production`) tidak pernah ditulis kode mana pun.
